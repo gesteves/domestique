@@ -122,6 +122,9 @@ export class CurrentTools {
       average_heart_rate: matchResult.average_heart_rate,
       max_heart_rate: matchResult.max_heart_rate,
       calories: matchResult.calories,
+      distance_meters: matchResult.distance_meters,
+      altitude_gain_meters: matchResult.altitude_gain_meters,
+      zone_durations: matchResult.zone_durations,
       match_confidence: confidence,
       match_method: method,
     };

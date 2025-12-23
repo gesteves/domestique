@@ -33,6 +33,7 @@ interface WhoopRecovery {
 
 interface WhoopSleep {
   id: number;
+  cycle_id: number;
   user_id: number;
   created_at: string;
   updated_at: string;
@@ -90,7 +91,7 @@ interface WhoopWorkout {
   start: string;
   end: string;
   timezone_offset: string;
-  sport_id: number;
+  sport_name: string; // Use this instead of sport_id (deprecated after 09/01/2025)
   score_state: string;
   score: {
     strain: number;
@@ -101,7 +102,7 @@ interface WhoopWorkout {
     distance_meter?: number;
     altitude_gain_meter?: number;
     altitude_change_meter?: number;
-    zone_duration?: {
+    zone_durations?: {
       zone_zero_milli: number;
       zone_one_milli: number;
       zone_two_milli: number;
@@ -112,16 +113,17 @@ interface WhoopWorkout {
   };
 }
 
-// Whoop sport ID to activity type mapping
-const WHOOP_SPORT_MAP: Record<number, string> = {
-  0: 'Running',
-  1: 'Cycling',
-  33: 'Swimming',
-  44: 'Functional Fitness',
-  52: 'HIIT',
-  63: 'Skiing',
-  71: 'Rowing',
-  82: 'Strength',
+// Whoop sport_name to normalized activity type mapping
+const WHOOP_SPORT_NAME_MAP: Record<string, string> = {
+  running: 'Running',
+  cycling: 'Cycling',
+  swimming: 'Swimming',
+  'functional fitness': 'Functional Fitness',
+  hiit: 'HIIT',
+  skiing: 'Skiing',
+  rowing: 'Rowing',
+  'weightlifting': 'Strength',
+  'strength trainer': 'Strength',
 };
 
 export class WhoopClient {
@@ -226,41 +228,92 @@ export class WhoopClient {
   }
 
   /**
-   * Get recovery data for a date range
+   * Get recovery data for a date range.
+   * Follows cycle → sleep → recovery relationship.
    */
   async getRecoveries(startDate: string, endDate: string): Promise<RecoveryData[]> {
-    const recoveries = await this.fetch<{ records: WhoopRecovery[] }>('/recovery', {
-      start: `${startDate}T00:00:00.000Z`,
-      end: `${endDate}T23:59:59.999Z`,
-    });
+    // Fetch all three data sources
+    const [cycles, sleeps, recoveries] = await Promise.all([
+      this.fetch<{ records: WhoopCycle[] }>('/cycle', {
+        start: `${startDate}T00:00:00.000Z`,
+        end: `${endDate}T23:59:59.999Z`,
+      }),
+      this.fetch<{ records: WhoopSleep[] }>('/activity/sleep', {
+        start: `${startDate}T00:00:00.000Z`,
+        end: `${endDate}T23:59:59.999Z`,
+      }),
+      this.fetch<{ records: WhoopRecovery[] }>('/recovery', {
+        start: `${startDate}T00:00:00.000Z`,
+        end: `${endDate}T23:59:59.999Z`,
+      }),
+    ]);
 
-    const sleeps = await this.fetch<{ records: WhoopSleep[] }>('/activity/sleep', {
-      start: `${startDate}T00:00:00.000Z`,
-      end: `${endDate}T23:59:59.999Z`,
-    });
-
-    const sleepMap = new Map<number, WhoopSleep>();
+    // Build lookup maps
+    // Sleep by cycle_id (non-nap, scored)
+    const sleepByCycleId = new Map<number, WhoopSleep>();
     for (const sleep of sleeps.records) {
-      if (!sleep.nap) {
-        sleepMap.set(sleep.id, sleep);
+      if (!sleep.nap && sleep.score_state === 'SCORED') {
+        sleepByCycleId.set(sleep.cycle_id, sleep);
       }
     }
 
-    return recoveries.records
-      .filter((r) => r.score_state === 'SCORED')
-      .map((r) => {
-        const sleep = sleepMap.get(r.sleep_id);
-        return this.normalizeRecovery(r, sleep);
-      });
+    // Recovery by sleep_id (scored)
+    const recoveryBySleepId = new Map<number, WhoopRecovery>();
+    for (const recovery of recoveries.records) {
+      if (recovery.score_state === 'SCORED') {
+        recoveryBySleepId.set(recovery.sleep_id, recovery);
+      }
+    }
+
+    // Follow the correct chain: cycle → sleep → recovery
+    const results: RecoveryData[] = [];
+    for (const cycle of cycles.records) {
+      if (cycle.score_state !== 'SCORED') continue;
+
+      const sleep = sleepByCycleId.get(cycle.id);
+      if (!sleep) continue;
+
+      const recovery = recoveryBySleepId.get(sleep.id);
+      if (!recovery) continue;
+
+      results.push(this.normalizeRecovery(recovery, sleep));
+    }
+
+    return results;
   }
 
   /**
-   * Get today's recovery
+   * Get today's recovery by finding the most recent scored cycle.
+   * This follows Whoop's physiological day model rather than calendar dates.
    */
   async getTodayRecovery(): Promise<RecoveryData | null> {
-    const today = new Date().toISOString().split('T')[0];
-    const recoveries = await this.getRecoveries(today, today);
-    return recoveries.length > 0 ? recoveries[0] : null;
+    // Get recent data (last few days to ensure we catch the current cycle)
+    const [cycles, sleeps, recoveries] = await Promise.all([
+      this.fetch<{ records: WhoopCycle[] }>('/cycle'),
+      this.fetch<{ records: WhoopSleep[] }>('/activity/sleep'),
+      this.fetch<{ records: WhoopRecovery[] }>('/recovery'),
+    ]);
+
+    // Find the most recent scored cycle
+    const scoredCycle = cycles.records.find((c) => c.score_state === 'SCORED');
+    if (!scoredCycle) return null;
+
+    // Find the sleep for this cycle (non-nap, scored)
+    const sleep = sleeps.records.find(
+      (s) =>
+        s.cycle_id === scoredCycle.id &&
+        s.score_state === 'SCORED' &&
+        !s.nap
+    );
+    if (!sleep) return null;
+
+    // Find the recovery for this sleep (scored)
+    const recovery = recoveries.records.find(
+      (r) => r.sleep_id === sleep.id && r.score_state === 'SCORED'
+    );
+    if (!recovery) return null;
+
+    return this.normalizeRecovery(recovery, sleep);
   }
 
   /**
@@ -315,6 +368,8 @@ export class WhoopClient {
     const stageSummary = sleepScore?.stage_summary;
     const sleepNeeded = sleepScore?.sleep_needed;
 
+    const milliToHours = (milli: number) => milli / (1000 * 60 * 60);
+
     const totalSleepMilli = stageSummary
       ? stageSummary.total_light_sleep_time_milli +
         stageSummary.total_slow_wave_sleep_time_milli +
@@ -323,23 +378,52 @@ export class WhoopClient {
 
     return {
       date: recovery.created_at.split('T')[0],
+      // Recovery metrics
       recovery_score: recovery.score.recovery_score,
       hrv_rmssd: recovery.score.hrv_rmssd_milli,
       resting_heart_rate: recovery.score.resting_heart_rate,
+      spo2_percentage: recovery.score.spo2_percentage,
+      skin_temp_celsius: recovery.score.skin_temp_celsius,
+      // Sleep performance metrics
       sleep_performance_percentage: sleepScore?.sleep_performance_percentage ?? 0,
-      sleep_duration_hours: totalSleepMilli / (1000 * 60 * 60),
+      sleep_consistency_percentage: sleepScore?.sleep_consistency_percentage,
+      sleep_efficiency_percentage: sleepScore?.sleep_efficiency_percentage,
+      // Sleep duration metrics
+      sleep_duration_hours: milliToHours(totalSleepMilli),
       sleep_quality_duration_hours: stageSummary
-        ? (stageSummary.total_slow_wave_sleep_time_milli +
-            stageSummary.total_rem_sleep_time_milli) /
-          (1000 * 60 * 60)
+        ? milliToHours(
+            stageSummary.total_slow_wave_sleep_time_milli +
+              stageSummary.total_rem_sleep_time_milli
+          )
         : undefined,
       sleep_needed_hours: sleepNeeded
-        ? (sleepNeeded.baseline_milli +
-            sleepNeeded.need_from_sleep_debt_milli +
-            sleepNeeded.need_from_recent_strain_milli -
-            sleepNeeded.need_from_recent_nap_milli) /
-          (1000 * 60 * 60)
+        ? milliToHours(
+            sleepNeeded.baseline_milli +
+              sleepNeeded.need_from_sleep_debt_milli +
+              sleepNeeded.need_from_recent_strain_milli -
+              sleepNeeded.need_from_recent_nap_milli
+          )
         : undefined,
+      // Sleep stage breakdown
+      light_sleep_hours: stageSummary
+        ? milliToHours(stageSummary.total_light_sleep_time_milli)
+        : undefined,
+      slow_wave_sleep_hours: stageSummary
+        ? milliToHours(stageSummary.total_slow_wave_sleep_time_milli)
+        : undefined,
+      rem_sleep_hours: stageSummary
+        ? milliToHours(stageSummary.total_rem_sleep_time_milli)
+        : undefined,
+      awake_hours: stageSummary
+        ? milliToHours(stageSummary.total_awake_time_milli)
+        : undefined,
+      in_bed_hours: stageSummary
+        ? milliToHours(stageSummary.total_in_bed_time_milli)
+        : undefined,
+      // Sleep details
+      sleep_cycle_count: stageSummary?.sleep_cycle_count,
+      disturbance_count: stageSummary?.disturbance_count,
+      respiratory_rate: sleepScore?.respiratory_rate,
     };
   }
 
@@ -355,7 +439,21 @@ export class WhoopClient {
   }
 
   private normalizeWorkout(workout: WhoopWorkout): StrainActivity {
-    const sportName = WHOOP_SPORT_MAP[workout.sport_id] ?? 'Other';
+    // Use sport_name (sport_id is deprecated after 09/01/2025)
+    const sportName =
+      WHOOP_SPORT_NAME_MAP[workout.sport_name.toLowerCase()] ??
+      workout.sport_name;
+
+    const zoneDurations = workout.score.zone_durations
+      ? {
+          zone_0_minutes: workout.score.zone_durations.zone_zero_milli / 60000,
+          zone_1_minutes: workout.score.zone_durations.zone_one_milli / 60000,
+          zone_2_minutes: workout.score.zone_durations.zone_two_milli / 60000,
+          zone_3_minutes: workout.score.zone_durations.zone_three_milli / 60000,
+          zone_4_minutes: workout.score.zone_durations.zone_four_milli / 60000,
+          zone_5_minutes: workout.score.zone_durations.zone_five_milli / 60000,
+        }
+      : undefined;
 
     return {
       id: String(workout.id),
@@ -366,6 +464,9 @@ export class WhoopClient {
       average_heart_rate: workout.score.average_heart_rate,
       max_heart_rate: workout.score.max_heart_rate,
       calories: Math.round(workout.score.kilojoule / 4.184),
+      distance_meters: workout.score.distance_meter,
+      altitude_gain_meters: workout.score.altitude_gain_meter,
+      zone_durations: zoneDurations,
     };
   }
 }

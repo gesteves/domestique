@@ -95,6 +95,9 @@ export interface WhoopMatchedData {
   average_heart_rate?: number;
   max_heart_rate?: number;
   calories?: number;
+  distance_meters?: number;
+  altitude_gain_meters?: number;
+  zone_durations?: WhoopZoneDurations;
   match_confidence: 'high' | 'medium' | 'low';
   match_method: 'timestamp' | 'date_and_type' | 'date_only';
 }
@@ -110,13 +113,28 @@ export interface WorkoutWithWhoop extends NormalizedWorkout {
 // Whoop recovery data
 export interface RecoveryData {
   date: string;
+  // Recovery metrics
   recovery_score: number;
   hrv_rmssd: number;
   resting_heart_rate: number;
+  spo2_percentage?: number;
+  skin_temp_celsius?: number;
+  // Sleep metrics
   sleep_performance_percentage: number;
+  sleep_consistency_percentage?: number;
+  sleep_efficiency_percentage?: number;
   sleep_duration_hours: number;
   sleep_quality_duration_hours?: number;
   sleep_needed_hours?: number;
+  // Sleep details
+  light_sleep_hours?: number;
+  slow_wave_sleep_hours?: number;
+  rem_sleep_hours?: number;
+  awake_hours?: number;
+  in_bed_hours?: number;
+  sleep_cycle_count?: number;
+  disturbance_count?: number;
+  respiratory_rate?: number;
 }
 
 // Whoop strain data
@@ -129,6 +147,16 @@ export interface StrainData {
   activities: StrainActivity[];
 }
 
+// Whoop HR zone durations in minutes
+export interface WhoopZoneDurations {
+  zone_0_minutes: number; // Below zone 1
+  zone_1_minutes: number; // 50-60% max HR
+  zone_2_minutes: number; // 60-70% max HR
+  zone_3_minutes: number; // 70-80% max HR
+  zone_4_minutes: number; // 80-90% max HR
+  zone_5_minutes: number; // 90-100% max HR
+}
+
 export interface StrainActivity {
   id: string;
   activity_type: ActivityType;
@@ -138,6 +166,9 @@ export interface StrainActivity {
   average_heart_rate?: number;
   max_heart_rate?: number;
   calories?: number;
+  distance_meters?: number;
+  altitude_gain_meters?: number;
+  zone_durations?: WhoopZoneDurations;
 }
 
 // Planned workout from calendar
