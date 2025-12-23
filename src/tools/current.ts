@@ -1,18 +1,13 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { getDaysBackRange, getToday } from '../utils/date-parser.js';
-import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
+import { parseDateString, getToday } from '../utils/date-parser.js';
 import type {
-  NormalizedWorkout,
-  WorkoutWithWhoop,
-  WhoopMatchedData,
   RecoveryData,
   StrainData,
-  StrainActivity,
   PlannedWorkout,
 } from '../types/index.js';
-import type { GetRecentWorkoutsInput, GetRecentStrainInput } from './types.js';
+import type { GetStrainHistoryInput } from './types.js';
 
 export class CurrentTools {
   constructor(
@@ -38,115 +33,20 @@ export class CurrentTools {
   }
 
   /**
-   * Get recent completed workouts from Intervals.icu with optional Whoop data
+   * Get strain history from Whoop for a date range
    */
-  async getRecentWorkouts(
-    params: GetRecentWorkoutsInput
-  ): Promise<WorkoutWithWhoop[]> {
-    const { days, sport } = params;
-    const range = getDaysBackRange(days);
-
-    try {
-      // Fetch Intervals.icu activities
-      const workouts = await this.intervals.getActivities(
-        range.start,
-        range.end,
-        sport
-      );
-
-      // If no Whoop client, return workouts without Whoop data
-      if (!this.whoop) {
-        return workouts.map((workout) => ({
-          ...workout,
-          whoop: null,
-        }));
-      }
-
-      // Fetch Whoop activities for the same date range
-      let whoopActivities: StrainActivity[] = [];
-      try {
-        whoopActivities = await this.whoop.getWorkouts(range.start, range.end);
-      } catch (error) {
-        console.error('Error fetching Whoop activities for matching:', error);
-        // Continue without Whoop data rather than failing entirely
-      }
-
-      // Match and merge
-      return workouts.map((workout) => ({
-        ...workout,
-        whoop: this.findAndMatchWhoopActivity(workout, whoopActivities),
-      }));
-    } catch (error) {
-      console.error('Error fetching recent workouts:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find matching Whoop activity for an Intervals.icu workout.
-   * Uses UTC timestamps (start_date_utc) when available for accurate matching.
-   */
-  private findAndMatchWhoopActivity(
-    workout: NormalizedWorkout,
-    whoopActivities: StrainActivity[]
-  ): WhoopMatchedData | null {
-    const matchResult = findMatchingWhoopActivity(workout, whoopActivities);
-
-    if (!matchResult) {
-      return null;
-    }
-
-    // Determine match confidence using UTC timestamps
-    // Prefer start_date_utc (UTC) over date (local) for accurate comparison
-    const workoutTimestamp = workout.start_date_utc ?? workout.date;
-    const workoutStart = new Date(workoutTimestamp);
-    const activityStart = new Date(matchResult.start_time);
-    const timeDiffMinutes = Math.abs(
-      (workoutStart.getTime() - activityStart.getTime()) / (1000 * 60)
-    );
-
-    let confidence: 'high' | 'medium' | 'low';
-    let method: 'timestamp' | 'date_and_type' | 'date_only';
-
-    if (timeDiffMinutes <= 5) {
-      confidence = 'high';
-      method = 'timestamp';
-    } else if (workout.activity_type === matchResult.activity_type) {
-      confidence = 'medium';
-      method = 'date_and_type';
-    } else {
-      confidence = 'low';
-      method = 'date_only';
-    }
-
-    return {
-      strain_score: matchResult.strain_score,
-      average_heart_rate: matchResult.average_heart_rate,
-      max_heart_rate: matchResult.max_heart_rate,
-      calories: matchResult.calories,
-      distance_meters: matchResult.distance_meters,
-      altitude_gain_meters: matchResult.altitude_gain_meters,
-      zone_durations: matchResult.zone_durations,
-      match_confidence: confidence,
-      match_method: method,
-    };
-  }
-
-  /**
-   * Get recent strain data from Whoop
-   */
-  async getRecentStrain(params: GetRecentStrainInput): Promise<StrainData[]> {
+  async getStrainHistory(params: GetStrainHistoryInput): Promise<StrainData[]> {
     if (!this.whoop) {
       return [];
     }
 
-    const { days } = params;
-    const range = getDaysBackRange(days);
+    const startDate = parseDateString(params.start_date);
+    const endDate = params.end_date ? parseDateString(params.end_date) : getToday();
 
     try {
-      return await this.whoop.getStrainData(range.start, range.end);
+      return await this.whoop.getStrainData(startDate, endDate);
     } catch (error) {
-      console.error('Error fetching recent strain:', error);
+      console.error('Error fetching strain history:', error);
       throw error;
     }
   }

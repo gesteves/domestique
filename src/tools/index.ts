@@ -64,31 +64,14 @@ export class ToolRegistry {
     );
 
     server.tool(
-      'get_recent_workouts',
-      'Get completed workouts from Intervals.icu with matched Whoop strain data. Returns expanded metrics including speed, cadence, efficiency, power data, and per-activity fitness snapshot. Whoop data (strain score, calories) is included in a nested "whoop" object when a matching activity is found.',
+      'get_strain_history',
+      'Get Whoop strain scores and activities for a date range.',
       {
-        days: z.number().optional().default(7).describe('Number of days to look back (default: 7, max: 90)'),
-        sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
+        start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
+        end_date: z.string().optional().describe('End date (defaults to today)'),
       },
       async (args) => {
-        const result = await this.currentTools.getRecentWorkouts(args);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: combineFieldDescriptions('workout', 'whoop'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
-    );
-
-    server.tool(
-      'get_recent_strain',
-      'Get Whoop strain scores and activities for the specified number of days.',
-      {
-        days: z.number().optional().default(7).describe('Number of days to look back (default: 7, max: 90)'),
-      },
-      async (args) => {
-        const result = await this.currentTools.getRecentStrain(args);
+        const result = await this.currentTools.getStrainHistory(args);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({
             _field_descriptions: getFieldDescriptions('whoop'),

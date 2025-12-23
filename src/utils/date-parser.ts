@@ -168,12 +168,15 @@ export function parseDateRange(input: string): DateRange {
 }
 
 /**
- * Get date range for "X days back from today"
+ * Get date range for "X days" including today.
+ * days=1 means today only, days=7 means today plus 6 previous days.
  */
 export function getDaysBackRange(days: number): DateRange {
   const now = new Date();
+  // Ensure at least 1 day
+  const daysBack = Math.max(0, days - 1);
   return {
-    start: format(subDays(now, days), 'yyyy-MM-dd'),
+    start: format(subDays(now, daysBack), 'yyyy-MM-dd'),
     end: format(now, 'yyyy-MM-dd'),
   };
 }

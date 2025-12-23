@@ -12,25 +12,9 @@ export const SportFilterSchema = z
   .describe('Filter by sport type');
 
 // Tool parameter schemas
-export const GetRecentWorkoutsParams = z.object({
-  days: z
-    .number()
-    .int()
-    .min(1)
-    .max(90)
-    .default(7)
-    .describe('Number of days to look back (default: 7, max: 90)'),
-  sport: SportFilterSchema,
-});
-
-export const GetRecentStrainParams = z.object({
-  days: z
-    .number()
-    .int()
-    .min(1)
-    .max(90)
-    .default(7)
-    .describe('Number of days to look back (default: 7, max: 90)'),
+export const GetStrainHistoryParams = z.object({
+  start_date: DateParamSchema.describe('Start date for the query'),
+  end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
 });
 
 export const GetWorkoutHistoryParams = z.object({
@@ -65,8 +49,7 @@ export const GetPlannedWorkoutDetailsParams = z.object({
 });
 
 // Type exports
-export type GetRecentWorkoutsInput = z.infer<typeof GetRecentWorkoutsParams>;
-export type GetRecentStrainInput = z.infer<typeof GetRecentStrainParams>;
+export type GetStrainHistoryInput = z.infer<typeof GetStrainHistoryParams>;
 export type GetWorkoutHistoryInput = z.infer<typeof GetWorkoutHistoryParams>;
 export type GetRecoveryTrendsInput = z.infer<typeof GetRecoveryTrendsParams>;
 export type GetUpcomingWorkoutsInput = z.infer<typeof GetUpcomingWorkoutsParams>;

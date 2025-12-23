@@ -125,13 +125,20 @@ describe('date-parser', () => {
   });
 
   describe('getDaysBackRange', () => {
-    it('should return correct range for given days', () => {
+    it('should return 7 days including today for days=7', () => {
       const range = getDaysBackRange(7);
-      expect(range.start).toBe('2024-12-08');
+      // 7 days = today (12-15) + 6 previous days, so start = 12-09
+      expect(range.start).toBe('2024-12-09');
       expect(range.end).toBe('2024-12-15');
     });
 
-    it('should handle 0 days', () => {
+    it('should return just today for days=1', () => {
+      const range = getDaysBackRange(1);
+      expect(range.start).toBe('2024-12-15');
+      expect(range.end).toBe('2024-12-15');
+    });
+
+    it('should handle 0 days as today only', () => {
       const range = getDaysBackRange(0);
       expect(range.start).toBe('2024-12-15');
       expect(range.end).toBe('2024-12-15');
@@ -139,7 +146,8 @@ describe('date-parser', () => {
 
     it('should handle 30 days', () => {
       const range = getDaysBackRange(30);
-      expect(range.start).toBe('2024-11-15');
+      // 30 days = today + 29 previous days, so start = 11-16
+      expect(range.start).toBe('2024-11-16');
       expect(range.end).toBe('2024-12-15');
     });
   });

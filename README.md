@@ -12,17 +12,15 @@ A TypeScript MCP (Model Context Protocol) server that integrates with Intervals.
 
 ## Available Tools
 
-### Current/Recent Data
+### Current/Today
 - `get_todays_recovery` - Today's Whoop recovery, sleep, and HRV data
-- `get_recent_workouts` - Completed workouts from Intervals.icu with matched Whoop strain data. Returns expanded metrics including speed, cadence, efficiency, power data, and per-activity fitness snapshot
-- `get_recent_strain` - Whoop strain scores and activities for the specified number of days
 - `get_todays_planned_workouts` - Today's scheduled workouts from both TrainerRoad and Intervals.icu calendars
-- `get_athlete_profile` - Athlete profile from Intervals.icu including power zones, heart rate zones, pace zones, and current threshold values (FTP, LTHR, max HR, W', Pmax) for each configured sport
 
 ### Historical/Trends
-- `get_workout_history` - Historical workouts with flexible date ranges. Supports ISO dates or natural language (e.g., "30 days ago")
+- `get_workout_history` - Historical workouts with matched Whoop strain data. Supports ISO dates or natural language (e.g., "30 days ago"). Returns expanded metrics including speed, cadence, efficiency, power data, and per-activity fitness snapshot
+- `get_strain_history` - Whoop strain scores and activities for a date range
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time with summary statistics
-- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. Returns daily data sorted oldest to newest. ACWR between 0.8-1.3 is optimal; above 1.5 indicates high injury risk
+- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR for injury risk. Takes number of days (default: 42). Returns daily data sorted oldest to newest
 
 ### Planning
 - `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
