@@ -19,29 +19,35 @@ vi.mock('../src/auth/middleware.js', () => ({
 
 // Mock the tool registry
 vi.mock('../src/tools/index.js', () => ({
-  ToolRegistry: vi.fn().mockImplementation(() => ({
-    registerTools: vi.fn(),
-    getToolDefinitions: vi.fn().mockReturnValue([]),
-    handleToolCall: vi.fn().mockResolvedValue({
-      content: [{ type: 'text', text: '{}' }],
-    }),
-  })),
+  ToolRegistry: vi.fn().mockImplementation(function() {
+    return {
+      registerTools: vi.fn(),
+      getToolDefinitions: vi.fn().mockReturnValue([]),
+      handleToolCall: vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: '{}' }],
+      }),
+    };
+  }),
 }));
 
 // Mock MCP SDK
 vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
-  Server: vi.fn().mockImplementation(() => ({
-    setRequestHandler: vi.fn(),
-    connect: vi.fn(),
-  })),
+  Server: vi.fn().mockImplementation(function() {
+    return {
+      setRequestHandler: vi.fn(),
+      connect: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: vi.fn().mockImplementation((options) => ({
-    handleRequest: vi.fn(),
-    close: vi.fn(),
-    sessionId: 'test-session-id',
-  })),
+  StreamableHTTPServerTransport: vi.fn().mockImplementation(function() {
+    return {
+      handleRequest: vi.fn(),
+      close: vi.fn(),
+      sessionId: 'test-session-id',
+    };
+  }),
 }));
 
 describe('Server', () => {
