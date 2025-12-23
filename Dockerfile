@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ COPY tests/ ./tests/
 CMD ["npm", "run", "test"]
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:25-alpine AS production
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
