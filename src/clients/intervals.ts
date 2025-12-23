@@ -20,6 +20,19 @@ import { normalizeActivityType } from '../utils/activity-matcher.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
+// Athlete profile from /profile endpoint
+interface IntervalsAthleteProfile {
+  athlete: {
+    id: string;
+    name?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    timezone?: string;
+    sex?: string;
+  };
+}
+
 // Zone time entry from Intervals.icu
 interface IntervalsZoneTime {
   id: string; // e.g., "Z1", "Z2", "SS"
@@ -223,12 +236,32 @@ interface IntervalsEvent {
 export class IntervalsClient {
   private config: IntervalsConfig;
   private authHeader: string;
+  private cachedTimezone: string | null = null;
 
   constructor(config: IntervalsConfig) {
     this.config = config;
     // Intervals.icu uses API key as password with "API_KEY" as username
     const credentials = Buffer.from(`API_KEY:${config.apiKey}`).toString('base64');
     this.authHeader = `Basic ${credentials}`;
+  }
+
+  /**
+   * Get the athlete's timezone from their profile.
+   * Result is cached after first fetch.
+   */
+  async getAthleteTimezone(): Promise<string> {
+    if (this.cachedTimezone) {
+      return this.cachedTimezone;
+    }
+
+    try {
+      const profile = await this.fetch<IntervalsAthleteProfile>('/profile');
+      this.cachedTimezone = profile.athlete.timezone ?? 'UTC';
+      return this.cachedTimezone;
+    } catch (error) {
+      console.error('Error fetching athlete timezone, defaulting to UTC:', error);
+      return 'UTC';
+    }
   }
 
   private async fetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {

@@ -9,6 +9,7 @@ vi.mock('../../src/clients/intervals.js', () => ({
       getPlannedEvents: vi.fn().mockResolvedValue([]),
       getFitnessMetrics: vi.fn().mockResolvedValue([]),
       getTrainingLoadTrends: vi.fn().mockResolvedValue({ data: [], summary: {} }),
+      getAthleteTimezone: vi.fn().mockResolvedValue('America/New_York'),
     };
   }),
 }));
@@ -20,6 +21,7 @@ vi.mock('../../src/clients/whoop.js', () => ({
       getStrainData: vi.fn().mockResolvedValue([]),
       getRecoveries: vi.fn().mockResolvedValue([]),
       getWorkouts: vi.fn().mockResolvedValue([]),
+      setTimezoneGetter: vi.fn(),
     };
   }),
 }));

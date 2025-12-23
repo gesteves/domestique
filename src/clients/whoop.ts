@@ -14,6 +14,22 @@ import {
 const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v2';
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
 
+/**
+ * Check if a UTC timestamp falls within a local date range given the timezone.
+ */
+function isTimestampInLocalDateRange(
+  utcTimestamp: string,
+  startDate: string,
+  endDate: string,
+  timezone: string
+): boolean {
+  // Format the UTC timestamp as a local date in the given timezone
+  const date = new Date(utcTimestamp);
+  const localDateStr = date.toLocaleDateString('en-CA', { timeZone: timezone }); // en-CA gives YYYY-MM-DD format
+
+  return localDateStr >= startDate && localDateStr <= endDate;
+}
+
 interface WhoopRecovery {
   cycle_id: number;
   sleep_id: number;
@@ -131,11 +147,30 @@ export class WhoopClient {
   private accessToken: string;
   private tokenExpiresAt: number = 0;
   private refreshToken: string;
+  private timezoneGetter: (() => Promise<string>) | null = null;
 
   constructor(config: WhoopConfig) {
     this.config = config;
     this.accessToken = config.accessToken;
     this.refreshToken = config.refreshToken;
+  }
+
+  /**
+   * Set a function that returns the user's timezone.
+   * Used to filter results to match local date ranges.
+   */
+  setTimezoneGetter(getter: () => Promise<string>): void {
+    this.timezoneGetter = getter;
+  }
+
+  /**
+   * Get the user's timezone, defaulting to UTC if not configured.
+   */
+  private async getTimezone(): Promise<string> {
+    if (this.timezoneGetter) {
+      return this.timezoneGetter();
+    }
+    return 'UTC';
   }
 
   /**
@@ -230,21 +265,28 @@ export class WhoopClient {
   /**
    * Get recovery data for a date range.
    * Follows cycle → sleep → recovery relationship.
+   * Filters results to match the user's local timezone.
    */
   async getRecoveries(startDate: string, endDate: string): Promise<RecoveryData[]> {
+    const timezone = await this.getTimezone();
+
+    // Fetch with a 1-day buffer to account for timezone differences
+    const startBuffer = this.subtractDays(startDate, 1);
+    const endBuffer = this.addDays(endDate, 1);
+
     // Fetch all three data sources
     const [cycles, sleeps, recoveries] = await Promise.all([
       this.fetch<{ records: WhoopCycle[] }>('/cycle', {
-        start: `${startDate}T00:00:00.000Z`,
-        end: `${endDate}T23:59:59.999Z`,
+        start: `${startBuffer}T00:00:00.000Z`,
+        end: `${endBuffer}T23:59:59.999Z`,
       }),
       this.fetch<{ records: WhoopSleep[] }>('/activity/sleep', {
-        start: `${startDate}T00:00:00.000Z`,
-        end: `${endDate}T23:59:59.999Z`,
+        start: `${startBuffer}T00:00:00.000Z`,
+        end: `${endBuffer}T23:59:59.999Z`,
       }),
       this.fetch<{ records: WhoopRecovery[] }>('/recovery', {
-        start: `${startDate}T00:00:00.000Z`,
-        end: `${endDate}T23:59:59.999Z`,
+        start: `${startBuffer}T00:00:00.000Z`,
+        end: `${endBuffer}T23:59:59.999Z`,
       }),
     ]);
 
@@ -276,10 +318,32 @@ export class WhoopClient {
       const recovery = recoveryBySleepId.get(sleep.id);
       if (!recovery) continue;
 
-      results.push(this.normalizeRecovery(recovery, sleep));
+      const normalized = this.normalizeRecovery(recovery, sleep);
+      // Filter by local date in user's timezone
+      if (isTimestampInLocalDateRange(recovery.created_at, startDate, endDate, timezone)) {
+        results.push(normalized);
+      }
     }
 
     return results;
+  }
+
+  /**
+   * Add days to a date string
+   */
+  private addDays(dateStr: string, days: number): string {
+    const date = new Date(dateStr + 'T00:00:00Z');
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().split('T')[0];
+  }
+
+  /**
+   * Subtract days from a date string
+   */
+  private subtractDays(dateStr: string, days: number): string {
+    const date = new Date(dateStr + 'T00:00:00Z');
+    date.setUTCDate(date.getUTCDate() - days);
+    return date.toISOString().split('T')[0];
   }
 
   /**
@@ -317,47 +381,66 @@ export class WhoopClient {
   }
 
   /**
-   * Get strain/cycle data for a date range
+   * Get strain/cycle data for a date range.
+   * Filters results to match the user's local timezone.
    */
   async getStrainData(startDate: string, endDate: string): Promise<StrainData[]> {
-    const cycles = await this.fetch<{ records: WhoopCycle[] }>('/cycle', {
-      start: `${startDate}T00:00:00.000Z`,
-      end: `${endDate}T23:59:59.999Z`,
-    });
+    const timezone = await this.getTimezone();
 
-    const workouts = await this.fetch<{ records: WhoopWorkout[] }>('/activity/workout', {
-      start: `${startDate}T00:00:00.000Z`,
-      end: `${endDate}T23:59:59.999Z`,
-    });
+    // Fetch with a 1-day buffer to account for timezone differences
+    const startBuffer = this.subtractDays(startDate, 1);
+    const endBuffer = this.addDays(endDate, 1);
 
+    const [cycles, workouts] = await Promise.all([
+      this.fetch<{ records: WhoopCycle[] }>('/cycle', {
+        start: `${startBuffer}T00:00:00.000Z`,
+        end: `${endBuffer}T23:59:59.999Z`,
+      }),
+      this.fetch<{ records: WhoopWorkout[] }>('/activity/workout', {
+        start: `${startBuffer}T00:00:00.000Z`,
+        end: `${endBuffer}T23:59:59.999Z`,
+      }),
+    ]);
+
+    // Group workouts by local date in user's timezone
     const workoutsByDate = new Map<string, WhoopWorkout[]>();
     for (const workout of workouts.records) {
-      const date = workout.start.split('T')[0];
-      if (!workoutsByDate.has(date)) {
-        workoutsByDate.set(date, []);
+      const localDate = new Date(workout.start).toLocaleDateString('en-CA', { timeZone: timezone });
+      if (!workoutsByDate.has(localDate)) {
+        workoutsByDate.set(localDate, []);
       }
-      workoutsByDate.get(date)!.push(workout);
+      workoutsByDate.get(localDate)!.push(workout);
     }
 
     return cycles.records
       .filter((c) => c.score_state === 'SCORED')
       .map((c) => {
-        const date = c.start.split('T')[0];
-        const dayWorkouts = workoutsByDate.get(date) ?? [];
+        const localDate = new Date(c.start).toLocaleDateString('en-CA', { timeZone: timezone });
+        const dayWorkouts = workoutsByDate.get(localDate) ?? [];
         return this.normalizeStrain(c, dayWorkouts);
-      });
+      })
+      .filter((s) => s.date >= startDate && s.date <= endDate);
   }
 
   /**
-   * Get workouts/activities for a date range
+   * Get workouts/activities for a date range.
+   * Filters results to match the user's local timezone.
    */
   async getWorkouts(startDate: string, endDate: string): Promise<StrainActivity[]> {
+    const timezone = await this.getTimezone();
+
+    // Fetch with a 1-day buffer to account for timezone differences
+    const startBuffer = this.subtractDays(startDate, 1);
+    const endBuffer = this.addDays(endDate, 1);
+
     const workouts = await this.fetch<{ records: WhoopWorkout[] }>('/activity/workout', {
-      start: `${startDate}T00:00:00.000Z`,
-      end: `${endDate}T23:59:59.999Z`,
+      start: `${startBuffer}T00:00:00.000Z`,
+      end: `${endBuffer}T23:59:59.999Z`,
     });
 
-    return workouts.records.map((w) => this.normalizeWorkout(w));
+    return workouts.records
+      .map((w) => this.normalizeWorkout(w))
+      .filter((w) => isTimestampInLocalDateRange(w.start_time, startDate, endDate, timezone));
   }
 
   private normalizeRecovery(

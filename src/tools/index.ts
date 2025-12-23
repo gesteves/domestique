@@ -34,6 +34,11 @@ export class ToolRegistry {
       ? new TrainerRoadClient(config.trainerroad)
       : null;
 
+    // Connect Whoop client to Intervals.icu timezone for proper date filtering
+    if (whoopClient) {
+      whoopClient.setTimezoneGetter(() => intervalsClient.getAthleteTimezone());
+    }
+
     this.currentTools = new CurrentTools(
       intervalsClient,
       whoopClient,
