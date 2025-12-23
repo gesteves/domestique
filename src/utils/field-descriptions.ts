@@ -211,16 +211,16 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   hr_zones: 'Heart rate zones as array of {name, low_bpm, high_bpm}. Sorted low to high (Zone 1 first). Note that these may be different than the Whoop HR zones.',
 
   // Pace thresholds
-  threshold_pace: 'Threshold pace raw value (use threshold_pace_human for display)',
-  threshold_pace_human: 'Human-readable threshold pace (e.g., "4:00/km" or "1:30/100m")',
-  pace_units: 'Units for pace: MINS_KM (running), SECS_100M (swimming)',
+  threshold_pace: 'Threshold pace in the units specified by pace_units (e.g., 4.17 for MINS_KM = 4:10/km, or 120 for SECS_100M = 2:00/100m)',
+  threshold_pace_human: 'Human-readable threshold pace (e.g., "4:10/km" or "2:00/100m")',
+  pace_units: 'Units for all pace values: MINS_KM (minutes per kilometer, running) or SECS_100M (seconds per 100 meters, swimming)',
 
   // Power zones
   power_zones: 'Power zones as array of {name, low_percent, high_percent, low_watts, high_watts}. Percentages are % of FTP. high values are null for highest zone.',
   indoor_power_zones: 'Indoor-specific power zones (only present if indoor_ftp differs from ftp)',
 
   // Pace zones
-  pace_zones: 'Pace zones as array sorted from slowest to fastest. Each zone has {name, low_percent, high_percent, slow_pace, fast_pace, slow_pace_human, fast_pace_human}. Higher % = faster pace. slow_pace is the slowest boundary (more time), fast_pace is the fastest (less time). null means unbounded.',
+  pace_zones: 'Pace zones sorted from slowest (Zone 1) to fastest. Each has: name, low_percent, high_percent (% of threshold - higher = faster), slow_pace (slowest boundary in pace_units), fast_pace (fastest boundary in pace_units), slow_pace_human, fast_pace_human. null means unbounded.',
 };
 
 type FieldCategory =
