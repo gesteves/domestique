@@ -139,8 +139,7 @@ interface IntervalsActivity {
 }
 
 interface IntervalsWellness {
-  id: string;
-  date: string;
+  id: string; // Date in YYYY-MM-DD format (used as primary key)
   ctl: number;
   atl: number;
   rampRate?: number;
@@ -301,7 +300,7 @@ export class IntervalsClient {
     });
 
     return wellness.map((w) => ({
-      date: w.date,
+      date: w.id, // id is the date in YYYY-MM-DD format
       ctl: w.ctl,
       atl: w.atl,
       tsb: w.ctl - w.atl, // Training Stress Balance = CTL - ATL
@@ -709,7 +708,7 @@ export class IntervalsClient {
     });
 
     const data: DailyTrainingLoad[] = wellness.map((w) => ({
-      date: w.date,
+      date: w.id, // id is the date in YYYY-MM-DD format
       ctl: w.ctl,
       atl: w.atl,
       tsb: w.ctl - w.atl,

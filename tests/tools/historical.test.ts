@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HistoricalTools } from '../../src/tools/historical.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
-import type { NormalizedWorkout, RecoveryData, FitnessMetrics } from '../../src/types/index.js';
+import type { NormalizedWorkout, RecoveryData } from '../../src/types/index.js';
 
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
@@ -178,76 +178,6 @@ describe('HistoricalTools', () => {
       expect(result.summary.avg_recovery).toBe(0);
       expect(result.summary.min_recovery).toBe(0);
       expect(result.summary.max_recovery).toBe(0);
-    });
-  });
-
-  describe('getFitnessProgression', () => {
-    const mockMetrics: FitnessMetrics[] = [
-      { date: '2024-12-01', ctl: 50, atl: 45, tsb: 5 },
-      { date: '2024-12-08', ctl: 55, atl: 60, tsb: -5 },
-      { date: '2024-12-15', ctl: 60, atl: 55, tsb: 5 },
-    ];
-
-    it('should return fitness data with summary', async () => {
-      vi.mocked(mockIntervalsClient.getFitnessMetrics).mockResolvedValue(mockMetrics);
-
-      const result = await tools.getFitnessProgression({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
-      });
-
-      expect(result.data).toEqual(mockMetrics);
-      expect(result.summary.start_ctl).toBe(50);
-      expect(result.summary.end_ctl).toBe(60);
-      expect(result.summary.ctl_change).toBe(10);
-      expect(result.summary.peak_ctl).toBe(60);
-      expect(result.summary.peak_ctl_date).toBe('2024-12-15');
-      expect(result.summary.avg_tsb).toBeCloseTo(1.7, 1); // (5 + -5 + 5) / 3
-    });
-
-    it('should handle unsorted data', async () => {
-      const unsortedMetrics = [
-        mockMetrics[2], // 2024-12-15
-        mockMetrics[0], // 2024-12-01
-        mockMetrics[1], // 2024-12-08
-      ];
-      vi.mocked(mockIntervalsClient.getFitnessMetrics).mockResolvedValue(unsortedMetrics);
-
-      const result = await tools.getFitnessProgression({
-        start_date: '2024-12-01',
-      });
-
-      // Should still calculate correctly based on dates
-      expect(result.summary.start_ctl).toBe(50);
-      expect(result.summary.end_ctl).toBe(60);
-    });
-
-    it('should handle empty data', async () => {
-      vi.mocked(mockIntervalsClient.getFitnessMetrics).mockResolvedValue([]);
-
-      const result = await tools.getFitnessProgression({
-        start_date: '2024-12-01',
-      });
-
-      expect(result.data).toEqual([]);
-      expect(result.summary.start_ctl).toBe(0);
-      expect(result.summary.end_ctl).toBe(0);
-      expect(result.summary.ctl_change).toBe(0);
-      expect(result.summary.peak_ctl).toBe(0);
-      expect(result.summary.peak_ctl_date).toBe('');
-    });
-
-    it('should parse natural language dates', async () => {
-      vi.mocked(mockIntervalsClient.getFitnessMetrics).mockResolvedValue(mockMetrics);
-
-      await tools.getFitnessProgression({
-        start_date: '30 days ago',
-      });
-
-      expect(mockIntervalsClient.getFitnessMetrics).toHaveBeenCalledWith(
-        '2024-11-15',
-        '2024-12-15'
-      );
     });
   });
 });

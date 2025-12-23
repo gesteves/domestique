@@ -4,13 +4,11 @@ import { parseDateString, getToday } from '../utils/date-parser.js';
 import type {
   NormalizedWorkout,
   RecoveryData,
-  FitnessMetrics,
   TrainingLoadTrends,
 } from '../types/index.js';
 import type {
   GetWorkoutHistoryInput,
   GetRecoveryTrendsInput,
-  GetFitnessProgressionInput,
 } from './types.js';
 
 export class HistoricalTools {
@@ -80,38 +78,6 @@ export class HistoricalTools {
     }
   }
 
-  /**
-   * Get fitness progression (CTL/ATL/TSB) over time
-   */
-  async getFitnessProgression(
-    params: GetFitnessProgressionInput
-  ): Promise<{
-    data: FitnessMetrics[];
-    summary: {
-      start_ctl: number;
-      end_ctl: number;
-      ctl_change: number;
-      peak_ctl: number;
-      peak_ctl_date: string;
-      avg_tsb: number;
-    };
-  }> {
-    const startDate = parseDateString(params.start_date);
-    const endDate = params.end_date ? parseDateString(params.end_date) : getToday();
-
-    try {
-      const data = await this.intervals.getFitnessMetrics(startDate, endDate);
-
-      // Calculate summary statistics
-      const summary = this.calculateFitnessSummary(data);
-
-      return { data, summary };
-    } catch (error) {
-      console.error('Error fetching fitness progression:', error);
-      throw error;
-    }
-  }
-
   private calculateRecoverySummary(data: RecoveryData[]): {
     avg_recovery: number;
     avg_hrv: number;
@@ -139,45 +105,6 @@ export class HistoricalTools {
       avg_sleep_hours: this.average(sleepHours),
       min_recovery: Math.min(...recoveryScores),
       max_recovery: Math.max(...recoveryScores),
-    };
-  }
-
-  private calculateFitnessSummary(data: FitnessMetrics[]): {
-    start_ctl: number;
-    end_ctl: number;
-    ctl_change: number;
-    peak_ctl: number;
-    peak_ctl_date: string;
-    avg_tsb: number;
-  } {
-    if (data.length === 0) {
-      return {
-        start_ctl: 0,
-        end_ctl: 0,
-        ctl_change: 0,
-        peak_ctl: 0,
-        peak_ctl_date: '',
-        avg_tsb: 0,
-      };
-    }
-
-    const sortedData = [...data].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    const ctlValues = sortedData.map((d) => d.ctl);
-    const tsbValues = sortedData.map((d) => d.tsb);
-
-    const peakCtl = Math.max(...ctlValues);
-    const peakCtlEntry = sortedData.find((d) => d.ctl === peakCtl);
-
-    return {
-      start_ctl: sortedData[0].ctl,
-      end_ctl: sortedData[sortedData.length - 1].ctl,
-      ctl_change: sortedData[sortedData.length - 1].ctl - sortedData[0].ctl,
-      peak_ctl: peakCtl,
-      peak_ctl_date: peakCtlEntry?.date ?? '',
-      avg_tsb: this.average(tsbValues),
     };
   }
 

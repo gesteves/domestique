@@ -22,8 +22,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with Intervals.
 ### Historical/Trends
 - `get_workout_history` - Historical workouts with flexible date ranges. Supports ISO dates or natural language (e.g., "30 days ago")
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time with summary statistics
-- `get_fitness_progression` - CTL/ATL/TSB (fitness/fatigue/form) trends from Intervals.icu with summary statistics
-- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. ACWR between 0.8-1.3 is optimal; above 1.5 indicates high injury risk
+- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. Returns daily data sorted oldest to newest. ACWR between 0.8-1.3 is optimal; above 1.5 indicates high injury risk
 
 ### Planning
 - `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars

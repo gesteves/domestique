@@ -151,11 +151,23 @@ export const RECOVERY_FIELD_DESCRIPTIONS = {
 };
 
 export const FITNESS_FIELD_DESCRIPTIONS = {
-  date: 'Date of fitness metrics (ISO 8601)',
+  // Data array (sorted oldest to newest)
+  data: 'Array of daily training load metrics, sorted oldest to newest (first item = oldest day)',
+  date: 'Date of fitness metrics (ISO 8601 YYYY-MM-DD)',
   ctl: 'Chronic Training Load (fitness) - 42-day exponentially weighted average of daily TSS',
   atl: 'Acute Training Load (fatigue) - 7-day exponentially weighted average of daily TSS',
   tsb: 'Training Stress Balance (form) = CTL - ATL. Positive = fresh, negative = fatigued. -10 to +25 typical for optimal performance',
   ramp_rate: 'Rate of CTL change per week. Safe: 3-7 pts/week. Aggressive: 7+ pts/week. Injury risk increases above 10 pts/week',
+  daily_tss: 'Training Stress Score for that specific day',
+
+  // Summary fields
+  current_ctl: 'Most recent CTL value (current fitness level)',
+  current_atl: 'Most recent ATL value (current fatigue level)',
+  current_tsb: 'Most recent TSB value (current form)',
+  ctl_trend: 'CTL trend direction: increasing, stable, or decreasing',
+  avg_ramp_rate: 'Average weekly CTL change rate over the period',
+  peak_ctl: 'Highest CTL reached during the period',
+  peak_ctl_date: 'Date when peak CTL was reached',
   acwr: 'Acute:Chronic Workload Ratio = ATL/CTL. Optimal: 0.8-1.3. Caution: 1.3-1.5. High injury risk: >1.5',
   acwr_status: 'ACWR risk assessment: optimal, low_risk, caution, or high_risk',
 };

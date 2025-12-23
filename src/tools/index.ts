@@ -151,25 +151,6 @@ export class ToolRegistry {
       }
     );
 
-    server.tool(
-      'get_fitness_progression',
-      'Get CTL/ATL/TSB (fitness/fatigue/form) trends from Intervals.icu.',
-      {
-        start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
-        end_date: z.string().optional().describe('End date (defaults to today)'),
-        sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
-      },
-      async (args) => {
-        const result = await this.historicalTools.getFitnessProgression(args);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('fitness'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
-    );
-
     // Planning Tools
     server.tool(
       'get_upcoming_workouts',
@@ -214,7 +195,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_training_load_trends',
-      'Get training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. ACWR between 0.8-1.3 is optimal; above 1.5 indicates high injury risk.',
+      'Get training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. Returns daily data sorted oldest to newest. ACWR between 0.8-1.3 is optimal; above 1.5 indicates high injury risk.',
       {
         days: z
           .number()

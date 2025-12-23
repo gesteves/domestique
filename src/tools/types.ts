@@ -44,12 +44,6 @@ export const GetRecoveryTrendsParams = z.object({
   end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
 });
 
-export const GetFitnessProgressionParams = z.object({
-  start_date: DateParamSchema.describe('Start date for the query'),
-  end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
-  sport: SportFilterSchema,
-});
-
 export const GetUpcomingWorkoutsParams = z.object({
   days: z
     .number()
@@ -75,6 +69,5 @@ export type GetRecentWorkoutsInput = z.infer<typeof GetRecentWorkoutsParams>;
 export type GetRecentStrainInput = z.infer<typeof GetRecentStrainParams>;
 export type GetWorkoutHistoryInput = z.infer<typeof GetWorkoutHistoryParams>;
 export type GetRecoveryTrendsInput = z.infer<typeof GetRecoveryTrendsParams>;
-export type GetFitnessProgressionInput = z.infer<typeof GetFitnessProgressionParams>;
 export type GetUpcomingWorkoutsInput = z.infer<typeof GetUpcomingWorkoutsParams>;
 export type GetPlannedWorkoutDetailsInput = z.infer<typeof GetPlannedWorkoutDetailsParams>;
