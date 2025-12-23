@@ -209,44 +209,8 @@ export class ToolRegistry {
     );
 
     // ============================================
-    // Athlete Profile & Analysis Tools
+    // Analysis Tools
     // ============================================
-
-    server.tool(
-      'get_athlete_profile',
-      'Get athlete profile from Intervals.icu including power zones, heart rate zones, pace zones, and current threshold values (FTP, LTHR, max HR, W\', Pmax) for each configured sport.',
-      {
-        sport: z
-          .enum(['cycling', 'running', 'swimming'])
-          .optional()
-          .describe('Filter to specific sport (optional, returns all sports if not specified)'),
-      },
-      async (args) => {
-        const result = await this.currentTools.getAthleteProfile();
-
-        // Filter to specific sport if requested
-        if (args.sport) {
-          const sportMap: Record<string, string[]> = {
-            cycling: ['Ride', 'Cycling', 'VirtualRide'],
-            running: ['Run', 'Running', 'VirtualRun'],
-            swimming: ['Swim', 'Swimming'],
-          };
-          const matchTypes = sportMap[args.sport] ?? [];
-          result.sports = result.sports.filter((s) =>
-            matchTypes.some((t) =>
-              s.sport_type.toLowerCase().includes(t.toLowerCase())
-            )
-          );
-        }
-
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('athlete_profile'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
-    );
 
     server.tool(
       'get_power_curve',

@@ -11,7 +11,6 @@ import type {
   StrainData,
   StrainActivity,
   PlannedWorkout,
-  AthleteProfile,
 } from '../types/index.js';
 import type { GetRecentWorkoutsInput, GetRecentStrainInput } from './types.js';
 
@@ -131,18 +130,6 @@ export class CurrentTools {
       match_confidence: confidence,
       match_method: method,
     };
-  }
-
-  /**
-   * Get athlete profile including zones and thresholds
-   */
-  async getAthleteProfile(): Promise<AthleteProfile> {
-    try {
-      return await this.intervals.getAthleteProfile();
-    } catch (error) {
-      console.error('Error fetching athlete profile:', error);
-      throw error;
-    }
   }
 
   /**

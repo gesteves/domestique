@@ -521,7 +521,7 @@ export class IntervalsClient {
     const cyclingSport = sports.find(
       (s) =>
         s.sport_type === 'Ride' ||
-        s.sport_type.toLowerCase().includes('cycling')
+        s.sport_type?.toLowerCase().includes('cycling')
     );
 
     return {
