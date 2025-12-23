@@ -64,6 +64,36 @@ export class ToolRegistry {
     );
 
     server.tool(
+      'get_todays_strain',
+      "Fetch today's Whoop strain data including strain score, heart rate, and calories.",
+      {},
+      async () => {
+        const result = await this.currentTools.getTodaysStrain();
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('whoop'),
+            data: result,
+          }, null, 2) }],
+        };
+      }
+    );
+
+    server.tool(
+      'get_todays_completed_workouts',
+      "Fetch today's completed workouts from Intervals.icu.",
+      {},
+      async () => {
+        const result = await this.currentTools.getTodaysCompletedWorkouts();
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('workout'),
+            data: result,
+          }, null, 2) }],
+        };
+      }
+    );
+
+    server.tool(
       'get_strain_history',
       'Get Whoop strain scores and activities for a date range.',
       {

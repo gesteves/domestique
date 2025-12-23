@@ -6,6 +6,7 @@ import type {
   RecoveryData,
   StrainData,
   PlannedWorkout,
+  NormalizedWorkout,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -28,6 +29,39 @@ export class CurrentTools {
       return await this.whoop.getTodayRecovery();
     } catch (error) {
       console.error('Error fetching today\'s recovery:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get today's strain data from Whoop
+   */
+  async getTodaysStrain(): Promise<StrainData | null> {
+    if (!this.whoop) {
+      return null;
+    }
+
+    const today = getToday();
+
+    try {
+      const data = await this.whoop.getStrainData(today, today);
+      return data.length > 0 ? data[0] : null;
+    } catch (error) {
+      console.error('Error fetching today\'s strain:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get today's completed workouts from Intervals.icu
+   */
+  async getTodaysCompletedWorkouts(): Promise<NormalizedWorkout[]> {
+    const today = getToday();
+
+    try {
+      return await this.intervals.getActivities(today, today);
+    } catch (error) {
+      console.error('Error fetching today\'s completed workouts:', error);
       throw error;
     }
   }

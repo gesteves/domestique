@@ -3,7 +3,7 @@ import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import type { RecoveryData, StrainData, PlannedWorkout } from '../../src/types/index.js';
+import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
@@ -62,6 +62,72 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockRejectedValue(new Error('API Error'));
 
       await expect(tools.getTodaysRecovery()).rejects.toThrow('API Error');
+    });
+  });
+
+  describe('getTodaysStrain', () => {
+    const mockStrain: StrainData = {
+      date: '2024-12-15',
+      strain_score: 15.5,
+      average_heart_rate: 75,
+      max_heart_rate: 185,
+      calories: 2500,
+      activities: [],
+    };
+
+    it('should return strain data from Whoop', async () => {
+      vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue([mockStrain]);
+
+      const result = await tools.getTodaysStrain();
+
+      expect(result).toEqual(mockStrain);
+    });
+
+    it('should return null when no strain data for today', async () => {
+      vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue([]);
+
+      const result = await tools.getTodaysStrain();
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when Whoop client is not configured', async () => {
+      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
+
+      const result = await toolsWithoutWhoop.getTodaysStrain();
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getTodaysCompletedWorkouts', () => {
+    const mockWorkouts: NormalizedWorkout[] = [
+      {
+        id: '1',
+        date: '2024-12-15T10:00:00Z',
+        activity_type: 'Cycling',
+        duration_seconds: 3600,
+        distance_km: 45,
+        tss: 85,
+        source: 'intervals.icu',
+      },
+    ];
+
+    it('should return completed workouts from Intervals.icu', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+
+      const result = await tools.getTodaysCompletedWorkouts();
+
+      expect(result).toEqual(mockWorkouts);
+      expect(mockIntervalsClient.getActivities).toHaveBeenCalled();
+    });
+
+    it('should return empty array when no workouts today', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+
+      const result = await tools.getTodaysCompletedWorkouts();
+
+      expect(result).toEqual([]);
     });
   });
 
