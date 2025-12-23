@@ -29,13 +29,13 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "date-fns": "^4.1.0",
-    "express": "^4.21.0",
+    "express": "^5.2.1",
     "node-ical": "^0.22.1",
     "redis": "^5.10.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "@vitest/coverage-v8": "^4.0.16",
     "tsx": "^4.19.0",
