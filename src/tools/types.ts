@@ -40,12 +40,11 @@ export const GetUpcomingWorkoutsParams = z.object({
 });
 
 export const GetPlannedWorkoutDetailsParams = z.object({
-  workout_id: z.string().optional().describe('Workout ID to fetch details for'),
-  date: DateParamSchema.optional().describe('Date to find workout on'),
-  source: z
-    .enum(['intervals.icu', 'trainerroad'])
+  date: DateParamSchema.describe('Date to find workout on - ISO format (YYYY-MM-DD) or natural language (e.g., "next wednesday")'),
+  sport: z
+    .enum(['cycling', 'running', 'swimming'])
     .optional()
-    .describe('Which calendar source to use'),
+    .describe('Filter by sport type (e.g., "cycling" for bike workouts)'),
 });
 
 // Type exports

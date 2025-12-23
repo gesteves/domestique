@@ -45,66 +45,42 @@ export class PlanningTools {
   }
 
   /**
-   * Get detailed information about a specific planned workout
+   * Get planned workouts for a specific date, optionally filtered by sport.
+   * Returns merged workouts from both TrainerRoad and Intervals.icu.
    */
   async getPlannedWorkoutDetails(
     params: GetPlannedWorkoutDetailsInput
-  ): Promise<PlannedWorkout | null> {
-    const { workout_id, date, source } = params;
+  ): Promise<PlannedWorkout[]> {
+    const { date, sport } = params;
+    const dateStr = parseDateString(date);
 
-    if (workout_id) {
-      // Find by ID
-      if (source === 'trainerroad' && this.trainerroad) {
-        const workouts = await this.trainerroad.getUpcomingWorkouts(30);
-        return workouts.find((w) => w.id === workout_id) ?? null;
-      } else if (source === 'intervals.icu') {
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const futureDate = format(addDays(new Date(), 30), 'yyyy-MM-dd');
-        const workouts = await this.intervals.getPlannedEvents(today, futureDate);
-        return workouts.find((w) => w.id === workout_id) ?? null;
-      }
+    // Fetch from both sources for the specified date
+    const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
+      this.trainerroad?.getPlannedWorkouts(dateStr, dateStr).catch((e) => {
+        console.error('Error fetching TrainerRoad workouts:', e);
+        return [];
+      }) ?? Promise.resolve([]),
+      this.intervals.getPlannedEvents(dateStr, dateStr).catch((e) => {
+        console.error('Error fetching Intervals.icu events:', e);
+        return [];
+      }),
+    ]);
 
-      // Search both if source not specified
-      const [trWorkouts, intWorkouts] = await Promise.all([
-        this.trainerroad?.getUpcomingWorkouts(30) ?? Promise.resolve([]),
-        this.intervals
-          .getPlannedEvents(
-            format(new Date(), 'yyyy-MM-dd'),
-            format(addDays(new Date(), 30), 'yyyy-MM-dd')
-          )
-          .catch(() => []),
-      ]);
+    // Merge and deduplicate
+    let workouts = this.mergeWorkouts(trainerroadWorkouts, intervalsWorkouts);
 
-      return (
-        trWorkouts.find((w) => w.id === workout_id) ??
-        intWorkouts.find((w) => w.id === workout_id) ??
-        null
-      );
+    // Filter by sport if specified
+    if (sport) {
+      const disciplineMap: Record<string, string> = {
+        cycling: 'Bike',
+        running: 'Run',
+        swimming: 'Swim',
+      };
+      const discipline = disciplineMap[sport];
+      workouts = workouts.filter((w) => w.discipline === discipline);
     }
 
-    if (date) {
-      // Find by date
-      const dateStr = parseDateString(date);
-
-      if (source === 'trainerroad' && this.trainerroad) {
-        const workouts = await this.trainerroad.getPlannedWorkouts(dateStr, dateStr);
-        return workouts[0] ?? null;
-      } else if (source === 'intervals.icu') {
-        const workouts = await this.intervals.getPlannedEvents(dateStr, dateStr);
-        return workouts[0] ?? null;
-      }
-
-      // Get from both and return first match
-      const [trWorkouts, intWorkouts] = await Promise.all([
-        this.trainerroad?.getPlannedWorkouts(dateStr, dateStr) ?? Promise.resolve([]),
-        this.intervals.getPlannedEvents(dateStr, dateStr).catch(() => []),
-      ]);
-
-      // Prefer TrainerRoad (more detailed)
-      return trWorkouts[0] ?? intWorkouts[0] ?? null;
-    }
-
-    return null;
+    return workouts;
   }
 
   /**

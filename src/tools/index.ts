@@ -185,11 +185,10 @@ export class ToolRegistry {
 
     server.tool(
       'get_planned_workout_details',
-      'Get detailed information about a specific planned workout.',
+      'Get planned workouts for a specific date. Use natural language like "next wednesday" or ISO format. Optionally filter by sport (e.g., "What is my bike workout on Thursday?").',
       {
-        workout_id: z.string().optional().describe('Workout ID to fetch details for'),
-        date: z.string().optional().describe('Date to find workout on (alternative to workout_id)'),
-        source: z.enum(['intervals.icu', 'trainerroad']).optional().describe('Which calendar source to use'),
+        date: z.string().describe('Date to find workout on - ISO format (YYYY-MM-DD) or natural language (e.g., "next wednesday", "tomorrow")'),
+        sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport type (cycling = bike, running = run, swimming = swim)'),
       },
       async (args) => {
         const result = await this.planningTools.getPlannedWorkoutDetails(args);
