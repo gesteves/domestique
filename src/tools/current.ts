@@ -84,7 +84,8 @@ export class CurrentTools {
   }
 
   /**
-   * Find matching Whoop activity for an Intervals.icu workout
+   * Find matching Whoop activity for an Intervals.icu workout.
+   * Uses UTC timestamps (start_date_utc) when available for accurate matching.
    */
   private findAndMatchWhoopActivity(
     workout: NormalizedWorkout,
@@ -96,8 +97,10 @@ export class CurrentTools {
       return null;
     }
 
-    // Determine match confidence and method based on the matching logic
-    const workoutStart = new Date(workout.date);
+    // Determine match confidence using UTC timestamps
+    // Prefer start_date_utc (UTC) over date (local) for accurate comparison
+    const workoutTimestamp = workout.start_date_utc ?? workout.date;
+    const workoutStart = new Date(workoutTimestamp);
     const activityStart = new Date(matchResult.start_time);
     const timeDiffMinutes = Math.abs(
       (workoutStart.getTime() - activityStart.getTime()) / (1000 * 60)

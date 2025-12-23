@@ -15,7 +15,8 @@ export type Discipline = 'Swim' | 'Bike' | 'Run';
 // Normalized workout from any source
 export interface NormalizedWorkout {
   id: string;
-  date: string; // ISO 8601
+  date: string; // ISO 8601 local time
+  start_date_utc?: string; // ISO 8601 UTC (with Z suffix) for cross-platform matching
   activity_type: ActivityType;
   name?: string;
   description?: string;

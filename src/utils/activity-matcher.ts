@@ -61,11 +61,22 @@ export function areActivityTypesCompatible(
 }
 
 /**
+ * Get the best timestamp to use for matching.
+ * Prefers UTC timestamp (start_date_utc) when available for accurate cross-platform matching.
+ */
+function getMatchingTimestamp(workout: NormalizedWorkout): string {
+  // Prefer UTC timestamp for accurate matching with Whoop (which uses UTC)
+  return workout.start_date_utc ?? workout.date;
+}
+
+/**
  * Match workouts across platforms using timestamp and activity type.
  * Algorithm:
  * 1. High confidence: Start times within 5 minutes AND same activity type
  * 2. Medium confidence: Same date AND same activity type
  * 3. Low confidence: Same date only
+ *
+ * Uses UTC timestamps when available for accurate cross-platform matching.
  */
 export function matchActivities(
   intervalsWorkouts: NormalizedWorkout[],
@@ -75,7 +86,8 @@ export function matchActivities(
   const usedWhoopIds = new Set<string>();
 
   for (const workout of intervalsWorkouts) {
-    const workoutStart = parseISO(workout.date);
+    const workoutTimestamp = getMatchingTimestamp(workout);
+    const workoutStart = parseISO(workoutTimestamp);
     const workoutDate = format(workoutStart, 'yyyy-MM-dd');
 
     let bestMatch: {
@@ -159,13 +171,15 @@ export function matchActivities(
 }
 
 /**
- * Find a single matching Whoop activity for an Intervals workout
+ * Find a single matching Whoop activity for an Intervals workout.
+ * Uses UTC timestamps when available for accurate cross-platform matching.
  */
 export function findMatchingWhoopActivity(
   workout: NormalizedWorkout,
   whoopActivities: StrainActivity[]
 ): StrainActivity | null {
-  const workoutStart = parseISO(workout.date);
+  const workoutTimestamp = getMatchingTimestamp(workout);
+  const workoutStart = parseISO(workoutTimestamp);
   const workoutDate = format(workoutStart, 'yyyy-MM-dd');
 
   // First pass: look for timestamp + type match

@@ -23,6 +23,7 @@ const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 interface IntervalsActivity {
   id: string;
   start_date_local: string;
+  start_date: string; // UTC timestamp with Z suffix
   type: string;
   name?: string;
   description?: string;
@@ -307,6 +308,7 @@ export class IntervalsClient {
     return {
       id: activity.id,
       date: activity.start_date_local,
+      start_date_utc: activity.start_date, // UTC for cross-platform matching
       activity_type: normalizeActivityType(activity.type),
       name: activity.name,
       description: activity.description,
