@@ -30,7 +30,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "date-fns": "^4.1.0",
     "express": "^4.21.0",
-    "node-ical": "^0.18.0",
+    "node-ical": "^0.22.1",
     "redis": "^5.10.0",
     "zod": "^3.23.8"
   },
