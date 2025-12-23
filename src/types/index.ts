@@ -82,6 +82,54 @@ export interface NormalizedWorkout {
   // Intervals/laps summary
   intervals_count?: number;
   laps_count?: number;
+
+  // Activity context flags
+  is_indoor?: boolean; // trainer/indoor workout
+  is_commute?: boolean;
+  is_race?: boolean;
+
+  // Zone thresholds used for this activity
+  hr_zones?: number[]; // HR zone boundaries
+  power_zones?: number[]; // Power zone boundaries (% of FTP)
+  pace_zones?: number[]; // Pace zone boundaries
+
+  // Time in zones (seconds)
+  power_zone_times?: ZoneTime[];
+  hr_zone_times?: number[]; // seconds per HR zone
+  pace_zone_times?: number[]; // seconds per pace zone
+
+  // Advanced power metrics
+  joules_above_ftp?: number;
+  max_wbal_depletion?: number; // W'bal depletion
+  polarization_index?: number; // Training polarization (0-2)
+
+  // Running/pace metrics
+  average_stride_m?: number; // meters per stride
+  gap?: number; // Gradient adjusted pace (sec/km)
+
+  // Altitude
+  average_altitude_m?: number;
+  min_altitude_m?: number;
+  max_altitude_m?: number;
+
+  // Temperature
+  average_temp_c?: number;
+  min_temp_c?: number;
+  max_temp_c?: number;
+
+  // Session metrics
+  session_rpe?: number; // RPE × duration
+  strain_score?: number; // Intervals.icu strain score
+
+  // Device info
+  device_name?: string;
+  power_meter?: string;
+}
+
+// Zone time entry for power zones
+export interface ZoneTime {
+  zone_id: string; // e.g., "Z1", "Z2", "SS" for sweetspot
+  seconds: number;
 }
 
 /**

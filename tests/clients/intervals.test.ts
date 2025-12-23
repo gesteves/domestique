@@ -26,27 +26,94 @@ describe('IntervalsClient', () => {
   });
 
   describe('getActivities', () => {
+    // Realistic mock based on actual Intervals.icu API response
     const mockActivities = [
       {
-        id: 'act1',
-        start_date_local: '2024-12-15T10:00:00',
-        type: 'Ride',
-        name: 'Morning Ride',
-        moving_time: 3600,
-        distance: 45000,
-        icu_training_load: 85,
-        weighted_avg_watts: 220,
-        average_heartrate: 150,
+        id: 'i113367711',
+        start_date_local: '2025-12-22T16:54:12',
+        start_date: '2025-12-22T23:54:12Z',
+        type: 'VirtualRide',
+        name: 'Zwift - TrainerRoad: Klammspitze on Petit Boucle in France',
+        description: null,
+        moving_time: 7236,
+        elapsed_time: 7238,
+        distance: 65530.26,
+        icu_training_load: 86,
+        icu_intensity: 65.5914,
+        weighted_avg_watts: 183,
+        average_watts: 181,
+        average_heartrate: 135,
+        max_heartrate: 152,
+        total_elevation_gain: 480,
+        calories: 1248,
+        average_speed: 9.052,
+        max_speed: 17.805,
+        coasting_time: 32,
+        icu_rpe: 3,
+        feel: null,
+        trainer: true,
+        commute: false,
+        race: false,
+        icu_hr_zones: [138, 154, 160, 171, 176, 181, 190],
+        icu_power_zones: [55, 75, 90, 105, 120, 150, 999],
+        pace_zones: null,
+        icu_zone_times: [
+          { id: 'Z1', secs: 571 },
+          { id: 'Z2', secs: 6524 },
+          { id: 'Z3', secs: 141 },
+          { id: 'Z4', secs: 0 },
+          { id: 'Z5', secs: 0 },
+          { id: 'Z6', secs: 0 },
+          { id: 'Z7', secs: 0 },
+          { id: 'SS', secs: 8 },
+        ],
+        icu_hr_zone_times: [4536, 2700, 0, 0, 0, 0, 0],
+        pace_zone_times: null,
+        icu_joules_above_ftp: 0,
+        icu_max_wbal_depletion: 0,
+        polarization_index: 0,
+        gap: null,
+        average_stride: null,
+        average_altitude: 25.928112,
+        min_altitude: 10.4,
+        max_altitude: 120.8,
+        average_temp: null,
+        min_temp: null,
+        max_temp: null,
+        session_rpe: 361,
+        strain_score: 118.56503,
+        device_name: 'ZWIFT',
+        power_meter: null,
+        trimp: 145.78423,
+        icu_ftp: 279,
+        icu_eftp: null,
+        icu_pm_ftp: 195,
+        joules: 1307298,
+        carbs_used: 241,
+        carbs_ingested: null,
+        ctl: 63.477615,
+        atl: 49.264656,
+        average_cadence: 91.98834,
+        max_cadence: null,
+        variability_index: 1.0110497,
+        decoupling: -0.95401156,
+        efficiency_factor: 1.3555555,
+        icu_lap_count: 17,
+        workout_doc: { class: 'Endurance' },
       },
       {
         id: 'act2',
         start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
         type: 'Run',
         name: 'Easy Run',
         moving_time: 2400,
         distance: 8000,
         icu_training_load: 45,
         average_heartrate: 140,
+        trainer: false,
+        commute: false,
+        race: false,
       },
     ];
 
@@ -65,11 +132,81 @@ describe('IntervalsClient', () => {
       expect(callUrl).toContain('newest=2024-12-15');
 
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('act1');
+      expect(result[0].id).toBe('i113367711');
       expect(result[0].activity_type).toBe('Cycling');
-      expect(result[0].duration_seconds).toBe(3600);
-      expect(result[0].distance_km).toBe(45);
+      expect(result[0].duration_seconds).toBe(7236);
+      expect(result[0].distance_km).toBeCloseTo(65.53, 2);
       expect(result[0].source).toBe('intervals.icu');
+    });
+
+    it('should include UTC timestamp for cross-platform matching', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivities),
+      });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].date).toBe('2025-12-22T16:54:12'); // local time
+      expect(result[0].start_date_utc).toBe('2025-12-22T23:54:12Z'); // UTC
+    });
+
+    it('should include activity context flags', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivities),
+      });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].is_indoor).toBe(true);
+      expect(result[0].is_commute).toBe(false);
+      expect(result[0].is_race).toBe(false);
+    });
+
+    it('should include zone thresholds and time in zones', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivities),
+      });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].hr_zones).toEqual([138, 154, 160, 171, 176, 181, 190]);
+      expect(result[0].power_zones).toEqual([55, 75, 90, 105, 120, 150, 999]);
+      expect(result[0].power_zone_times).toHaveLength(8);
+      expect(result[0].power_zone_times?.[0]).toEqual({ zone_id: 'Z1', seconds: 571 });
+      expect(result[0].power_zone_times?.[7]).toEqual({ zone_id: 'SS', seconds: 8 });
+      expect(result[0].hr_zone_times).toEqual([4536, 2700, 0, 0, 0, 0, 0]);
+    });
+
+    it('should include advanced power and session metrics', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivities),
+      });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].joules_above_ftp).toBe(0);
+      expect(result[0].max_wbal_depletion).toBe(0);
+      expect(result[0].polarization_index).toBe(0);
+      expect(result[0].session_rpe).toBe(361);
+      expect(result[0].strain_score).toBeCloseTo(118.565, 2);
+      expect(result[0].device_name).toBe('ZWIFT');
+    });
+
+    it('should include altitude data', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivities),
+      });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].average_altitude_m).toBeCloseTo(25.93, 2);
+      expect(result[0].min_altitude_m).toBe(10.4);
+      expect(result[0].max_altitude_m).toBe(120.8);
     });
 
     it('should filter by sport when specified', async () => {
@@ -123,13 +260,19 @@ describe('IntervalsClient', () => {
 
   describe('getActivity', () => {
     const mockActivity = {
-      id: 'act1',
-      start_date_local: '2024-12-15T10:00:00',
-      type: 'Ride',
-      name: 'Morning Ride',
-      moving_time: 3600,
-      distance: 45000,
-      icu_training_load: 85,
+      id: 'i113367711',
+      start_date_local: '2025-12-22T16:54:12',
+      start_date: '2025-12-22T23:54:12Z',
+      type: 'VirtualRide',
+      name: 'Zwift - TrainerRoad: Klammspitze',
+      moving_time: 7236,
+      distance: 65530.26,
+      icu_training_load: 86,
+      trainer: true,
+      icu_zone_times: [
+        { id: 'Z1', secs: 571 },
+        { id: 'Z2', secs: 6524 },
+      ],
     };
 
     it('should fetch single activity by ID', async () => {
@@ -138,11 +281,13 @@ describe('IntervalsClient', () => {
         json: () => Promise.resolve(mockActivity),
       });
 
-      const result = await client.getActivity('act1');
+      const result = await client.getActivity('i113367711');
 
       const callUrl = mockFetch.mock.calls[0][0] as string;
-      expect(callUrl).toContain('/activities/act1');
-      expect(result.id).toBe('act1');
+      expect(callUrl).toContain('/activities/i113367711');
+      expect(result.id).toBe('i113367711');
+      expect(result.is_indoor).toBe(true);
+      expect(result.start_date_utc).toBe('2025-12-22T23:54:12Z');
     });
   });
 

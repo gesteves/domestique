@@ -20,6 +20,12 @@ import { normalizeActivityType } from '../utils/activity-matcher.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
+// Zone time entry from Intervals.icu
+interface IntervalsZoneTime {
+  id: string; // e.g., "Z1", "Z2", "SS"
+  secs: number;
+}
+
 interface IntervalsActivity {
   id: string;
   start_date_local: string;
@@ -49,11 +55,52 @@ interface IntervalsActivity {
 
   // Training load & feel
   rpe?: number;
+  icu_rpe?: number; // Intervals.icu RPE (may differ from rpe)
   feel?: number;
 
-  // Sweetspot & classification
-  icu_zone_times?: number[];
-  gap?: number; // gradient adjusted pace
+  // Activity context flags
+  trainer?: boolean;
+  commute?: boolean;
+  race?: boolean;
+
+  // Zone thresholds used for this activity
+  icu_hr_zones?: number[]; // HR zone boundaries
+  icu_power_zones?: number[]; // Power zone boundaries (% of FTP)
+  pace_zones?: number[]; // Pace zone boundaries
+
+  // Time in zones
+  icu_zone_times?: IntervalsZoneTime[]; // Power zone times with zone IDs
+  icu_hr_zone_times?: number[]; // Seconds per HR zone
+  pace_zone_times?: number[]; // Seconds per pace zone
+
+  // Advanced power metrics
+  icu_joules_above_ftp?: number;
+  icu_max_wbal_depletion?: number;
+  polarization_index?: number;
+
+  // Gradient adjusted pace & stride
+  gap?: number; // gradient adjusted pace (sec/m)
+  average_stride?: number; // meters per stride
+
+  // Altitude
+  average_altitude?: number;
+  min_altitude?: number;
+  max_altitude?: number;
+
+  // Temperature
+  average_temp?: number;
+  min_temp?: number;
+  max_temp?: number;
+
+  // Session metrics
+  session_rpe?: number;
+  strain_score?: number;
+
+  // Device info
+  device_name?: string;
+  power_meter?: string;
+
+  // Classification
   workout_doc?: {
     class?: string;
   };
@@ -88,6 +135,7 @@ interface IntervalsActivity {
   // Intervals/laps
   icu_intervals?: unknown[];
   laps?: unknown[];
+  icu_lap_count?: number;
 }
 
 interface IntervalsWellness {
@@ -305,6 +353,15 @@ export class IntervalsClient {
       ? activity.max_speed * 3.6
       : undefined;
 
+    // Convert GAP from sec/m to sec/km if available
+    const gapSecPerKm = activity.gap ? activity.gap * 1000 : undefined;
+
+    // Normalize power zone times to our format
+    const powerZoneTimes = activity.icu_zone_times?.map((zt) => ({
+      zone_id: zt.id,
+      seconds: zt.secs,
+    }));
+
     return {
       id: activity.id,
       date: activity.start_date_local,
@@ -334,7 +391,7 @@ export class IntervalsClient {
 
       // Training load & feel
       load: activity.icu_training_load,
-      rpe: activity.rpe,
+      rpe: this.pickHighestRpe(activity.rpe, activity.icu_rpe),
       feel: activity.feel,
 
       // Classification
@@ -373,8 +430,61 @@ export class IntervalsClient {
 
       // Intervals/laps count
       intervals_count: activity.icu_intervals?.length,
-      laps_count: activity.laps?.length,
+      laps_count: activity.icu_lap_count ?? activity.laps?.length,
+
+      // Activity context flags
+      is_indoor: activity.trainer,
+      is_commute: activity.commute,
+      is_race: activity.race,
+
+      // Zone thresholds
+      hr_zones: activity.icu_hr_zones,
+      power_zones: activity.icu_power_zones,
+      pace_zones: activity.pace_zones,
+
+      // Time in zones
+      power_zone_times: powerZoneTimes,
+      hr_zone_times: activity.icu_hr_zone_times,
+      pace_zone_times: activity.pace_zone_times,
+
+      // Advanced power metrics
+      joules_above_ftp: activity.icu_joules_above_ftp,
+      max_wbal_depletion: activity.icu_max_wbal_depletion,
+      polarization_index: activity.polarization_index,
+
+      // Running/pace metrics
+      average_stride_m: activity.average_stride,
+      gap: gapSecPerKm,
+
+      // Altitude
+      average_altitude_m: activity.average_altitude,
+      min_altitude_m: activity.min_altitude,
+      max_altitude_m: activity.max_altitude,
+
+      // Temperature
+      average_temp_c: activity.average_temp,
+      min_temp_c: activity.min_temp,
+      max_temp_c: activity.max_temp,
+
+      // Session metrics
+      session_rpe: activity.session_rpe,
+      strain_score: activity.strain_score,
+
+      // Device info
+      device_name: activity.device_name,
+      power_meter: activity.power_meter,
     };
+  }
+
+  /**
+   * Pick the highest RPE value from multiple sources.
+   * Returns undefined if neither is present.
+   */
+  private pickHighestRpe(rpe?: number, icuRpe?: number): number | undefined {
+    if (rpe !== undefined && icuRpe !== undefined) {
+      return Math.max(rpe, icuRpe);
+    }
+    return icuRpe ?? rpe;
   }
 
   private normalizePlannedEvent(event: IntervalsEvent): PlannedWorkout {
