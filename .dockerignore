@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# Environment files (secrets)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+*.md
+!README.md
+
+# Tests (coverage only - tests needed for test stage)
+coverage
+
+# Fly.io config (not needed in image)
+fly.toml
+
+# Development files
+.editorconfig
+.eslintrc*
+.prettierrc*
+docker-compose.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Project planning
+project-plan.md

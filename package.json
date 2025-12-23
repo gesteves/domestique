@@ -1,0 +1,48 @@
+{
+  "name": "domestique",
+  "version": "1.0.0",
+  "description": "Fitness MCP server integrating Intervals.icu, Whoop, and TrainerRoad",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "whoop:auth": "node dist/scripts/whoop-oauth.js",
+    "whoop:auth:dev": "tsx src/scripts/whoop-oauth.ts",
+    "test:clients": "node dist/scripts/test-clients.js",
+    "stdio": "node dist/stdio.js"
+  },
+  "keywords": [
+    "mcp",
+    "fitness",
+    "intervals.icu",
+    "whoop",
+    "trainerroad"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "date-fns": "^3.6.0",
+    "express": "^4.21.0",
+    "node-ical": "^0.18.0",
+    "redis": "^4.7.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
