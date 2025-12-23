@@ -8,9 +8,6 @@ vi.mock('../../src/clients/intervals.js', () => ({
       getActivities: vi.fn().mockResolvedValue([]),
       getPlannedEvents: vi.fn().mockResolvedValue([]),
       getFitnessMetrics: vi.fn().mockResolvedValue([]),
-      getAthleteProfile: vi.fn().mockResolvedValue({ sports: [] }),
-      getPowerCurve: vi.fn().mockResolvedValue({ curve: [] }),
-      getPaceCurve: vi.fn().mockResolvedValue({ curve: [] }),
       getTrainingLoadTrends: vi.fn().mockResolvedValue({ data: [], summary: {} }),
     };
   }),
@@ -106,10 +103,8 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_upcoming_workouts');
       expect(registeredTools).toContain('get_planned_workout_details');
       // Analysis tools
-      expect(registeredTools).toContain('get_power_curve');
-      expect(registeredTools).toContain('get_pace_curve');
       expect(registeredTools).toContain('get_training_load_trends');
-      expect(registeredTools.length).toBe(12);
+      expect(registeredTools.length).toBe(10);
     });
 
     it('should call server.tool for each tool', () => {
@@ -119,7 +114,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(12);
+      expect(mockServer.tool).toHaveBeenCalledTimes(10);
     });
 
     it('should pass description and schema to each tool', () => {

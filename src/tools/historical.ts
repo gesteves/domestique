@@ -5,8 +5,6 @@ import type {
   NormalizedWorkout,
   RecoveryData,
   FitnessMetrics,
-  PowerCurve,
-  PaceCurve,
   TrainingLoadTrends,
 } from '../types/index.js';
 import type {
@@ -186,44 +184,6 @@ export class HistoricalTools {
   private average(values: number[]): number {
     if (values.length === 0) return 0;
     return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
-  }
-
-  // ============================================
-  // Power Curves
-  // ============================================
-
-  /**
-   * Get power curve showing best efforts at various durations
-   */
-  async getPowerCurve(
-    sport: string = 'Ride',
-    period: string = '90d'
-  ): Promise<PowerCurve> {
-    try {
-      return await this.intervals.getPowerCurve(sport, period);
-    } catch (error) {
-      console.error('Error fetching power curve:', error);
-      throw error;
-    }
-  }
-
-  // ============================================
-  // Pace Curves
-  // ============================================
-
-  /**
-   * Get pace curve showing best paces at various durations
-   */
-  async getPaceCurve(
-    period: string = '90d',
-    gap: boolean = false
-  ): Promise<PaceCurve> {
-    try {
-      return await this.intervals.getPaceCurve(period, gap);
-    } catch (error) {
-      console.error('Error fetching pace curve:', error);
-      throw error;
-    }
   }
 
   // ============================================

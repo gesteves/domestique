@@ -213,62 +213,6 @@ export class ToolRegistry {
     // ============================================
 
     server.tool(
-      'get_power_curve',
-      'Get power curve showing best power outputs at various durations (5s, 1min, 5min, 20min, 60min, etc.). Essential for identifying athlete strengths, tracking FTP progression, and setting appropriate workout intensities.',
-      {
-        sport: z
-          .enum(['cycling'])
-          .optional()
-          .default('cycling')
-          .describe('Sport type (currently only cycling supported)'),
-        period: z
-          .enum(['42d', '90d', '1y', 'all'])
-          .optional()
-          .default('90d')
-          .describe('Time period for curve data (default: 90 days)'),
-      },
-      async (args) => {
-        const sportType = args.sport === 'cycling' ? 'Ride' : 'Ride';
-        const result = await this.historicalTools.getPowerCurve(sportType, args.period);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('power_curve'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
-    );
-
-    server.tool(
-      'get_pace_curve',
-      'Get pace curve showing best running paces at various durations. Useful for setting appropriate run paces for workouts, tracking running fitness progression, and identifying race potential at various distances.',
-      {
-        period: z
-          .enum(['42d', '90d', '1y', 'all'])
-          .optional()
-          .default('90d')
-          .describe('Time period for curve data (default: 90 days)'),
-        gradient_adjusted: z
-          .boolean()
-          .optional()
-          .default(false)
-          .describe('Use gradient-adjusted pace (GAP) to normalize for hills'),
-      },
-      async (args) => {
-        const result = await this.historicalTools.getPaceCurve(
-          args.period,
-          args.gradient_adjusted
-        );
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('pace_curve'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
-    );
-
-    server.tool(
       'get_training_load_trends',
       'Get training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. ACWR between 0.8-1.3 is optimal; above 1.5 indicates high injury risk.',
       {

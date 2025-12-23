@@ -199,53 +199,13 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   pace_zones: 'Pace zones as {zone_number, name, min_value, max_value} - values are seconds/km',
 };
 
-export const POWER_CURVE_FIELD_DESCRIPTIONS = {
-  sport: 'Sport type for this curve',
-  period: 'Time period covered (42d, 90d, 1y, all)',
-  athlete_ftp: 'Current FTP for context in watts',
-  athlete_weight_kg: 'Athlete weight for W/kg calculations',
-
-  // Curve data
-  curve: 'Array of {duration_seconds, watts, watts_per_kg, date} points',
-  duration_seconds: 'Duration of max effort in seconds',
-  watts: 'Best power output at this duration in watts',
-  watts_per_kg: 'Power-to-weight ratio in W/kg',
-
-  // Key durations
-  peak_5s: 'Best 5-second power in watts (neuromuscular)',
-  peak_1min: 'Best 1-minute power in watts (anaerobic capacity)',
-  peak_5min: 'Best 5-minute power in watts (VO2max)',
-  peak_20min: 'Best 20-minute power in watts (threshold indicator)',
-  peak_60min: 'Best 60-minute power in watts (true FTP)',
-};
-
-export const PACE_CURVE_FIELD_DESCRIPTIONS = {
-  period: 'Time period covered (42d, 90d, 1y, all)',
-  gradient_adjusted: 'Whether pace is gradient-adjusted (GAP)',
-
-  // Curve data
-  curve: 'Array of {duration_seconds, pace_per_km, speed_kph, date} points',
-  duration_seconds: 'Duration of max effort in seconds',
-  pace_per_km: 'Best pace at this duration in seconds per kilometer',
-  speed_kph: 'Speed at this pace in km/h',
-
-  // Key paces
-  peak_400m_pace: 'Best ~1min effort pace in sec/km',
-  peak_1km_pace: 'Best ~3min effort pace in sec/km',
-  peak_5km_pace: 'Best ~20min effort pace in sec/km (threshold indicator)',
-  peak_10km_pace: 'Best ~40min effort pace in sec/km',
-  peak_half_marathon_pace: 'Best ~90min effort pace in sec/km',
-};
-
 type FieldCategory =
   | 'workout'
   | 'whoop'
   | 'recovery'
   | 'fitness'
   | 'planned'
-  | 'athlete_profile'
-  | 'power_curve'
-  | 'pace_curve';
+  | 'athlete_profile';
 
 /**
  * Get descriptions for a specific category
@@ -264,10 +224,6 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return PLANNED_WORKOUT_FIELD_DESCRIPTIONS;
     case 'athlete_profile':
       return ATHLETE_PROFILE_FIELD_DESCRIPTIONS;
-    case 'power_curve':
-      return POWER_CURVE_FIELD_DESCRIPTIONS;
-    case 'pace_curve':
-      return PACE_CURVE_FIELD_DESCRIPTIONS;
   }
 }
 
