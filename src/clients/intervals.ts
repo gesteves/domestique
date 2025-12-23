@@ -8,6 +8,11 @@ import type {
   TrainingLoadSummary,
   CTLTrend,
   ACWRStatus,
+  AthleteProfile,
+  SportSettings,
+  HRZone,
+  PowerZone,
+  PaceZone,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 
@@ -24,6 +29,25 @@ interface IntervalsAthleteProfile {
     timezone?: string;
     sex?: string;
   };
+}
+
+// Sport settings from /sport-settings endpoint
+interface IntervalsSportSettings {
+  id: number;
+  athlete_id: string;
+  types: string[];
+  ftp?: number;
+  indoor_ftp?: number;
+  lthr?: number;
+  max_hr?: number;
+  hr_zones?: number[];
+  hr_zone_names?: string[];
+  power_zones?: number[];
+  power_zone_names?: string[];
+  threshold_pace?: number;
+  pace_units?: string;
+  pace_zones?: number[];
+  pace_zone_names?: string[];
 }
 
 // Zone time entry from Intervals.icu
@@ -195,6 +219,247 @@ export class IntervalsClient {
       console.error('Error fetching athlete timezone, defaulting to UTC:', error);
       return 'UTC';
     }
+  }
+
+  /**
+   * Get the complete athlete profile including sport settings.
+   */
+  async getAthleteProfile(): Promise<AthleteProfile> {
+    const [profile, sportSettings] = await Promise.all([
+      this.fetch<IntervalsAthleteProfile>('/profile'),
+      this.fetch<IntervalsSportSettings[]>('/sport-settings'),
+    ]);
+
+    const sports = sportSettings
+      .filter((s) => !s.types.includes('Other')) // Exclude 'Other' catch-all
+      .map((s) => this.normalizeSportSettings(s));
+
+    return {
+      id: profile.athlete.id,
+      name: profile.athlete.name,
+      city: profile.athlete.city,
+      state: profile.athlete.state,
+      country: profile.athlete.country,
+      timezone: profile.athlete.timezone,
+      sex: profile.athlete.sex,
+      sports,
+    };
+  }
+
+  /**
+   * Normalize sport settings from Intervals.icu API format.
+   */
+  private normalizeSportSettings(settings: IntervalsSportSettings): SportSettings {
+    const result: SportSettings = {
+      types: settings.types,
+    };
+
+    // FTP
+    if (settings.ftp) {
+      result.ftp = settings.ftp;
+      // Only include indoor_ftp if different
+      if (settings.indoor_ftp && settings.indoor_ftp !== settings.ftp) {
+        result.indoor_ftp = settings.indoor_ftp;
+      }
+    }
+
+    // Heart rate thresholds
+    if (settings.lthr) result.lthr = settings.lthr;
+    if (settings.max_hr) result.max_hr = settings.max_hr;
+
+    // HR zones
+    if (settings.hr_zones && settings.hr_zone_names) {
+      result.hr_zones = this.mergeHRZones(
+        settings.hr_zones,
+        settings.hr_zone_names,
+        settings.max_hr
+      );
+    }
+
+    // Threshold pace
+    if (settings.threshold_pace && settings.pace_units) {
+      // For SECS_100M (swimming), threshold_pace is stored as speed in m/s
+      // Convert to actual pace (time per distance) for display
+      const paceValue = this.convertToPaceValue(settings.threshold_pace, settings.pace_units);
+      result.threshold_pace = paceValue;
+      result.pace_units = settings.pace_units;
+      result.threshold_pace_human = this.formatPaceValue(paceValue, settings.pace_units);
+    }
+
+    // Power zones
+    if (settings.power_zones && settings.power_zone_names && settings.ftp) {
+      result.power_zones = this.mergePowerZones(
+        settings.power_zones,
+        settings.power_zone_names,
+        settings.ftp
+      );
+      // Indoor power zones if indoor FTP differs
+      if (settings.indoor_ftp && settings.indoor_ftp !== settings.ftp) {
+        result.indoor_power_zones = this.mergePowerZones(
+          settings.power_zones,
+          settings.power_zone_names,
+          settings.indoor_ftp
+        );
+      }
+    }
+
+    // Pace zones
+    if (settings.pace_zones && settings.pace_zone_names && settings.threshold_pace && settings.pace_units) {
+      // Convert threshold to actual pace value for zone calculations
+      const paceValue = this.convertToPaceValue(settings.threshold_pace, settings.pace_units);
+      result.pace_zones = this.mergePaceZones(
+        settings.pace_zones,
+        settings.pace_zone_names,
+        paceValue,
+        settings.pace_units
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Merge HR zone boundaries with names into structured zones.
+   * HR zones array contains thresholds: [138, 154, 160, 171, 176, 181, 190]
+   * Names array has one name per zone: ["Recovery", "Aerobic", ...]
+   */
+  private mergeHRZones(
+    zones: number[],
+    names: string[],
+    maxHR?: number
+  ): HRZone[] {
+    const result: HRZone[] = [];
+
+    for (let i = 0; i < names.length; i++) {
+      const low = i === 0 ? 0 : zones[i - 1];
+      const high = i < zones.length ? zones[i] : null;
+
+      result.push({
+        name: names[i],
+        low_bpm: low,
+        high_bpm: high,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Merge power zone percentages with names and calculate absolute values.
+   * Power zones array contains % of FTP: [55, 75, 90, 105, 120, 150, 999]
+   */
+  private mergePowerZones(
+    zones: number[],
+    names: string[],
+    ftp: number
+  ): PowerZone[] {
+    const result: PowerZone[] = [];
+
+    for (let i = 0; i < names.length; i++) {
+      const lowPercent = i === 0 ? 0 : zones[i - 1];
+      const highPercent = zones[i] >= 999 ? null : zones[i];
+
+      result.push({
+        name: names[i],
+        low_percent: lowPercent,
+        high_percent: highPercent,
+        low_watts: Math.round((lowPercent / 100) * ftp),
+        high_watts: highPercent ? Math.round((highPercent / 100) * ftp) : null,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Merge pace zone percentages with names and format human-readable paces.
+   * Pace zones array contains % of threshold pace: [77.5, 87.7, 94.3, 100, 103.4, 111.5, 999]
+   *
+   * Important: Higher percentage = FASTER pace (less time per km)
+   * So pace = threshold_pace / (percentage / 100)
+   *
+   * Example with 4:00/km threshold:
+   * - 77.5% → 4.0 / 0.775 = 5.16 min/km (slower)
+   * - 100%  → 4.0 / 1.0   = 4.00 min/km (threshold)
+   * - 112%  → 4.0 / 1.12  = 3.57 min/km (faster)
+   */
+  private mergePaceZones(
+    zones: number[],
+    names: string[],
+    thresholdPace: number,
+    paceUnits: string
+  ): PaceZone[] {
+    const result: PaceZone[] = [];
+
+    for (let i = 0; i < names.length; i++) {
+      const lowPercent = i === 0 ? 0 : zones[i - 1];
+      const highPercent = zones[i] >= 999 ? null : zones[i];
+
+      // Calculate actual pace values
+      // pace = threshold / (percentage / 100)
+      // low_percent (lower %) = slower pace (more time per km)
+      // high_percent (higher %) = faster pace (less time per km)
+      const slowPace = lowPercent > 0 ? thresholdPace / (lowPercent / 100) : null;
+      const fastPace = highPercent ? thresholdPace / (highPercent / 100) : null;
+
+      result.push({
+        name: names[i],
+        low_percent: lowPercent,
+        high_percent: highPercent,
+        slow_pace: slowPace,
+        fast_pace: fastPace,
+        slow_pace_human: slowPace ? this.formatPaceValue(slowPace, paceUnits) : null,
+        fast_pace_human: fastPace ? this.formatPaceValue(fastPace, paceUnits) : null,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Convert raw threshold_pace from API to actual pace value.
+   * Intervals.icu stores threshold_pace as SPEED in m/s for all sports.
+   * The pace_units field indicates how to DISPLAY it.
+   *
+   * - MINS_KM: convert m/s to minutes per km
+   * - SECS_100M: convert m/s to seconds per 100m
+   */
+  private convertToPaceValue(rawValue: number, units: string): number {
+    if (units === 'MINS_KM') {
+      // rawValue is speed in m/s, convert to minutes per km
+      // pace (min/km) = (1000m / speed) / 60
+      return (1000 / rawValue) / 60;
+    } else if (units === 'SECS_100M') {
+      // rawValue is speed in m/s, convert to seconds per 100m
+      // pace (sec/100m) = 100m / speed (m/s)
+      return 100 / rawValue;
+    }
+    // Default: assume it's already the pace value
+    return rawValue;
+  }
+
+  /**
+   * Format a pace value (already converted) into human-readable string.
+   * @param pace - Pace value (min/km for MINS_KM, sec/100m for SECS_100M)
+   * @param units - "MINS_KM", "SECS_100M", etc.
+   */
+  private formatPaceValue(pace: number, units: string): string {
+    if (units === 'MINS_KM') {
+      // pace is in minutes per km (e.g., 4 = 4:00/km)
+      const minutes = Math.floor(pace);
+      const seconds = Math.round((pace - minutes) * 60);
+      return `${minutes}:${seconds.toString().padStart(2, '0')}/km`;
+    } else if (units === 'SECS_100M') {
+      // pace is in seconds per 100m (e.g., 120 = 2:00/100m)
+      const minutes = Math.floor(pace / 60);
+      const seconds = Math.round(pace % 60);
+      if (minutes > 0) {
+        return `${minutes}:${seconds.toString().padStart(2, '0')}/100m`;
+      }
+      return `${seconds}s/100m`;
+    }
+    // Default: just return the raw value
+    return `${pace.toFixed(2)} ${units}`;
   }
 
   private async fetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {

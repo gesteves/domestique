@@ -11,6 +11,7 @@ import type {
   WorkoutWithWhoop,
   StrainActivity,
   WhoopMatchedData,
+  AthleteProfile,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -192,5 +193,12 @@ export class CurrentTools {
     }
 
     return false;
+  }
+
+  /**
+   * Get athlete profile including sport-specific settings (FTP, zones, etc.)
+   */
+  async getAthleteProfile(): Promise<AthleteProfile> {
+    return await this.intervals.getAthleteProfile();
   }
 }

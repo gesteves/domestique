@@ -131,6 +131,21 @@ export class ToolRegistry {
       }
     );
 
+    server.tool(
+      'get_athlete_profile',
+      "Get the athlete's profile including sport-specific settings for power zones, heart rate zones, pace zones, FTP, LTHR, and thresholds. Useful for understanding training zones and interpreting workout data.",
+      {},
+      async () => {
+        const result = await this.currentTools.getAthleteProfile();
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('athlete_profile'),
+            data: result,
+          }, null, 2) }],
+        };
+      }
+    );
+
     // Historical/Trends Tools
     server.tool(
       'get_workout_history',

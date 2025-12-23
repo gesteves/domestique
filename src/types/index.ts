@@ -277,6 +277,79 @@ export interface DateRange {
 }
 
 // ============================================
+// Athlete Profile
+// ============================================
+
+// Heart rate zone with name and range
+export interface HRZone {
+  name: string;
+  low_bpm: number;
+  high_bpm: number | null; // null for highest zone (unbounded)
+}
+
+// Power zone with name, percentages, and absolute values
+export interface PowerZone {
+  name: string;
+  low_percent: number;
+  high_percent: number | null; // null for highest zone (unbounded)
+  low_watts: number;
+  high_watts: number | null;
+}
+
+// Pace zone with name, percentages, values, and human-readable format
+// Note: low_percent corresponds to slow pace, high_percent to fast pace
+// (higher % = faster = less time per unit distance)
+export interface PaceZone {
+  name: string;
+  low_percent: number;
+  high_percent: number | null;
+  slow_pace: number | null; // slower boundary (more time) - null if unbounded slow
+  fast_pace: number | null; // faster boundary (less time) - null if unbounded fast
+  slow_pace_human: string | null; // e.g., "5:30/km" or null if unbounded
+  fast_pace_human: string | null; // e.g., "4:30/km" or null if unbounded
+}
+
+// Sport-specific settings
+export interface SportSettings {
+  types: string[]; // Activity types this applies to (e.g., ["Ride", "VirtualRide"])
+
+  // Power thresholds
+  ftp?: number;
+  indoor_ftp?: number; // Only included if different from ftp
+
+  // Heart rate thresholds
+  lthr?: number;
+  max_hr?: number;
+
+  // HR zones (merged with names)
+  hr_zones?: HRZone[];
+
+  // Pace thresholds
+  threshold_pace?: number;
+  threshold_pace_human?: string; // e.g., "4:00/km" or "1:30/100m"
+  pace_units?: string;
+
+  // Power zones (merged with names and values)
+  power_zones?: PowerZone[];
+  indoor_power_zones?: PowerZone[]; // Only if indoor_ftp differs
+
+  // Pace zones
+  pace_zones?: PaceZone[];
+}
+
+// Complete athlete profile
+export interface AthleteProfile {
+  id: string;
+  name?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  timezone?: string;
+  sex?: string;
+  sports: SportSettings[];
+}
+
+// ============================================
 // Training Load Trends
 // ============================================
 

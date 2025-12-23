@@ -186,29 +186,41 @@ export const PLANNED_WORKOUT_FIELD_DESCRIPTIONS = {
 };
 
 export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
-  athlete_id: 'Unique athlete identifier',
+  // Athlete info
+  id: 'Unique athlete identifier in Intervals.icu',
   name: 'Athlete name',
-  weight_kg: 'Athlete weight in kilograms',
-  primary_ftp: 'Primary FTP (Functional Threshold Power) in watts',
-  primary_lthr: 'Primary LTHR (Lactate Threshold Heart Rate) in BPM',
-  primary_max_hr: 'Primary maximum heart rate in BPM',
+  city: 'City of residence',
+  state: 'State/province of residence',
+  country: 'Country of residence',
+  timezone: 'Athlete timezone (e.g., "America/New_York")',
+  sex: 'Athlete sex (M or F)',
 
   // Sport settings
-  sport_type: 'Sport type (Ride, Run, Swim, etc.)',
-  ftp: 'Functional Threshold Power in watts',
-  indoor_ftp: 'Indoor-specific FTP in watts (often higher than outdoor)',
-  eftp: 'Estimated FTP from recent activities in watts',
-  lthr: 'Lactate Threshold Heart Rate in BPM',
-  max_hr: 'Maximum heart rate in BPM',
-  resting_hr: 'Resting heart rate in BPM',
-  threshold_pace: 'Threshold pace in seconds per km (running)',
-  w_prime: "W' (W prime) anaerobic work capacity in joules",
-  pmax: 'Maximum power capacity in watts',
+  sports: 'Array of sport-specific settings for each activity type the athlete trains',
+  types: 'Activity types this sport setting applies to (e.g., ["Ride", "VirtualRide", "GravelRide"])',
 
-  // Zones
-  power_zones: 'Power zones as {zone_number, name, min_value, max_value} - values are watts',
-  heart_rate_zones: 'HR zones as {zone_number, name, min_value, max_value} - values are BPM',
-  pace_zones: 'Pace zones as {zone_number, name, min_value, max_value} - values are seconds/km',
+  // Power thresholds
+  ftp: 'Functional Threshold Power in watts',
+  indoor_ftp: 'Indoor-specific FTP in watts (only shown if different from outdoor FTP)',
+
+  // Heart rate thresholds
+  lthr: 'Lactate Threshold Heart Rate in BPM - HR at threshold effort',
+  max_hr: 'Maximum heart rate in BPM',
+
+  // HR zones
+  hr_zones: 'Heart rate zones as array of {name, low_bpm, high_bpm}. Sorted low to high (Zone 1 first). Note that these may be different than the Whoop HR zones.',
+
+  // Pace thresholds
+  threshold_pace: 'Threshold pace raw value (use threshold_pace_human for display)',
+  threshold_pace_human: 'Human-readable threshold pace (e.g., "4:00/km" or "1:30/100m")',
+  pace_units: 'Units for pace: MINS_KM (running), SECS_100M (swimming)',
+
+  // Power zones
+  power_zones: 'Power zones as array of {name, low_percent, high_percent, low_watts, high_watts}. Percentages are % of FTP. high values are null for highest zone.',
+  indoor_power_zones: 'Indoor-specific power zones (only present if indoor_ftp differs from ftp)',
+
+  // Pace zones
+  pace_zones: 'Pace zones as array sorted from slowest to fastest. Each zone has {name, low_percent, high_percent, slow_pace, fast_pace, slow_pace_human, fast_pace_human}. Higher % = faster pace. slow_pace is the slowest boundary (more time), fast_pace is the fastest (less time). null means unbounded.',
 };
 
 type FieldCategory =

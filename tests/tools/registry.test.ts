@@ -10,6 +10,7 @@ vi.mock('../../src/clients/intervals.js', () => ({
       getFitnessMetrics: vi.fn().mockResolvedValue([]),
       getTrainingLoadTrends: vi.fn().mockResolvedValue({ data: [], summary: {} }),
       getAthleteTimezone: vi.fn().mockResolvedValue('America/New_York'),
+      getAthleteProfile: vi.fn().mockResolvedValue({ id: 'test', sports: [] }),
     };
   }),
 }));
@@ -99,6 +100,7 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_todays_strain');
       expect(registeredTools).toContain('get_todays_completed_workouts');
       expect(registeredTools).toContain('get_todays_planned_workouts');
+      expect(registeredTools).toContain('get_athlete_profile');
       expect(registeredTools).toContain('get_strain_history');
       expect(registeredTools).toContain('get_workout_history');
       expect(registeredTools).toContain('get_recovery_trends');
@@ -106,7 +108,7 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_planned_workout_details');
       // Analysis tools
       expect(registeredTools).toContain('get_training_load_trends');
-      expect(registeredTools.length).toBe(10);
+      expect(registeredTools.length).toBe(11);
     });
 
     it('should call server.tool for each tool', () => {
@@ -116,7 +118,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(10);
+      expect(mockServer.tool).toHaveBeenCalledTimes(11);
     });
 
     it('should pass description and schema to each tool', () => {
