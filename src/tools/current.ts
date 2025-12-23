@@ -165,23 +165,11 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's planned workouts from both TrainerRoad and Intervals.icu
+   * Get today's planned workouts from both TrainerRoad and Intervals.icu.
+   * Returns a single merged array, preferring TrainerRoad for duplicates (has more detail).
    */
-  async getTodaysPlannedWorkouts(): Promise<{
-    trainerroad: PlannedWorkout[];
-    intervals: PlannedWorkout[];
-    merged: PlannedWorkout[];
-  }> {
+  async getTodaysPlannedWorkouts(): Promise<PlannedWorkout[]> {
     const today = getToday();
-    const results: {
-      trainerroad: PlannedWorkout[];
-      intervals: PlannedWorkout[];
-      merged: PlannedWorkout[];
-    } = {
-      trainerroad: [],
-      intervals: [],
-      merged: [],
-    };
 
     // Fetch from both sources in parallel
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
@@ -194,9 +182,6 @@ export class CurrentTools {
         return [];
       }),
     ]);
-
-    results.trainerroad = trainerroadWorkouts;
-    results.intervals = intervalsWorkouts;
 
     // Merge workouts, preferring TrainerRoad for duplicates (has more detail)
     const merged = [...trainerroadWorkouts];
@@ -211,8 +196,7 @@ export class CurrentTools {
       }
     }
 
-    results.merged = merged;
-    return results;
+    return merged;
   }
 
   /**

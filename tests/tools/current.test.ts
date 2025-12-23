@@ -220,9 +220,9 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysPlannedWorkouts();
 
-      expect(result.trainerroad).toEqual(trainerroadWorkouts);
-      expect(result.intervals).toEqual(intervalsWorkouts);
-      expect(result.merged).toHaveLength(2);
+      expect(result).toHaveLength(2);
+      expect(result).toContainEqual(trainerroadWorkouts[0]);
+      expect(result).toContainEqual(intervalsWorkouts[0]);
     });
 
     it('should deduplicate similar workouts', async () => {
@@ -240,8 +240,8 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysPlannedWorkouts();
 
       // Should only have TrainerRoad version (preferred)
-      expect(result.merged).toHaveLength(1);
-      expect(result.merged[0].source).toBe('trainerroad');
+      expect(result).toHaveLength(1);
+      expect(result[0].source).toBe('trainerroad');
     });
 
     it('should handle TrainerRoad client not configured', async () => {
@@ -250,9 +250,8 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithoutTr.getTodaysPlannedWorkouts();
 
-      expect(result.trainerroad).toEqual([]);
-      expect(result.intervals).toEqual(intervalsWorkouts);
-      expect(result.merged).toHaveLength(1);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(intervalsWorkouts[0]);
     });
 
     it('should handle errors gracefully', async () => {
@@ -261,8 +260,8 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysPlannedWorkouts();
 
-      expect(result.trainerroad).toEqual([]);
-      expect(result.intervals).toEqual(intervalsWorkouts);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(intervalsWorkouts[0]);
     });
   });
 });
