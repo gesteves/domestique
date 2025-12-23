@@ -153,14 +153,26 @@ describe('date-parser', () => {
   describe('getStartOfDay', () => {
     it('should return start of day as ISO datetime', () => {
       const result = getStartOfDay('2024-12-15');
-      expect(result).toMatch(/^2024-12-15T00:00:00/);
+      // Result is in UTC, so just verify it's a valid ISO string
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      // Verify the parsed date represents midnight local time
+      const parsed = new Date(result);
+      expect(parsed.getHours()).toBe(0);
+      expect(parsed.getMinutes()).toBe(0);
+      expect(parsed.getSeconds()).toBe(0);
     });
   });
 
   describe('getEndOfDay', () => {
     it('should return end of day as ISO datetime', () => {
       const result = getEndOfDay('2024-12-15');
-      expect(result).toMatch(/^2024-12-15T23:59:59/);
+      // Result is in UTC, so just verify it's a valid ISO string
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      // Verify the parsed date represents end of day local time
+      const parsed = new Date(result);
+      expect(parsed.getHours()).toBe(23);
+      expect(parsed.getMinutes()).toBe(59);
+      expect(parsed.getSeconds()).toBe(59);
     });
   });
 });

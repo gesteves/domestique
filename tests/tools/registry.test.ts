@@ -3,32 +3,38 @@ import { ToolRegistry } from '../../src/tools/index.js';
 
 // Mock all clients
 vi.mock('../../src/clients/intervals.js', () => ({
-  IntervalsClient: vi.fn().mockImplementation(() => ({
-    getActivities: vi.fn().mockResolvedValue([]),
-    getPlannedEvents: vi.fn().mockResolvedValue([]),
-    getFitnessMetrics: vi.fn().mockResolvedValue([]),
-    getAthleteProfile: vi.fn().mockResolvedValue({ sports: [] }),
-    getPowerCurve: vi.fn().mockResolvedValue({ curve: [] }),
-    getPaceCurve: vi.fn().mockResolvedValue({ curve: [] }),
-    getTrainingLoadTrends: vi.fn().mockResolvedValue({ data: [], summary: {} }),
-  })),
+  IntervalsClient: vi.fn().mockImplementation(function() {
+    return {
+      getActivities: vi.fn().mockResolvedValue([]),
+      getPlannedEvents: vi.fn().mockResolvedValue([]),
+      getFitnessMetrics: vi.fn().mockResolvedValue([]),
+      getAthleteProfile: vi.fn().mockResolvedValue({ sports: [] }),
+      getPowerCurve: vi.fn().mockResolvedValue({ curve: [] }),
+      getPaceCurve: vi.fn().mockResolvedValue({ curve: [] }),
+      getTrainingLoadTrends: vi.fn().mockResolvedValue({ data: [], summary: {} }),
+    };
+  }),
 }));
 
 vi.mock('../../src/clients/whoop.js', () => ({
-  WhoopClient: vi.fn().mockImplementation(() => ({
-    getTodayRecovery: vi.fn().mockResolvedValue(null),
-    getStrainData: vi.fn().mockResolvedValue([]),
-    getRecoveries: vi.fn().mockResolvedValue([]),
-    getWorkouts: vi.fn().mockResolvedValue([]),
-  })),
+  WhoopClient: vi.fn().mockImplementation(function() {
+    return {
+      getTodayRecovery: vi.fn().mockResolvedValue(null),
+      getStrainData: vi.fn().mockResolvedValue([]),
+      getRecoveries: vi.fn().mockResolvedValue([]),
+      getWorkouts: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('../../src/clients/trainerroad.js', () => ({
-  TrainerRoadClient: vi.fn().mockImplementation(() => ({
-    getTodayWorkouts: vi.fn().mockResolvedValue([]),
-    getPlannedWorkouts: vi.fn().mockResolvedValue([]),
-    getUpcomingWorkouts: vi.fn().mockResolvedValue([]),
-  })),
+  TrainerRoadClient: vi.fn().mockImplementation(function() {
+    return {
+      getTodayWorkouts: vi.fn().mockResolvedValue([]),
+      getPlannedWorkouts: vi.fn().mockResolvedValue([]),
+      getUpcomingWorkouts: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 describe('ToolRegistry', () => {
