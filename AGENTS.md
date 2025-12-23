@@ -11,9 +11,9 @@ Domestique is a TypeScript MCP (Model Context Protocol) server that integrates w
 
 ## Development Environment
 
-### ⚠️ All Commands Run in Docker
+### Commands Run in Docker
 
-This project uses Docker Compose for development. **Do not run npm commands directly on the host machine.** Always use:
+This project uses Docker Compose for development. When possible, run commands in Docker, and not directly on the host machine, like so:
 
 ```bash
 docker compose exec domestique <command>
@@ -33,6 +33,8 @@ docker compose logs domestique -f
 # Restart after code changes (hot reload is enabled, but sometimes needed)
 docker compose restart domestique
 ```
+
+If any commands need to be run directly on the host machine, run `nvm use` first to ensure you're using the correct version of Node, defined in @.nvmrc.
 
 ### Starting Development
 
@@ -85,18 +87,31 @@ src/
 
 - **TypeScript** with ES modules (`"type": "module"`)
 - **Express** for HTTP server
-- **@modelcontextprotocol/sdk** v1.25+ for MCP implementation
-- **StreamableHTTPServerTransport** (not deprecated SSE)
+- **@modelcontextprotocol/sdk**
+- **StreamableHTTPServerTransport**
 - **Vitest** for testing
 - **tsx** for development (hot reload)
 
 ## MCP Transport
 
-The server uses **Streamable HTTP transport** (not SSE):
+The server supports two transport methods:
+
+### Streamable HTTP Transport (Primary)
 
 - Single endpoint: `/mcp`
 - Authentication: `Authorization: Bearer <token>` header or `?token=<token>` query param
 - Session management via `mcp-session-id` header
+- Session termination via `DELETE /mcp` endpoint
+
+### Stdio Transport (Alternative)
+
+For local testing with Claude Desktop, use stdio transport:
+
+```bash
+npm run stdio
+```
+
+This uses `src/stdio.ts` and communicates via standard input/output.
 
 ## Environment Variables
 
@@ -112,6 +127,7 @@ Optional:
 # Whoop (requires all three + Redis)
 WHOOP_CLIENT_ID=
 WHOOP_CLIENT_SECRET=
+WHOOP_REDIRECT_URI=        # OAuth redirect URI (defaults to http://localhost:3000/callback)
 REDIS_URL=redis://redis:6379
 
 # TrainerRoad
@@ -126,8 +142,8 @@ Tests are in the `tests/` directory mirroring `src/` structure.
 # Tests must run with the test Docker target or locally (not in dev container)
 # The dev container doesn't mount the tests/ directory
 
-# Run tests locally (if node_modules installed)
-npm test
+# Run tests locally
+nvm use && npm test
 
 # Or build and run test container
 docker build --target test -t domestique-test .
@@ -135,28 +151,6 @@ docker run domestique-test
 ```
 
 **Note:** The dev container only mounts `src/` and `tsconfig.json` for hot reload. Tests directory is not mounted.
-
-## Deployment
-
-Deployed to **Fly.io**:
-
-```bash
-# Deploy main app
-fly deploy
-
-# Deploy Redis (first time)
-cd fly-redis && fly deploy
-
-# View logs
-fly logs
-
-# SSH into container
-fly ssh console
-```
-
-### Fly.io Apps
-- `domestique` - Main MCP server
-- `domestique-redis` - Redis for Whoop tokens
 
 ## Common Tasks
 
@@ -203,7 +197,8 @@ curl -X POST http://localhost:3000/mcp \
 
 2. **Hot reload** - The dev container uses `tsx watch` for hot reload of `src/` files.
 
-3. **No global express.json()** was needed for SSE, but is now used for Streamable HTTP.
+3. **express.json() middleware** - Used for Streamable HTTP transport to parse JSON request bodies.
 
 4. **Tool registry is shared** - Created once at server start, but each MCP session gets its own `McpServer` instance.
 
+5. When making changes, ensure that @AGENTS.md and @README.md are up to date.
