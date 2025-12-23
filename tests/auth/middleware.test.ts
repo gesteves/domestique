@@ -30,6 +30,7 @@ describe('auth/middleware', () => {
       statusMock = vi.fn().mockReturnValue({ json: jsonMock });
 
       mockReq = {
+        headers: {},
         query: {},
       };
       mockRes = {
