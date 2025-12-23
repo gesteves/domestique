@@ -17,13 +17,7 @@ export class PlanningTools {
   /**
    * Get upcoming planned workouts from both calendars
    */
-  async getUpcomingWorkouts(
-    params: GetUpcomingWorkoutsInput
-  ): Promise<{
-    trainerroad: PlannedWorkout[];
-    intervals: PlannedWorkout[];
-    merged: PlannedWorkout[];
-  }> {
+  async getUpcomingWorkouts(params: GetUpcomingWorkoutsInput): Promise<PlannedWorkout[]> {
     const { days, sport } = params;
     const today = new Date();
     const endDate = addDays(today, days);
@@ -43,18 +37,11 @@ export class PlanningTools {
       }),
     ]);
 
-    // Merge and deduplicate
+    // Merge, deduplicate, and sort by date
     const merged = this.mergeWorkouts(trainerroadWorkouts, intervalsWorkouts);
-
-    // Sort by date
-    const sortByDate = (a: PlannedWorkout, b: PlannedWorkout) =>
-      new Date(a.date).getTime() - new Date(b.date).getTime();
-
-    return {
-      trainerroad: trainerroadWorkouts.sort(sortByDate),
-      intervals: intervalsWorkouts.sort(sortByDate),
-      merged: merged.sort(sortByDate),
-    };
+    return merged.sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
   }
 
   /**

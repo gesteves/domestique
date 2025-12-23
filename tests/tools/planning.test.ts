@@ -62,24 +62,22 @@ describe('PlanningTools', () => {
       },
     ];
 
-    it('should return workouts from both sources', async () => {
+    it('should return merged workouts from both sources', async () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
       const result = await tools.getUpcomingWorkouts({ days: 7 });
 
-      expect(result.trainerroad).toHaveLength(2);
-      expect(result.intervals).toHaveLength(2);
-      expect(result.merged).toHaveLength(4);
+      expect(result).toHaveLength(4);
     });
 
-    it('should sort merged workouts by date', async () => {
+    it('should sort workouts by date', async () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
       const result = await tools.getUpcomingWorkouts({ days: 7 });
 
-      const dates = result.merged.map((w) => new Date(w.date).getTime());
+      const dates = result.map((w) => new Date(w.date).getTime());
       for (let i = 1; i < dates.length; i++) {
         expect(dates[i]).toBeGreaterThanOrEqual(dates[i - 1]);
       }
@@ -99,8 +97,8 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ days: 7 });
 
-      expect(result.merged).toHaveLength(2); // Only TR workouts, duplicate removed
-      expect(result.merged.find((w) => w.source === 'intervals.icu')).toBeUndefined();
+      expect(result).toHaveLength(2); // Only TR workouts, duplicate removed
+      expect(result.find((w) => w.source === 'intervals.icu')).toBeUndefined();
     });
 
     it('should handle TrainerRoad client not configured', async () => {
@@ -109,9 +107,7 @@ describe('PlanningTools', () => {
 
       const result = await toolsWithoutTr.getUpcomingWorkouts({ days: 7 });
 
-      expect(result.trainerroad).toEqual([]);
-      expect(result.intervals).toHaveLength(2);
-      expect(result.merged).toHaveLength(2);
+      expect(result).toHaveLength(2);
     });
 
     it('should handle errors gracefully', async () => {
@@ -120,8 +116,7 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ days: 7 });
 
-      expect(result.trainerroad).toEqual([]);
-      expect(result.intervals).toHaveLength(2);
+      expect(result).toHaveLength(2);
     });
 
     it('should use correct date range', async () => {

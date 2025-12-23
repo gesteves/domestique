@@ -95,10 +95,17 @@ export class TrainerRoadClient {
   private normalizeEvent(event: CalendarEvent): PlannedWorkout {
     const parsed = this.parseDescription(event.description);
 
-    // Calculate duration from event times if not in description
-    let durationMinutes = parsed.duration;
+    // Try to get duration from: 1) workout name, 2) description, 3) event times
+    let durationMinutes =
+      this.parseDurationFromName(event.summary) ?? parsed.duration;
     if (!durationMinutes && event.start && event.end) {
-      durationMinutes = (event.end.getTime() - event.start.getTime()) / (1000 * 60);
+      const eventDuration =
+        (event.end.getTime() - event.start.getTime()) / (1000 * 60);
+      // Only use event duration if it's reasonable (< 12 hours)
+      // All-day events return 1440 minutes which is incorrect
+      if (eventDuration < 720) {
+        durationMinutes = eventDuration;
+      }
     }
 
     const discipline = this.detectDiscipline(event.summary);
@@ -120,6 +127,20 @@ export class TrainerRoadClient {
       intervals: parsed.intervals,
       source: 'trainerroad',
     };
+  }
+
+  /**
+   * Parse duration from workout name (e.g., "2:00 - Gibbs" or "1:30 - Workout")
+   */
+  private parseDurationFromName(name: string): number | undefined {
+    // Match patterns like "2:00 - Name" or "1:30 - Name" at the start
+    const match = name.match(/^(\d{1,2}):(\d{2})\s*[-–—]/);
+    if (match) {
+      const hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      return hours * 60 + minutes;
+    }
+    return undefined;
   }
 
   /**

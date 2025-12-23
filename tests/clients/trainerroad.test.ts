@@ -5,29 +5,41 @@ describe('TrainerRoadClient', () => {
   let client: TrainerRoadClient;
   const mockFetch = vi.fn();
 
+  // Real TrainerRoad calendar format based on actual data
   const mockIcsData = `BEGIN:VCALENDAR
+PRODID:-// Trainer Road LLC// Cycling// EN
 VERSION:2.0
-PRODID:-//TrainerRoad//Calendar//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
 BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+DTSTAMP:20241215T120000Z
 UID:workout-1@trainerroad.com
-DTSTART:20241216T090000Z
-DTEND:20241216T100000Z
-SUMMARY:Sweet Spot Base - Antelope
-DESCRIPTION:TSS: 88\\nIF: 0.88\\n\\n3x10 minute Sweet Spot intervals at 88-94% FTP
+STATUS:CONFIRMED
+SUMMARY:2:00 - Gibbs
+DESCRIPTION:TSS 81, IF 0.64, kJ(Cal) 1263.  Description: Gibbs consists of 2 hours of aerobic Endurance riding spent between 60-70% FTP.
 END:VEVENT
 BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+DTSTAMP:20241215T120000Z
 UID:workout-2@trainerroad.com
-DTSTART:20241218T090000Z
-DTEND:20241218T103000Z
-SUMMARY:VO2max - Spencer
-DESCRIPTION:TSS: 75\\nIF: 0.95\\n\\n5x3 minute VO2max intervals at 120% FTP
+STATUS:CONFIRMED
+SUMMARY:1:30 - Heng Shan
+DESCRIPTION:TSS 119, IF 0.89, kJ(Cal) 1186.  Description: Heng Shan consists of 4 sets of short efforts lasting between 1-4 minutes at 96-117% FTP with very short, 30-second recoveries between intervals.
 END:VEVENT
 BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;VALUE=DATE:20241220
+DTEND;VALUE=DATE:20241221
+DTSTAMP:20241215T120000Z
 UID:workout-3@trainerroad.com
-DTSTART:20241220T080000Z
-DTEND:20241220T100000Z
-SUMMARY:Endurance - Pettit
-DESCRIPTION:Duration: 60 minutes\\nTSS: 45\\nRecovery ride at 60-70% FTP
+STATUS:CONFIRMED
+SUMMARY:1:00 - Denali
+DESCRIPTION:TSS 77, IF 0.88, kJ(Cal) 723.  Description: Denali is 4x6-minute intervals at 105-109% FTP with 6-minute recoveries following each interval.
 END:VEVENT
 END:VCALENDAR`;
 
@@ -57,7 +69,7 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-20');
 
       expect(result).toHaveLength(3);
-      expect(result[0].name).toBe('Sweet Spot Base - Antelope');
+      expect(result[0].name).toBe('2:00 - Gibbs');
       expect(result[0].source).toBe('trainerroad');
     });
 
@@ -69,7 +81,7 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].expected_tss).toBe(88);
+      expect(result[0].expected_tss).toBe(81);
     });
 
     it('should parse IF from description', async () => {
@@ -80,7 +92,7 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].expected_if).toBe(0.88);
+      expect(result[0].expected_if).toBe(0.64);
     });
 
     it('should filter events by date range', async () => {
@@ -92,7 +104,7 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-17');
 
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('Sweet Spot Base - Antelope');
+      expect(result[0].name).toBe('2:00 - Gibbs');
     });
 
     it('should always fetch fresh data', async () => {
@@ -139,13 +151,13 @@ END:VCALENDAR`;
     it('should return workouts for today', async () => {
       const todayIcs = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//TrainerRoad//Calendar//EN
+PRODID:-// Trainer Road LLC// Cycling// EN
 BEGIN:VEVENT
 UID:workout-today@trainerroad.com
-DTSTART:20241215T090000Z
-DTEND:20241215T100000Z
-SUMMARY:Today's Workout
-DESCRIPTION:TSS: 50
+DTSTART;VALUE=DATE:20241215
+DTEND;VALUE=DATE:20241216
+SUMMARY:1:30 - Heng Shan
+DESCRIPTION:TSS 119, IF 0.89, kJ(Cal) 1186.  Description: Heng Shan consists of 4 sets of short efforts.
 END:VEVENT
 END:VCALENDAR`;
 
@@ -157,7 +169,8 @@ END:VCALENDAR`;
       const result = await client.getTodayWorkouts();
 
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe("Today's Workout");
+      expect(result[0].name).toBe('1:30 - Heng Shan');
+      expect(result[0].expected_duration_minutes).toBe(90);
     });
   });
 
@@ -197,10 +210,10 @@ END:VCALENDAR`;
 VERSION:2.0
 BEGIN:VEVENT
 UID:run@trainerroad.com
-DTSTART:20241216T090000Z
-DTEND:20241216T100000Z
-SUMMARY:Easy Run - Recovery
-DESCRIPTION:TSS: 30
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:0:45 - Easy Run
+DESCRIPTION:TSS 30, IF 0.65.
 END:VEVENT
 END:VCALENDAR`;
 
@@ -219,10 +232,10 @@ END:VCALENDAR`;
 VERSION:2.0
 BEGIN:VEVENT
 UID:swim@trainerroad.com
-DTSTART:20241216T090000Z
-DTEND:20241216T100000Z
-SUMMARY:Endurance Swim - Drills
-DESCRIPTION:TSS: 40
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:0:30 - Endurance Swim
+DESCRIPTION:TSS 40, IF 0.70.
 END:VEVENT
 END:VCALENDAR`;
 
@@ -243,9 +256,10 @@ END:VCALENDAR`;
 VERSION:2.0
 BEGIN:VEVENT
 UID:short@trainerroad.com
-DTSTART:20241216T090000Z
-DTEND:20241216T093000Z
-SUMMARY:Short Ride
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:0:45 - Short Workout
+DESCRIPTION:TSS 30, IF 0.60.
 END:VEVENT
 END:VCALENDAR`;
 
@@ -256,7 +270,8 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].duration_human).toBe('30-minute ride');
+      expect(result[0].expected_duration_minutes).toBe(45);
+      expect(result[0].duration_human).toBe('45-minute ride');
     });
 
     it('should format long durations as hours:minutes', async () => {
@@ -264,9 +279,10 @@ END:VCALENDAR`;
 VERSION:2.0
 BEGIN:VEVENT
 UID:long@trainerroad.com
-DTSTART:20241216T090000Z
-DTEND:20241216T113000Z
-SUMMARY:Long Endurance Ride
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:2:30 - Apikuni
+DESCRIPTION:TSS 93, IF 0.61, kJ(Cal) 1544.  Description: Apikuni is 2.5 hours of aerobic Endurance riding.
 END:VEVENT
 END:VCALENDAR`;
 
@@ -277,17 +293,19 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
+      expect(result[0].expected_duration_minutes).toBe(150);
       expect(result[0].duration_human).toBe('2:30 ride');
     });
 
-    it('should use discipline-specific suffix', async () => {
+    it('should use discipline-specific suffix for runs', async () => {
       const runIcs = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
 UID:run@trainerroad.com
-DTSTART:20241216T090000Z
-DTEND:20241216T100000Z
-SUMMARY:Easy Run
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - Easy Run
+DESCRIPTION:TSS 40, IF 0.65.
 END:VEVENT
 END:VCALENDAR`;
 
@@ -298,10 +316,11 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
+      expect(result[0].discipline).toBe('Run');
       expect(result[0].duration_human).toBe('60-minute run');
     });
 
-    it('should calculate duration from event times', async () => {
+    it('should parse duration from workout name for all-day events', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(mockIcsData),
@@ -309,12 +328,61 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      // First workout is 1 hour (09:00 to 10:00)
-      expect(result[0].expected_duration_minutes).toBe(60);
+      // Duration parsed from "2:00 - Gibbs" workout name
+      expect(result[0].expected_duration_minutes).toBe(120);
+      expect(result[0].duration_human).toBe('2:00 ride');
+    });
+
+    it('should ignore all-day event durations for non-workout events', async () => {
+      // Real example: annotations like "Boise" or plan names like "Off-Season - Increasing FTP"
+      const annotationIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:annotation@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241219
+SUMMARY:Boise
+DESCRIPTION: Description: Boise
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(annotationIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      // Should not use multi-day duration from annotation event
+      expect(result[0].expected_duration_minutes).toBeUndefined();
+      expect(result[0].duration_human).toBeUndefined();
     });
   });
 
   describe('description parsing', () => {
+    it('should parse real TrainerRoad description format', async () => {
+      // Real format: "TSS 81, IF 0.64, kJ(Cal) 1263.  Description: ..."
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:test@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:2:00 - Gibbs
+DESCRIPTION:TSS 81, IF 0.64, kJ(Cal) 1263.  Description: Gibbs consists of 2 hours of aerobic Endurance riding spent between 60-70% FTP.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+      expect(result[0].expected_tss).toBe(81);
+      expect(result[0].expected_if).toBe(0.64);
+    });
+
     it('should handle various TSS formats', async () => {
       const variations = [
         { desc: 'TSS: 75', expected: 75 },
@@ -327,8 +395,9 @@ END:VCALENDAR`;
 VERSION:2.0
 BEGIN:VEVENT
 UID:test@trainerroad.com
-DTSTART:20241216T090000Z
-SUMMARY:Test
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - Test Workout
 DESCRIPTION:${desc}
 END:VEVENT
 END:VCALENDAR`;
@@ -348,8 +417,9 @@ END:VCALENDAR`;
 VERSION:2.0
 BEGIN:VEVENT
 UID:test@trainerroad.com
-DTSTART:20241216T090000Z
-SUMMARY:Test
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - Test Workout
 DESCRIPTION:Intensity Factor: 85%
 END:VEVENT
 END:VCALENDAR`;
