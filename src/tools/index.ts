@@ -6,6 +6,10 @@ import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { CurrentTools } from './current.js';
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
+import {
+  combineFieldDescriptions,
+  getFieldDescriptions,
+} from '../utils/field-descriptions.js';
 
 export interface ToolsConfig {
   intervals: { apiKey: string; athleteId: string };
@@ -51,7 +55,10 @@ export class ToolRegistry {
       async () => {
         const result = await this.currentTools.getTodaysRecovery();
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('recovery'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -66,7 +73,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.currentTools.getRecentWorkouts(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: combineFieldDescriptions('workout', 'whoop'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -80,7 +90,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.currentTools.getRecentStrain(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('whoop'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -92,7 +105,10 @@ export class ToolRegistry {
       async () => {
         const result = await this.currentTools.getTodaysPlannedWorkouts();
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('planned'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -109,7 +125,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.historicalTools.getWorkoutHistory(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: combineFieldDescriptions('workout', 'whoop'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -124,7 +143,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.historicalTools.getRecoveryTrends(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('recovery'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -140,7 +162,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.historicalTools.getFitnessProgression(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('fitness'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -156,7 +181,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.planningTools.getUpcomingWorkouts(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('planned'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -172,7 +200,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.planningTools.getPlannedWorkoutDetails(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('planned'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -209,7 +240,10 @@ export class ToolRegistry {
         }
 
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('athlete_profile'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -233,7 +267,10 @@ export class ToolRegistry {
         const sportType = args.sport === 'cycling' ? 'Ride' : 'Ride';
         const result = await this.historicalTools.getPowerCurve(sportType, args.period);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('power_curve'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -259,7 +296,10 @@ export class ToolRegistry {
           args.gradient_adjusted
         );
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('pace_curve'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
@@ -277,7 +317,10 @@ export class ToolRegistry {
       async (args) => {
         const result = await this.historicalTools.getTrainingLoadTrends(args.days);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('fitness'),
+            data: result,
+          }, null, 2) }],
         };
       }
     );
