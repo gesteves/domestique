@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HistoricalTools } from '../../src/tools/historical.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
-import type { NormalizedWorkout, RecoveryData } from '../../src/types/index.js';
+import type { NormalizedWorkout, RecoveryData, StrainActivity } from '../../src/types/index.js';
 
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
@@ -37,6 +37,7 @@ describe('HistoricalTools', () => {
       {
         id: '1',
         date: '2024-12-10T10:00:00Z',
+        start_date_utc: '2024-12-10T10:00:00Z',
         activity_type: 'Cycling',
         duration_seconds: 3600,
         tss: 85,
@@ -45,6 +46,7 @@ describe('HistoricalTools', () => {
       {
         id: '2',
         date: '2024-12-12T08:00:00Z',
+        start_date_utc: '2024-12-12T08:00:00Z',
         activity_type: 'Running',
         duration_seconds: 2400,
         tss: 45,
@@ -52,15 +54,34 @@ describe('HistoricalTools', () => {
       },
     ];
 
-    it('should fetch workouts for ISO date range', async () => {
+    const mockWhoopActivities: StrainActivity[] = [
+      {
+        id: 'whoop-1',
+        start_time: '2024-12-10T10:01:00Z',
+        end_time: '2024-12-10T11:00:00Z',
+        activity_type: 'Cycling',
+        strain_score: 12.5,
+        average_heart_rate: 145,
+        max_heart_rate: 175,
+        calories: 650,
+      },
+    ];
+
+    it('should fetch workouts for ISO date range with Whoop matching', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue(mockWhoopActivities);
 
       const result = await tools.getWorkoutHistory({
         start_date: '2024-12-01',
         end_date: '2024-12-15',
       });
 
-      expect(result).toEqual(mockWorkouts);
+      expect(result).toHaveLength(2);
+      // First workout should have matched Whoop data
+      expect(result[0].whoop).not.toBeNull();
+      expect(result[0].whoop?.strain_score).toBe(12.5);
+      // Second workout should not have matched Whoop data
+      expect(result[1].whoop).toBeNull();
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
         '2024-12-15',
@@ -70,6 +91,7 @@ describe('HistoricalTools', () => {
 
     it('should parse natural language start date', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       await tools.getWorkoutHistory({
         start_date: '30 days ago',
@@ -84,6 +106,7 @@ describe('HistoricalTools', () => {
 
     it('should default end_date to today', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       await tools.getWorkoutHistory({
         start_date: '2024-12-01',
@@ -98,6 +121,7 @@ describe('HistoricalTools', () => {
 
     it('should pass sport filter', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([mockWorkouts[0]]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       await tools.getWorkoutHistory({
         start_date: '2024-12-01',
@@ -109,6 +133,19 @@ describe('HistoricalTools', () => {
         '2024-12-15',
         'cycling'
       );
+    });
+
+    it('should return workouts without Whoop data when Whoop client is not configured', async () => {
+      const toolsWithoutWhoop = new HistoricalTools(mockIntervalsClient, null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+
+      const result = await toolsWithoutWhoop.getWorkoutHistory({
+        start_date: '2024-12-01',
+      });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].whoop).toBeNull();
+      expect(result[1].whoop).toBeNull();
     });
   });
 

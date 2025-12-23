@@ -2,11 +2,15 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday } from '../utils/date-parser.js';
+import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import type {
   RecoveryData,
   StrainData,
   PlannedWorkout,
   NormalizedWorkout,
+  WorkoutWithWhoop,
+  StrainActivity,
+  WhoopMatchedData,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -53,17 +57,64 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's completed workouts from Intervals.icu
+   * Get today's completed workouts from Intervals.icu with matched Whoop data
    */
-  async getTodaysCompletedWorkouts(): Promise<NormalizedWorkout[]> {
+  async getTodaysCompletedWorkouts(): Promise<WorkoutWithWhoop[]> {
     const today = getToday();
 
     try {
-      return await this.intervals.getActivities(today, today);
+      // Fetch Intervals.icu activities
+      const workouts = await this.intervals.getActivities(today, today);
+
+      // If no Whoop client, return workouts without Whoop data
+      if (!this.whoop) {
+        return workouts.map((workout) => ({
+          ...workout,
+          whoop: null,
+        }));
+      }
+
+      // Fetch Whoop activities for today
+      let whoopActivities: StrainActivity[] = [];
+      try {
+        whoopActivities = await this.whoop.getWorkouts(today, today);
+      } catch (error) {
+        console.error('Error fetching Whoop activities for matching:', error);
+        // Continue without Whoop data rather than failing entirely
+      }
+
+      // Match and merge
+      return workouts.map((workout) => ({
+        ...workout,
+        whoop: this.findAndMatchWhoopActivity(workout, whoopActivities),
+      }));
     } catch (error) {
       console.error('Error fetching today\'s completed workouts:', error);
       throw error;
     }
+  }
+
+  /**
+   * Find and match a Whoop activity to an Intervals.icu workout
+   */
+  private findAndMatchWhoopActivity(
+    workout: NormalizedWorkout,
+    whoopActivities: StrainActivity[]
+  ): WhoopMatchedData | null {
+    const match = findMatchingWhoopActivity(workout, whoopActivities);
+    if (!match) return null;
+
+    return {
+      strain_score: match.strain_score,
+      average_heart_rate: match.average_heart_rate,
+      max_heart_rate: match.max_heart_rate,
+      calories: match.calories,
+      distance_meters: match.distance_meters,
+      altitude_gain_meters: match.altitude_gain_meters,
+      zone_durations: match.zone_durations,
+      match_confidence: 'high',
+      match_method: 'timestamp',
+    };
   }
 
   /**

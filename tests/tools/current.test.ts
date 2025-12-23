@@ -3,7 +3,7 @@ import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout } from '../../src/types/index.js';
+import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
@@ -105,6 +105,7 @@ describe('CurrentTools', () => {
       {
         id: '1',
         date: '2024-12-15T10:00:00Z',
+        start_date_utc: '2024-12-15T10:00:00Z',
         activity_type: 'Cycling',
         duration_seconds: 3600,
         distance_km: 45,
@@ -113,21 +114,58 @@ describe('CurrentTools', () => {
       },
     ];
 
-    it('should return completed workouts from Intervals.icu', async () => {
+    const mockWhoopActivities: StrainActivity[] = [
+      {
+        id: 'whoop-1',
+        start_time: '2024-12-15T10:01:00Z',
+        end_time: '2024-12-15T11:00:00Z',
+        activity_type: 'Cycling',
+        strain_score: 12.5,
+        average_heart_rate: 145,
+        max_heart_rate: 175,
+        calories: 650,
+      },
+    ];
+
+    it('should return completed workouts from Intervals.icu with matched Whoop data', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue(mockWhoopActivities);
 
       const result = await tools.getTodaysCompletedWorkouts();
 
-      expect(result).toEqual(mockWorkouts);
+      expect(result).toHaveLength(1);
+      expect(result[0].whoop).not.toBeNull();
+      expect(result[0].whoop?.strain_score).toBe(12.5);
       expect(mockIntervalsClient.getActivities).toHaveBeenCalled();
     });
 
     it('should return empty array when no workouts today', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       const result = await tools.getTodaysCompletedWorkouts();
 
       expect(result).toEqual([]);
+    });
+
+    it('should return workouts without Whoop data when no Whoop client configured', async () => {
+      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+
+      const result = await toolsWithoutWhoop.getTodaysCompletedWorkouts();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].whoop).toBeNull();
+    });
+
+    it('should return workouts with null Whoop when no Whoop match found', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+
+      const result = await tools.getTodaysCompletedWorkouts();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].whoop).toBeNull();
     });
   });
 
