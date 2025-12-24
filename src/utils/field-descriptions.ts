@@ -122,7 +122,7 @@ export const WHOOP_FIELD_DESCRIPTIONS = {
   calories: 'Estimated calories burned',
   distance_meters: 'Distance in meters',
   altitude_gain_meters: 'Elevation gain in meters',
-  zone_durations: 'Object with zone_0_minutes through zone_5_minutes - time in each Whoop HR zone',
+  zone_durations: 'Object with zone_0_minutes through zone_5_minutes - time in each Whoop HR zone. Note that Whoop uses the Heart Rate Reserve (HRR) method to set the zones, so they may not match the HR zones used by Intervals.icu.',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {
