@@ -3,6 +3,7 @@ import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone } from '../utils/date-parser.js';
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
+import { computeRecoveryInsights, computeStrainInsights } from '../utils/whoop-insights.js';
 import type {
   RecoveryData,
   StrainData,
@@ -12,6 +13,8 @@ import type {
   StrainActivity,
   WhoopMatchedData,
   AthleteProfile,
+  DailySummary,
+  DailyInsights,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -200,5 +203,91 @@ export class CurrentTools {
    */
   async getAthleteProfile(): Promise<AthleteProfile> {
     return await this.intervals.getAthleteProfile();
+  }
+
+  /**
+   * Get a complete daily summary including recovery, strain, and workouts.
+   * Consolidates 4 tool calls into 1 for efficiency.
+   */
+  async getDailySummary(): Promise<DailySummary> {
+    const today = getToday();
+
+    // Fetch all data in parallel for efficiency
+    const [recovery, strain, completedWorkouts, plannedWorkouts] = await Promise.all([
+      this.getTodaysRecovery().catch((e) => {
+        console.error('Error fetching recovery for daily summary:', e);
+        return null;
+      }),
+      this.getTodaysStrain().catch((e) => {
+        console.error('Error fetching strain for daily summary:', e);
+        return null;
+      }),
+      this.getTodaysCompletedWorkouts().catch((e) => {
+        console.error('Error fetching completed workouts for daily summary:', e);
+        return [];
+      }),
+      this.getTodaysPlannedWorkouts().catch((e) => {
+        console.error('Error fetching planned workouts for daily summary:', e);
+        return [];
+      }),
+    ]);
+
+    // Compute insights from Whoop data
+    const insights = this.computeDailyInsights(
+      recovery,
+      strain,
+      completedWorkouts,
+      plannedWorkouts
+    );
+
+    return {
+      date: today,
+      recovery,
+      strain,
+      completed_workouts: completedWorkouts,
+      planned_workouts: plannedWorkouts,
+      insights,
+    };
+  }
+
+  /**
+   * Compute daily insights from recovery, strain, and workout data.
+   */
+  private computeDailyInsights(
+    recovery: RecoveryData | null,
+    strain: StrainData | null,
+    completedWorkouts: WorkoutWithWhoop[],
+    plannedWorkouts: PlannedWorkout[]
+  ): DailyInsights {
+    // Compute Whoop insights if data available
+    const recoveryInsights = recovery ? computeRecoveryInsights(recovery) : null;
+    const strainInsights = strain ? computeStrainInsights(strain) : null;
+
+    // Calculate TSS totals
+    const tssCompleted = completedWorkouts.reduce(
+      (sum, w) => sum + (w.tss || 0),
+      0
+    );
+    const tssPlanned = plannedWorkouts.reduce(
+      (sum, w) => sum + (w.expected_tss || 0),
+      0
+    );
+
+    return {
+      // Whoop insights
+      recovery_level: recoveryInsights?.recovery_level || null,
+      recovery_level_description: recoveryInsights?.recovery_level_description || null,
+      strain_level: strainInsights?.strain_level || null,
+      strain_level_description: strainInsights?.strain_level_description || null,
+      sleep_performance_level: recoveryInsights?.sleep_performance_level || null,
+      sleep_performance_level_description: recoveryInsights?.sleep_performance_level_description || null,
+      sleep_duration_human: recoveryInsights?.sleep_duration_human || null,
+
+      // Summary stats
+      workouts_completed: completedWorkouts.length,
+      workouts_remaining: plannedWorkouts.length,
+      tss_completed: Math.round(tssCompleted),
+      tss_planned: Math.round(tssPlanned),
+    };
   }
 }

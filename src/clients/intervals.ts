@@ -20,6 +20,13 @@ import type {
   WorkoutNotesResponse,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
+import {
+  formatDuration,
+  formatDistance,
+  formatSpeed,
+  formatPace,
+  isSwimmingActivity,
+} from '../utils/format-units.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
@@ -695,13 +702,19 @@ export class IntervalsClient {
    * Normalize a raw interval from the API
    */
   private normalizeInterval(raw: IntervalsRawInterval): WorkoutInterval {
+    const distanceKm = raw.distance ? raw.distance / 1000 : undefined;
+    const speedKph = raw.average_speed ? raw.average_speed * 3.6 : undefined;
+    const elevationGain = raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined;
+
     return {
       type: raw.type,
       label: raw.label,
       group_id: raw.group_id,
       start_seconds: raw.start_time,
       duration_seconds: raw.moving_time,
-      distance_km: raw.distance ? raw.distance / 1000 : undefined,
+      duration_human: formatDuration(raw.moving_time),
+      distance_km: distanceKm,
+      distance_human: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
 
       // Power
       average_watts: raw.average_watts,
@@ -722,10 +735,12 @@ export class IntervalsClient {
       stride_length_m: raw.average_stride,
 
       // Speed (m/s → km/h)
-      average_speed_kph: raw.average_speed ? raw.average_speed * 3.6 : undefined,
+      average_speed_kph: speedKph,
+      average_speed_human: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
 
       // Elevation
-      elevation_gain_m: raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined,
+      elevation_gain_m: elevationGain,
+      elevation_gain_human: elevationGain !== undefined ? `${elevationGain} m` : undefined,
       average_gradient_pct: raw.average_gradient ? raw.average_gradient * 100 : undefined,
 
       // W'bal
@@ -739,16 +754,24 @@ export class IntervalsClient {
    * Normalize an interval group from the API
    */
   private normalizeIntervalGroup(raw: IntervalsRawGroup): IntervalGroup {
+    const speedKph = raw.average_speed ? raw.average_speed * 3.6 : undefined;
+    const distanceKm = raw.distance ? raw.distance / 1000 : undefined;
+    const elevationGain = raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined;
+
     return {
       id: raw.id,
       count: raw.count,
       average_watts: raw.average_watts,
       average_hr: raw.average_heartrate ? Math.round(raw.average_heartrate) : undefined,
       average_cadence: raw.average_cadence ? Math.round(raw.average_cadence) : undefined,
-      average_speed_kph: raw.average_speed ? raw.average_speed * 3.6 : undefined,
-      distance_km: raw.distance ? raw.distance / 1000 : undefined,
+      average_speed_kph: speedKph,
+      average_speed_human: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
+      distance_km: distanceKm,
+      distance_human: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
       duration_seconds: raw.moving_time,
-      elevation_gain_m: raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined,
+      duration_human: raw.moving_time !== undefined ? formatDuration(raw.moving_time) : undefined,
+      elevation_gain_m: elevationGain,
+      elevation_gain_human: elevationGain !== undefined ? `${elevationGain} m` : undefined,
     };
   }
 
@@ -826,6 +849,15 @@ export class IntervalsClient {
       seconds: zt.secs,
     }));
 
+    // Determine if this is a swimming activity for unit formatting
+    const isSwim = isSwimmingActivity(activity.type);
+
+    // Calculate duration in seconds
+    const durationSeconds = activity.moving_time ?? activity.elapsed_time ?? 0;
+
+    // Calculate distance in km
+    const distanceKm = activity.distance ? activity.distance / 1000 : undefined;
+
     return {
       id: activity.id,
       date: activity.start_date_local,
@@ -833,8 +865,10 @@ export class IntervalsClient {
       activity_type: normalizeActivityType(activity.type),
       name: activity.name,
       description: activity.description,
-      duration_seconds: activity.moving_time ?? activity.elapsed_time ?? 0,
-      distance_km: activity.distance ? activity.distance / 1000 : undefined,
+      duration_seconds: durationSeconds,
+      duration_human: formatDuration(durationSeconds),
+      distance_km: distanceKm,
+      distance_human: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
       tss: activity.icu_training_load,
       normalized_power: activity.weighted_avg_watts,
       average_power: activity.average_watts,
@@ -842,12 +876,17 @@ export class IntervalsClient {
       max_heart_rate: activity.max_heartrate,
       intensity_factor: activity.icu_intensity,
       elevation_gain_m: activity.total_elevation_gain,
+      elevation_gain_human: activity.total_elevation_gain !== undefined
+        ? `${Math.round(activity.total_elevation_gain)} m`
+        : undefined,
       calories: activity.calories,
       source: 'intervals.icu',
 
       // Speed metrics
       average_speed_kph: avgSpeedKph,
+      average_speed_human: avgSpeedKph !== undefined ? formatSpeed(avgSpeedKph) : undefined,
       max_speed_kph: maxSpeedKph,
+      max_speed_human: maxSpeedKph !== undefined ? formatSpeed(maxSpeedKph) : undefined,
 
       // Coasting
       coasting_time_seconds: activity.coasting_time,
@@ -919,6 +958,7 @@ export class IntervalsClient {
       // Running/pace metrics
       average_stride_m: activity.average_stride,
       gap: gapSecPerKm,
+      gap_human: gapSecPerKm !== undefined ? formatPace(gapSecPerKm, isSwim) : undefined,
 
       // Altitude
       average_altitude_m: activity.average_altitude,

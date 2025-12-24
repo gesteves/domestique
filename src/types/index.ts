@@ -21,7 +21,9 @@ export interface NormalizedWorkout {
   name?: string;
   description?: string;
   duration_seconds: number;
+  duration_human?: string; // Human-readable duration, e.g., "1:30:00"
   distance_km?: number;
+  distance_human?: string; // Human-readable distance, e.g., "45.2 km" or "2500 m" for swimming
   tss?: number;
   normalized_power?: number;
   average_power?: number;
@@ -29,12 +31,15 @@ export interface NormalizedWorkout {
   max_heart_rate?: number;
   intensity_factor?: number;
   elevation_gain_m?: number;
+  elevation_gain_human?: string;
   calories?: number;
   source: 'intervals.icu' | 'whoop' | 'trainerroad';
 
   // Speed metrics
   average_speed_kph?: number;
+  average_speed_human?: string; // Human-readable speed, e.g., "32.5 km/h"
   max_speed_kph?: number;
+  max_speed_human?: string; // Human-readable max speed, e.g., "55.2 km/h"
 
   // Coasting metrics
   coasting_time_seconds?: number;
@@ -106,6 +111,7 @@ export interface NormalizedWorkout {
   // Running/pace metrics
   average_stride_m?: number; // meters per stride
   gap?: number; // Gradient adjusted pace (sec/km)
+  gap_human?: string; // Human-readable GAP, e.g., "4:30/km"
 
   // Altitude
   average_altitude_m?: number;
@@ -171,14 +177,22 @@ export interface RecoveryData {
   sleep_consistency_percentage?: number;
   sleep_efficiency_percentage?: number;
   sleep_duration_hours: number;
+  sleep_duration_human?: string;
   sleep_quality_duration_hours?: number;
+  sleep_quality_duration_human?: string;
   sleep_needed_hours?: number;
+  sleep_needed_human?: string;
   // Sleep details
   light_sleep_hours?: number;
+  light_sleep_human?: string;
   slow_wave_sleep_hours?: number;
+  slow_wave_sleep_human?: string;
   rem_sleep_hours?: number;
+  rem_sleep_human?: string;
   awake_hours?: number;
+  awake_human?: string;
   in_bed_hours?: number;
+  in_bed_human?: string;
   sleep_cycle_count?: number;
   disturbance_count?: number;
   respiratory_rate?: number;
@@ -209,13 +223,28 @@ export interface StrainActivity {
   activity_type: ActivityType;
   start_time: string;
   end_time: string;
+  duration_seconds?: number;
+  duration_human?: string;
   strain_score: number;
   average_heart_rate?: number;
   max_heart_rate?: number;
   calories?: number;
   distance_meters?: number;
+  distance_human?: string;
   altitude_gain_meters?: number;
+  elevation_gain_human?: string;
   zone_durations?: WhoopZoneDurations;
+  zone_durations_human?: WhoopZoneDurationsHuman;
+}
+
+// Whoop HR zone durations as human-readable strings
+export interface WhoopZoneDurationsHuman {
+  zone_0: string;
+  zone_1: string;
+  zone_2: string;
+  zone_3: string;
+  zone_4: string;
+  zone_5: string;
 }
 
 // Planned workout from calendar
@@ -227,7 +256,7 @@ export interface PlannedWorkout {
   expected_tss?: number;
   expected_if?: number;
   expected_duration_minutes?: number;
-  duration_human?: string;
+  expected_duration_human?: string;
   discipline?: Discipline;
   workout_type?: string;
   intervals?: string;
@@ -391,7 +420,9 @@ export interface WorkoutInterval {
   group_id?: string;
   start_seconds: number;
   duration_seconds: number;
+  duration_human?: string;
   distance_km?: number;
+  distance_human?: string;
 
   // Power metrics
   average_watts?: number;
@@ -413,9 +444,11 @@ export interface WorkoutInterval {
 
   // Speed
   average_speed_kph?: number;
+  average_speed_human?: string;
 
   // Elevation
   elevation_gain_m?: number;
+  elevation_gain_human?: string;
   average_gradient_pct?: number;
 
   // W'bal (anaerobic capacity)
@@ -431,9 +464,13 @@ export interface IntervalGroup {
   average_hr?: number;
   average_cadence?: number;
   average_speed_kph?: number;
+  average_speed_human?: string;
   distance_km?: number;
+  distance_human?: string;
   duration_seconds?: number;
+  duration_human?: string;
   elevation_gain_m?: number;
+  elevation_gain_human?: string;
 }
 
 export interface WorkoutIntervalsResponse {
@@ -457,4 +494,68 @@ export interface WorkoutNote {
 export interface WorkoutNotesResponse {
   activity_id: string;
   notes: WorkoutNote[];
+}
+
+// ============================================
+// Daily Summary
+// ============================================
+
+// Re-export insight types from whoop-insights for convenience
+export type {
+  RecoveryLevel,
+  StrainLevel,
+  SleepPerformanceLevel,
+  RecoveryInsights,
+  StrainInsights,
+} from '../utils/whoop-insights.js';
+
+/**
+ * Daily insights with pre-computed Whoop interpretations.
+ * Uses Whoop's official terminology for recovery and strain levels.
+ */
+export interface DailyInsights {
+  // Whoop-specific interpretations (using Whoop's official terminology)
+  /** Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%) */
+  recovery_level: 'SUFFICIENT' | 'ADEQUATE' | 'LOW' | null;
+  /** Human-readable description from Whoop */
+  recovery_level_description: string | null;
+  /** Strain level: LIGHT (0-9), MODERATE (10-13), HIGH (14-17), ALL_OUT (18-21) */
+  strain_level: 'LIGHT' | 'MODERATE' | 'HIGH' | 'ALL_OUT' | null;
+  /** Human-readable description from Whoop */
+  strain_level_description: string | null;
+  /** Sleep performance level: OPTIMAL (≥85%), SUFFICIENT (70-85%), POOR (<70%) */
+  sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR' | null;
+  /** Human-readable sleep performance description from Whoop */
+  sleep_performance_level_description: string | null;
+  /** Human-readable sleep duration, e.g., "7:30" */
+  sleep_duration_human: string | null;
+
+  // Summary stats
+  /** Number of workouts completed today */
+  workouts_completed: number;
+  /** Number of planned workouts remaining */
+  workouts_remaining: number;
+  /** Total TSS from completed workouts */
+  tss_completed: number;
+  /** Total TSS from planned workouts */
+  tss_planned: number;
+}
+
+/**
+ * Complete daily summary combining recovery, strain, and workout data.
+ * Returned by get_daily_summary tool.
+ */
+export interface DailySummary {
+  /** Date in ISO 8601 format */
+  date: string;
+  /** Today's Whoop recovery data, null if unavailable */
+  recovery: RecoveryData | null;
+  /** Today's Whoop strain data, null if unavailable */
+  strain: StrainData | null;
+  /** Completed workouts from Intervals.icu with matched Whoop data */
+  completed_workouts: WorkoutWithWhoop[];
+  /** Planned workouts from TrainerRoad and Intervals.icu */
+  planned_workouts: PlannedWorkout[];
+  /** Pre-computed insights for LLM consumption */
+  insights: DailyInsights;
 }

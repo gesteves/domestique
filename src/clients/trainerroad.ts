@@ -1,6 +1,7 @@
 import ical from 'node-ical';
 import { parseISO, isWithinInterval, format } from 'date-fns';
 import type { PlannedWorkout, TrainerRoadConfig, Discipline } from '../types/index.js';
+import { formatDuration } from '../utils/format-units.js';
 
 interface CalendarEvent {
   uid: string;
@@ -109,24 +110,41 @@ export class TrainerRoadClient {
     }
 
     const discipline = this.detectDiscipline(event.summary);
-    const durationHuman = durationMinutes
-      ? this.formatDuration(durationMinutes, discipline)
+
+    // Clean up the name by stripping the duration prefix (e.g., "2:00 - Gibbs" → "Gibbs")
+    const cleanName = this.stripDurationFromName(event.summary);
+
+    // Format duration as human-readable (e.g., "1:30:00" or "45:00")
+    const expectedDurationHuman = durationMinutes
+      ? formatDuration(durationMinutes * 60) // Convert minutes to seconds
       : undefined;
 
     return {
       id: event.uid,
       date: event.start.toISOString(),
-      name: event.summary,
+      name: cleanName,
       description: event.description,
       expected_tss: parsed.tss,
       expected_if: parsed.if,
       expected_duration_minutes: durationMinutes,
-      duration_human: durationHuman,
+      expected_duration_human: expectedDurationHuman,
       discipline,
       workout_type: parsed.workoutType,
       intervals: parsed.intervals,
       source: 'trainerroad',
     };
+  }
+
+  /**
+   * Strip duration prefix from workout name (e.g., "2:00 - Gibbs" → "Gibbs")
+   */
+  private stripDurationFromName(name: string): string {
+    // Match patterns like "2:00 - Name" or "1:30 - Name" at the start
+    const match = name.match(/^(\d{1,2}):(\d{2})\s*[-–—]\s*(.+)$/);
+    if (match) {
+      return match[3];
+    }
+    return name;
   }
 
   /**
@@ -156,23 +174,6 @@ export class TrainerRoadClient {
       return 'Swim';
     }
     return 'Bike';
-  }
-
-  /**
-   * Format duration as human-readable string
-   * Under 90 minutes: "45-minute ride"
-   * 90+ minutes: "1:30 ride"
-   */
-  private formatDuration(minutes: number, discipline: Discipline): string {
-    const suffix = discipline === 'Bike' ? 'ride' : discipline.toLowerCase();
-
-    if (minutes < 90) {
-      return `${Math.round(minutes)}-minute ${suffix}`;
-    }
-
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return `${hours}:${mins.toString().padStart(2, '0')} ${suffix}`;
   }
 
   private parseDescription(description?: string): {

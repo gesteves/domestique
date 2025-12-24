@@ -69,7 +69,7 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-20');
 
       expect(result).toHaveLength(3);
-      expect(result[0].name).toBe('2:00 - Gibbs');
+      expect(result[0].name).toBe('Gibbs');
       expect(result[0].source).toBe('trainerroad');
     });
 
@@ -104,7 +104,7 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-17');
 
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('2:00 - Gibbs');
+      expect(result[0].name).toBe('Gibbs');
     });
 
     it('should always fetch fresh data', async () => {
@@ -169,7 +169,7 @@ END:VCALENDAR`;
       const result = await client.getTodayWorkouts();
 
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('1:30 - Heng Shan');
+      expect(result[0].name).toBe('Heng Shan');
       expect(result[0].expected_duration_minutes).toBe(90);
     });
   });
@@ -271,10 +271,11 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
       expect(result[0].expected_duration_minutes).toBe(45);
-      expect(result[0].duration_human).toBe('45-minute ride');
+      expect(result[0].expected_duration_human).toBe('0:45:00');
+      expect(result[0].name).toBe('Short Workout');
     });
 
-    it('should format long durations as hours:minutes', async () => {
+    it('should format long durations as hours:minutes:seconds', async () => {
       const longIcs = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
@@ -294,10 +295,11 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
       expect(result[0].expected_duration_minutes).toBe(150);
-      expect(result[0].duration_human).toBe('2:30 ride');
+      expect(result[0].expected_duration_human).toBe('2:30:00');
+      expect(result[0].name).toBe('Apikuni');
     });
 
-    it('should use discipline-specific suffix for runs', async () => {
+    it('should strip duration from name for runs too', async () => {
       const runIcs = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
@@ -317,7 +319,8 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
       expect(result[0].discipline).toBe('Run');
-      expect(result[0].duration_human).toBe('60-minute run');
+      expect(result[0].expected_duration_human).toBe('1:00:00');
+      expect(result[0].name).toBe('Easy Run');
     });
 
     it('should parse duration from workout name for all-day events', async () => {
@@ -330,7 +333,8 @@ END:VCALENDAR`;
 
       // Duration parsed from "2:00 - Gibbs" workout name
       expect(result[0].expected_duration_minutes).toBe(120);
-      expect(result[0].duration_human).toBe('2:00 ride');
+      expect(result[0].expected_duration_human).toBe('2:00:00');
+      expect(result[0].name).toBe('Gibbs');
     });
 
     it('should ignore all-day event durations for non-workout events', async () => {
@@ -355,7 +359,7 @@ END:VCALENDAR`;
 
       // Should not use multi-day duration from annotation event
       expect(result[0].expected_duration_minutes).toBeUndefined();
-      expect(result[0].duration_human).toBeUndefined();
+      expect(result[0].expected_duration_human).toBeUndefined();
     });
   });
 

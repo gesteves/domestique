@@ -3,8 +3,10 @@ import type {
   StrainData,
   StrainActivity,
   WhoopConfig,
+  WhoopZoneDurationsHuman,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
+import { formatDuration, formatDistance, isSwimmingActivity } from '../utils/format-units.js';
 import {
   getWhoopAccessToken,
   getWhoopRefreshToken,
@@ -589,7 +591,14 @@ export class WhoopClient {
     const stageSummary = sleepScore?.stage_summary;
     const sleepNeeded = sleepScore?.sleep_needed;
 
-    const milliToHours = (milli: number) => milli / (1000 * 60 * 60);
+    // Helper to convert milliseconds to hours (rounded to 2 decimals)
+    const milliToHours = (milli: number) => Math.round((milli / (1000 * 60 * 60)) * 100) / 100;
+
+    // Helper to convert milliseconds to human-readable duration
+    const milliToHuman = (milli: number) => formatDuration(milli / 1000);
+
+    // Helper to round to 2 decimal places
+    const round2 = (value: number | undefined) => value !== undefined ? Math.round(value * 100) / 100 : undefined;
 
     const totalSleepMilli = stageSummary
       ? stageSummary.total_light_sleep_time_milli +
@@ -597,54 +606,80 @@ export class WhoopClient {
         stageSummary.total_rem_sleep_time_milli
       : 0;
 
+    const sleepQualityMilli = stageSummary
+      ? stageSummary.total_slow_wave_sleep_time_milli +
+        stageSummary.total_rem_sleep_time_milli
+      : undefined;
+
+    const sleepNeededMilli = sleepNeeded
+      ? sleepNeeded.baseline_milli +
+        sleepNeeded.need_from_sleep_debt_milli +
+        sleepNeeded.need_from_recent_strain_milli -
+        sleepNeeded.need_from_recent_nap_milli
+      : undefined;
+
     return {
       date: recovery.created_at.split('T')[0],
-      // Recovery metrics
+      // Recovery metrics (rounded to 2 decimals)
       recovery_score: recovery.score.recovery_score,
-      hrv_rmssd: recovery.score.hrv_rmssd_milli,
+      hrv_rmssd: round2(recovery.score.hrv_rmssd_milli)!,
       resting_heart_rate: recovery.score.resting_heart_rate,
-      spo2_percentage: recovery.score.spo2_percentage,
-      skin_temp_celsius: recovery.score.skin_temp_celsius,
-      // Sleep performance metrics
-      sleep_performance_percentage: sleepScore?.sleep_performance_percentage ?? 0,
-      sleep_consistency_percentage: sleepScore?.sleep_consistency_percentage,
-      sleep_efficiency_percentage: sleepScore?.sleep_efficiency_percentage,
-      // Sleep duration metrics
+      spo2_percentage: round2(recovery.score.spo2_percentage),
+      skin_temp_celsius: round2(recovery.score.skin_temp_celsius),
+      // Sleep performance metrics (rounded to 2 decimals)
+      sleep_performance_percentage: round2(sleepScore?.sleep_performance_percentage) ?? 0,
+      sleep_consistency_percentage: round2(sleepScore?.sleep_consistency_percentage),
+      sleep_efficiency_percentage: round2(sleepScore?.sleep_efficiency_percentage),
+      // Sleep duration metrics (rounded to 2 decimals + human-readable)
       sleep_duration_hours: milliToHours(totalSleepMilli),
-      sleep_quality_duration_hours: stageSummary
-        ? milliToHours(
-            stageSummary.total_slow_wave_sleep_time_milli +
-              stageSummary.total_rem_sleep_time_milli
-          )
+      sleep_duration_human: totalSleepMilli > 0 ? milliToHuman(totalSleepMilli) : undefined,
+      sleep_quality_duration_hours: sleepQualityMilli !== undefined
+        ? milliToHours(sleepQualityMilli)
         : undefined,
-      sleep_needed_hours: sleepNeeded
-        ? milliToHours(
-            sleepNeeded.baseline_milli +
-              sleepNeeded.need_from_sleep_debt_milli +
-              sleepNeeded.need_from_recent_strain_milli -
-              sleepNeeded.need_from_recent_nap_milli
-          )
+      sleep_quality_duration_human: sleepQualityMilli !== undefined
+        ? milliToHuman(sleepQualityMilli)
         : undefined,
-      // Sleep stage breakdown
+      sleep_needed_hours: sleepNeededMilli !== undefined
+        ? milliToHours(sleepNeededMilli)
+        : undefined,
+      sleep_needed_human: sleepNeededMilli !== undefined
+        ? milliToHuman(sleepNeededMilli)
+        : undefined,
+      // Sleep stage breakdown (rounded to 2 decimals + human-readable)
       light_sleep_hours: stageSummary
         ? milliToHours(stageSummary.total_light_sleep_time_milli)
+        : undefined,
+      light_sleep_human: stageSummary
+        ? milliToHuman(stageSummary.total_light_sleep_time_milli)
         : undefined,
       slow_wave_sleep_hours: stageSummary
         ? milliToHours(stageSummary.total_slow_wave_sleep_time_milli)
         : undefined,
+      slow_wave_sleep_human: stageSummary
+        ? milliToHuman(stageSummary.total_slow_wave_sleep_time_milli)
+        : undefined,
       rem_sleep_hours: stageSummary
         ? milliToHours(stageSummary.total_rem_sleep_time_milli)
+        : undefined,
+      rem_sleep_human: stageSummary
+        ? milliToHuman(stageSummary.total_rem_sleep_time_milli)
         : undefined,
       awake_hours: stageSummary
         ? milliToHours(stageSummary.total_awake_time_milli)
         : undefined,
+      awake_human: stageSummary
+        ? milliToHuman(stageSummary.total_awake_time_milli)
+        : undefined,
       in_bed_hours: stageSummary
         ? milliToHours(stageSummary.total_in_bed_time_milli)
+        : undefined,
+      in_bed_human: stageSummary
+        ? milliToHuman(stageSummary.total_in_bed_time_milli)
         : undefined,
       // Sleep details
       sleep_cycle_count: stageSummary?.sleep_cycle_count,
       disturbance_count: stageSummary?.disturbance_count,
-      respiratory_rate: sleepScore?.respiratory_rate,
+      respiratory_rate: round2(sleepScore?.respiratory_rate),
     };
   }
 
@@ -665,6 +700,19 @@ export class WhoopClient {
       WHOOP_SPORT_NAME_MAP[workout.sport_name.toLowerCase()] ??
       workout.sport_name;
 
+    const activityType = normalizeActivityType(sportName);
+    const isSwim = isSwimmingActivity(activityType);
+
+    // Calculate duration from start/end times
+    const startMs = new Date(workout.start).getTime();
+    const endMs = new Date(workout.end).getTime();
+    const durationSeconds = Math.round((endMs - startMs) / 1000);
+
+    // Distance in km for human-readable format
+    const distanceKm = workout.score.distance_meter
+      ? workout.score.distance_meter / 1000
+      : undefined;
+
     const zoneDurations = workout.score.zone_durations
       ? {
           zone_0_minutes: workout.score.zone_durations.zone_zero_milli / 60000,
@@ -676,18 +724,38 @@ export class WhoopClient {
         }
       : undefined;
 
+    // Human-readable zone durations
+    const zoneDurationsHuman: WhoopZoneDurationsHuman | undefined =
+      workout.score.zone_durations
+        ? {
+            zone_0: formatDuration(workout.score.zone_durations.zone_zero_milli / 1000),
+            zone_1: formatDuration(workout.score.zone_durations.zone_one_milli / 1000),
+            zone_2: formatDuration(workout.score.zone_durations.zone_two_milli / 1000),
+            zone_3: formatDuration(workout.score.zone_durations.zone_three_milli / 1000),
+            zone_4: formatDuration(workout.score.zone_durations.zone_four_milli / 1000),
+            zone_5: formatDuration(workout.score.zone_durations.zone_five_milli / 1000),
+          }
+        : undefined;
+
     return {
       id: String(workout.id),
-      activity_type: normalizeActivityType(sportName),
+      activity_type: activityType,
       start_time: workout.start,
       end_time: workout.end,
+      duration_seconds: durationSeconds,
+      duration_human: formatDuration(durationSeconds),
       strain_score: workout.score.strain,
       average_heart_rate: workout.score.average_heart_rate,
       max_heart_rate: workout.score.max_heart_rate,
       calories: Math.round(workout.score.kilojoule / 4.184),
       distance_meters: workout.score.distance_meter,
+      distance_human: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
       altitude_gain_meters: workout.score.altitude_gain_meter,
+      elevation_gain_human: workout.score.altitude_gain_meter !== undefined
+        ? `${Math.round(workout.score.altitude_gain_meter)} m`
+        : undefined,
       zone_durations: zoneDurations,
+      zone_durations_human: zoneDurationsHuman,
     };
   }
 }
