@@ -53,7 +53,11 @@ cp .env.example .env
 ```
 
 Required variables:
-- `MCP_AUTH_TOKEN` - Secret token for MCP authentication
+- `MCP_AUTH_TOKEN` - Secret token for MCP authentication. You can quickly generate one with:
+
+```bash
+openssl rand -hex 32
+```
 
 For Intervals.icu integration:
 - `INTERVALS_API_KEY` - Your Intervals.icu API key
