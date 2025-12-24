@@ -1,6 +1,6 @@
 # Domestique
 
-A TypeScript MCP (Model Context Protocol) server that integrates with Intervals.icu, Whoop, and TrainerRoad to provide unified access to fitness data across all activities and sports.
+A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com), and [TrainerRoad](https://www.trainerroad.com) to provide unified access to fitness data across all activities and sports.
 
 ## Features
 
@@ -135,18 +135,18 @@ docker compose exec domestique npm run whoop:auth
 
 ### Testing with MCP Inspector
 
-The MCP Inspector is a useful tool for testing and debugging your MCP server:
+The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a useful tool for testing and debugging your MCP server:
 
 ```bash
 # Install MCP Inspector globally (if not already installed)
 npm install -g @modelcontextprotocol/inspector
 
 # Run inspector pointing to your local server
-npx @modelcontextprotocol/inspector http://localhost:3000/mcp?token=YOUR_SECRET_TOKEN
+npx @modelcontextprotocol/inspector --server-url "http://localhost:3000/mcp?token=YOUR_SECRET_TOKEN"
 
-# Or with Authorization header (if your terminal supports it)
-npx @modelcontextprotocol/inspector http://localhost:3000/mcp \
-  --header "Authorization: Bearer YOUR_SECRET_TOKEN"
+# Or with Authorization header
+npx @modelcontextprotocol/inspector --server-url "http://localhost:3000/mcp" \
+  --header "{ \"Authorization\": \"Bearer YOUR_SECRET_TOKEN\" }"
 ```
 
 The inspector will open a web interface where you can:
