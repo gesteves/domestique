@@ -296,7 +296,7 @@ Fetches planned workouts for today from both TrainerRoad and Intervals.icu:
 - Workout name and description
 - Expected duration and TSS
 - Workout type and discipline (Swim/Bike/Run)
-- Interval structure (if available)
+- General structure and goals of the workout (if available)
 
 Deduplicates workouts that appear in both calendars.
 Returns empty array if no workouts planned today.
@@ -346,7 +346,8 @@ Fetches the athlete's profile from Intervals.icu including:
 - Zone definitions with names, ranges, and absolute values
 - Athlete info: name, location, timezone
 
-Use this to interpret zone data in workout responses.
+Use this to interpret zone data in workout responses. Note that this returns the athlete's
+**current** zones, which may not match the ones in historical workouts.
 </instructions>`,
       {},
       withToolResponse(
@@ -514,7 +515,7 @@ Fetches Whoop recovery data over a date range:
 - Sleep durations and stages
 
 Date parameters accept ISO format (YYYY-MM-DD) or natural language:
-- "30 days ago", "last month", "2 weeks ago"
+- "today", "yesterday", "30 days ago", "last month", "2 weeks ago"
 
 Use alongside get_training_load_trends to correlate recovery with training stress.
 Returns empty array if Whoop is not configured.
@@ -570,7 +571,7 @@ Returns:
 - Workout name and description
 - Expected duration and TSS
 - Workout type and discipline
-- Interval structure (if available)
+- General description of the interval structure and workout goals (if available)
 
 Returns empty array if no workouts planned.
 </instructions>`,
@@ -615,7 +616,7 @@ Do NOT use for:
 
 <instructions>
 Fetches planned workouts for a specific date:
-- Accepts natural language: "next wednesday", "tomorrow", "December 28"
+- Accepts natural language: "today", "yesterday", "next wednesday", "tomorrow", "December 28"
 - Accepts ISO format: YYYY-MM-DD
 - Optional sport filter: cycling (bike), running (run), swimming (swim)
 - Combines TrainerRoad and Intervals.icu calendars
@@ -794,7 +795,7 @@ Use when the user asks about:
 - RPE (Rate of Perceived Exertion) or feel rating
 
 Requires: activity_id from get_workout_history or get_todays_completed_workouts
-ALWAYS fetch this when analyzing a workout - subjective data is valuable context.
+**ALWAYS** fetch this when analyzing a workout - subjective data is valuable context.
 
 Do NOT use for:
 - Objective workout metrics (use get_workout_intervals)
@@ -844,7 +845,7 @@ Use when the user asks about:
 - Environmental factors during a ride or run
 
 Requires: activity_id from get_workout_history or get_todays_completed_workouts
-ONLY use for OUTDOOR activities - indoor/trainer workouts have no weather data.
+**ONLY** use for OUTDOOR activities - indoor/trainer workouts have no weather data.
 
 Do NOT use for:
 - Indoor/trainer workouts (no weather data available)
