@@ -93,9 +93,9 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   workout_class: 'Workout classification: Endurance, Tempo, Threshold, VO2max, etc.',
 
   // Zone thresholds
-  hr_zones: 'Heart rate zone boundaries in BPM',
-  power_zones: 'Power zone boundaries as percentage of FTP',
-  pace_zones: 'Pace zone boundaries in seconds per km',
+  hr_zones: 'Heart rate zone boundaries in BPM at the time of the activity. May differ from the current heart rate zones in the athlete\'s profile.',
+  power_zones: 'Power zone boundaries as percentage of FTP at the time of the activity. May differ from the current power zones in the athlete\'s profile.',
+  pace_zones: 'Pace zone boundaries in seconds per km at the time of the activity. May differ from the current pace zones in the athlete\'s profile.',
 
   // Time in zones
   power_zone_times: 'Array of {zone_id, seconds} - time spent in each power zone.',
@@ -216,7 +216,7 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   max_hr: 'Maximum heart rate in BPM',
 
   // HR zones
-  hr_zones: 'Heart rate zones as array of {name, low_bpm, high_bpm}. Sorted low to high (Zone 1 first). Note that these may be different than the Whoop HR zones.',
+  hr_zones: 'Current heart rate zones for the athlete. Note that these may be different than the Whoop HR zones.',
 
   // Pace thresholds
   threshold_pace: 'Threshold pace in the units specified by pace_units (e.g., 4.17 for MINS_KM = 4:10/km, or 120 for SECS_100M = 2:00/100m)',
@@ -224,11 +224,11 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   pace_units: 'Units for all pace values: MINS_KM (minutes per kilometer, running) or SECS_100M (seconds per 100 meters, swimming)',
 
   // Power zones
-  power_zones: 'Power zones as array of {name, low_percent, high_percent, low_watts, high_watts}. Percentages are % of FTP. high values are null for highest zone.',
-  indoor_power_zones: 'Indoor-specific power zones (only present if indoor_ftp differs from ftp)',
+  power_zones: 'Current power zones for the athlete',
+  indoor_power_zones: 'Current indoor-specific power zones for the athlete (only present if indoor_ftp differs from ftp)',
 
   // Pace zones
-  pace_zones: 'Pace zones sorted from slowest (Zone 1) to fastest. Each has: name, low_percent, high_percent (% of threshold - higher = faster), slow_pace (slowest boundary in pace_units), fast_pace (fastest boundary in pace_units), slow_pace_human, fast_pace_human. null means unbounded.',
+  pace_zones: 'Current pace zones for the athlete',
 };
 
 export const INTERVALS_FIELD_DESCRIPTIONS = {
