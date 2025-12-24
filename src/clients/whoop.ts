@@ -288,8 +288,9 @@ export class WhoopClient {
         const responseText = await response.text();
         console.error(`[Whoop] Token refresh failed with ${response.status} ${response.statusText}: ${responseText}`);
 
-        // Determine if this is a retryable error (5xx server errors)
+        // Determine if this is a retryable error
         const isServerError = response.status >= 500 && response.status < 600;
+        const isClientError = response.status >= 400 && response.status < 500;
         lastError = new Error(
           `Whoop token refresh failed: ${response.status} ${response.statusText}`
         );
@@ -304,18 +305,19 @@ export class WhoopClient {
             this.tokenExpiresAt = freshToken.expiresAt;
             return;
           }
-          console.log('[Whoop] No fresh token found in Redis, refresh token may be invalid');
+          console.log('[Whoop] No fresh token found in Redis, will retry if attempts remain');
         }
 
-        if (isServerError && attempt < MAX_RETRY_ATTEMPTS) {
+        // Retry on server errors (5xx) or client errors (4xx) with backoff
+        if ((isServerError || isClientError) && attempt < MAX_RETRY_ATTEMPTS) {
           // Exponential backoff: 1s, 2s, 4s...
           const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-          console.log(`[Whoop] Server error, retrying in ${delayMs}ms...`);
+          console.log(`[Whoop] ${isServerError ? 'Server' : 'Client'} error, retrying in ${delayMs}ms...`);
           await sleep(delayMs);
           continue;
         }
 
-        // Non-retryable error (4xx) or exhausted retries
+        // Exhausted retries
         break;
       } catch (error) {
         // Network errors are retryable
