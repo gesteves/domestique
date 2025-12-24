@@ -1,86 +1,40 @@
+import * as chrono from 'chrono-node';
 import {
-  parseISO,
-  subDays,
-  subWeeks,
-  subMonths,
+  format,
   startOfWeek,
   endOfWeek,
   startOfMonth,
   endOfMonth,
-  format,
-  isValid,
+  subDays,
   startOfDay,
   endOfDay,
+  parseISO,
 } from 'date-fns';
 import type { DateRange } from '../types/index.js';
 
 /**
  * Parse a natural language date string into an ISO date string.
+ * Uses chrono-node for comprehensive natural language support.
+ *
  * Supports:
  * - ISO dates: "2024-12-15"
- * - Relative: "today", "yesterday", "3 days ago", "last week"
- * - Ranges: "this week", "last 30 days"
+ * - Relative: "today", "yesterday", "tomorrow"
+ * - Day names: "next wednesday", "last friday"
+ * - Offsets: "3 days ago", "in 2 weeks"
+ * - Natural: "December 25th", "Jan 15 2025"
  */
 export function parseDateString(input: string): string {
-  const normalized = input.toLowerCase().trim();
-  const now = new Date();
+  const normalized = input.trim();
 
-  // Try ISO date first
-  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    const parsed = parseISO(input);
-    if (isValid(parsed)) {
-      return input;
-    }
+  // Try ISO date first (faster path for common case)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
   }
 
-  // Relative dates
-  if (normalized === 'today') {
-    return format(now, 'yyyy-MM-dd');
-  }
-
-  if (normalized === 'yesterday') {
-    return format(subDays(now, 1), 'yyyy-MM-dd');
-  }
-
-  if (normalized === 'tomorrow') {
-    return format(new Date(now.getTime() + 86400000), 'yyyy-MM-dd');
-  }
-
-  // "X days ago"
-  const daysAgoMatch = normalized.match(/^(\d+)\s*days?\s*ago$/);
-  if (daysAgoMatch) {
-    const days = parseInt(daysAgoMatch[1], 10);
-    return format(subDays(now, days), 'yyyy-MM-dd');
-  }
-
-  // "X weeks ago"
-  const weeksAgoMatch = normalized.match(/^(\d+)\s*weeks?\s*ago$/);
-  if (weeksAgoMatch) {
-    const weeks = parseInt(weeksAgoMatch[1], 10);
-    return format(subWeeks(now, weeks), 'yyyy-MM-dd');
-  }
-
-  // "X months ago"
-  const monthsAgoMatch = normalized.match(/^(\d+)\s*months?\s*ago$/);
-  if (monthsAgoMatch) {
-    const months = parseInt(monthsAgoMatch[1], 10);
-    return format(subMonths(now, months), 'yyyy-MM-dd');
-  }
-
-  // "last week" - start of last week
-  if (normalized === 'last week') {
-    return format(startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  }
-
-  // "last month" - start of last month
-  if (normalized === 'last month') {
-    return format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
-  }
-
-  // If nothing matched, try parsing as-is
-  const parsed = parseISO(input);
-  if (isValid(parsed)) {
-    return format(parsed, 'yyyy-MM-dd');
+  // Use chrono-node for natural language parsing
+  const result = chrono.parseDate(normalized);
+  if (result) {
+    return format(result, 'yyyy-MM-dd');
   }
 
   throw new Error(`Unable to parse date: "${input}"`);
@@ -89,6 +43,11 @@ export function parseDateString(input: string): string {
 /**
  * Parse a date range from natural language.
  * Returns start and end ISO date strings.
+ *
+ * Supports:
+ * - "today", "this week", "this month"
+ * - "last week", "last month"
+ * - "last X days/weeks/months"
  */
 export function parseDateRange(input: string): DateRange {
   const normalized = input.toLowerCase().trim();
@@ -110,10 +69,10 @@ export function parseDateRange(input: string): DateRange {
 
   // "last week"
   if (normalized === 'last week') {
-    const lastWeek = subWeeks(now, 1);
+    const lastWeekDate = chrono.parseDate('last week') ?? subDays(now, 7);
     return {
-      start: format(startOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-      end: format(endOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+      start: format(startOfWeek(lastWeekDate, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+      end: format(endOfWeek(lastWeekDate, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
     };
   }
 
@@ -127,10 +86,10 @@ export function parseDateRange(input: string): DateRange {
 
   // "last month"
   if (normalized === 'last month') {
-    const lastMonth = subMonths(now, 1);
+    const lastMonthDate = chrono.parseDate('last month') ?? subDays(now, 30);
     return {
-      start: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
-      end: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
+      start: format(startOfMonth(lastMonthDate), 'yyyy-MM-dd'),
+      end: format(endOfMonth(lastMonthDate), 'yyyy-MM-dd'),
     };
   }
 
@@ -149,7 +108,7 @@ export function parseDateRange(input: string): DateRange {
   if (lastWeeksMatch) {
     const weeks = parseInt(lastWeeksMatch[1], 10);
     return {
-      start: format(subWeeks(now, weeks), 'yyyy-MM-dd'),
+      start: format(subDays(now, weeks * 7), 'yyyy-MM-dd'),
       end: format(now, 'yyyy-MM-dd'),
     };
   }
@@ -158,8 +117,9 @@ export function parseDateRange(input: string): DateRange {
   const lastMonthsMatch = normalized.match(/^last\s+(\d+)\s*months?$/);
   if (lastMonthsMatch) {
     const months = parseInt(lastMonthsMatch[1], 10);
+    // Approximate months as 30 days
     return {
-      start: format(subMonths(now, months), 'yyyy-MM-dd'),
+      start: format(subDays(now, months * 30), 'yyyy-MM-dd'),
       end: format(now, 'yyyy-MM-dd'),
     };
   }
@@ -198,69 +158,26 @@ export function getTodayInTimezone(timezone: string): string {
 /**
  * Parse a natural language date string into an ISO date string,
  * using the specified timezone for relative dates.
+ *
+ * Uses chrono-node with timezone context for accurate parsing.
  */
 export function parseDateStringInTimezone(input: string, timezone: string): string {
-  const normalized = input.toLowerCase().trim();
+  const normalized = input.trim();
 
   // Try ISO date first - these are absolute, no timezone needed
-  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    const parsed = parseISO(input);
-    if (isValid(parsed)) {
-      return input;
-    }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
   }
 
-  // For relative dates, we need to compute based on the user's timezone
-  const todayStr = getTodayInTimezone(timezone);
-  const today = parseISO(todayStr);
+  // Get the current time in the target timezone
+  const nowInTz = new Date(
+    new Date().toLocaleString('en-US', { timeZone: timezone })
+  );
 
-  if (normalized === 'today') {
-    return todayStr;
-  }
-
-  if (normalized === 'yesterday') {
-    return format(subDays(today, 1), 'yyyy-MM-dd');
-  }
-
-  if (normalized === 'tomorrow') {
-    return format(new Date(today.getTime() + 86400000), 'yyyy-MM-dd');
-  }
-
-  // "X days ago"
-  const daysAgoMatch = normalized.match(/^(\d+)\s*days?\s*ago$/);
-  if (daysAgoMatch) {
-    const days = parseInt(daysAgoMatch[1], 10);
-    return format(subDays(today, days), 'yyyy-MM-dd');
-  }
-
-  // "X weeks ago"
-  const weeksAgoMatch = normalized.match(/^(\d+)\s*weeks?\s*ago$/);
-  if (weeksAgoMatch) {
-    const weeks = parseInt(weeksAgoMatch[1], 10);
-    return format(subWeeks(today, weeks), 'yyyy-MM-dd');
-  }
-
-  // "X months ago"
-  const monthsAgoMatch = normalized.match(/^(\d+)\s*months?\s*ago$/);
-  if (monthsAgoMatch) {
-    const months = parseInt(monthsAgoMatch[1], 10);
-    return format(subMonths(today, months), 'yyyy-MM-dd');
-  }
-
-  // "last week" - start of last week
-  if (normalized === 'last week') {
-    return format(startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  }
-
-  // "last month" - start of last month
-  if (normalized === 'last month') {
-    return format(startOfMonth(subMonths(today, 1)), 'yyyy-MM-dd');
-  }
-
-  // If nothing matched, try parsing as-is
-  const parsed = parseISO(input);
-  if (isValid(parsed)) {
-    return format(parsed, 'yyyy-MM-dd');
+  // Use chrono-node with reference date in the target timezone
+  const result = chrono.parseDate(normalized, nowInTz);
+  if (result) {
+    return format(result, 'yyyy-MM-dd');
   }
 
   throw new Error(`Unable to parse date: "${input}"`);
