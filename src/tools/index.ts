@@ -262,5 +262,22 @@ export class ToolRegistry {
         };
       }
     );
+
+    server.tool(
+      'get_workout_notes',
+      'Get notes left by the athlete for a specific workout. Notes provide subjective context like perceived effort, how they felt, or other observations.',
+      {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+      },
+      async (args) => {
+        const result = await this.historicalTools.getWorkoutNotes(args.activity_id);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('notes'),
+            data: result,
+          }, null, 2) }],
+        };
+      }
+    );
   }
 }

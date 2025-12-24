@@ -441,3 +441,20 @@ export interface WorkoutIntervalsResponse {
   intervals: WorkoutInterval[];
   groups: IntervalGroup[];
 }
+
+// Workout note/message from the athlete
+export interface WorkoutNote {
+  id: number;
+  athlete_id: string;
+  name: string;
+  created: string;
+  type: string;
+  content: string;
+  attachment_url?: string;
+  attachment_mime_type?: string;
+}
+
+export interface WorkoutNotesResponse {
+  activity_id: string;
+  notes: WorkoutNote[];
+}

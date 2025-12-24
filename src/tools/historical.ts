@@ -10,6 +10,7 @@ import type {
   NormalizedWorkout,
   WhoopMatchedData,
   WorkoutIntervalsResponse,
+  WorkoutNotesResponse,
 } from '../types/index.js';
 import type {
   GetWorkoutHistoryInput,
@@ -191,6 +192,22 @@ export class HistoricalTools {
       return await this.intervals.getActivityIntervals(activityId);
     } catch (error) {
       console.error('Error fetching workout intervals:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // Workout Notes
+  // ============================================
+
+  /**
+   * Get notes/messages for a specific workout
+   */
+  async getWorkoutNotes(activityId: string): Promise<WorkoutNotesResponse> {
+    try {
+      return await this.intervals.getActivityNotes(activityId);
+    } catch (error) {
+      console.error('Error fetching workout notes:', error);
       throw error;
     }
   }

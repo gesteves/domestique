@@ -16,6 +16,8 @@ import type {
   WorkoutInterval,
   IntervalGroup,
   WorkoutIntervalsResponse,
+  WorkoutNote,
+  WorkoutNotesResponse,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 
@@ -241,6 +243,19 @@ interface IntervalsActivityIntervalsResponse {
   id: string;
   icu_intervals: IntervalsRawInterval[];
   icu_groups: IntervalsRawGroup[];
+}
+
+// Raw message/note from Intervals.icu API
+interface IntervalsRawMessage {
+  id: number;
+  athlete_id: string;
+  name: string;
+  created: string;
+  type: string;
+  content: string;
+  deleted: string | null;
+  attachment_url?: string | null;
+  attachment_mime_type?: string | null;
 }
 
 export class IntervalsClient {
@@ -613,6 +628,35 @@ export class IntervalsClient {
       activity_id: activityId,
       intervals,
       groups,
+    };
+  }
+
+  /**
+   * Get notes/messages for a specific activity
+   */
+  async getActivityNotes(activityId: string): Promise<WorkoutNotesResponse> {
+    const messages = await this.fetchActivity<IntervalsRawMessage[]>(
+      activityId,
+      '/messages'
+    );
+
+    // Filter out deleted messages and normalize
+    const notes: WorkoutNote[] = (messages || [])
+      .filter((m) => m.deleted === null)
+      .map((m) => ({
+        id: m.id,
+        athlete_id: m.athlete_id,
+        name: m.name,
+        created: m.created,
+        type: m.type,
+        content: m.content,
+        attachment_url: m.attachment_url ?? undefined,
+        attachment_mime_type: m.attachment_mime_type ?? undefined,
+      }));
+
+    return {
+      activity_id: activityId,
+      notes,
     };
   }
 

@@ -110,7 +110,8 @@ describe('ToolRegistry', () => {
       // Analysis tools
       expect(registeredTools).toContain('get_training_load_trends');
       expect(registeredTools).toContain('get_workout_intervals');
-      expect(registeredTools.length).toBe(12);
+      expect(registeredTools).toContain('get_workout_notes');
+      expect(registeredTools.length).toBe(13);
     });
 
     it('should call server.tool for each tool', () => {
@@ -120,7 +121,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(12);
+      expect(mockServer.tool).toHaveBeenCalledTimes(13);
     });
 
     it('should pass description and schema to each tool', () => {
