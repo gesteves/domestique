@@ -10,20 +10,33 @@ import {
   combineFieldDescriptions,
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
+import { buildToolResponse } from '../utils/response-builder.js';
+
+interface ResponseOptions<TResult> {
+  fieldDescriptions: Record<string, string>;
+  getMessage?: (data: TResult) => string | undefined;
+  getNextActions?: (data: TResult) => string[] | undefined;
+  getWarnings?: (data: TResult) => string[] | undefined;
+}
 
 /**
- * Wraps a tool handler to provide graceful error handling for Whoop API errors.
- * Returns a user-friendly message that suggests the LLM retry the request.
+ * Wraps a tool handler with response building and Whoop error handling.
+ * Combines error handling with contextual response formatting.
  */
-function withWhoopErrorHandling<TArgs, TResult>(
-  handler: (args: TArgs) => Promise<TResult>
+function withToolResponse<TArgs, TResult>(
+  handler: (args: TArgs) => Promise<TResult>,
+  options: ResponseOptions<TResult>
 ): (args: TArgs) => Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   return async (args: TArgs) => {
     try {
-      const result = await handler(args);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      const data = await handler(args);
+      return buildToolResponse({
+        data,
+        fieldDescriptions: options.fieldDescriptions,
+        message: options.getMessage?.(data),
+        nextActions: options.getNextActions?.(data),
+        warnings: options.getWarnings?.(data),
+      });
     } catch (error) {
       if (error instanceof WhoopApiError && error.isRetryable) {
         return {
@@ -87,175 +100,556 @@ export class ToolRegistry {
     // Current/Recent Data Tools
     server.tool(
       'get_todays_recovery',
-      "Fetch today's Whoop sleep and recovery data, including recovery score, HRV, sleep performance, and resting heart rate.",
+      `<usecase>
+Use when the user asks about:
+- How they recovered overnight or their readiness for today
+- Sleep quality, HRV, or resting heart rate from last night
+- Whether they should train hard today based on recovery
+
+Do NOT use for:
+- Historical recovery trends (use get_recovery_trends)
+- General "how am I doing today" questions (use get_daily_summary)
+</usecase>
+
+<instructions>
+Fetches today's Whoop recovery data including:
+- Recovery score (0-100%) with level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%)
+- HRV RMSSD in milliseconds
+- Resting heart rate
+- Sleep performance percentage and durations
+- Sleep stages (light, deep/SWS, REM, awake)
+
+Returns null if Whoop is not configured.
+</instructions>`,
       {},
-      withWhoopErrorHandling(async () => {
-        const result = await this.currentTools.getTodaysRecovery();
-        return {
-          _field_descriptions: getFieldDescriptions('recovery'),
-          data: result,
-        };
-      })
+      withToolResponse(
+        async () => this.currentTools.getTodaysRecovery(),
+        {
+          fieldDescriptions: getFieldDescriptions('recovery'),
+          getMessage: (data) => data
+            ? `Recovery: ${data.recovery_score}% (${data.recovery_level}). Sleep: ${data.sleep_duration}.`
+            : 'No recovery data available (Whoop not configured or no data for today).',
+          getNextActions: (data) => data
+            ? ['Use get_recovery_trends to see patterns over time', 'Use get_daily_summary for full today overview']
+            : undefined,
+        }
+      )
     );
 
     server.tool(
       'get_todays_strain',
-      "Fetch today's Whoop strain data and completed activities.",
+      `<usecase>
+Use when the user asks about:
+- Today's strain or exertion level
+- How hard they've worked today (from Whoop's perspective)
+- Calories burned or heart rate data from Whoop today
+
+Do NOT use for:
+- Historical strain data (use get_strain_history)
+- Detailed workout metrics (use get_todays_completed_workouts)
+- General "how am I doing today" questions (use get_daily_summary)
+</usecase>
+
+<instructions>
+Fetches today's Whoop strain data including:
+- Strain score (0-21) with level: LIGHT (0-9), MODERATE (10-13), HIGH (14-17), ALL_OUT (18-21)
+- Average and max heart rate
+- Calories burned
+- List of Whoop-tracked activities
+
+Returns null if Whoop is not configured.
+</instructions>`,
       {},
-      withWhoopErrorHandling(async () => {
-        const result = await this.currentTools.getTodaysStrain();
-        return {
-          _field_descriptions: getFieldDescriptions('whoop'),
-          data: result,
-        };
-      })
+      withToolResponse(
+        async () => this.currentTools.getTodaysStrain(),
+        {
+          fieldDescriptions: getFieldDescriptions('whoop'),
+          getMessage: (data) => data
+            ? `Strain: ${data.strain_score.toFixed(1)} (${data.strain_level}). ${data.activities?.length ?? 0} activities tracked.`
+            : 'No strain data available (Whoop not configured or no data for today).',
+          getNextActions: (data) => data
+            ? ['Use get_strain_history for trends over time', 'Use get_daily_summary for full today overview']
+            : undefined,
+        }
+      )
     );
 
     server.tool(
       'get_todays_completed_workouts',
-      "Fetch today's completed workouts from Intervals.icu. Use the activity ID from results with `get_workout_notes`, `get_workout_weather` and `get_workout_intervals` for deeper analysis.",
+      `<usecase>
+Use when the user asks about:
+- Workouts completed today
+- How today's training went
+- Comparing planned vs completed workouts for today
+- Today's power, TSS, or training metrics
+
+Do NOT use for:
+- Historical workouts (use get_workout_history)
+- Deep analysis of intervals (use get_workout_intervals with the activity_id)
+- General "how am I doing today" questions (use get_daily_summary)
+</usecase>
+
+<instructions>
+Fetches all completed workouts from Intervals.icu for today:
+- Basic metrics: duration, distance, TSS, intensity factor
+- Power data: normalized power, average power
+- Heart rate: average and max HR
+- Matched Whoop strain data (if available)
+- Fitness snapshot: CTL, ATL, TSB at time of activity
+
+For detailed analysis, use the activity_id with:
+- get_workout_intervals: Interval-by-interval breakdown
+- get_workout_notes: Athlete's subjective notes
+- get_workout_weather: Weather conditions (outdoor only)
+
+Returns empty array if no workouts completed today.
+</instructions>`,
       {},
-      async () => {
-        const result = await this.currentTools.getTodaysCompletedWorkouts();
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('workout'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async () => this.currentTools.getTodaysCompletedWorkouts(),
+        {
+          fieldDescriptions: getFieldDescriptions('workout'),
+          getMessage: (data) => {
+            if (!data || data.length === 0) {
+              return 'No workouts completed today.';
+            }
+            const totalTss = data.reduce((sum, w) => sum + (w.tss ?? 0), 0);
+            return `${data.length} workout${data.length === 1 ? '' : 's'} completed today. Total TSS: ${totalTss.toFixed(0)}.`;
+          },
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_workout_intervals(activity_id) for interval breakdown',
+                'Use get_workout_notes(activity_id) for athlete comments',
+                'Use get_workout_weather(activity_id) for outdoor workout conditions',
+              ]
+            : undefined,
+        }
+      )
     );
 
     server.tool(
       'get_strain_history',
-      "Get Whoop strain scores and activities for a date range.",
+      `<usecase>
+Use when the user asks about:
+- Strain patterns over a period of time
+- Historical exertion or activity levels from Whoop
+- Comparing strain across different days or weeks
+
+Do NOT use for:
+- Today's strain only (use get_todays_strain)
+- Workout details from Intervals.icu (use get_workout_history)
+</usecase>
+
+<instructions>
+Fetches Whoop strain data for a date range:
+- Daily strain scores (0-21) with level classifications
+- Heart rate metrics (average, max)
+- Calories burned
+- Activities tracked by Whoop
+
+Date parameters accept ISO format (YYYY-MM-DD) or natural language:
+- "7 days ago", "last week", "2 weeks ago"
+
+Returns empty array if Whoop is not configured.
+</instructions>`,
       {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
-      withWhoopErrorHandling(async (args) => {
-        const result = await this.currentTools.getStrainHistory(args);
-        return {
-          _field_descriptions: getFieldDescriptions('whoop'),
-          data: result,
-        };
-      })
+      withToolResponse(
+        async (args: { start_date: string; end_date?: string }) => this.currentTools.getStrainHistory(args),
+        {
+          fieldDescriptions: getFieldDescriptions('whoop'),
+          getMessage: (data) => {
+            if (!data || data.length === 0) {
+              return 'No strain data available for this period (Whoop not configured or no data).';
+            }
+            const avgStrain = data.reduce((sum, d) => sum + d.strain_score, 0) / data.length;
+            return `${data.length} days of strain data. Average strain: ${avgStrain.toFixed(1)}.`;
+          },
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_recovery_trends for same period to correlate strain with recovery',
+                'Use get_workout_history for detailed workout data from Intervals.icu',
+              ]
+            : undefined,
+        }
+      )
     );
 
     server.tool(
       'get_todays_planned_workouts',
-      "Get all workouts scheduled for today from both TrainerRoad and Intervals.icu calendars.",
+      `<usecase>
+Use when the user asks about:
+- What workouts are planned for today
+- Today's training schedule
+- What they should do today
+
+Do NOT use for:
+- Future workouts beyond today (use get_upcoming_workouts)
+- Completed workouts (use get_todays_completed_workouts)
+- General "how am I doing today" questions (use get_daily_summary)
+</usecase>
+
+<instructions>
+Fetches planned workouts for today from both TrainerRoad and Intervals.icu:
+- Workout name and description
+- Expected duration and TSS
+- Workout type and discipline (Swim/Bike/Run)
+- Interval structure (if available)
+
+Deduplicates workouts that appear in both calendars.
+Returns empty array if no workouts planned today.
+</instructions>`,
       {},
-      async () => {
-        const result = await this.currentTools.getTodaysPlannedWorkouts();
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('planned'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async () => this.currentTools.getTodaysPlannedWorkouts(),
+        {
+          fieldDescriptions: getFieldDescriptions('planned'),
+          getMessage: (data) => {
+            if (!data || data.length === 0) {
+              return 'No workouts planned for today.';
+            }
+            const totalTss = data.reduce((sum, w) => sum + (w.expected_tss ?? 0), 0);
+            return `${data.length} workout${data.length === 1 ? '' : 's'} planned for today. Expected TSS: ${totalTss.toFixed(0)}.`;
+          },
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_todays_recovery to check readiness for planned workouts',
+                'Use get_upcoming_workouts to see the full week ahead',
+              ]
+            : undefined,
+        }
+      )
     );
 
     server.tool(
       'get_athlete_profile',
-      "Get the athlete's profile including current sport-specific settings for power zones, heart rate zones, pace zones, FTP, LTHR, and thresholds. Useful for understanding training zones and interpreting workout data.",
+      `<usecase>
+Use when the user asks about:
+- Their FTP, threshold power, or current fitness settings
+- Training zones (power, heart rate, or pace)
+- How to interpret zone data from workouts
+- Their profile settings or thresholds
+
+Do NOT use for:
+- Workout data (use get_workout_history or get_todays_completed_workouts)
+- Fitness trends over time (use get_training_load_trends)
+</usecase>
+
+<instructions>
+Fetches the athlete's profile from Intervals.icu including:
+- Sport-specific settings for each activity type (Ride, Run, Swim, etc.)
+- Power thresholds: FTP, indoor FTP (if different)
+- Heart rate thresholds: LTHR, max HR
+- Pace thresholds: threshold pace
+- Zone definitions with names, ranges, and absolute values
+- Athlete info: name, location, timezone
+
+Use this to interpret zone data in workout responses.
+</instructions>`,
       {},
-      async () => {
-        const result = await this.currentTools.getAthleteProfile();
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('athlete_profile'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async () => this.currentTools.getAthleteProfile(),
+        {
+          fieldDescriptions: getFieldDescriptions('athlete_profile'),
+          getMessage: (data) => {
+            const sports = data.sports?.map((s: { types?: string[] }) => s.types?.[0]).filter(Boolean).join(', ') ?? 'none';
+            return `Athlete profile loaded. Sports configured: ${sports}.`;
+          },
+          getNextActions: () => [
+            'Use this zone information to interpret power/HR data in workouts',
+            'Use get_training_load_trends to see how fitness has evolved',
+          ],
+        }
+      )
     );
 
     server.tool(
       'get_daily_summary',
-      "Get a basic summary of today including Whoop recovery, strain, completed workouts, and planned workouts. Use the other tools for more details, as needed.",
+      `<usecase>
+Use when the user asks general questions about today like:
+- "How am I doing today?"
+- "Give me a summary of today"
+- "What's my status?"
+- When you need multiple pieces of today's data at once
+
+Do NOT use for:
+- Specific deep-dives (use individual tools for recovery, strain, workouts)
+- Historical data (use get_workout_history, get_recovery_trends)
+- Future plans (use get_upcoming_workouts)
+</usecase>
+
+<instructions>
+Fetches a complete snapshot of today in a single call:
+- Whoop recovery: score, HRV, sleep metrics with level classifications
+- Whoop strain: score, calories, activities with level classifications
+- Completed workouts from Intervals.icu with matched Whoop data
+- Planned workouts from TrainerRoad and Intervals.icu
+- Summary stats: workouts completed/remaining, TSS completed/planned
+
+More efficient than calling individual tools when you need the full picture.
+For deeper analysis of any component, use the specific tool.
+</instructions>`,
       {},
-      withWhoopErrorHandling(async () => {
-        const result = await this.currentTools.getDailySummary();
-        return {
-          _field_descriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned'),
-          data: result,
-        };
-      })
+      withToolResponse(
+        async () => this.currentTools.getDailySummary(),
+        {
+          fieldDescriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned'),
+          getMessage: (data) => {
+            const parts: string[] = [];
+            if (data.recovery) {
+              parts.push(`Recovery: ${data.recovery.recovery_score}% (${data.recovery.recovery_level})`);
+            }
+            if (data.strain) {
+              parts.push(`Strain: ${data.strain.strain_score.toFixed(1)} (${data.strain.strain_level})`);
+            }
+            parts.push(`Completed: ${data.workouts_completed}/${data.workouts_completed + data.workouts_remaining} workouts`);
+            return parts.join('. ') + '.';
+          },
+          getNextActions: (data) => {
+            const actions: string[] = [];
+            if (data.completed_workouts && data.completed_workouts.length > 0) {
+              actions.push('Use get_workout_intervals(activity_id) for detailed workout analysis');
+            }
+            if (data.recovery) {
+              actions.push('Use get_recovery_trends to see patterns over time');
+            }
+            actions.push('Use get_training_load_trends for fitness/fatigue analysis');
+            return actions;
+          },
+          getWarnings: (data) => {
+            const warnings: string[] = [];
+            if (!data.recovery) {
+              warnings.push('Whoop recovery data unavailable');
+            }
+            if (!data.strain) {
+              warnings.push('Whoop strain data unavailable');
+            }
+            return warnings.length > 0 ? warnings : undefined;
+          },
+        }
+      )
     );
 
     // Historical/Trends Tools
     server.tool(
       'get_workout_history',
-      'Query completed workouts with flexible date ranges. Supports ISO dates or natural language for the dates. Use the activity ID from results with `get_workout_notes`, `get_workout_weather` and `get_workout_intervals` for deeper analysis.',
+      `<usecase>
+Use when the user asks about:
+- Workouts over a time period ("last week", "past 30 days")
+- Training patterns or volume over time
+- Specific sport history ("my runs this month")
+- Finding a specific past workout
+
+Do NOT use for:
+- Today's workouts only (use get_todays_completed_workouts)
+- Single workout deep-dive (get the ID first, then use get_workout_intervals)
+- Fitness/load trends (use get_training_load_trends)
+</usecase>
+
+<instructions>
+Queries completed workouts with flexible date filtering:
+- Accepts ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1")
+- Optional sport filter: cycling, running, swimming, skiing, hiking, rowing, strength
+- Returns comprehensive metrics for each workout
+- Includes matched Whoop strain data when available
+- Results sorted by date (oldest to newest)
+
+For detailed analysis of specific workouts, use the activity_id with:
+- get_workout_intervals: Interval structure and power/HR data
+- get_workout_notes: Athlete's comments and observations
+- get_workout_weather: Weather conditions (outdoor activities only)
+
+Returns empty array if no workouts match.
+</instructions>`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
-      async (args) => {
-        const result = await this.historicalTools.getWorkoutHistory(args);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: combineFieldDescriptions('workout', 'whoop'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async (args: { start_date: string; end_date?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
+        {
+          fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
+          getMessage: (data) => {
+            if (!data || data.length === 0) {
+              return 'No workouts found for this period.';
+            }
+            const totalTss = data.reduce((sum, w) => sum + (w.tss ?? 0), 0);
+            return `${data.length} workout${data.length === 1 ? '' : 's'} found. Total TSS: ${totalTss.toFixed(0)}.`;
+          },
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_workout_intervals(activity_id) for interval breakdown',
+                'Use get_workout_notes(activity_id) for athlete comments',
+                'Use get_recovery_trends for same period to correlate with training',
+              ]
+            : undefined,
+        }
+      )
     );
 
     server.tool(
       'get_recovery_trends',
-      "Get historic Whoop data for HRV, sleep, and recovery patterns for a date range.",
+      `<usecase>
+Use when the user asks about:
+- Recovery patterns over time
+- HRV trends or sleep quality trends
+- How recovery correlates with training
+- Historical sleep or recovery data
+
+Do NOT use for:
+- Today's recovery only (use get_todays_recovery)
+- Workout data (use get_workout_history)
+- Training load analysis (use get_training_load_trends)
+</usecase>
+
+<instructions>
+Fetches Whoop recovery data over a date range:
+- Daily recovery scores with level classifications (SUFFICIENT/ADEQUATE/LOW)
+- HRV RMSSD values
+- Resting heart rate trends
+- Sleep performance percentages with level classifications
+- Sleep durations and stages
+
+Date parameters accept ISO format (YYYY-MM-DD) or natural language:
+- "30 days ago", "last month", "2 weeks ago"
+
+Use alongside get_training_load_trends to correlate recovery with training stress.
+Returns empty array if Whoop is not configured.
+</instructions>`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
-      withWhoopErrorHandling(async (args) => {
-        const result = await this.historicalTools.getRecoveryTrends(args);
-        return {
-          _field_descriptions: getFieldDescriptions('recovery'),
-          data: result,
-        };
-      })
+      withToolResponse(
+        async (args: { start_date: string; end_date?: string }) => this.historicalTools.getRecoveryTrends(args),
+        {
+          fieldDescriptions: getFieldDescriptions('recovery'),
+          getMessage: (data) => {
+            if (!data || !data.data || data.data.length === 0) {
+              return 'No recovery data available for this period (Whoop not configured or no data).';
+            }
+            return `${data.data.length} days of recovery data. Avg recovery: ${data.summary.avg_recovery.toFixed(0)}%. Avg HRV: ${data.summary.avg_hrv.toFixed(0)} ms.`;
+          },
+          getNextActions: (data) => data && data.data && data.data.length > 0
+            ? [
+                'Use get_training_load_trends to correlate with training stress',
+                'Use get_workout_history for same period to see training patterns',
+              ]
+            : undefined,
+        }
+      )
     );
 
     // Planning Tools
     server.tool(
       'get_upcoming_workouts',
-      'Get planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars.',
+      `<usecase>
+Use when the user asks about:
+- Upcoming training schedule
+- Workouts planned for the next few days/weeks
+- What's coming up in their training plan
+- Specific sport schedule ("my bike workouts this week")
+
+Do NOT use for:
+- Today's planned workouts only (use get_todays_planned_workouts)
+- Specific date lookup (use get_planned_workout_details)
+- Completed workouts (use get_workout_history)
+</usecase>
+
+<instructions>
+Fetches planned workouts for a future date range:
+- Combines TrainerRoad and Intervals.icu calendars
+- Default: next 7 days (max: 30 days)
+- Optional sport filter: cycling, running, swimming, etc.
+- Deduplicates workouts that appear in both calendars
+
+Returns:
+- Workout name and description
+- Expected duration and TSS
+- Workout type and discipline
+- Interval structure (if available)
+
+Returns empty array if no workouts planned.
+</instructions>`,
       {
         days: z.number().optional().default(7).describe('Number of days ahead to look (default: 7, max: 30)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
-      async (args) => {
-        const result = await this.planningTools.getUpcomingWorkouts(args);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('planned'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async (args: { days?: number; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts({ days: args.days ?? 7, sport: args.sport }),
+        {
+          fieldDescriptions: getFieldDescriptions('planned'),
+          getMessage: (data) => {
+            if (!data || data.length === 0) {
+              return 'No workouts planned in this period.';
+            }
+            const totalTss = data.reduce((sum, w) => sum + (w.expected_tss ?? 0), 0);
+            return `${data.length} workout${data.length === 1 ? '' : 's'} planned. Total expected TSS: ${totalTss.toFixed(0)}.`;
+          },
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_planned_workout_details(date) for specific day details',
+                'Use get_training_load_trends to see current fitness/fatigue',
+              ]
+            : undefined,
+        }
+      )
     );
 
     server.tool(
       'get_planned_workout_details',
-      'Get planned workouts for a specific date. Use natural language like "next wednesday" or ISO format. Optionally filter by sport (e.g., "What is my bike workout on Thursday?").',
+      `<usecase>
+Use when the user asks about:
+- A specific day's planned workout ("What's my workout on Thursday?")
+- Details about an upcoming workout on a particular date
+- Sport-specific workout on a date ("What's my bike workout next Tuesday?")
+
+Do NOT use for:
+- Today's workouts (use get_todays_planned_workouts)
+- Range of upcoming workouts (use get_upcoming_workouts)
+- Completed workouts (use get_workout_history)
+</usecase>
+
+<instructions>
+Fetches planned workouts for a specific date:
+- Accepts natural language: "next wednesday", "tomorrow", "December 28"
+- Accepts ISO format: YYYY-MM-DD
+- Optional sport filter: cycling (bike), running (run), swimming (swim)
+- Combines TrainerRoad and Intervals.icu calendars
+
+Returns full workout details:
+- Name and description
+- Expected duration and TSS
+- Interval structure (if available)
+
+Returns empty array if no workouts match.
+</instructions>`,
       {
         date: z.string().describe('Date to find workout on - ISO format (YYYY-MM-DD) or natural language (e.g., "next wednesday", "tomorrow")'),
         sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport type (cycling = bike, running = run, swimming = swim)'),
       },
-      async (args) => {
-        const result = await this.planningTools.getPlannedWorkoutDetails(args);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('planned'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async (args: { date: string; sport?: 'cycling' | 'running' | 'swimming' }) => this.planningTools.getPlannedWorkoutDetails(args),
+        {
+          fieldDescriptions: getFieldDescriptions('planned'),
+          getMessage: (data) => {
+            if (!data || data.length === 0) {
+              return 'No workouts planned for this date.';
+            }
+            const totalTss = data.reduce((sum, w) => sum + (w.expected_tss ?? 0), 0);
+            return `${data.length} workout${data.length === 1 ? '' : 's'} planned. Expected TSS: ${totalTss.toFixed(0)}.`;
+          },
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_upcoming_workouts to see the full schedule',
+                'Use get_todays_recovery to check readiness if workout is today',
+              ]
+            : ['Use get_upcoming_workouts to find workouts on other dates'],
+        }
+      )
     );
 
     // ============================================
@@ -264,7 +658,42 @@ export class ToolRegistry {
 
     server.tool(
       'get_training_load_trends',
-      'Get training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. Returns daily data sorted oldest to newest.',
+      `<usecase>
+Use when the user asks about:
+- Fitness trends or training load over time
+- Whether they're building or losing fitness
+- If they're overtraining or at injury risk
+- Form/freshness for an upcoming race
+- CTL, ATL, TSB, or ACWR metrics
+
+Do NOT use for:
+- Individual workout details (use get_workout_history)
+- Recovery/sleep data (use get_recovery_trends)
+- Today's summary (use get_daily_summary)
+</usecase>
+
+<instructions>
+Analyzes training load trends over a specified period (default: 42 days, max: 365):
+
+Key metrics:
+- CTL (Chronic Training Load): 42-day rolling fitness
+- ATL (Acute Training Load): 7-day rolling fatigue
+- TSB (Training Stress Balance): Form = CTL - ATL
+  • Positive = fresh/rested
+  • Negative = fatigued
+  • Race-ready: -10 to +25
+- Ramp rate: Weekly CTL change
+  • Safe: 3-7 pts/week
+  • Aggressive: 7-10 pts/week
+  • Injury risk: >10 pts/week
+- ACWR (Acute:Chronic Workload Ratio): ATL/CTL
+  • Optimal: 0.8-1.3
+  • Caution: 1.3-1.5
+  • High injury risk: >1.5
+
+Returns daily time series (oldest to newest) plus summary statistics.
+Use with get_recovery_trends to correlate load with recovery.
+</instructions>`,
       {
         days: z
           .number()
@@ -272,66 +701,190 @@ export class ToolRegistry {
           .default(42)
           .describe('Number of days of history to analyze (default: 42, max: 365)'),
       },
-      async (args) => {
-        const result = await this.historicalTools.getTrainingLoadTrends(args.days);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('fitness'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
+        {
+          fieldDescriptions: getFieldDescriptions('fitness'),
+          getMessage: (data) => {
+            if (!data || !data.summary) {
+              return 'No training load data available.';
+            }
+            const { current_ctl, current_atl, current_tsb, acwr } = data.summary;
+            return `Current fitness: CTL ${current_ctl?.toFixed(0) ?? 'N/A'}, ATL ${current_atl?.toFixed(0) ?? 'N/A'}, TSB ${current_tsb?.toFixed(0) ?? 'N/A'}, ACWR ${acwr?.toFixed(2) ?? 'N/A'}.`;
+          },
+          getNextActions: () => [
+            'Use get_recovery_trends to correlate with sleep/HRV',
+            'Use get_workout_history to see what drove these trends',
+          ],
+          getWarnings: (data) => {
+            const warnings: string[] = [];
+            if (data?.summary?.acwr !== undefined && data.summary.acwr > 1.5) {
+              warnings.push(`ACWR is ${data.summary.acwr.toFixed(2)} - high injury risk. Consider reducing load.`);
+            } else if (data?.summary?.acwr !== undefined && data.summary.acwr > 1.3) {
+              warnings.push(`ACWR is ${data.summary.acwr.toFixed(2)} - approaching injury risk zone.`);
+            }
+            if (data?.summary?.avg_ramp_rate !== undefined && data.summary.avg_ramp_rate > 10) {
+              warnings.push(`Ramp rate is ${data.summary.avg_ramp_rate.toFixed(1)} pts/week - exceeds safe limit.`);
+            }
+            return warnings.length > 0 ? warnings : undefined;
+          },
+        }
+      )
     );
 
     server.tool(
       'get_workout_intervals',
-      'Get detailed interval breakdown for a specific workout. Returns structured intervals with power, HR, cadence, and timing data. Also includes interval groups that summarize repeated efforts (e.g., "5 x 56s @ 314w"). Optional, depending on the level of detail requested by the user.',
+      `<usecase>
+Use when the user asks about:
+- Interval details or structure of a specific workout
+- Power or HR data for individual efforts within a workout
+- How well they hit their interval targets
+- Detailed breakdown of a workout's efforts
+
+Requires: activity_id from get_workout_history or get_todays_completed_workouts
+
+Do NOT use for:
+- General workout overview (use get_workout_history first)
+- Workout notes or comments (use get_workout_notes)
+- Weather during workout (use get_workout_weather)
+</usecase>
+
+<instructions>
+Fetches detailed interval breakdown for a specific workout:
+- Individual intervals with type (WORK/RECOVERY)
+- Power metrics: average watts, max watts, normalized power, watts/kg
+- Heart rate: average and max HR, HR decoupling
+- Cadence and stride length
+- Interval groups summarizing repeated efforts (e.g., "5 x 56s @ 314w")
+- W'bal (anaerobic capacity) depletion
+
+Get the activity_id first from:
+- get_workout_history (for past workouts)
+- get_todays_completed_workouts (for today's workouts)
+</instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      async (args) => {
-        const result = await this.historicalTools.getWorkoutIntervals(args.activity_id);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('intervals'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
+        {
+          fieldDescriptions: getFieldDescriptions('intervals'),
+          getMessage: (data) => {
+            if (!data || !data.intervals || data.intervals.length === 0) {
+              return 'No interval data available for this workout.';
+            }
+            const workIntervals = data.intervals.filter((i: { type?: string }) => i.type === 'WORK').length;
+            return `${data.intervals.length} intervals found (${workIntervals} work intervals).`;
+          },
+          getNextActions: (data) => [
+            'Use get_workout_notes for athlete comments on this workout',
+            'Use get_workout_weather for outdoor workout conditions',
+          ],
+        }
+      )
     );
 
     server.tool(
       'get_workout_notes',
-      'Get notes for a specific workout. Notes may be written by the athlete themselves, or other Intervals.icu users (like a coach). Notes provide subjective context like perceived effort, how they felt, or other observations. Always fetch these when analyzing a workout.',
+      `<usecase>
+Use when the user asks about:
+- How a workout felt subjectively
+- Athlete's comments or observations about a workout
+- Coach feedback on a workout
+- RPE (Rate of Perceived Exertion) or feel rating
+
+Requires: activity_id from get_workout_history or get_todays_completed_workouts
+ALWAYS fetch this when analyzing a workout - subjective data is valuable context.
+
+Do NOT use for:
+- Objective workout metrics (use get_workout_intervals)
+- Weather data (use get_workout_weather)
+</usecase>
+
+<instructions>
+Fetches notes attached to a specific workout:
+- Athlete's own comments and observations
+- Coach feedback (if using Intervals.icu coaching features)
+- Attachments (if any)
+- Creation timestamp and author
+
+Get the activity_id first from:
+- get_workout_history (for past workouts)
+- get_todays_completed_workouts (for today's workouts)
+
+Returns empty notes array if no notes exist.
+</instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      async (args) => {
-        const result = await this.historicalTools.getWorkoutNotes(args.activity_id);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('notes'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
+        {
+          fieldDescriptions: getFieldDescriptions('notes'),
+          getMessage: (data) => {
+            if (!data || !data.notes || data.notes.length === 0) {
+              return 'No notes found for this workout.';
+            }
+            return `${data.notes.length} note${data.notes.length === 1 ? '' : 's'} found.`;
+          },
+          getNextActions: () => [
+            'Use get_workout_intervals for objective interval data',
+            'Use get_workout_weather for outdoor workout conditions',
+          ],
+        }
+      )
     );
 
     server.tool(
       'get_workout_weather',
-      'Get weather conditions during a specific outdoor* workout. Always fetch this when analyzing **outdoor** activities, but **do not fetch** it for indoor/trainer workouts.',
+      `<usecase>
+Use when the user asks about:
+- Weather conditions during an outdoor workout
+- How wind, temperature, or rain affected performance
+- Environmental factors during a ride or run
+
+Requires: activity_id from get_workout_history or get_todays_completed_workouts
+ONLY use for OUTDOOR activities - indoor/trainer workouts have no weather data.
+
+Do NOT use for:
+- Indoor/trainer workouts (no weather data available)
+- Objective workout metrics (use get_workout_intervals)
+- Subjective notes (use get_workout_notes)
+</usecase>
+
+<instructions>
+Fetches weather conditions during an outdoor workout:
+- Temperature (average, min, max)
+- Wind speed and direction
+- Precipitation and humidity
+- Cloud cover
+
+Get the activity_id first from:
+- get_workout_history (for past workouts)
+- get_todays_completed_workouts (for today's workouts)
+
+Check the is_indoor field first - only fetch weather for outdoor activities.
+Returns null if weather data is not available.
+</instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      async (args) => {
-        const result = await this.historicalTools.getWorkoutWeather(args.activity_id);
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('weather'),
-            data: result,
-          }, null, 2) }],
-        };
-      }
+      withToolResponse(
+        async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
+        {
+          fieldDescriptions: getFieldDescriptions('weather'),
+          getMessage: (data) => {
+            if (!data || !data.weather_description) {
+              return 'No weather data available (indoor workout or data not recorded).';
+            }
+            return `Weather: ${data.weather_description}`;
+          },
+          getNextActions: () => [
+            'Use get_workout_intervals for power/HR data',
+            'Use get_workout_notes for athlete comments',
+          ],
+        }
+      )
     );
   }
 }
