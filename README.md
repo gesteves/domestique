@@ -4,29 +4,38 @@ A TypeScript MCP (Model Context Protocol) server that integrates with Intervals.
 
 ## Features
 
-- Query completed workouts from Intervals.icu
-- Access recovery metrics (HRV, sleep, recovery score) from Whoop
+- Query completed workouts from Intervals.icu with matched Whoop strain data
+- Access recovery metrics (HRV, sleep, recovery score) from Whoop with recovery level classifications
 - View planned workouts from TrainerRoad and Intervals.icu calendars
-- Analyze fitness trends (CTL/ATL/TSB)
+- Analyze fitness trends (CTL/ATL/TSB) with injury risk assessment (ACWR)
 - Cross-platform activity matching
+- Natural language date parsing (e.g., "next wednesday", "last 2 weeks", "December 25")
+- Comprehensive workout analysis with intervals, notes, and weather data
 
 ## Available Tools
 
 ### Current/Today
-- `get_todays_recovery` - Today's Whoop recovery, sleep, and HRV data
-- `get_todays_strain` - Today's Whoop strain data including strain score, heart rate, and calories
-- `get_todays_completed_workouts` - Today's completed workouts from Intervals.icu
+- `get_todays_recovery` - Today's Whoop recovery, sleep, and HRV data with recovery level classification
+- `get_todays_strain` - Today's Whoop strain data including strain score, heart rate, and calories with strain level classification
+- `get_todays_completed_workouts` - Today's completed workouts from Intervals.icu with matched Whoop strain data
 - `get_todays_planned_workouts` - Today's scheduled workouts from both TrainerRoad and Intervals.icu calendars
+- `get_athlete_profile` - Athlete's profile including sport-specific settings, power zones, heart rate zones, pace zones, FTP, LTHR, and thresholds
+- `get_daily_summary` - Complete summary of today including recovery, strain, completed workouts, and planned workouts in a single call. More efficient than calling individual tools
 
 ### Historical/Trends
-- `get_workout_history` - Historical workouts with matched Whoop strain data. Supports ISO dates or natural language (e.g., "30 days ago"). Returns expanded metrics including speed, cadence, efficiency, power data, and per-activity fitness snapshot
-- `get_strain_history` - Whoop strain scores and activities for a date range
-- `get_recovery_trends` - HRV, sleep, and recovery patterns over time with summary statistics
-- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR for injury risk. Takes number of days (default: 42). Returns daily data sorted oldest to newest
+- `get_workout_history` - Historical workouts with matched Whoop strain data. Supports ISO dates, natural language (e.g., "30 days ago", "last 2 weeks"), and day names (e.g., "next wednesday"). Returns expanded metrics including speed, cadence, efficiency, power data, and per-activity fitness snapshot
+- `get_strain_history` - Whoop strain scores and activities for a date range with flexible date parsing
+- `get_recovery_trends` - HRV, sleep, and recovery patterns over time with recovery level classifications and summary statistics
+- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR for injury risk assessment. Takes number of days (default: 42, max: 365). Returns daily data sorted oldest to newest
+
+### Workout Analysis
+- `get_workout_intervals` - Detailed interval breakdown for a specific workout including power, HR, cadence, and timing data with interval groups that summarize repeated efforts
+- `get_workout_notes` - Notes left by the athlete for a specific workout including subjective context like perceived effort and how they felt
+- `get_workout_weather` - Weather conditions during a specific outdoor workout (wind, temperature, precipitation, cloud data)
 
 ### Planning
-- `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
-- `get_planned_workout_details` - Detailed information about a specific planned workout by ID or date
+- `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars with optional sport filtering
+- `get_planned_workout_details` - Detailed information about a specific planned workout using flexible date parsing (e.g., "next wednesday", "tomorrow", ISO dates)
 
 ## Setup
 
@@ -278,3 +287,7 @@ Once connected, you can ask Claude:
 - "Show me my fitness trends for the last month"
 - "What workouts do I have planned this week?"
 - "How has my HRV trended compared to my training load?"
+- "What workout do I have scheduled for next Wednesday?"
+- "Show me my workouts from last Friday"
+- "How many workouts did I complete in the last 2 weeks?"
+- "What was my training load in the last 42 days?"
