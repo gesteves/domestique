@@ -10,10 +10,6 @@ import {
   combineFieldDescriptions,
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
-import {
-  computeRecoveryInsights,
-  computeStrainInsights,
-} from '../utils/whoop-insights.js';
 
 /**
  * Wraps a tool handler to provide graceful error handling for Whoop API errors.
@@ -91,30 +87,26 @@ export class ToolRegistry {
     // Current/Recent Data Tools
     server.tool(
       'get_todays_recovery',
-      "Fetch today's Whoop recovery data including recovery score, HRV, sleep performance, and resting heart rate. Includes pre-computed insights with Whoop's official terminology.",
+      "Fetch today's Whoop recovery data including recovery score, HRV, sleep performance, and resting heart rate. Includes recovery_level (SUFFICIENT/ADEQUATE/LOW) and sleep_performance_level (OPTIMAL/SUFFICIENT/POOR) with descriptions.",
       {},
       withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getTodaysRecovery();
-        const insights = result ? computeRecoveryInsights(result) : null;
         return {
           _field_descriptions: getFieldDescriptions('recovery'),
           data: result,
-          insights,
         };
       })
     );
 
     server.tool(
       'get_todays_strain',
-      "Fetch today's Whoop strain data including strain score, heart rate, and calories. Includes pre-computed insights with Whoop's official terminology.",
+      "Fetch today's Whoop strain data including strain score, heart rate, and calories. Includes strain_level (LIGHT/MODERATE/HIGH/ALL_OUT) with description.",
       {},
       withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getTodaysStrain();
-        const insights = result ? computeStrainInsights(result) : null;
         return {
           _field_descriptions: getFieldDescriptions('whoop'),
           data: result,
-          insights,
         };
       })
     );
@@ -136,21 +128,16 @@ export class ToolRegistry {
 
     server.tool(
       'get_strain_history',
-      "Get Whoop strain scores and activities for a date range. Includes pre-computed insights with Whoop's official terminology for each day.",
+      "Get Whoop strain scores and activities for a date range. Each entry includes strain_level (LIGHT/MODERATE/HIGH/ALL_OUT) with description.",
       {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
       withWhoopErrorHandling(async (args) => {
         const result = await this.currentTools.getStrainHistory(args);
-        // Add insights to each strain data entry
-        const dataWithInsights = result.map((strain) => ({
-          ...strain,
-          insights: computeStrainInsights(strain),
-        }));
         return {
           _field_descriptions: getFieldDescriptions('whoop'),
-          data: dataWithInsights,
+          data: result,
         };
       })
     );
@@ -187,7 +174,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_daily_summary',
-      "Get a complete summary of today including Whoop recovery, strain, completed workouts, and planned workouts in a single call. Includes pre-computed insights with Whoop's official terminology (recovery: SUFFICIENT/ADEQUATE/LOW, strain: LIGHT/MODERATE/HIGH/ALL_OUT, sleep: OPTIMAL/SUFFICIENT/POOR). More efficient than calling individual tools separately.",
+      "Get a complete summary of today including Whoop recovery, strain, completed workouts, and planned workouts in a single call. Recovery and strain objects include level fields (recovery: SUFFICIENT/ADEQUATE/LOW, strain: LIGHT/MODERATE/HIGH/ALL_OUT, sleep: OPTIMAL/SUFFICIENT/POOR). More efficient than calling individual tools separately.",
       {},
       withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getDailySummary();
@@ -220,24 +207,16 @@ export class ToolRegistry {
 
     server.tool(
       'get_recovery_trends',
-      "Analyze HRV, sleep, and recovery patterns over time. Includes pre-computed insights with Whoop's official terminology for each day.",
+      "Analyze HRV, sleep, and recovery patterns over time. Each entry includes recovery_level (SUFFICIENT/ADEQUATE/LOW) and sleep_performance_level (OPTIMAL/SUFFICIENT/POOR) with descriptions.",
       {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
       withWhoopErrorHandling(async (args) => {
         const result = await this.historicalTools.getRecoveryTrends(args);
-        // Add insights to each recovery data entry in the data array
-        const dataWithInsights = {
-          ...result,
-          data: result.data.map((recovery) => ({
-            ...recovery,
-            insights: computeRecoveryInsights(recovery),
-          })),
-        };
         return {
           _field_descriptions: getFieldDescriptions('recovery'),
-          data: dataWithInsights,
+          data: result,
         };
       })
     );

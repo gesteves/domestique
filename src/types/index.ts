@@ -166,10 +166,19 @@ export interface RecoveryData {
   resting_heart_rate: number;
   spo2_percentage?: number;
   skin_temp_celsius?: number;
+  // Recovery level interpretation (Whoop's official terminology)
+  /** Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%) */
+  recovery_level: 'SUFFICIENT' | 'ADEQUATE' | 'LOW';
+  /** Human-readable description from Whoop */
+  recovery_level_description: string;
   // Sleep metrics
   sleep_performance_percentage: number;
   sleep_consistency_percentage?: number;
   sleep_efficiency_percentage?: number;
+  /** Sleep performance level: OPTIMAL (≥85%), SUFFICIENT (70-85%), POOR (<70%) */
+  sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR';
+  /** Human-readable sleep performance description from Whoop */
+  sleep_performance_level_description: string;
   // Sleep durations (human-readable, e.g., "7:12:40")
   sleep_duration: string;
   sleep_quality_duration?: string; // Deep + REM sleep
@@ -190,6 +199,10 @@ export interface RecoveryData {
 export interface StrainData {
   date: string;
   strain_score: number;
+  /** Strain level: LIGHT (0-9), MODERATE (10-13), HIGH (14-17), ALL_OUT (18-21) */
+  strain_level: 'LIGHT' | 'MODERATE' | 'HIGH' | 'ALL_OUT';
+  /** Human-readable description from Whoop */
+  strain_level_description: string;
   average_heart_rate?: number;
   max_heart_rate?: number;
   calories?: number;
@@ -465,37 +478,24 @@ export interface WorkoutNotesResponse {
 // Daily Summary
 // ============================================
 
-// Re-export insight types from whoop-insights for convenience
-export type {
-  RecoveryLevel,
-  StrainLevel,
-  SleepPerformanceLevel,
-  RecoveryInsights,
-  StrainInsights,
-} from '../utils/whoop-insights.js';
-
 /**
- * Daily insights with pre-computed Whoop interpretations.
- * Uses Whoop's official terminology for recovery and strain levels.
+ * Complete daily summary combining recovery, strain, and workout data.
+ * Returned by get_daily_summary tool.
+ *
+ * Note: Whoop insight fields (recovery_level, strain_level, sleep_performance_level, etc.)
+ * are included directly in the recovery and strain objects.
  */
-export interface DailyInsights {
-  // Whoop-specific interpretations (using Whoop's official terminology)
-  /** Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%) */
-  recovery_level: 'SUFFICIENT' | 'ADEQUATE' | 'LOW' | null;
-  /** Human-readable description from Whoop */
-  recovery_level_description: string | null;
-  /** Strain level: LIGHT (0-9), MODERATE (10-13), HIGH (14-17), ALL_OUT (18-21) */
-  strain_level: 'LIGHT' | 'MODERATE' | 'HIGH' | 'ALL_OUT' | null;
-  /** Human-readable description from Whoop */
-  strain_level_description: string | null;
-  /** Sleep performance level: OPTIMAL (≥85%), SUFFICIENT (70-85%), POOR (<70%) */
-  sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR' | null;
-  /** Human-readable sleep performance description from Whoop */
-  sleep_performance_level_description: string | null;
-  /** Sleep duration, e.g., "7:12:40" */
-  sleep_duration: string | null;
-
-  // Summary stats
+export interface DailySummary {
+  /** Date in ISO 8601 format */
+  date: string;
+  /** Today's Whoop recovery data with insight fields, null if unavailable */
+  recovery: RecoveryData | null;
+  /** Today's Whoop strain data with insight fields, null if unavailable */
+  strain: StrainData | null;
+  /** Completed workouts from Intervals.icu with matched Whoop data */
+  completed_workouts: WorkoutWithWhoop[];
+  /** Planned workouts from TrainerRoad and Intervals.icu */
+  planned_workouts: PlannedWorkout[];
   /** Number of workouts completed today */
   workouts_completed: number;
   /** Number of planned workouts remaining */
@@ -504,23 +504,4 @@ export interface DailyInsights {
   tss_completed: number;
   /** Total TSS from planned workouts */
   tss_planned: number;
-}
-
-/**
- * Complete daily summary combining recovery, strain, and workout data.
- * Returned by get_daily_summary tool.
- */
-export interface DailySummary {
-  /** Date in ISO 8601 format */
-  date: string;
-  /** Today's Whoop recovery data, null if unavailable */
-  recovery: RecoveryData | null;
-  /** Today's Whoop strain data, null if unavailable */
-  strain: StrainData | null;
-  /** Completed workouts from Intervals.icu with matched Whoop data */
-  completed_workouts: WorkoutWithWhoop[];
-  /** Planned workouts from TrainerRoad and Intervals.icu */
-  planned_workouts: PlannedWorkout[];
-  /** Pre-computed insights for LLM consumption */
-  insights: DailyInsights;
 }

@@ -8,6 +8,14 @@ import type {
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { formatDuration, formatDistance, isSwimmingActivity } from '../utils/format-units.js';
 import {
+  getRecoveryLevel,
+  getRecoveryLevelDescription,
+  getSleepPerformanceLevel,
+  getSleepPerformanceLevelDescription,
+  getStrainLevel,
+  getStrainLevelDescription,
+} from '../utils/whoop-insights.js';
+import {
   getWhoopAccessToken,
   getWhoopRefreshToken,
   storeWhoopTokens,
@@ -615,6 +623,11 @@ export class WhoopClient {
         sleepNeeded.need_from_recent_nap_milli
       : undefined;
 
+    // Compute insight levels
+    const recoveryLevel = getRecoveryLevel(recovery.score.recovery_score);
+    const sleepPerfPct = round2(sleepScore?.sleep_performance_percentage) ?? 0;
+    const sleepPerformanceLevel = getSleepPerformanceLevel(sleepPerfPct);
+
     return {
       date: recovery.created_at.split('T')[0],
       // Recovery metrics (rounded to 2 decimals)
@@ -623,10 +636,16 @@ export class WhoopClient {
       resting_heart_rate: recovery.score.resting_heart_rate,
       spo2_percentage: round2(recovery.score.spo2_percentage),
       skin_temp_celsius: round2(recovery.score.skin_temp_celsius),
+      // Recovery level interpretation
+      recovery_level: recoveryLevel,
+      recovery_level_description: getRecoveryLevelDescription(recoveryLevel),
       // Sleep performance metrics (rounded to 2 decimals)
-      sleep_performance_percentage: round2(sleepScore?.sleep_performance_percentage) ?? 0,
+      sleep_performance_percentage: sleepPerfPct,
       sleep_consistency_percentage: round2(sleepScore?.sleep_consistency_percentage),
       sleep_efficiency_percentage: round2(sleepScore?.sleep_efficiency_percentage),
+      // Sleep performance level interpretation
+      sleep_performance_level: sleepPerformanceLevel,
+      sleep_performance_level_description: getSleepPerformanceLevelDescription(sleepPerformanceLevel),
       // Sleep durations (human-readable, e.g., "7:12:40")
       sleep_duration: totalSleepMilli > 0 ? milliToHuman(totalSleepMilli) : '0:00:00',
       sleep_quality_duration: sleepQualityMilli !== undefined
@@ -659,9 +678,12 @@ export class WhoopClient {
   }
 
   private normalizeStrain(cycle: WhoopCycle, workouts: WhoopWorkout[], localDate: string): StrainData {
+    const strainLevel = getStrainLevel(cycle.score.strain);
     return {
       date: localDate,
       strain_score: cycle.score.strain,
+      strain_level: strainLevel,
+      strain_level_description: getStrainLevelDescription(strainLevel),
       average_heart_rate: cycle.score.average_heart_rate,
       max_heart_rate: cycle.score.max_heart_rate,
       calories: Math.round(cycle.score.kilojoule / 4.184),

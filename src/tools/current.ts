@@ -3,7 +3,6 @@ import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone } from '../utils/date-parser.js';
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
-import { computeRecoveryInsights, computeStrainInsights } from '../utils/whoop-insights.js';
 import type {
   RecoveryData,
   StrainData,
@@ -14,7 +13,6 @@ import type {
   WhoopMatchedData,
   AthleteProfile,
   DailySummary,
-  DailyInsights,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -208,6 +206,9 @@ export class CurrentTools {
   /**
    * Get a complete daily summary including recovery, strain, and workouts.
    * Consolidates 4 tool calls into 1 for efficiency.
+   *
+   * Note: Whoop insight fields (recovery_level, strain_level, sleep_performance_level, etc.)
+   * are included directly in the recovery and strain objects.
    */
   async getDailySummary(): Promise<DailySummary> {
     const today = getToday();
@@ -232,37 +233,6 @@ export class CurrentTools {
       }),
     ]);
 
-    // Compute insights from Whoop data
-    const insights = this.computeDailyInsights(
-      recovery,
-      strain,
-      completedWorkouts,
-      plannedWorkouts
-    );
-
-    return {
-      date: today,
-      recovery,
-      strain,
-      completed_workouts: completedWorkouts,
-      planned_workouts: plannedWorkouts,
-      insights,
-    };
-  }
-
-  /**
-   * Compute daily insights from recovery, strain, and workout data.
-   */
-  private computeDailyInsights(
-    recovery: RecoveryData | null,
-    strain: StrainData | null,
-    completedWorkouts: WorkoutWithWhoop[],
-    plannedWorkouts: PlannedWorkout[]
-  ): DailyInsights {
-    // Compute Whoop insights if data available
-    const recoveryInsights = recovery ? computeRecoveryInsights(recovery) : null;
-    const strainInsights = strain ? computeStrainInsights(strain) : null;
-
     // Calculate TSS totals
     const tssCompleted = completedWorkouts.reduce(
       (sum, w) => sum + (w.tss || 0),
@@ -274,16 +244,11 @@ export class CurrentTools {
     );
 
     return {
-      // Whoop insights
-      recovery_level: recoveryInsights?.recovery_level || null,
-      recovery_level_description: recoveryInsights?.recovery_level_description || null,
-      strain_level: strainInsights?.strain_level || null,
-      strain_level_description: strainInsights?.strain_level_description || null,
-      sleep_performance_level: recoveryInsights?.sleep_performance_level || null,
-      sleep_performance_level_description: recoveryInsights?.sleep_performance_level_description || null,
-      sleep_duration: recoveryInsights?.sleep_duration || null,
-
-      // Summary stats
+      date: today,
+      recovery,
+      strain,
+      completed_workouts: completedWorkouts,
+      planned_workouts: plannedWorkouts,
       workouts_completed: completedWorkouts.length,
       workouts_remaining: plannedWorkouts.length,
       tss_completed: Math.round(tssCompleted),
