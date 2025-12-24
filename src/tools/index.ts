@@ -87,7 +87,7 @@ export class ToolRegistry {
     // Current/Recent Data Tools
     server.tool(
       'get_todays_recovery',
-      "Fetch today's Whoop recovery data including recovery score, HRV, sleep performance, and resting heart rate. Includes recovery_level (SUFFICIENT/ADEQUATE/LOW) and sleep_performance_level (OPTIMAL/SUFFICIENT/POOR) with descriptions.",
+      "Fetch today's Whoop sleep and recovery data, including recovery score, HRV, sleep performance, and resting heart rate.",
       {},
       withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getTodaysRecovery();
@@ -100,7 +100,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_todays_strain',
-      "Fetch today's Whoop strain data including strain score, heart rate, and calories. Includes strain_level (LIGHT/MODERATE/HIGH/ALL_OUT) with description.",
+      "Fetch today's Whoop strain data and completed activities.",
       {},
       withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getTodaysStrain();
@@ -128,7 +128,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_strain_history',
-      "Get Whoop strain scores and activities for a date range. Each entry includes strain_level (LIGHT/MODERATE/HIGH/ALL_OUT) with description.",
+      "Get Whoop strain scores and activities for a date range.",
       {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -159,7 +159,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_athlete_profile',
-      "Get the athlete's profile including sport-specific settings for power zones, heart rate zones, pace zones, FTP, LTHR, and thresholds. Useful for understanding training zones and interpreting workout data.",
+      "Get the athlete's profile including current sport-specific settings for power zones, heart rate zones, pace zones, FTP, LTHR, and thresholds. Useful for understanding training zones and interpreting workout data.",
       {},
       async () => {
         const result = await this.currentTools.getAthleteProfile();
@@ -174,7 +174,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_daily_summary',
-      "Get a complete summary of today including Whoop recovery, strain, completed workouts, and planned workouts in a single call. Recovery and strain objects include level fields (recovery: SUFFICIENT/ADEQUATE/LOW, strain: LIGHT/MODERATE/HIGH/ALL_OUT, sleep: OPTIMAL/SUFFICIENT/POOR). More efficient than calling individual tools separately.",
+      "Get a basic summary of today including Whoop recovery, strain, completed workouts, and planned workouts. Use the other tools for more details, as needed.",
       {},
       withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getDailySummary();
@@ -188,9 +188,9 @@ export class ToolRegistry {
     // Historical/Trends Tools
     server.tool(
       'get_workout_history',
-      'Query historical workouts with flexible date ranges. Supports ISO dates or natural language. Use the activity ID from results with `get_workout_notes`, `get_workout_weather` and `get_workout_intervals` for deeper analysis.',
+      'Query completed workouts with flexible date ranges. Supports ISO dates or natural language for the dates. Use the activity ID from results with `get_workout_notes`, `get_workout_weather` and `get_workout_intervals` for deeper analysis.',
       {
-        start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
+        start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
@@ -207,9 +207,9 @@ export class ToolRegistry {
 
     server.tool(
       'get_recovery_trends',
-      "Analyze HRV, sleep, and recovery patterns over time. Each entry includes recovery_level (SUFFICIENT/ADEQUATE/LOW) and sleep_performance_level (OPTIMAL/SUFFICIENT/POOR) with descriptions.",
+      "Get historic Whoop data for HRV, sleep, and recovery patterns for a date range.",
       {
-        start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
+        start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
       withWhoopErrorHandling(async (args) => {
@@ -264,7 +264,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_training_load_trends',
-      'Get training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. Returns daily data sorted oldest to newest. ACWR between 0.8-1.3 is optimal; above 1.5 indicates high injury risk.',
+      'Get training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and Acute:Chronic Workload Ratio (ACWR) for injury risk assessment. Returns daily data sorted oldest to newest.',
       {
         days: z
           .number()
@@ -319,7 +319,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_workout_weather',
-      'Get weather conditions during a specific OUTDOOR workout. Returns wind, temperature, precipitation, and cloud data. Always fetch this when analyzing outdoor activities, but do not fetch it for for indoor/trainer workouts.',
+      'Get weather conditions during a specific outdoor* workout. Always fetch this when analyzing **outdoor** activities, but **do not fetch** it for indoor/trainer workouts.',
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
