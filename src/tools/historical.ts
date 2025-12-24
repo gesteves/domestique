@@ -81,8 +81,6 @@ export class HistoricalTools {
       distance_meters: match.distance_meters,
       altitude_gain_meters: match.altitude_gain_meters,
       zone_durations: match.zone_durations,
-      match_confidence: 'high', // findMatchingWhoopActivity only returns timestamp or date+type matches
-      match_method: 'timestamp',
     };
   }
 

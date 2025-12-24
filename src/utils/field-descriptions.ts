@@ -123,8 +123,6 @@ export const WHOOP_FIELD_DESCRIPTIONS = {
   distance_meters: 'Distance in meters',
   altitude_gain_meters: 'Elevation gain in meters',
   zone_durations: 'Object with zone_0_minutes through zone_5_minutes - time in each Whoop HR zone',
-  match_confidence: 'How confidently this Whoop activity matched the Intervals workout: high (timestamp match), medium (date+type match), low (date only)',
-  match_method: 'How the match was determined: timestamp, date_and_type, or date_only',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {

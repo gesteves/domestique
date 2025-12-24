@@ -113,8 +113,6 @@ export class CurrentTools {
       distance_meters: match.distance_meters,
       altitude_gain_meters: match.altitude_gain_meters,
       zone_durations: match.zone_durations,
-      match_confidence: 'high',
-      match_method: 'timestamp',
     };
   }
 

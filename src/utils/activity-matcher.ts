@@ -143,15 +143,11 @@ export function matchActivities(
       matched.push({
         intervals_workout: workout,
         whoop_activity: bestMatch.activity,
-        match_confidence: bestMatch.confidence,
-        match_method: bestMatch.method,
       });
     } else {
       // No match found, include workout without Whoop data
       matched.push({
         intervals_workout: workout,
-        match_confidence: 'low',
-        match_method: 'date_only',
       });
     }
   }
@@ -161,8 +157,6 @@ export function matchActivities(
     if (!usedWhoopIds.has(activity.id)) {
       matched.push({
         whoop_activity: activity,
-        match_confidence: 'low',
-        match_method: 'date_only',
       });
     }
   }

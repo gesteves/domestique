@@ -105,7 +105,7 @@ describe('activity-matcher', () => {
       strain_score: 10,
     });
 
-    it('should match activities with high confidence by timestamp', () => {
+    it('should match activities by timestamp', () => {
       const workouts = [
         createWorkout('w1', '2024-12-15T10:00:00Z', 'Ride'),
       ];
@@ -118,11 +118,9 @@ describe('activity-matcher', () => {
       expect(result).toHaveLength(1);
       expect(result[0].intervals_workout?.id).toBe('w1');
       expect(result[0].whoop_activity?.id).toBe('a1');
-      expect(result[0].match_confidence).toBe('high');
-      expect(result[0].match_method).toBe('timestamp');
     });
 
-    it('should match activities with medium confidence by date and type', () => {
+    it('should match activities by date and type when timestamps differ', () => {
       const workouts = [
         createWorkout('w1', '2024-12-15T10:00:00Z', 'Ride'),
       ];
@@ -133,11 +131,11 @@ describe('activity-matcher', () => {
       const result = matchActivities(workouts, activities);
 
       expect(result).toHaveLength(1);
-      expect(result[0].match_confidence).toBe('medium');
-      expect(result[0].match_method).toBe('date_and_type');
+      expect(result[0].intervals_workout?.id).toBe('w1');
+      expect(result[0].whoop_activity?.id).toBe('a1');
     });
 
-    it('should match activities with low confidence by date only', () => {
+    it('should match activities by date only when types differ', () => {
       const workouts = [
         createWorkout('w1', '2024-12-15T10:00:00Z', 'Ride'),
       ];
@@ -148,8 +146,8 @@ describe('activity-matcher', () => {
       const result = matchActivities(workouts, activities);
 
       expect(result).toHaveLength(1);
-      expect(result[0].match_confidence).toBe('low');
-      expect(result[0].match_method).toBe('date_only');
+      expect(result[0].intervals_workout?.id).toBe('w1');
+      expect(result[0].whoop_activity?.id).toBe('a1');
     });
 
     it('should include unmatched workouts', () => {

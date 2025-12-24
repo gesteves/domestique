@@ -147,8 +147,6 @@ export interface WhoopMatchedData {
   distance_meters?: number;
   altitude_gain_meters?: number;
   zone_durations?: WhoopZoneDurations;
-  match_confidence: 'high' | 'medium' | 'low';
-  match_method: 'timestamp' | 'date_and_type' | 'date_only';
 }
 
 /**
@@ -249,8 +247,6 @@ export interface FitnessMetrics {
 export interface MatchedActivity {
   intervals_workout?: NormalizedWorkout;
   whoop_activity?: StrainActivity;
-  match_confidence: 'high' | 'medium' | 'low';
-  match_method: 'timestamp' | 'date_and_type' | 'date_only';
 }
 
 // API client configuration
