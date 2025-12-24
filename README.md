@@ -247,32 +247,13 @@ Follow the prompts to authorize with Whoop and store the tokens in Redis.
 
 ## Connecting to Claude
 
-Add this MCP server to your Claude configuration. The server supports two authentication methods:
-
-### Method 1: Authorization Header (Recommended)
-
-```json
-{
-  "mcpServers": {
-    "domestique": {
-      "url": "https://{FLY_APP_NAME}.fly.dev/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_SECRET_TOKEN"
-      }
-    }
-  }
-}
-```
-
-### Method 2: Query Parameter (For Claude UI)
-
-If you're using Claude's custom connector UI (which doesn't support custom headers), use the query parameter method as the Remote MCP Server URL:
+Add this MCP server as a connector to your Claude configuration using this URL:
 
 ```
 https://{FLY_APP_NAME}.fly.dev/mcp?token=YOUR_SECRET_TOKEN
 ```
 
-**Note:** Replace `YOUR_SECRET_TOKEN` with your actual `MCP_AUTH_TOKEN` value.
+**Note:** Replace `YOUR_SECRET_TOKEN` with your actual `MCP_AUTH_TOKEN` value and `FLY_APP_NAME` with the name of the Fly.io app (or the URL wherever you have it hosted). 
 
 ## Example Queries
 
