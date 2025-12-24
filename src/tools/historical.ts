@@ -9,6 +9,7 @@ import type {
   StrainActivity,
   NormalizedWorkout,
   WhoopMatchedData,
+  WorkoutIntervalsResponse,
 } from '../types/index.js';
 import type {
   GetWorkoutHistoryInput,
@@ -176,6 +177,22 @@ export class HistoricalTools {
       return await this.intervals.getTrainingLoadTrends(days);
     } catch (error) {
       console.error('Error fetching training load trends:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // Workout Intervals
+  // ============================================
+
+  /**
+   * Get detailed intervals for a specific workout
+   */
+  async getWorkoutIntervals(activityId: string): Promise<WorkoutIntervalsResponse> {
+    try {
+      return await this.intervals.getActivityIntervals(activityId);
+    } catch (error) {
+      console.error('Error fetching workout intervals:', error);
       throw error;
     }
   }

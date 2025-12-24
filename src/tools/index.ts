@@ -245,5 +245,22 @@ export class ToolRegistry {
         };
       }
     );
+
+    server.tool(
+      'get_workout_intervals',
+      'Get detailed interval breakdown for a specific workout. Returns structured intervals with power, HR, cadence, and timing data. Also includes interval groups that summarize repeated efforts (e.g., "5 x 56s @ 314w").',
+      {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+      },
+      async (args) => {
+        const result = await this.historicalTools.getWorkoutIntervals(args.activity_id);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('intervals'),
+            data: result,
+          }, null, 2) }],
+        };
+      }
+    );
   }
 }

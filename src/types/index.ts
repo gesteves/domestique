@@ -384,3 +384,64 @@ export interface TrainingLoadTrends {
   data: DailyTrainingLoad[];
   summary: TrainingLoadSummary;
 }
+
+// ============================================
+// Workout Intervals
+// ============================================
+
+export interface WorkoutInterval {
+  type: 'WORK' | 'RECOVERY';
+  label?: string;
+  group_id?: string;
+  start_seconds: number;
+  duration_seconds: number;
+  distance_km?: number;
+
+  // Power metrics
+  average_watts?: number;
+  max_watts?: number;
+  normalized_power?: number;
+  watts_per_kg?: number;
+  power_zone?: number;
+  intensity_factor?: number;
+  interval_tss?: number;
+
+  // Heart rate
+  average_hr?: number;
+  max_hr?: number;
+  hr_decoupling?: number;
+
+  // Cadence/stride
+  average_cadence?: number;
+  stride_length_m?: number;
+
+  // Speed
+  average_speed_kph?: number;
+
+  // Elevation
+  elevation_gain_m?: number;
+  average_gradient_pct?: number;
+
+  // W'bal (anaerobic capacity)
+  wbal_start_j?: number;
+  wbal_end_j?: number;
+  joules_above_ftp?: number;
+}
+
+export interface IntervalGroup {
+  id: string; // e.g., "56s@314w91rpm" - human-readable summary
+  count: number;
+  average_watts?: number;
+  average_hr?: number;
+  average_cadence?: number;
+  average_speed_kph?: number;
+  distance_km?: number;
+  duration_seconds?: number;
+  elevation_gain_m?: number;
+}
+
+export interface WorkoutIntervalsResponse {
+  activity_id: string;
+  intervals: WorkoutInterval[];
+  groups: IntervalGroup[];
+}

@@ -5,7 +5,7 @@
 
 export const WORKOUT_FIELD_DESCRIPTIONS = {
   // Core fields
-  id: 'Unique activity identifier',
+  id: 'Unique identifier of the completed activity in Intervals.icu',
   date: 'Activity start time in local timezone (ISO 8601)',
   start_date_utc: 'Activity start time in UTC (ISO 8601 with Z suffix)',
   activity_type: 'Normalized type: Cycling, Running, Swimming, Skiing, Hiking, Rowing, Strength, or Other',
@@ -187,7 +187,7 @@ export const PLANNED_WORKOUT_FIELD_DESCRIPTIONS = {
 
 export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   // Athlete info
-  id: 'Unique athlete identifier in Intervals.icu',
+  id: 'Unique identifier of the athlete in Intervals.icu',
   name: 'Athlete name',
   city: 'City of residence',
   state: 'State/province of residence',
@@ -223,13 +223,62 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   pace_zones: 'Pace zones sorted from slowest (Zone 1) to fastest. Each has: name, low_percent, high_percent (% of threshold - higher = faster), slow_pace (slowest boundary in pace_units), fast_pace (fastest boundary in pace_units), slow_pace_human, fast_pace_human. null means unbounded.',
 };
 
+export const INTERVALS_FIELD_DESCRIPTIONS = {
+  // Response structure
+  activity_id: 'Unique identifier of the activity in Intervals.icu',
+  intervals: 'Array of individual intervals in chronological order',
+  groups: 'Summary of repeated interval sets (e.g., "5 x 56s @ 314w")',
+
+  // Interval core fields
+  type: 'Interval type: WORK (hard effort) or RECOVERY (easy/rest)',
+  label: 'Custom label if assigned',
+  group_id: 'ID linking similar intervals (e.g., "56s@314w91rpm")',
+  start_seconds: 'Start time in seconds from activity start',
+  duration_seconds: 'Interval duration in seconds',
+  distance_km: 'Distance covered in kilometers',
+
+  // Power
+  average_watts: 'Average power in watts',
+  max_watts: 'Maximum power in watts',
+  normalized_power: 'Normalized Power (NP) in watts - accounts for variability',
+  watts_per_kg: 'Power-to-weight ratio in watts per kilogram',
+  power_zone: 'Power zone number (1-7)',
+  intensity_factor: 'Intensity Factor (IF) - ratio of NP to FTP (e.g., 1.05 = 105% of FTP)',
+  interval_tss: 'Training Stress Score for this interval',
+
+  // Heart rate
+  average_hr: 'Average heart rate in BPM',
+  max_hr: 'Maximum heart rate in BPM',
+  hr_decoupling: 'Power:HR decoupling percentage - positive indicates cardiac drift',
+
+  // Cadence/stride
+  average_cadence: 'Average cadence in RPM (cycling) or steps/min (running)',
+  stride_length_m: 'Average stride length in meters (running)',
+
+  // Speed
+  average_speed_kph: 'Average speed in kilometers per hour',
+
+  // Elevation
+  elevation_gain_m: 'Elevation gain in meters',
+  average_gradient_pct: 'Average gradient as percentage',
+
+  // W\'bal (anaerobic capacity)
+  wbal_start_j: 'W\'bal at interval start in joules - remaining anaerobic capacity',
+  wbal_end_j: 'W\'bal at interval end in joules',
+  joules_above_ftp: 'Work done above FTP in joules - anaerobic contribution',
+
+  // Group fields
+  count: 'Number of repetitions in this interval set',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
   | 'recovery'
   | 'fitness'
   | 'planned'
-  | 'athlete_profile';
+  | 'athlete_profile'
+  | 'intervals';
 
 /**
  * Get descriptions for a specific category
@@ -248,6 +297,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return PLANNED_WORKOUT_FIELD_DESCRIPTIONS;
     case 'athlete_profile':
       return ATHLETE_PROFILE_FIELD_DESCRIPTIONS;
+    case 'intervals':
+      return INTERVALS_FIELD_DESCRIPTIONS;
   }
 }
 

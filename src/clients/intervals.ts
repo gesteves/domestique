@@ -13,6 +13,9 @@ import type {
   HRZone,
   PowerZone,
   PaceZone,
+  WorkoutInterval,
+  IntervalGroup,
+  WorkoutIntervalsResponse,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 
@@ -188,6 +191,56 @@ interface IntervalsEvent {
   icu_intensity?: number;
   moving_time?: number;
   duration?: number;
+}
+
+// Raw interval from Intervals.icu API
+interface IntervalsRawInterval {
+  id: number;
+  type: 'WORK' | 'RECOVERY';
+  label?: string;
+  group_id?: string;
+  start_time: number;
+  end_time: number;
+  moving_time: number;
+  distance: number;
+  average_watts?: number;
+  max_watts?: number;
+  weighted_average_watts?: number;
+  average_watts_kg?: number;
+  zone?: number;
+  intensity?: number;
+  training_load?: number;
+  average_heartrate?: number;
+  max_heartrate?: number;
+  decoupling?: number;
+  average_cadence?: number;
+  average_stride?: number;
+  average_speed?: number;
+  total_elevation_gain?: number;
+  average_gradient?: number;
+  wbal_start?: number;
+  wbal_end?: number;
+  joules_above_ftp?: number;
+}
+
+// Raw interval group from Intervals.icu API
+interface IntervalsRawGroup {
+  id: string;
+  count: number;
+  average_watts?: number;
+  average_heartrate?: number;
+  average_cadence?: number;
+  average_speed?: number;
+  distance?: number;
+  moving_time?: number;
+  total_elevation_gain?: number;
+}
+
+// API response for activity intervals
+interface IntervalsActivityIntervalsResponse {
+  id: string;
+  icu_intervals: IntervalsRawInterval[];
+  icu_groups: IntervalsRawGroup[];
 }
 
 export class IntervalsClient {
@@ -487,6 +540,28 @@ export class IntervalsClient {
   }
 
   /**
+   * Fetch from activity-specific endpoints (uses /activity/{id} instead of /athlete/{id})
+   */
+  private async fetchActivity<T>(activityId: string, endpoint: string): Promise<T> {
+    const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: this.authHeader,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Intervals.icu API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  /**
    * Get completed activities within a date range
    */
   async getActivities(
@@ -516,6 +591,90 @@ export class IntervalsClient {
   async getActivity(activityId: string): Promise<NormalizedWorkout> {
     const activity = await this.fetch<IntervalsActivity>(`/activities/${activityId}`);
     return this.normalizeActivity(activity);
+  }
+
+  /**
+   * Get intervals for a specific activity
+   */
+  async getActivityIntervals(activityId: string): Promise<WorkoutIntervalsResponse> {
+    const response = await this.fetchActivity<IntervalsActivityIntervalsResponse>(
+      activityId,
+      '/intervals'
+    );
+
+    const intervals = (response.icu_intervals || []).map((i) =>
+      this.normalizeInterval(i)
+    );
+    const groups = (response.icu_groups || []).map((g) =>
+      this.normalizeIntervalGroup(g)
+    );
+
+    return {
+      activity_id: activityId,
+      intervals,
+      groups,
+    };
+  }
+
+  /**
+   * Normalize a raw interval from the API
+   */
+  private normalizeInterval(raw: IntervalsRawInterval): WorkoutInterval {
+    return {
+      type: raw.type,
+      label: raw.label,
+      group_id: raw.group_id,
+      start_seconds: raw.start_time,
+      duration_seconds: raw.moving_time,
+      distance_km: raw.distance ? raw.distance / 1000 : undefined,
+
+      // Power
+      average_watts: raw.average_watts,
+      max_watts: raw.max_watts,
+      normalized_power: raw.weighted_average_watts,
+      watts_per_kg: raw.average_watts_kg,
+      power_zone: raw.zone,
+      intensity_factor: raw.intensity ? raw.intensity / 100 : undefined,
+      interval_tss: raw.training_load ? Math.round(raw.training_load * 10) / 10 : undefined,
+
+      // Heart rate
+      average_hr: raw.average_heartrate ? Math.round(raw.average_heartrate) : undefined,
+      max_hr: raw.max_heartrate ? Math.round(raw.max_heartrate) : undefined,
+      hr_decoupling: raw.decoupling,
+
+      // Cadence/stride
+      average_cadence: raw.average_cadence ? Math.round(raw.average_cadence) : undefined,
+      stride_length_m: raw.average_stride,
+
+      // Speed (m/s → km/h)
+      average_speed_kph: raw.average_speed ? raw.average_speed * 3.6 : undefined,
+
+      // Elevation
+      elevation_gain_m: raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined,
+      average_gradient_pct: raw.average_gradient ? raw.average_gradient * 100 : undefined,
+
+      // W'bal
+      wbal_start_j: raw.wbal_start,
+      wbal_end_j: raw.wbal_end,
+      joules_above_ftp: raw.joules_above_ftp,
+    };
+  }
+
+  /**
+   * Normalize an interval group from the API
+   */
+  private normalizeIntervalGroup(raw: IntervalsRawGroup): IntervalGroup {
+    return {
+      id: raw.id,
+      count: raw.count,
+      average_watts: raw.average_watts,
+      average_hr: raw.average_heartrate ? Math.round(raw.average_heartrate) : undefined,
+      average_cadence: raw.average_cadence ? Math.round(raw.average_cadence) : undefined,
+      average_speed_kph: raw.average_speed ? raw.average_speed * 3.6 : undefined,
+      distance_km: raw.distance ? raw.distance / 1000 : undefined,
+      duration_seconds: raw.moving_time,
+      elevation_gain_m: raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined,
+    };
   }
 
   /**
