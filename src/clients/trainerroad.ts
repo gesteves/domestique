@@ -114,11 +114,6 @@ export class TrainerRoadClient {
     // Clean up the name by stripping the duration prefix (e.g., "2:00 - Gibbs" → "Gibbs")
     const cleanName = this.stripDurationFromName(event.summary);
 
-    // Format duration as human-readable (e.g., "1:30:00" or "45:00")
-    const expectedDurationHuman = durationMinutes
-      ? formatDuration(durationMinutes * 60) // Convert minutes to seconds
-      : undefined;
-
     return {
       id: event.uid,
       date: event.start.toISOString(),
@@ -126,8 +121,9 @@ export class TrainerRoadClient {
       description: event.description,
       expected_tss: parsed.tss,
       expected_if: parsed.if,
-      expected_duration_minutes: durationMinutes,
-      expected_duration_human: expectedDurationHuman,
+      expected_duration: durationMinutes
+        ? formatDuration(durationMinutes * 60) // Convert minutes to seconds
+        : undefined,
       discipline,
       workout_type: parsed.workoutType,
       intervals: parsed.intervals,

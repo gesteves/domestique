@@ -134,8 +134,8 @@ describe('IntervalsClient', () => {
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('i113367711');
       expect(result[0].activity_type).toBe('Cycling');
-      expect(result[0].duration_seconds).toBe(7236);
-      expect(result[0].distance_km).toBeCloseTo(65.53, 2);
+      expect(result[0].duration).toBe('2:00:36');
+      expect(result[0].distance).toBe('65.5 km');
       expect(result[0].source).toBe('intervals.icu');
     });
 

@@ -150,14 +150,14 @@ describe('WhoopClient', () => {
       expect(result[0].sleep_performance_percentage).toBe(95);
       expect(result[0].sleep_consistency_percentage).toBe(88);
       expect(result[0].sleep_efficiency_percentage).toBe(92.3);
-      // Sleep duration metrics
-      expect(result[0].sleep_duration_hours).toBeCloseTo(7.5, 1); // (10800000 + 7200000 + 9000000) / 3600000
-      expect(result[0].in_bed_hours).toBe(8); // 28800000 / 3600000
-      expect(result[0].awake_hours).toBe(0.5); // 1800000 / 3600000
-      // Sleep stage breakdown
-      expect(result[0].light_sleep_hours).toBe(3); // 10800000 / 3600000
-      expect(result[0].slow_wave_sleep_hours).toBe(2); // 7200000 / 3600000
-      expect(result[0].rem_sleep_hours).toBe(2.5); // 9000000 / 3600000
+      // Sleep duration metrics (human-readable)
+      expect(result[0].sleep_duration).toBe('7:30:00'); // (10800000 + 7200000 + 9000000) ms
+      expect(result[0].in_bed_time).toBe('8:00:00'); // 28800000 ms
+      expect(result[0].awake_time).toBe('0:30:00'); // 1800000 ms
+      // Sleep stage breakdown (human-readable)
+      expect(result[0].light_sleep).toBe('3:00:00'); // 10800000 ms
+      expect(result[0].slow_wave_sleep).toBe('2:00:00'); // 7200000 ms
+      expect(result[0].rem_sleep).toBe('2:30:00'); // 9000000 ms
       // Sleep details
       expect(result[0].sleep_cycle_count).toBe(4);
       expect(result[0].disturbance_count).toBe(2);
@@ -545,9 +545,9 @@ describe('WhoopClient', () => {
       expect(result[0].activity_type).toBe('Running');
       expect(result[0].strain_score).toBe(10.2);
       expect(result[0].average_heart_rate).toBe(145);
-      expect(result[0].distance_meters).toBe(8500);
-      expect(result[0].altitude_gain_meters).toBe(45);
-      expect(result[0].zone_durations?.zone_3_minutes).toBe(20); // 1200000 / 60000
+      expect(result[0].distance).toBe('8.5 km');
+      expect(result[0].elevation_gain).toBe('45 m');
+      expect(result[0].zone_durations?.zone_3).toBe('0:20:00'); // 1200000 ms
     });
   });
 

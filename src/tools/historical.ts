@@ -2,6 +2,7 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { parseDateString, getToday } from '../utils/date-parser.js';
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
+import { parseDurationToHours } from '../utils/format-units.js';
 import type {
   RecoveryData,
   TrainingLoadTrends,
@@ -79,8 +80,8 @@ export class HistoricalTools {
       average_heart_rate: match.average_heart_rate,
       max_heart_rate: match.max_heart_rate,
       calories: match.calories,
-      distance_meters: match.distance_meters,
-      altitude_gain_meters: match.altitude_gain_meters,
+      distance: match.distance,
+      elevation_gain: match.elevation_gain,
       zone_durations: match.zone_durations,
     };
   }
@@ -148,7 +149,7 @@ export class HistoricalTools {
 
     const recoveryScores = data.map((d) => d.recovery_score);
     const hrvValues = data.map((d) => d.hrv_rmssd);
-    const sleepHours = data.map((d) => d.sleep_duration_hours);
+    const sleepHours = data.map((d) => parseDurationToHours(d.sleep_duration));
 
     return {
       avg_recovery: this.average(recoveryScores),

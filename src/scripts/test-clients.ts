@@ -34,7 +34,7 @@ async function testWhoop() {
       console.log(`   ✅ Recovery score: ${recovery.recovery_score}%`);
       console.log(`      HRV: ${recovery.hrv_rmssd.toFixed(1)} ms`);
       console.log(`      RHR: ${recovery.resting_heart_rate} bpm`);
-      console.log(`      Sleep: ${recovery.sleep_duration_hours.toFixed(1)} hours`);
+      console.log(`      Sleep: ${recovery.sleep_duration}`);
     } else {
       console.log('   ⚠️  No recovery data for today');
     }
@@ -81,7 +81,7 @@ async function testIntervals() {
     if (activities.length > 0) {
       const latest = activities[0];
       console.log(`      Latest: ${latest.name || latest.activity_type}`);
-      console.log(`      Duration: ${Math.round(latest.duration_seconds / 60)} min`);
+      console.log(`      Duration: ${latest.duration}`);
       if (latest.tss) console.log(`      TSS: ${latest.tss}`);
     }
 
@@ -123,7 +123,7 @@ async function testTrainerRoad() {
       const date = new Date(workout.date).toLocaleDateString();
       console.log(`      ${date}: ${workout.name}`);
       if (workout.discipline) console.log(`         Discipline: ${workout.discipline}`);
-      if (workout.duration_human) console.log(`         Duration: ${workout.duration_human}`);
+      if (workout.expected_duration) console.log(`         Duration: ${workout.expected_duration}`);
       if (workout.expected_tss) console.log(`         TSS: ${workout.expected_tss}`);
     }
 

@@ -11,10 +11,8 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   activity_type: 'Normalized type: Cycling, Running, Swimming, Skiing, Hiking, Rowing, Strength, or Other',
   name: 'Activity name/title',
   description: 'Activity description or notes',
-  duration_seconds: 'Total moving time in seconds',
-  duration_human: 'Human-readable duration (e.g., "1:30:00" or "45:00")',
-  distance_km: 'Total distance in kilometers',
-  distance_human: 'Human-readable distance (e.g., "45.2 km" or "2500 m" for swimming)',
+  duration: 'Human-readable duration (e.g., "1:30:00")',
+  distance: 'Human-readable distance (e.g., "45.2 km" or "2500 m" for swimming)',
   source: 'Data source: intervals.icu, whoop, or trainerroad',
 
   // Training load
@@ -43,10 +41,8 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   hrrc: 'Heart rate recovery - drop in HR in first minute after stopping',
 
   // Speed
-  average_speed_kph: 'Average speed in kilometers per hour',
-  average_speed_human: 'Human-readable average speed (e.g., "32.5 km/h")',
-  max_speed_kph: 'Maximum speed in kilometers per hour',
-  max_speed_human: 'Human-readable max speed (e.g., "55.2 km/h")',
+  average_speed: 'Human-readable average speed (e.g., "32.5 km/h")',
+  max_speed: 'Human-readable max speed (e.g., "55.2 km/h")',
 
   // Cadence
   average_cadence: 'Average cadence in RPM (cycling) or steps/min (running)',
@@ -58,7 +54,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   efficiency_factor: 'Efficiency Factor (EF) - NP/Avg HR. Higher is more efficient',
 
   // Coasting
-  coasting_time_seconds: 'Time spent coasting (not pedaling) in seconds',
+  coasting_time: 'Human-readable time spent coasting (e.g., "0:05:30")',
   coasting_percentage: 'Percentage of ride time spent coasting',
 
   // Subjective
@@ -71,8 +67,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   tsb_at_activity: 'Training Stress Balance (TSB/form) at time of activity. Positive = fresh, negative = fatigued',
 
   // Elevation
-  elevation_gain_m: 'Total elevation gain in meters',
-  elevation_gain_human: 'Human-readable elevation gain (e.g., "500 m")',
+  elevation_gain: 'Human-readable elevation gain (e.g., "500 m")',
   average_altitude_m: 'Average altitude in meters',
   min_altitude_m: 'Minimum altitude in meters',
   max_altitude_m: 'Maximum altitude in meters',
@@ -89,8 +84,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
   // Running specific
   average_stride_m: 'Average stride length in meters',
-  gap: 'Gradient Adjusted Pace in seconds per kilometer - normalizes pace for hills',
-  gap_human: 'Human-readable GAP (e.g., "4:30/km" or "1:45/100m" for swimming)',
+  gap: 'Human-readable Gradient Adjusted Pace (e.g., "4:30/km" or "1:45/100m" for swimming)',
 
   // Activity context
   is_indoor: 'Whether activity was on a trainer/treadmill/indoor',
@@ -126,14 +120,10 @@ export const WHOOP_FIELD_DESCRIPTIONS = {
   average_heart_rate: 'Average heart rate in BPM',
   max_heart_rate: 'Maximum heart rate in BPM',
   calories: 'Estimated calories burned',
-  duration_seconds: 'Activity duration in seconds',
-  duration_human: 'Human-readable duration (e.g., "1:30:00")',
-  distance_meters: 'Distance in meters',
-  distance_human: 'Human-readable distance (e.g., "45.2 km" or "2500 m" for swimming)',
-  altitude_gain_meters: 'Elevation gain in meters',
-  elevation_gain_human: 'Human-readable elevation gain (e.g., "500 m")',
-  zone_durations: 'Object with zone_0_minutes through zone_5_minutes - time in each Whoop HR zone. Note that Whoop uses the Heart Rate Reserve (HRR) method to set the zones, so they may not match the HR zones used by Intervals.icu.',
-  zone_durations_human: 'Human-readable zone durations (e.g., zone_0: "5:30", zone_1: "12:45")',
+  duration: 'Human-readable duration (e.g., "1:30:00")',
+  distance: 'Human-readable distance (e.g., "45.2 km" or "2500 m" for swimming)',
+  elevation_gain: 'Human-readable elevation gain (e.g., "500 m")',
+  zone_durations: 'Object with zone_0 through zone_5 - human-readable time in each Whoop HR zone (e.g., zone_0: "0:05:30"). Note: Whoop uses Heart Rate Reserve (HRR) method, may not match Intervals.icu HR zones.',
 
   // Strain insights (pre-computed)
   insights: 'Pre-computed strain insights using Whoop official terminology',
@@ -155,23 +145,15 @@ export const RECOVERY_FIELD_DESCRIPTIONS = {
   sleep_efficiency_percentage: 'Sleep efficiency - time asleep / time in bed (0-100%)',
   respiratory_rate: 'Breaths per minute during sleep',
 
-  // Sleep durations (hours rounded to 2 decimals + human-readable)
-  sleep_duration_hours: 'Total sleep duration in hours',
-  sleep_duration_human: 'Human-readable sleep duration (e.g., "7:12:40")',
-  sleep_quality_duration_hours: 'Quality sleep (deep + REM) duration in hours',
-  sleep_quality_duration_human: 'Human-readable quality sleep duration (e.g., "3:55:27")',
-  sleep_needed_hours: 'Sleep needed for full recovery in hours',
-  sleep_needed_human: 'Human-readable sleep needed (e.g., "8:39:15")',
-  light_sleep_hours: 'Time in light sleep in hours',
-  light_sleep_human: 'Human-readable light sleep duration (e.g., "3:17:13")',
-  slow_wave_sleep_hours: 'Time in deep/slow wave sleep in hours (most restorative)',
-  slow_wave_sleep_human: 'Human-readable deep sleep duration (e.g., "1:55:02")',
-  rem_sleep_hours: 'Time in REM sleep in hours',
-  rem_sleep_human: 'Human-readable REM sleep duration (e.g., "2:00:25")',
-  awake_hours: 'Time awake during sleep period in hours',
-  awake_human: 'Human-readable awake time (e.g., "0:21:01")',
-  in_bed_hours: 'Total time in bed in hours',
-  in_bed_human: 'Human-readable time in bed (e.g., "7:33:41")',
+  // Sleep durations (human-readable, e.g., "7:12:40")
+  sleep_duration: 'Total sleep duration (e.g., "7:12:40")',
+  sleep_quality_duration: 'Quality sleep - deep + REM (e.g., "3:55:27")',
+  sleep_needed: 'Sleep needed for full recovery (e.g., "8:39:15")',
+  light_sleep: 'Time in light sleep (e.g., "3:17:13")',
+  slow_wave_sleep: 'Time in deep/slow wave sleep - most restorative (e.g., "1:55:02")',
+  rem_sleep: 'Time in REM sleep (e.g., "2:00:25")',
+  awake_time: 'Time awake during sleep period (e.g., "0:21:01")',
+  in_bed_time: 'Total time in bed (e.g., "7:33:41")',
   sleep_cycle_count: 'Number of complete sleep cycles',
   disturbance_count: 'Number of sleep disturbances',
 
@@ -213,8 +195,7 @@ export const PLANNED_WORKOUT_FIELD_DESCRIPTIONS = {
   description: 'Workout description including structure',
   expected_tss: 'Expected Training Stress Score',
   expected_if: 'Expected Intensity Factor (as percentage)',
-  expected_duration_minutes: 'Expected duration in minutes',
-  expected_duration_human: 'Human-readable expected duration (e.g., "1:30:00")',
+  expected_duration: 'Human-readable expected duration (e.g., "1:30:00")',
   workout_type: 'Type of workout (Ride, Run, Swim, etc.)',
   source: 'Calendar source: intervals.icu or trainerroad',
 };
@@ -268,10 +249,8 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
   label: 'Custom label if assigned',
   group_id: 'ID linking similar intervals (e.g., "56s@314w91rpm")',
   start_seconds: 'Start time in seconds from activity start',
-  duration_seconds: 'Interval duration in seconds',
-  duration_human: 'Human-readable interval duration (e.g., "56" or "5:00")',
-  distance_km: 'Distance covered in kilometers',
-  distance_human: 'Human-readable distance (e.g., "1.2 km")',
+  duration: 'Human-readable interval duration (e.g., "0:00:56")',
+  distance: 'Human-readable distance (e.g., "1.2 km")',
 
   // Power
   average_watts: 'Average power in watts',
@@ -292,12 +271,10 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
   stride_length_m: 'Average stride length in meters (running)',
 
   // Speed
-  average_speed_kph: 'Average speed in kilometers per hour',
-  average_speed_human: 'Human-readable average speed (e.g., "32.5 km/h")',
+  average_speed: 'Human-readable average speed (e.g., "32.5 km/h")',
 
   // Elevation
-  elevation_gain_m: 'Elevation gain in meters',
-  elevation_gain_human: 'Human-readable elevation gain (e.g., "45 m")',
+  elevation_gain: 'Human-readable elevation gain (e.g., "45 m")',
   average_gradient_pct: 'Average gradient as percentage',
 
   // W\'bal (anaerobic capacity)

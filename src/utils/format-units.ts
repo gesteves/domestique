@@ -70,3 +70,17 @@ export function isSwimmingActivity(activityType: string): boolean {
     (type) => activityType.toLowerCase().includes(type.toLowerCase())
   );
 }
+
+/**
+ * Parse a duration string (h:mm:ss) back to hours.
+ * @param duration String like "7:12:40" or "0:45:00"
+ * @returns Duration in hours (e.g., 7.21)
+ */
+export function parseDurationToHours(duration: string): number {
+  const parts = duration.split(':').map(Number);
+  if (parts.length === 3) {
+    const [h, m, s] = parts;
+    return h + m / 60 + s / 3600;
+  }
+  return 0;
+}

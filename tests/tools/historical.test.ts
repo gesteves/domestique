@@ -39,7 +39,7 @@ describe('HistoricalTools', () => {
         date: '2024-12-10T10:00:00Z',
         start_date_utc: '2024-12-10T10:00:00Z',
         activity_type: 'Cycling',
-        duration_seconds: 3600,
+        duration: '1:00:00',
         tss: 85,
         source: 'intervals.icu',
       },
@@ -48,7 +48,7 @@ describe('HistoricalTools', () => {
         date: '2024-12-12T08:00:00Z',
         start_date_utc: '2024-12-12T08:00:00Z',
         activity_type: 'Running',
-        duration_seconds: 2400,
+        duration: '0:40:00',
         tss: 45,
         source: 'intervals.icu',
       },
@@ -60,6 +60,7 @@ describe('HistoricalTools', () => {
         start_time: '2024-12-10T10:01:00Z',
         end_time: '2024-12-10T11:00:00Z',
         activity_type: 'Cycling',
+        duration: '0:59:00',
         strain_score: 12.5,
         average_heart_rate: 145,
         max_heart_rate: 175,
@@ -157,7 +158,7 @@ describe('HistoricalTools', () => {
         hrv_rmssd: 60,
         resting_heart_rate: 52,
         sleep_performance_percentage: 85,
-        sleep_duration_hours: 7.5,
+        sleep_duration: '7:30:00',
       },
       {
         date: '2024-12-14',
@@ -165,7 +166,7 @@ describe('HistoricalTools', () => {
         hrv_rmssd: 55,
         resting_heart_rate: 54,
         sleep_performance_percentage: 75,
-        sleep_duration_hours: 6.5,
+        sleep_duration: '6:30:00',
       },
       {
         date: '2024-12-15',
@@ -173,7 +174,7 @@ describe('HistoricalTools', () => {
         hrv_rmssd: 70,
         resting_heart_rate: 50,
         sleep_performance_percentage: 95,
-        sleep_duration_hours: 8.0,
+        sleep_duration: '8:00:00',
       },
     ];
 

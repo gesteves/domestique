@@ -170,7 +170,7 @@ END:VCALENDAR`;
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Heng Shan');
-      expect(result[0].expected_duration_minutes).toBe(90);
+      expect(result[0].expected_duration).toBe('1:30:00');
     });
   });
 
@@ -270,8 +270,7 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].expected_duration_minutes).toBe(45);
-      expect(result[0].expected_duration_human).toBe('0:45:00');
+      expect(result[0].expected_duration).toBe('0:45:00');
       expect(result[0].name).toBe('Short Workout');
     });
 
@@ -294,8 +293,7 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].expected_duration_minutes).toBe(150);
-      expect(result[0].expected_duration_human).toBe('2:30:00');
+      expect(result[0].expected_duration).toBe('2:30:00');
       expect(result[0].name).toBe('Apikuni');
     });
 
@@ -319,7 +317,7 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
       expect(result[0].discipline).toBe('Run');
-      expect(result[0].expected_duration_human).toBe('1:00:00');
+      expect(result[0].expected_duration).toBe('1:00:00');
       expect(result[0].name).toBe('Easy Run');
     });
 
@@ -332,8 +330,7 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
       // Duration parsed from "2:00 - Gibbs" workout name
-      expect(result[0].expected_duration_minutes).toBe(120);
-      expect(result[0].expected_duration_human).toBe('2:00:00');
+      expect(result[0].expected_duration).toBe('2:00:00');
       expect(result[0].name).toBe('Gibbs');
     });
 
@@ -358,8 +355,7 @@ END:VCALENDAR`;
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
       // Should not use multi-day duration from annotation event
-      expect(result[0].expected_duration_minutes).toBeUndefined();
-      expect(result[0].expected_duration_human).toBeUndefined();
+      expect(result[0].expected_duration).toBeUndefined();
     });
   });
 

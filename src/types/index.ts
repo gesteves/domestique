@@ -20,29 +20,24 @@ export interface NormalizedWorkout {
   activity_type: ActivityType;
   name?: string;
   description?: string;
-  duration_seconds: number;
-  duration_human?: string; // Human-readable duration, e.g., "1:30:00"
-  distance_km?: number;
-  distance_human?: string; // Human-readable distance, e.g., "45.2 km" or "2500 m" for swimming
+  duration: string; // Human-readable duration, e.g., "1:30:00"
+  distance?: string; // Human-readable distance, e.g., "45.2 km" or "2500 m" for swimming
   tss?: number;
   normalized_power?: number;
   average_power?: number;
   average_heart_rate?: number;
   max_heart_rate?: number;
   intensity_factor?: number;
-  elevation_gain_m?: number;
-  elevation_gain_human?: string;
+  elevation_gain?: string; // Human-readable, e.g., "500 m"
   calories?: number;
   source: 'intervals.icu' | 'whoop' | 'trainerroad';
 
   // Speed metrics
-  average_speed_kph?: number;
-  average_speed_human?: string; // Human-readable speed, e.g., "32.5 km/h"
-  max_speed_kph?: number;
-  max_speed_human?: string; // Human-readable max speed, e.g., "55.2 km/h"
+  average_speed?: string; // Human-readable speed, e.g., "32.5 km/h"
+  max_speed?: string; // Human-readable max speed, e.g., "55.2 km/h"
 
   // Coasting metrics
-  coasting_time_seconds?: number;
+  coasting_time?: string; // Human-readable, e.g., "0:05:30"
   coasting_percentage?: number;
 
   // Training load & subjective feel
@@ -110,8 +105,7 @@ export interface NormalizedWorkout {
 
   // Running/pace metrics
   average_stride_m?: number; // meters per stride
-  gap?: number; // Gradient adjusted pace (sec/km)
-  gap_human?: string; // Human-readable GAP, e.g., "4:30/km"
+  gap?: string; // Gradient adjusted pace, e.g., "4:30/km"
 
   // Altitude
   average_altitude_m?: number;
@@ -150,8 +144,8 @@ export interface WhoopMatchedData {
   average_heart_rate?: number;
   max_heart_rate?: number;
   calories?: number;
-  distance_meters?: number;
-  altitude_gain_meters?: number;
+  distance?: string; // Human-readable, e.g., "45.2 km"
+  elevation_gain?: string; // Human-readable, e.g., "500 m"
   zone_durations?: WhoopZoneDurations;
 }
 
@@ -176,23 +170,17 @@ export interface RecoveryData {
   sleep_performance_percentage: number;
   sleep_consistency_percentage?: number;
   sleep_efficiency_percentage?: number;
-  sleep_duration_hours: number;
-  sleep_duration_human?: string;
-  sleep_quality_duration_hours?: number;
-  sleep_quality_duration_human?: string;
-  sleep_needed_hours?: number;
-  sleep_needed_human?: string;
+  // Sleep durations (human-readable, e.g., "7:12:40")
+  sleep_duration: string;
+  sleep_quality_duration?: string; // Deep + REM sleep
+  sleep_needed?: string;
+  // Sleep stage breakdown (human-readable)
+  light_sleep?: string;
+  slow_wave_sleep?: string;
+  rem_sleep?: string;
+  awake_time?: string;
+  in_bed_time?: string;
   // Sleep details
-  light_sleep_hours?: number;
-  light_sleep_human?: string;
-  slow_wave_sleep_hours?: number;
-  slow_wave_sleep_human?: string;
-  rem_sleep_hours?: number;
-  rem_sleep_human?: string;
-  awake_hours?: number;
-  awake_human?: string;
-  in_bed_hours?: number;
-  in_bed_human?: string;
   sleep_cycle_count?: number;
   disturbance_count?: number;
   respiratory_rate?: number;
@@ -208,14 +196,14 @@ export interface StrainData {
   activities: StrainActivity[];
 }
 
-// Whoop HR zone durations in minutes
+// Whoop HR zone durations (human-readable, e.g., "0:05:30")
 export interface WhoopZoneDurations {
-  zone_0_minutes: number; // Below zone 1
-  zone_1_minutes: number; // 50-60% max HR
-  zone_2_minutes: number; // 60-70% max HR
-  zone_3_minutes: number; // 70-80% max HR
-  zone_4_minutes: number; // 80-90% max HR
-  zone_5_minutes: number; // 90-100% max HR
+  zone_0: string; // Below zone 1
+  zone_1: string; // 50-60% max HR
+  zone_2: string; // 60-70% max HR
+  zone_3: string; // 70-80% max HR
+  zone_4: string; // 80-90% max HR
+  zone_5: string; // 90-100% max HR
 }
 
 export interface StrainActivity {
@@ -223,28 +211,14 @@ export interface StrainActivity {
   activity_type: ActivityType;
   start_time: string;
   end_time: string;
-  duration_seconds?: number;
-  duration_human?: string;
+  duration: string; // Human-readable, e.g., "1:30:00"
   strain_score: number;
   average_heart_rate?: number;
   max_heart_rate?: number;
   calories?: number;
-  distance_meters?: number;
-  distance_human?: string;
-  altitude_gain_meters?: number;
-  elevation_gain_human?: string;
+  distance?: string; // Human-readable, e.g., "45.2 km"
+  elevation_gain?: string; // Human-readable, e.g., "500 m"
   zone_durations?: WhoopZoneDurations;
-  zone_durations_human?: WhoopZoneDurationsHuman;
-}
-
-// Whoop HR zone durations as human-readable strings
-export interface WhoopZoneDurationsHuman {
-  zone_0: string;
-  zone_1: string;
-  zone_2: string;
-  zone_3: string;
-  zone_4: string;
-  zone_5: string;
 }
 
 // Planned workout from calendar
@@ -255,8 +229,7 @@ export interface PlannedWorkout {
   description?: string;
   expected_tss?: number;
   expected_if?: number;
-  expected_duration_minutes?: number;
-  expected_duration_human?: string;
+  expected_duration?: string; // Human-readable, e.g., "1:30:00"
   discipline?: Discipline;
   workout_type?: string;
   intervals?: string;
@@ -418,11 +391,9 @@ export interface WorkoutInterval {
   type: 'WORK' | 'RECOVERY';
   label?: string;
   group_id?: string;
-  start_seconds: number;
-  duration_seconds: number;
-  duration_human?: string;
-  distance_km?: number;
-  distance_human?: string;
+  start_seconds: number; // Position marker - kept as number
+  duration: string; // Human-readable, e.g., "0:00:56"
+  distance?: string; // Human-readable, e.g., "1.2 km"
 
   // Power metrics
   average_watts?: number;
@@ -443,12 +414,10 @@ export interface WorkoutInterval {
   stride_length_m?: number;
 
   // Speed
-  average_speed_kph?: number;
-  average_speed_human?: string;
+  average_speed?: string; // Human-readable, e.g., "32.5 km/h"
 
   // Elevation
-  elevation_gain_m?: number;
-  elevation_gain_human?: string;
+  elevation_gain?: string; // Human-readable, e.g., "45 m"
   average_gradient_pct?: number;
 
   // W'bal (anaerobic capacity)
@@ -463,14 +432,10 @@ export interface IntervalGroup {
   average_watts?: number;
   average_hr?: number;
   average_cadence?: number;
-  average_speed_kph?: number;
-  average_speed_human?: string;
-  distance_km?: number;
-  distance_human?: string;
-  duration_seconds?: number;
-  duration_human?: string;
-  elevation_gain_m?: number;
-  elevation_gain_human?: string;
+  average_speed?: string; // Human-readable, e.g., "32.5 km/h"
+  distance?: string; // Human-readable, e.g., "1.2 km"
+  duration?: string; // Human-readable, e.g., "0:00:56"
+  elevation_gain?: string; // Human-readable, e.g., "45 m"
 }
 
 export interface WorkoutIntervalsResponse {
@@ -527,8 +492,8 @@ export interface DailyInsights {
   sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR' | null;
   /** Human-readable sleep performance description from Whoop */
   sleep_performance_level_description: string | null;
-  /** Human-readable sleep duration, e.g., "7:30" */
-  sleep_duration_human: string | null;
+  /** Sleep duration, e.g., "7:12:40" */
+  sleep_duration: string | null;
 
   // Summary stats
   /** Number of workouts completed today */

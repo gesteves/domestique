@@ -13,7 +13,7 @@ describe('whoop-insights', () => {
       hrv_rmssd: 45,
       resting_heart_rate: 52,
       sleep_performance_percentage: 90,
-      sleep_duration_hours: 7.5,
+      sleep_duration: '7:30:00',
     };
 
     describe('recovery level', () => {
@@ -95,12 +95,12 @@ describe('whoop-insights', () => {
         expect(computeRecoveryInsights(poor).sleep_performance_level_description).toBe('Did not get enough sleep, recovery impacted');
       });
 
-      it('should format sleep duration as human-readable', () => {
-        const recovery = { ...baseRecovery, sleep_duration_hours: 7.5 };
-        expect(computeRecoveryInsights(recovery).sleep_duration_human).toBe('7:30:00');
+      it('should pass through sleep duration', () => {
+        const recovery = { ...baseRecovery, sleep_duration: '7:30:00' };
+        expect(computeRecoveryInsights(recovery).sleep_duration).toBe('7:30:00');
 
-        const shortSleep = { ...baseRecovery, sleep_duration_hours: 5.25 };
-        expect(computeRecoveryInsights(shortSleep).sleep_duration_human).toBe('5:15:00');
+        const shortSleep = { ...baseRecovery, sleep_duration: '5:15:00' };
+        expect(computeRecoveryInsights(shortSleep).sleep_duration).toBe('5:15:00');
       });
     });
 

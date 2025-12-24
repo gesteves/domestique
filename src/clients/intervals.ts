@@ -711,10 +711,8 @@ export class IntervalsClient {
       label: raw.label,
       group_id: raw.group_id,
       start_seconds: raw.start_time,
-      duration_seconds: raw.moving_time,
-      duration_human: formatDuration(raw.moving_time),
-      distance_km: distanceKm,
-      distance_human: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
+      duration: formatDuration(raw.moving_time),
+      distance: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
 
       // Power
       average_watts: raw.average_watts,
@@ -735,12 +733,10 @@ export class IntervalsClient {
       stride_length_m: raw.average_stride,
 
       // Speed (m/s → km/h)
-      average_speed_kph: speedKph,
-      average_speed_human: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
+      average_speed: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
 
       // Elevation
-      elevation_gain_m: elevationGain,
-      elevation_gain_human: elevationGain !== undefined ? `${elevationGain} m` : undefined,
+      elevation_gain: elevationGain !== undefined ? `${elevationGain} m` : undefined,
       average_gradient_pct: raw.average_gradient ? raw.average_gradient * 100 : undefined,
 
       // W'bal
@@ -764,14 +760,10 @@ export class IntervalsClient {
       average_watts: raw.average_watts,
       average_hr: raw.average_heartrate ? Math.round(raw.average_heartrate) : undefined,
       average_cadence: raw.average_cadence ? Math.round(raw.average_cadence) : undefined,
-      average_speed_kph: speedKph,
-      average_speed_human: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
-      distance_km: distanceKm,
-      distance_human: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
-      duration_seconds: raw.moving_time,
-      duration_human: raw.moving_time !== undefined ? formatDuration(raw.moving_time) : undefined,
-      elevation_gain_m: elevationGain,
-      elevation_gain_human: elevationGain !== undefined ? `${elevationGain} m` : undefined,
+      average_speed: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
+      distance: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
+      duration: raw.moving_time !== undefined ? formatDuration(raw.moving_time) : undefined,
+      elevation_gain: elevationGain !== undefined ? `${elevationGain} m` : undefined,
     };
   }
 
@@ -865,31 +857,28 @@ export class IntervalsClient {
       activity_type: normalizeActivityType(activity.type),
       name: activity.name,
       description: activity.description,
-      duration_seconds: durationSeconds,
-      duration_human: formatDuration(durationSeconds),
-      distance_km: distanceKm,
-      distance_human: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
+      duration: formatDuration(durationSeconds),
+      distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
       tss: activity.icu_training_load,
       normalized_power: activity.weighted_avg_watts,
       average_power: activity.average_watts,
       average_heart_rate: activity.average_heartrate,
       max_heart_rate: activity.max_heartrate,
       intensity_factor: activity.icu_intensity,
-      elevation_gain_m: activity.total_elevation_gain,
-      elevation_gain_human: activity.total_elevation_gain !== undefined
+      elevation_gain: activity.total_elevation_gain !== undefined
         ? `${Math.round(activity.total_elevation_gain)} m`
         : undefined,
       calories: activity.calories,
       source: 'intervals.icu',
 
       // Speed metrics
-      average_speed_kph: avgSpeedKph,
-      average_speed_human: avgSpeedKph !== undefined ? formatSpeed(avgSpeedKph) : undefined,
-      max_speed_kph: maxSpeedKph,
-      max_speed_human: maxSpeedKph !== undefined ? formatSpeed(maxSpeedKph) : undefined,
+      average_speed: avgSpeedKph !== undefined ? formatSpeed(avgSpeedKph) : undefined,
+      max_speed: maxSpeedKph !== undefined ? formatSpeed(maxSpeedKph) : undefined,
 
       // Coasting
-      coasting_time_seconds: activity.coasting_time,
+      coasting_time: activity.coasting_time !== undefined
+        ? formatDuration(activity.coasting_time)
+        : undefined,
       coasting_percentage: coastingPercentage,
 
       // Training load & feel
@@ -957,8 +946,7 @@ export class IntervalsClient {
 
       // Running/pace metrics
       average_stride_m: activity.average_stride,
-      gap: gapSecPerKm,
-      gap_human: gapSecPerKm !== undefined ? formatPace(gapSecPerKm, isSwim) : undefined,
+      gap: gapSecPerKm !== undefined ? formatPace(gapSecPerKm, isSwim) : undefined,
 
       // Altitude
       average_altitude_m: activity.average_altitude,
@@ -992,16 +980,19 @@ export class IntervalsClient {
   }
 
   private normalizePlannedEvent(event: IntervalsEvent): PlannedWorkout {
-      return {
+    // Calculate duration in seconds
+    const durationSeconds = event.moving_time ?? (event.duration ? event.duration * 60 : undefined);
+
+    return {
       id: event.uid ?? String(event.id),
       date: event.start_date_local,
       name: event.name,
       description: event.description,
       expected_tss: event.icu_training_load,
       expected_if: event.icu_intensity,
-      expected_duration_minutes: event.moving_time
-        ? Math.round(event.moving_time / 60)
-        : event.duration,
+      expected_duration: durationSeconds !== undefined
+        ? formatDuration(durationSeconds)
+        : undefined,
       workout_type: event.type,
       source: 'intervals.icu',
     };

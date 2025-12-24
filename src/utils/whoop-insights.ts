@@ -4,7 +4,6 @@
  */
 
 import type { RecoveryData, StrainData } from '../types/index.js';
-import { formatDuration } from './format-units.js';
 
 // Whoop's official terminology for recovery levels
 export type RecoveryLevel = 'SUFFICIENT' | 'ADEQUATE' | 'LOW';
@@ -47,8 +46,8 @@ export interface RecoveryInsights {
   sleep_performance_level: SleepPerformanceLevel;
   /** Human-readable sleep performance description from Whoop */
   sleep_performance_level_description: string;
-  /** Human-readable sleep duration, e.g., "7:30" */
-  sleep_duration_human: string;
+  /** Human-readable sleep duration, e.g., "7:12:40" */
+  sleep_duration: string;
   /** Raw HRV value in milliseconds for reference */
   hrv_rmssd_ms: number;
 }
@@ -88,16 +87,12 @@ export function computeRecoveryInsights(recovery: RecoveryData): RecoveryInsight
         ? 'SUFFICIENT'
         : 'POOR';
 
-  // Use pre-computed human duration if available, otherwise compute from hours
-  const sleepDurationHuman = recovery.sleep_duration_human
-    ?? formatDuration(recovery.sleep_duration_hours * 3600);
-
   return {
     recovery_level: recoveryLevel,
     recovery_level_description: RECOVERY_DESCRIPTIONS[recoveryLevel],
     sleep_performance_level: sleepPerformanceLevel,
     sleep_performance_level_description: SLEEP_PERFORMANCE_DESCRIPTIONS[sleepPerformanceLevel],
-    sleep_duration_human: sleepDurationHuman,
+    sleep_duration: recovery.sleep_duration,
     hrv_rmssd_ms: recovery.hrv_rmssd,
   };
 }

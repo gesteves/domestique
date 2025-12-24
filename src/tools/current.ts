@@ -111,8 +111,8 @@ export class CurrentTools {
       average_heart_rate: match.average_heart_rate,
       max_heart_rate: match.max_heart_rate,
       calories: match.calories,
-      distance_meters: match.distance_meters,
-      altitude_gain_meters: match.altitude_gain_meters,
+      distance: match.distance,
+      elevation_gain: match.elevation_gain,
       zone_durations: match.zone_durations,
     };
   }
@@ -281,7 +281,7 @@ export class CurrentTools {
       strain_level_description: strainInsights?.strain_level_description || null,
       sleep_performance_level: recoveryInsights?.sleep_performance_level || null,
       sleep_performance_level_description: recoveryInsights?.sleep_performance_level_description || null,
-      sleep_duration_human: recoveryInsights?.sleep_duration_human || null,
+      sleep_duration: recoveryInsights?.sleep_duration || null,
 
       // Summary stats
       workouts_completed: completedWorkouts.length,
