@@ -85,7 +85,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_todays_completed_workouts',
-      "Fetch today's completed workouts from Intervals.icu.",
+      "Fetch today's completed workouts from Intervals.icu. Use the activity ID from results with `get_workout_notes`, `get_workout_weather` and `get_workout_intervals` for deeper analysis.",
       {},
       async () => {
         const result = await this.currentTools.getTodaysCompletedWorkouts();
@@ -149,7 +149,7 @@ export class ToolRegistry {
     // Historical/Trends Tools
     server.tool(
       'get_workout_history',
-      'Query historical workouts with flexible date ranges. Supports ISO dates or natural language.',
+      'Query historical workouts with flexible date ranges. Supports ISO dates or natural language. Use the activity ID from results with `get_workout_notes`, `get_workout_weather` and `get_workout_intervals` for deeper analysis.',
       {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -248,7 +248,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_workout_intervals',
-      'Get detailed interval breakdown for a specific workout. Returns structured intervals with power, HR, cadence, and timing data. Also includes interval groups that summarize repeated efforts (e.g., "5 x 56s @ 314w").',
+      'Get detailed interval breakdown for a specific workout. Returns structured intervals with power, HR, cadence, and timing data. Also includes interval groups that summarize repeated efforts (e.g., "5 x 56s @ 314w"). Optional, depending on the level of detail requested by the user.',
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
@@ -265,7 +265,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_workout_notes',
-      'Get notes left by the athlete for a specific workout. Notes provide subjective context like perceived effort, how they felt, or other observations.',
+      'Get notes left by the athlete for a specific workout. Notes provide subjective context like perceived effort, how they felt, or other observations. Always fetch these when analyzing a workout.',
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
@@ -282,7 +282,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_workout_weather',
-      'Get weather conditions during a specific OUTDOOR workout. Returns wind, temperature, precipitation, and cloud data. Only relevant for outdoor activities - will return null for indoor/trainer workouts.',
+      'Get weather conditions during a specific OUTDOOR workout. Returns wind, temperature, precipitation, and cloud data. Always fetch this when analyzing outdoor activities, but do not fetch it for for indoor/trainer workouts.',
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
