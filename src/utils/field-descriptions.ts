@@ -59,7 +59,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
   // Subjective
   rpe: 'Rate of Perceived Exertion (1-10 scale)',
-  feel: 'How athlete felt (1-5 scale, 5 = great)',
+  feel: 'How athlete felt (1-5 scale, 1 = strong, 2 = good, 3 = normal, 4 = poor, 5 = weak)',
 
   // Fitness snapshot
   ctl_at_activity: 'Chronic Training Load (CTL/fitness) at time of activity',
