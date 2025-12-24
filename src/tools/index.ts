@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { IntervalsClient } from '../clients/intervals.js';
-import { WhoopClient } from '../clients/whoop.js';
+import { WhoopClient, WhoopApiError } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { CurrentTools } from './current.js';
 import { HistoricalTools } from './historical.js';
@@ -10,6 +10,38 @@ import {
   combineFieldDescriptions,
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
+
+/**
+ * Wraps a tool handler to provide graceful error handling for Whoop API errors.
+ * Returns a user-friendly message that suggests the LLM retry the request.
+ */
+function withWhoopErrorHandling<TArgs, TResult>(
+  handler: (args: TArgs) => Promise<TResult>
+): (args: TArgs) => Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  return async (args: TArgs) => {
+    try {
+      const result = await handler(args);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+      };
+    } catch (error) {
+      if (error instanceof WhoopApiError && error.isRetryable) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              error: true,
+              retryable: true,
+              message: error.message,
+              suggestion: 'This is a temporary issue. Please retry this tool call.',
+            }, null, 2),
+          }],
+        };
+      }
+      throw error;
+    }
+  };
+}
 
 export interface ToolsConfig {
   intervals: { apiKey: string; athleteId: string };
@@ -57,30 +89,26 @@ export class ToolRegistry {
       'get_todays_recovery',
       "Fetch today's Whoop recovery data including recovery score, HRV, sleep performance, and resting heart rate.",
       {},
-      async () => {
+      withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getTodaysRecovery();
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('recovery'),
-            data: result,
-          }, null, 2) }],
+          _field_descriptions: getFieldDescriptions('recovery'),
+          data: result,
         };
-      }
+      })
     );
 
     server.tool(
       'get_todays_strain',
       "Fetch today's Whoop strain data including strain score, heart rate, and calories.",
       {},
-      async () => {
+      withWhoopErrorHandling(async () => {
         const result = await this.currentTools.getTodaysStrain();
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('whoop'),
-            data: result,
-          }, null, 2) }],
+          _field_descriptions: getFieldDescriptions('whoop'),
+          data: result,
         };
-      }
+      })
     );
 
     server.tool(
@@ -105,15 +133,13 @@ export class ToolRegistry {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
-      async (args) => {
+      withWhoopErrorHandling(async (args) => {
         const result = await this.currentTools.getStrainHistory(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('whoop'),
-            data: result,
-          }, null, 2) }],
+          _field_descriptions: getFieldDescriptions('whoop'),
+          data: result,
         };
-      }
+      })
     );
 
     server.tool(
@@ -173,15 +199,13 @@ export class ToolRegistry {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
-      async (args) => {
+      withWhoopErrorHandling(async (args) => {
         const result = await this.historicalTools.getRecoveryTrends(args);
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({
-            _field_descriptions: getFieldDescriptions('recovery'),
-            data: result,
-          }, null, 2) }],
+          _field_descriptions: getFieldDescriptions('recovery'),
+          data: result,
         };
-      }
+      })
     );
 
     // Planning Tools

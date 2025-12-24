@@ -14,6 +14,30 @@ import {
 const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v2';
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
 
+const MAX_RETRY_ATTEMPTS = 3;
+const INITIAL_RETRY_DELAY_MS = 1000;
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Error thrown when Whoop API calls fail in a potentially recoverable way.
+ * The message is designed to be helpful to LLMs that may retry the operation.
+ */
+export class WhoopApiError extends Error {
+  constructor(
+    message: string,
+    public readonly isRetryable: boolean = false
+  ) {
+    super(message);
+    this.name = 'WhoopApiError';
+  }
+}
+
 /**
  * Check if a UTC timestamp falls within a local date range given the timezone.
  */
@@ -174,13 +198,23 @@ export class WhoopClient {
   }
 
   /**
+   * Mask a token for logging (show first 4 and last 4 characters)
+   */
+  private maskToken(token: string): string {
+    if (token.length <= 12) return '***';
+    return `${token.slice(0, 4)}...${token.slice(-4)}`;
+  }
+
+  /**
    * Get a valid access token, refreshing if necessary.
    * Tries Redis cache first, then falls back to refresh.
+   * Includes retry logic for transient failures.
    */
   private async ensureValidToken(): Promise<void> {
     // First, try to get a cached access token from Redis
     const cachedToken = await getWhoopAccessToken();
     if (cachedToken) {
+      console.log('[Whoop] Using cached access token from Redis');
       this.accessToken = cachedToken.token;
       this.tokenExpiresAt = cachedToken.expiresAt;
       return;
@@ -188,49 +222,112 @@ export class WhoopClient {
 
     // Check if current in-memory token is still valid
     if (Date.now() < this.tokenExpiresAt - 5 * 60 * 1000) {
+      console.log('[Whoop] Using valid in-memory access token');
       return;
     }
 
     // Try to get refresh token from Redis, fall back to config
     const storedRefreshToken = await getWhoopRefreshToken();
     const refreshToken = storedRefreshToken ?? this.refreshToken;
+    const tokenSource = storedRefreshToken ? 'Redis' : 'config';
+    console.log(`[Whoop] Starting token refresh using ${tokenSource} refresh token: ${this.maskToken(refreshToken)}`);
 
-    // Refresh the token
-    const response = await fetch(WHOOP_AUTH_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-      }),
-    });
+    // Refresh the token with retry logic
+    let lastError: Error | null = null;
+    let attemptsMade = 0;
+    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+      attemptsMade = attempt;
+      try {
+        console.log(`[Whoop] Token refresh attempt ${attempt}/${MAX_RETRY_ATTEMPTS}`);
+        const response = await fetch(WHOOP_AUTH_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+            client_id: this.config.clientId,
+            client_secret: this.config.clientSecret,
+          }),
+        });
 
-    if (!response.ok) {
-      throw new Error(
-        `Whoop token refresh failed: ${response.status} ${response.statusText}`
-      );
+        if (response.ok) {
+          const data = (await response.json()) as {
+            access_token: string;
+            refresh_token: string;
+            expires_in: number;
+          };
+
+          console.log(`[Whoop] Token refresh successful on attempt ${attempt}, new refresh token: ${this.maskToken(data.refresh_token)}, expires in ${data.expires_in}s`);
+
+          this.accessToken = data.access_token;
+          this.tokenExpiresAt = Date.now() + data.expires_in * 1000;
+          this.refreshToken = data.refresh_token;
+
+          // Store tokens in Redis for future use
+          await storeWhoopTokens({
+            accessToken: this.accessToken,
+            refreshToken: this.refreshToken,
+            expiresAt: this.tokenExpiresAt,
+          });
+          return;
+        }
+
+        // Log the error response
+        const responseText = await response.text();
+        console.error(`[Whoop] Token refresh failed with ${response.status} ${response.statusText}: ${responseText}`);
+
+        // Determine if this is a retryable error (5xx server errors)
+        const isServerError = response.status >= 500 && response.status < 600;
+        lastError = new Error(
+          `Whoop token refresh failed: ${response.status} ${response.statusText}`
+        );
+
+        // For 400 errors, check if another request already refreshed the token
+        if (response.status === 400) {
+          console.log('[Whoop] Got 400 error, checking if another request already refreshed the token...');
+          const freshToken = await getWhoopAccessToken();
+          if (freshToken) {
+            console.log('[Whoop] Found fresh access token in Redis (likely refreshed by concurrent request), using it');
+            this.accessToken = freshToken.token;
+            this.tokenExpiresAt = freshToken.expiresAt;
+            return;
+          }
+          console.log('[Whoop] No fresh token found in Redis, refresh token may be invalid');
+        }
+
+        if (isServerError && attempt < MAX_RETRY_ATTEMPTS) {
+          // Exponential backoff: 1s, 2s, 4s...
+          const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+          console.log(`[Whoop] Server error, retrying in ${delayMs}ms...`);
+          await sleep(delayMs);
+          continue;
+        }
+
+        // Non-retryable error (4xx) or exhausted retries
+        break;
+      } catch (error) {
+        // Network errors are retryable
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.error(`[Whoop] Network error on attempt ${attempt}: ${lastError.message}`);
+        if (attempt < MAX_RETRY_ATTEMPTS) {
+          const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+          console.log(`[Whoop] Retrying in ${delayMs}ms...`);
+          await sleep(delayMs);
+          continue;
+        }
+        break;
+      }
     }
 
-    const data = (await response.json()) as {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
-    };
-
-    this.accessToken = data.access_token;
-    this.tokenExpiresAt = Date.now() + data.expires_in * 1000;
-    this.refreshToken = data.refresh_token;
-
-    // Store tokens in Redis for future use
-    await storeWhoopTokens({
-      accessToken: this.accessToken,
-      refreshToken: this.refreshToken,
-      expiresAt: this.tokenExpiresAt,
-    });
+    // All retries exhausted - throw a helpful error
+    throw new WhoopApiError(
+      `Whoop API is temporarily unavailable. The token refresh failed after ${attemptsMade} attempt(s). ` +
+        `This is typically a transient issue with the Whoop API. Please try this request again in a few moments. ` +
+        `Original error: ${lastError?.message ?? 'Unknown error'}`,
+      true
+    );
   }
 
   private async fetch<T>(
