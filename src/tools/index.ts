@@ -302,7 +302,7 @@ export class ToolRegistry {
 
     server.tool(
       'get_workout_notes',
-      'Get notes left by the athlete for a specific workout. Notes provide subjective context like perceived effort, how they felt, or other observations. Always fetch these when analyzing a workout.',
+      'Get notes for a specific workout. Notes may be written by the athlete themselves, or other Intervals.icu users (like a coach). Notes provide subjective context like perceived effort, how they felt, or other observations. Always fetch these when analyzing a workout.',
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
