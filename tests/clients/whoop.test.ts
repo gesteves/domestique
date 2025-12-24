@@ -513,10 +513,11 @@ describe('WhoopClient', () => {
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
+        text: () => Promise.resolve('{"error": "invalid_token"}'),
       });
 
       await expect(client.getRecoveries('2024-12-15', '2024-12-15'))
-        .rejects.toThrow('Whoop token refresh failed');
+        .rejects.toThrow('Whoop API is temporarily unavailable');
     });
   });
 
