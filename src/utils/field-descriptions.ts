@@ -5,69 +5,69 @@
 
 export const WORKOUT_FIELD_DESCRIPTIONS = {
   // Core fields
-  id: 'Unique identifier of the completed activity in Intervals.icu',
+  id: 'Unique ID of the completed activity in Intervals.icu',
   date: 'Activity start time in local timezone (ISO 8601)',
   start_date_utc: 'Activity start time in UTC (ISO 8601 with Z suffix)',
   activity_type: 'Normalized type: Cycling, Running, Swimming, Skiing, Hiking, Rowing, Strength, or Other',
-  name: 'Activity name/title',
+  name: 'Activity name or title',
   description: 'Activity description or notes',
-  duration: 'Human-readable duration (e.g., "1:30:00")',
-  distance: 'Human-readable distance (e.g., "45.2 km" or "2500 m" for swimming)',
+  duration: 'Total duration of the activity',
+  distance: 'Total distance of the activity',
   source: 'Data source: intervals.icu, whoop, or trainerroad',
 
   // Training load
-  tss: 'Training Stress Score (TSS) - normalized training load (100 = 1 hour at FTP)',
+  tss: 'Training Stress Score (TSS)',
   load: 'Training load (same as TSS for power-based activities)',
-  intensity_factor: 'Intensity Factor (IF) - ratio of Normalized Power to FTP (as percentage, e.g., 75 = 0.75 IF)',
-  trimp: 'Training Impulse - heart rate based training load',
+  intensity_factor: 'Intensity Factor (IF)',
+  trimp: 'Training Impulse',
   session_rpe: 'Session RPE = RPE × duration in minutes',
-  strain_score: 'Intervals.icu strain score',
+  strain_score: 'Intervals.icu strain score (unrealted to Whoop\'s strain)',
 
   // Power metrics
-  normalized_power: 'Normalized Power (NP) in watts - accounts for variability',
+  normalized_power: 'Normalized Power (NP) in watts',
   average_power: 'Average power in watts',
-  ftp: 'Functional Threshold Power used for this activity in watts',
-  eftp: 'Estimated FTP from Intervals.icu in watts',
-  activity_eftp: 'eFTP derived from this specific activity in watts',
-  w_prime: "W' (W prime) - anaerobic work capacity in joules",
+  ftp: 'Functional Threshold Power used for this activity, in watts',
+  eftp: 'Estimated FTP from Intervals.icu, in watts',
+  activity_eftp: 'eFTP derived from this specific activity, in watts',
+  w_prime: "W' (W prime), anaerobic work capacity in joules",
   pmax: 'Maximum power capacity in watts',
-  work_kj: 'Total work done in kilojoules',
-  joules_above_ftp: 'Work done above FTP in joules',
-  max_wbal_depletion: "Maximum W'bal depletion during activity (joules)",
+  work_kj: 'Total work done, in kilojoules',
+  joules_above_ftp: 'Work done above FTP, in joules',
+  max_wbal_depletion: "Maximum W'bal depletion during activity, in joules",
 
   // Heart rate
   average_heart_rate: 'Average heart rate in beats per minute',
   max_heart_rate: 'Maximum heart rate in beats per minute',
-  hrrc: 'Heart rate recovery - drop in HR in first minute after stopping',
+  hrrc: 'Heart rate recovery, drop in HR in first minute after stopping',
 
   // Speed
-  average_speed: 'Human-readable average speed (e.g., "32.5 km/h")',
-  max_speed: 'Human-readable max speed (e.g., "55.2 km/h")',
+  average_speed: 'Average speed during the activity',
+  max_speed: 'Maximum speed during the activity',
 
   // Cadence
   average_cadence: 'Average cadence in RPM (cycling) or steps/min (running)',
   max_cadence: 'Maximum cadence in RPM or steps/min',
 
   // Efficiency
-  variability_index: 'Variability Index (VI) - NP/Avg Power ratio. >1.05 indicates variable effort',
-  power_hr_ratio: 'Power:HR decoupling - positive means cardiac drift occurred',
-  efficiency_factor: 'Efficiency Factor (EF) - NP/Avg HR. Higher is more efficient',
+  variability_index: 'Variability Index (VI)',
+  power_hr_ratio: 'Power:HR decoupling, positive means cardiac drift occurred',
+  efficiency_factor: 'Efficiency Factor (EF)',
 
   // Coasting
-  coasting_time: 'Human-readable time spent coasting (e.g., "0:05:30")',
+  coasting_time: 'Total time spent coasting',
   coasting_percentage: 'Percentage of ride time spent coasting',
 
   // Subjective
   rpe: 'Rate of Perceived Exertion (1-10 scale)',
-  feel: 'How athlete felt (1-5 scale, 1 = strong, 2 = good, 3 = normal, 4 = poor, 5 = weak)',
+  feel: 'How the athlete felt (1-5 scale, 1 = strong, 2 = good, 3 = normal, 4 = poor, 5 = weak)',
 
   // Fitness snapshot
   ctl_at_activity: 'Chronic Training Load (CTL/fitness) at time of activity',
   atl_at_activity: 'Acute Training Load (ATL/fatigue) at time of activity',
-  tsb_at_activity: 'Training Stress Balance (TSB/form) at time of activity. Positive = fresh, negative = fatigued',
+  tsb_at_activity: 'Training Stress Balance (TSB/form) at time of activity',
 
   // Elevation
-  elevation_gain: 'Human-readable elevation gain (e.g., "500 m")',
+  elevation_gain: 'Elevation gain during the activity',
   average_altitude_m: 'Average altitude in meters',
   min_altitude_m: 'Minimum altitude in meters',
   max_altitude_m: 'Maximum altitude in meters',
@@ -79,12 +79,12 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
   // Energy
   calories: 'Estimated calories burned',
-  cho_used_g: 'Estimated carbohydrates used in grams',
-  cho_intake_g: 'Carbohydrates consumed during activity in grams',
+  cho_used_g: 'Estimated carbohydrates used, in grams',
+  cho_intake_g: 'Carbohydrates consumed during activity, in grams. Seldom used, its absence doesn’t imply lack of consumption.',
 
   // Running specific
   average_stride_m: 'Average stride length in meters',
-  gap: 'Human-readable Gradient Adjusted Pace (e.g., "4:30/km" or "1:45/100m" for swimming)',
+  gap: 'Gradient Adjusted Pace',
 
   // Activity context
   is_indoor: 'Whether activity was on a trainer/treadmill/indoor',
@@ -93,13 +93,13 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   workout_class: 'Workout classification: Endurance, Tempo, Threshold, VO2max, etc.',
 
   // Zone thresholds
-  hr_zones: 'Heart rate zone boundaries in BPM (array of 7 values)',
-  power_zones: 'Power zone boundaries as percentage of FTP (array of 7 values)',
+  hr_zones: 'Heart rate zone boundaries in BPM',
+  power_zones: 'Power zone boundaries as percentage of FTP',
   pace_zones: 'Pace zone boundaries in seconds per km',
 
   // Time in zones
-  power_zone_times: 'Array of {zone_id, seconds} - time spent in each power zone. Z1-Z7 plus SS (sweetspot)',
-  hr_zone_times: 'Array of seconds spent in each HR zone (7 zones)',
+  power_zone_times: 'Array of {zone_id, seconds} - time spent in each power zone.',
+  hr_zone_times: 'Array of seconds spent in each HR zone',
   pace_zone_times: 'Array of seconds spent in each pace zone',
 
   // Polarization
@@ -116,54 +116,47 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
   // Strain activity
-  strain_score: 'Whoop strain score (0-21 scale, logarithmic). LIGHT: 0-9, MODERATE: 10-13, HIGH: 14-17, ALL_OUT: 18-21',
+  strain_score: 'Whoop strain score (0-21 scale, logarithmic). Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21',
   average_heart_rate: 'Average heart rate in BPM',
   max_heart_rate: 'Maximum heart rate in BPM',
   calories: 'Estimated calories burned',
   duration: 'Human-readable duration (e.g., "1:30:00")',
   distance: 'Human-readable distance (e.g., "45.2 km" or "2500 m" for swimming)',
   elevation_gain: 'Human-readable elevation gain (e.g., "500 m")',
-  zone_durations: 'Object with zone_0 through zone_5 - human-readable time in each Whoop HR zone (e.g., zone_0: "0:05:30"). Note: Whoop uses Heart Rate Reserve (HRR) method, may not match Intervals.icu HR zones.',
-
-  // Strain insights (pre-computed)
-  insights: 'Pre-computed strain insights using Whoop official terminology',
-  strain_level: 'Strain level: LIGHT (0-9), MODERATE (10-13), HIGH (14-17), or ALL_OUT (18-21)',
-  strain_level_description: 'Whoop official description for this strain level',
+  zone_durations: 'Time spent in each Whoop HR zone. Note: Whoop uses the Heart Rate Reserve (HRR) method to calculate; they may not match Intervals.icu HR zones.',
+  strain_level: 'Strain level',
+  strain_level_description: 'Whoop\'s official description for this strain level',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {
   date: 'Date of recovery data (ISO 8601)',
-  recovery_score: 'Whoop recovery score (0-100%). SUFFICIENT: ≥67%, ADEQUATE: 34-66%, LOW: <34%',
+  recovery_score: 'Whoop recovery score (0-100%). Sufficient: ≥67%, Adequate: 34-66%, Low: <34%',
   resting_heart_rate: 'Resting heart rate in BPM',
   hrv_rmssd: 'Heart Rate Variability in milliseconds (RMSSD). Higher generally indicates better recovery',
   spo2_percentage: 'Blood oxygen saturation percentage',
   skin_temp_celsius: 'Skin temperature in Celsius',
 
   // Sleep metrics
-  sleep_performance_percentage: 'Sleep performance vs. sleep need (0-100%). OPTIMAL: ≥85%, SUFFICIENT: 70-85%, POOR: <70%',
+  sleep_performance_percentage: 'Sleep performance vs. sleep need (0-100%). Optimal: ≥85%, Sufficient: 70-85%, Poor: <70%',
   sleep_consistency_percentage: 'Sleep consistency score (0-100%)',
   sleep_efficiency_percentage: 'Sleep efficiency - time asleep / time in bed (0-100%)',
   respiratory_rate: 'Breaths per minute during sleep',
 
   // Sleep durations (human-readable, e.g., "7:12:40")
-  sleep_duration: 'Total sleep duration (e.g., "7:12:40")',
-  sleep_quality_duration: 'Quality sleep - deep + REM (e.g., "3:55:27")',
-  sleep_needed: 'Sleep needed for full recovery (e.g., "8:39:15")',
-  light_sleep: 'Time in light sleep (e.g., "3:17:13")',
-  slow_wave_sleep: 'Time in deep/slow wave sleep - most restorative (e.g., "1:55:02")',
-  rem_sleep: 'Time in REM sleep (e.g., "2:00:25")',
-  awake_time: 'Time awake during sleep period (e.g., "0:21:01")',
-  in_bed_time: 'Total time in bed (e.g., "7:33:41")',
+  sleep_duration: 'Total sleep duration',
+  sleep_quality_duration: 'Time spent in Restorative sleep. Restorative sleep is the sum of time spent in Deep or REM sleep.',
+  sleep_needed: 'Sleep needed for full recovery',
+  light_sleep: 'Time spent in Light sleep',
+  slow_wave_sleep: 'Time spent in deep/slow wave sleep.',
+  rem_sleep: 'Time spent in REM sleep',
+  awake_time: 'Time awake during sleep period',
+  in_bed_time: 'Total time in bed',
   sleep_cycle_count: 'Number of complete sleep cycles',
   disturbance_count: 'Number of sleep disturbances',
-
-  // Recovery insights (pre-computed)
-  insights: 'Pre-computed recovery insights using Whoop official terminology',
-  recovery_level: 'Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), or LOW (<34%)',
-  recovery_level_description: 'Whoop official description for this recovery level',
-  sleep_performance_level: 'Sleep performance level: OPTIMAL (≥85%), SUFFICIENT (70-85%), or POOR (<70%)',
-  sleep_performance_level_description: 'Whoop official description for this sleep performance level',
-  hrv_rmssd_ms: 'Raw HRV value in milliseconds for reference',
+  recovery_level: 'Recovery level',
+  recovery_level_description: 'Whoop\'s official description for this recovery level',
+  sleep_performance_level: 'Sleep performance level',
+  sleep_performance_level_description: 'Whoop\'s official description for this sleep performance level',
 };
 
 export const FITNESS_FIELD_DESCRIPTIONS = {
@@ -192,23 +185,23 @@ export const PLANNED_WORKOUT_FIELD_DESCRIPTIONS = {
   id: 'Unique workout identifier',
   date: 'Scheduled date/time (ISO 8601)',
   name: 'Workout name',
-  description: 'Workout description including structure',
+  description: 'Workout description, possibly including structure',
   expected_tss: 'Expected Training Stress Score',
   expected_if: 'Expected Intensity Factor (as percentage)',
-  expected_duration: 'Human-readable expected duration (e.g., "1:30:00")',
+  expected_duration: 'Expected duration of the workout',
   workout_type: 'Type of workout (Ride, Run, Swim, etc.)',
   source: 'Calendar source: intervals.icu or trainerroad',
 };
 
 export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   // Athlete info
-  id: 'Unique identifier of the athlete in Intervals.icu',
-  name: 'Athlete name',
+  id: 'Unique ID of the athlete in Intervals.icu',
+  name: 'Athlete\'s name',
   city: 'City of residence',
   state: 'State/province of residence',
   country: 'Country of residence',
-  timezone: 'Athlete timezone (e.g., "America/New_York")',
-  sex: 'Athlete sex (M or F)',
+  timezone: 'Athlete\'s timezone',
+  sex: 'Athlete\'s gender',
 
   // Sport settings
   sports: 'Array of sport-specific settings for each activity type the athlete trains',
@@ -240,7 +233,7 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
 
 export const INTERVALS_FIELD_DESCRIPTIONS = {
   // Response structure
-  activity_id: 'Unique identifier of the activity in Intervals.icu',
+  activity_id: 'Unique ID of the activity in Intervals.icu',
   intervals: 'Array of individual intervals in chronological order',
   groups: 'Summary of repeated interval sets (e.g., "5 x 56s @ 314w")',
 
@@ -249,45 +242,45 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
   label: 'Custom label if assigned',
   group_id: 'ID linking similar intervals (e.g., "56s@314w91rpm")',
   start_seconds: 'Start time in seconds from activity start',
-  duration: 'Human-readable interval duration (e.g., "0:00:56")',
-  distance: 'Human-readable distance (e.g., "1.2 km")',
+  duration: 'Duration of the interval',
+  distance: 'Distance of the interval',
 
   // Power
   average_watts: 'Average power in watts',
   max_watts: 'Maximum power in watts',
-  normalized_power: 'Normalized Power (NP) in watts - accounts for variability',
+  normalized_power: 'Normalized Power (NP) in watts',
   watts_per_kg: 'Power-to-weight ratio in watts per kilogram',
   power_zone: 'Power zone number (1-7)',
-  intensity_factor: 'Intensity Factor (IF) - ratio of NP to FTP (e.g., 1.05 = 105% of FTP)',
+  intensity_factor: 'Intensity Factor (IF)',
   interval_tss: 'Training Stress Score for this interval',
 
   // Heart rate
   average_hr: 'Average heart rate in BPM',
   max_hr: 'Maximum heart rate in BPM',
-  hr_decoupling: 'Power:HR decoupling percentage - positive indicates cardiac drift',
+  hr_decoupling: 'Power:HR decoupling percentage; positive indicates cardiac drift',
 
   // Cadence/stride
   average_cadence: 'Average cadence in RPM (cycling) or steps/min (running)',
   stride_length_m: 'Average stride length in meters (running)',
 
   // Speed
-  average_speed: 'Human-readable average speed (e.g., "32.5 km/h")',
+  average_speed: 'Average speed of the interval',
 
   // Elevation
-  elevation_gain: 'Human-readable elevation gain (e.g., "45 m")',
+  elevation_gain: 'Elevation gain of the interval',
   average_gradient_pct: 'Average gradient as percentage',
 
   // W\'bal (anaerobic capacity)
-  wbal_start_j: 'W\'bal at interval start in joules - remaining anaerobic capacity',
+  wbal_start_j: 'W\'bal at interval start in joules; remaining anaerobic capacity',
   wbal_end_j: 'W\'bal at interval end in joules',
-  joules_above_ftp: 'Work done above FTP in joules - anaerobic contribution',
+  joules_above_ftp: 'Work done above FTP in joules; anaerobic contribution',
 
   // Group fields
   count: 'Number of repetitions in this interval set',
 };
 
 export const NOTES_FIELD_DESCRIPTIONS = {
-  activity_id: 'Unique identifier of the activity in Intervals.icu',
+  activity_id: 'Unique ID of the activity in Intervals.icu',
   notes: 'Array of notes/messages left by the athlete for this activity',
   id: 'Unique identifier of the note',
   athlete_id: 'Intervals.icu athlete ID who wrote the note',
@@ -300,8 +293,8 @@ export const NOTES_FIELD_DESCRIPTIONS = {
 };
 
 export const WEATHER_FIELD_DESCRIPTIONS = {
-  activity_id: 'Unique identifier of the activity in Intervals.icu',
-  weather_description: 'Human-readable weather summary including wind direction/speed, headwind/tailwind percentages, precipitation, temperature, feels-like temperature, and cloud cover. Null if weather data is unavailable (e.g., indoor activities).',
+  activity_id: 'Unique ID of the activity in Intervals.icu',
+  weather_description: 'Weather summary for the activity. Null if weather data is unavailable (e.g., indoor activities).',
 };
 
 type FieldCategory =
