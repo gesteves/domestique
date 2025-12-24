@@ -304,7 +304,103 @@ describe('WhoopClient', () => {
     });
   });
 
+  describe('getTodayStrain', () => {
+    it('should return strain for current in-progress cycle', async () => {
+      const mockCycles = {
+        records: [
+          {
+            id: 1,
+            user_id: 1,
+            start: '2024-12-15T06:00:00Z',
+            // No end = in-progress
+            score_state: 'SCORED',
+            score: {
+              strain: 8.5,
+              kilojoule: 6000,
+              average_heart_rate: 70,
+              max_heart_rate: 150,
+            },
+          },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockCycles),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [] }),
+        });
+
+      const result = await client.getTodayStrain();
+
+      expect(result).not.toBeNull();
+      expect(result?.strain_score).toBe(8.5);
+    });
+
+    it('should return null when no in-progress cycle', async () => {
+      const mockCycles = {
+        records: [
+          {
+            id: 1,
+            user_id: 1,
+            start: '2024-12-14T06:00:00Z',
+            end: '2024-12-15T06:00:00Z', // Has end = completed
+            score_state: 'SCORED',
+            score: { strain: 10, kilojoule: 8000, average_heart_rate: 70, max_heart_rate: 150 },
+          },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockCycles),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [] }),
+        });
+
+      const result = await client.getTodayStrain();
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when current cycle not scored yet', async () => {
+      const mockCycles = {
+        records: [
+          {
+            id: 1,
+            user_id: 1,
+            start: '2024-12-15T06:00:00Z',
+            // No end = in-progress
+            score_state: 'PENDING_SCORE',
+            score: { strain: 0, kilojoule: 0, average_heart_rate: 0, max_heart_rate: 0 },
+          },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockCycles),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [] }),
+        });
+
+      const result = await client.getTodayStrain();
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('getStrainData', () => {
+    // Cycle date is determined by END time (when you went to sleep)
     const mockCycles = {
       records: [
         {
@@ -312,8 +408,8 @@ describe('WhoopClient', () => {
           user_id: 1,
           created_at: '2024-12-15T00:00:00Z',
           updated_at: '2024-12-15T23:59:59Z',
-          start: '2024-12-15T00:00:00Z',
-          end: '2024-12-15T23:59:59Z',
+          start: '2024-12-14T14:00:00Z', // Started Dec 14
+          end: '2024-12-15T14:00:00Z',   // Ended Dec 15 = cycle date is Dec 15
           timezone_offset: '-05:00',
           score_state: 'SCORED',
           score: {
@@ -359,7 +455,7 @@ describe('WhoopClient', () => {
       ],
     };
 
-    it('should fetch and transform strain data', async () => {
+    it('should fetch and transform strain data using cycle end date', async () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -373,6 +469,7 @@ describe('WhoopClient', () => {
       const result = await client.getStrainData('2024-12-15', '2024-12-15');
 
       expect(result).toHaveLength(1);
+      expect(result[0].date).toBe('2024-12-15'); // Date from end time
       expect(result[0].strain_score).toBe(15.5);
       expect(result[0].calories).toBeCloseTo(2868, 0); // 12000 / 4.184
       expect(result[0].activities).toHaveLength(1);

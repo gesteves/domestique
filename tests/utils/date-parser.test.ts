@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   parseDateString,
+  parseDateStringInTimezone,
   parseDateRange,
   getDaysBackRange,
   getToday,
+  getTodayInTimezone,
   getStartOfDay,
   getEndOfDay,
 } from '../../src/utils/date-parser.js';
@@ -155,6 +157,55 @@ describe('date-parser', () => {
   describe('getToday', () => {
     it('should return today\'s date in ISO format', () => {
       expect(getToday()).toBe('2024-12-15');
+    });
+  });
+
+  describe('getTodayInTimezone', () => {
+    it('should return today\'s date in the specified timezone', () => {
+      // At 12:00 UTC on Dec 15, it's still Dec 15 in UTC
+      expect(getTodayInTimezone('UTC')).toBe('2024-12-15');
+    });
+
+    it('should handle timezone where it is a different date', () => {
+      // At 12:00 UTC on Dec 15, in a timezone like Pacific/Auckland (+13), it's already late Dec 15
+      // In a timezone like Pacific/Honolulu (-10), it's still Dec 15 02:00
+      expect(getTodayInTimezone('Pacific/Honolulu')).toBe('2024-12-15');
+    });
+
+    it('should return previous day in western timezones when UTC is early morning', () => {
+      // Set time to 02:00 UTC on Dec 15
+      vi.setSystemTime(new Date('2024-12-15T02:00:00Z'));
+      // At 02:00 UTC, in America/Denver (UTC-7), it's 19:00 on Dec 14
+      expect(getTodayInTimezone('America/Denver')).toBe('2024-12-14');
+    });
+  });
+
+  describe('parseDateStringInTimezone', () => {
+    it('should parse ISO date strings regardless of timezone', () => {
+      expect(parseDateStringInTimezone('2024-12-15', 'America/New_York')).toBe('2024-12-15');
+      expect(parseDateStringInTimezone('2024-01-01', 'Europe/London')).toBe('2024-01-01');
+    });
+
+    it('should parse "today" using the specified timezone', () => {
+      expect(parseDateStringInTimezone('today', 'UTC')).toBe('2024-12-15');
+    });
+
+    it('should parse "yesterday" using the specified timezone', () => {
+      expect(parseDateStringInTimezone('yesterday', 'UTC')).toBe('2024-12-14');
+    });
+
+    it('should parse relative dates using the specified timezone', () => {
+      // At 12:00 UTC on Dec 15
+      expect(parseDateStringInTimezone('today', 'UTC')).toBe('2024-12-15');
+      expect(parseDateStringInTimezone('3 days ago', 'UTC')).toBe('2024-12-12');
+    });
+
+    it('should handle timezone differences for relative dates', () => {
+      // Set time to 02:00 UTC on Dec 15
+      vi.setSystemTime(new Date('2024-12-15T02:00:00Z'));
+      // In America/Denver (UTC-7), it's 19:00 on Dec 14
+      expect(parseDateStringInTimezone('today', 'America/Denver')).toBe('2024-12-14');
+      expect(parseDateStringInTimezone('yesterday', 'America/Denver')).toBe('2024-12-13');
     });
   });
 

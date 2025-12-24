@@ -478,11 +478,45 @@ export class WhoopClient {
   }
 
   /**
+   * Get today's strain by finding the current in-progress cycle.
+   * The current cycle is identified by having no 'end' field.
+   */
+  async getTodayStrain(): Promise<StrainData | null> {
+    const timezone = await this.getTimezone();
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+
+    // Get recent data without date parameters to get current cycle
+    const [cycles, workouts] = await Promise.all([
+      this.fetch<{ records: WhoopCycle[] }>('/cycle'),
+      this.fetch<{ records: WhoopWorkout[] }>('/activity/workout'),
+    ]);
+
+    // Find the current cycle (no end date means in progress)
+    const currentCycle = cycles.records.find((c) => !c.end);
+    if (!currentCycle) return null;
+
+    // Current cycle may not be scored yet (PENDING_SCORE)
+    if (currentCycle.score_state !== 'SCORED') return null;
+
+    // Find workouts that started after this cycle began
+    const cycleWorkouts = workouts.records.filter((w) => {
+      return new Date(w.start) >= new Date(currentCycle.start);
+    });
+
+    // Current cycle = today's date
+    return this.normalizeStrain(currentCycle, cycleWorkouts, todayStr);
+  }
+
+  /**
    * Get strain/cycle data for a date range.
    * Filters results to match the user's local timezone.
+   *
+   * A cycle's date is determined by its END time (when you went to sleep),
+   * not its start time. For the current in-progress cycle (no end), we use today's date.
    */
   async getStrainData(startDate: string, endDate: string): Promise<StrainData[]> {
     const timezone = await this.getTimezone();
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
 
     // Fetch with a 1-day buffer to account for timezone differences
     const startBuffer = this.subtractDays(startDate, 1);
@@ -499,22 +533,29 @@ export class WhoopClient {
       }),
     ]);
 
-    // Group workouts by local date in user's timezone
-    const workoutsByDate = new Map<string, WhoopWorkout[]>();
-    for (const workout of workouts.records) {
-      const localDate = new Date(workout.start).toLocaleDateString('en-CA', { timeZone: timezone });
-      if (!workoutsByDate.has(localDate)) {
-        workoutsByDate.set(localDate, []);
-      }
-      workoutsByDate.get(localDate)!.push(workout);
-    }
+    // Determine each cycle's date based on END time (or today if in-progress)
+    const cyclesWithDates = cycles.records.map((cycle) => {
+      const cycleDate = !cycle.end
+        ? todayStr
+        : new Date(cycle.end).toLocaleDateString('en-CA', { timeZone: timezone });
+      return { cycle, cycleDate };
+    });
 
-    return cycles.records
-      .filter((c) => c.score_state === 'SCORED')
-      .map((c) => {
-        const localDate = new Date(c.start).toLocaleDateString('en-CA', { timeZone: timezone });
-        const dayWorkouts = workoutsByDate.get(localDate) ?? [];
-        return this.normalizeStrain(c, dayWorkouts);
+    // Group workouts by the cycle they belong to (started after cycle start, before cycle end)
+    const getWorkoutsForCycle = (cycle: WhoopCycle): WhoopWorkout[] => {
+      const cycleStart = new Date(cycle.start);
+      const cycleEnd = cycle.end ? new Date(cycle.end) : new Date();
+      return workouts.records.filter((w) => {
+        const workoutStart = new Date(w.start);
+        return workoutStart >= cycleStart && workoutStart <= cycleEnd;
+      });
+    };
+
+    return cyclesWithDates
+      .filter(({ cycle }) => cycle.score_state === 'SCORED')
+      .map(({ cycle, cycleDate }) => {
+        const cycleWorkouts = getWorkoutsForCycle(cycle);
+        return this.normalizeStrain(cycle, cycleWorkouts, cycleDate);
       })
       .filter((s) => s.date >= startDate && s.date <= endDate);
   }
@@ -607,9 +648,9 @@ export class WhoopClient {
     };
   }
 
-  private normalizeStrain(cycle: WhoopCycle, workouts: WhoopWorkout[]): StrainData {
+  private normalizeStrain(cycle: WhoopCycle, workouts: WhoopWorkout[], localDate: string): StrainData {
     return {
-      date: cycle.start.split('T')[0],
+      date: localDate,
       strain_score: cycle.score.strain,
       average_heart_rate: cycle.score.average_heart_rate,
       max_heart_rate: cycle.score.max_heart_rate,

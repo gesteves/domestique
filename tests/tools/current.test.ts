@@ -76,15 +76,16 @@ describe('CurrentTools', () => {
     };
 
     it('should return strain data from Whoop', async () => {
-      vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue([mockStrain]);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(mockStrain);
 
       const result = await tools.getTodaysStrain();
 
       expect(result).toEqual(mockStrain);
+      expect(mockWhoopClient.getTodayStrain).toHaveBeenCalled();
     });
 
     it('should return null when no strain data for today', async () => {
-      vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
 
       const result = await tools.getTodaysStrain();
 
@@ -182,6 +183,7 @@ describe('CurrentTools', () => {
     ];
 
     it('should return strain data from Whoop for date range', async () => {
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
       vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue(mockStrain);
 
       const result = await tools.getStrainHistory({
@@ -193,15 +195,32 @@ describe('CurrentTools', () => {
       expect(mockWhoopClient.getStrainData).toHaveBeenCalledWith('2024-12-01', '2024-12-15');
     });
 
-    it('should default end_date to today', async () => {
+    it('should default end_date to today using athlete timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
 
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
       vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue(mockStrain);
 
       await tools.getStrainHistory({ start_date: '2024-12-01' });
 
       expect(mockWhoopClient.getStrainData).toHaveBeenCalledWith('2024-12-01', '2024-12-15');
+
+      vi.useRealTimers();
+    });
+
+    it('should parse relative dates using athlete timezone', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
+
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Denver');
+      vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue(mockStrain);
+
+      await tools.getStrainHistory({ start_date: 'yesterday' });
+
+      // Yesterday in America/Denver when it's 12:00 UTC on Dec 15
+      // Denver is UTC-7, so local time is 05:00 on Dec 15, yesterday is Dec 14
+      expect(mockWhoopClient.getStrainData).toHaveBeenCalledWith('2024-12-14', '2024-12-15');
 
       vi.useRealTimers();
     });

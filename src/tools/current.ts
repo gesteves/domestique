@@ -1,7 +1,7 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { parseDateString, getToday } from '../utils/date-parser.js';
+import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone } from '../utils/date-parser.js';
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import type {
   RecoveryData,
@@ -39,18 +39,16 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's strain data from Whoop
+   * Get today's strain data from Whoop.
+   * Uses Whoop's physiological day model - returns the most recent scored cycle.
    */
   async getTodaysStrain(): Promise<StrainData | null> {
     if (!this.whoop) {
       return null;
     }
 
-    const today = getToday();
-
     try {
-      const data = await this.whoop.getStrainData(today, today);
-      return data.length > 0 ? data[0] : null;
+      return await this.whoop.getTodayStrain();
     } catch (error) {
       console.error('Error fetching today\'s strain:', error);
       throw error;
@@ -124,8 +122,12 @@ export class CurrentTools {
       return [];
     }
 
-    const startDate = parseDateString(params.start_date);
-    const endDate = params.end_date ? parseDateString(params.end_date) : getToday();
+    // Use athlete's timezone for date parsing
+    const timezone = await this.intervals.getAthleteTimezone();
+    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const endDate = params.end_date
+      ? parseDateStringInTimezone(params.end_date, timezone)
+      : getTodayInTimezone(timezone);
 
     try {
       return await this.whoop.getStrainData(startDate, endDate);

@@ -182,10 +182,88 @@ export function getDaysBackRange(days: number): DateRange {
 }
 
 /**
- * Get today's date as ISO string
+ * Get today's date as ISO string (uses server timezone)
  */
 export function getToday(): string {
   return format(new Date(), 'yyyy-MM-dd');
+}
+
+/**
+ * Get today's date as ISO string in the specified timezone
+ */
+export function getTodayInTimezone(timezone: string): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+}
+
+/**
+ * Parse a natural language date string into an ISO date string,
+ * using the specified timezone for relative dates.
+ */
+export function parseDateStringInTimezone(input: string, timezone: string): string {
+  const normalized = input.toLowerCase().trim();
+
+  // Try ISO date first - these are absolute, no timezone needed
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const parsed = parseISO(input);
+    if (isValid(parsed)) {
+      return input;
+    }
+  }
+
+  // For relative dates, we need to compute based on the user's timezone
+  const todayStr = getTodayInTimezone(timezone);
+  const today = parseISO(todayStr);
+
+  if (normalized === 'today') {
+    return todayStr;
+  }
+
+  if (normalized === 'yesterday') {
+    return format(subDays(today, 1), 'yyyy-MM-dd');
+  }
+
+  if (normalized === 'tomorrow') {
+    return format(new Date(today.getTime() + 86400000), 'yyyy-MM-dd');
+  }
+
+  // "X days ago"
+  const daysAgoMatch = normalized.match(/^(\d+)\s*days?\s*ago$/);
+  if (daysAgoMatch) {
+    const days = parseInt(daysAgoMatch[1], 10);
+    return format(subDays(today, days), 'yyyy-MM-dd');
+  }
+
+  // "X weeks ago"
+  const weeksAgoMatch = normalized.match(/^(\d+)\s*weeks?\s*ago$/);
+  if (weeksAgoMatch) {
+    const weeks = parseInt(weeksAgoMatch[1], 10);
+    return format(subWeeks(today, weeks), 'yyyy-MM-dd');
+  }
+
+  // "X months ago"
+  const monthsAgoMatch = normalized.match(/^(\d+)\s*months?\s*ago$/);
+  if (monthsAgoMatch) {
+    const months = parseInt(monthsAgoMatch[1], 10);
+    return format(subMonths(today, months), 'yyyy-MM-dd');
+  }
+
+  // "last week" - start of last week
+  if (normalized === 'last week') {
+    return format(startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  }
+
+  // "last month" - start of last month
+  if (normalized === 'last month') {
+    return format(startOfMonth(subMonths(today, 1)), 'yyyy-MM-dd');
+  }
+
+  // If nothing matched, try parsing as-is
+  const parsed = parseISO(input);
+  if (isValid(parsed)) {
+    return format(parsed, 'yyyy-MM-dd');
+  }
+
+  throw new Error(`Unable to parse date: "${input}"`);
 }
 
 /**
