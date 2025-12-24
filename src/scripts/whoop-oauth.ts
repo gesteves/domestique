@@ -7,8 +7,12 @@
  *
  * Requirements:
  * - WHOOP_CLIENT_ID and WHOOP_CLIENT_SECRET in environment
- * - WHOOP_REDIRECT_URI (defaults to http://localhost:3000/callback)
  * - REDIS_URL for storing tokens
+ *
+ * Redirect URI is determined automatically:
+ * - If FLY_APP_NAME is set: https://{FLY_APP_NAME}.fly.dev/callback
+ * - If WHOOP_REDIRECT_URI is set: uses that value
+ * - Otherwise: http://localhost:3000/callback
  */
 
 import * as readline from 'readline';
@@ -23,13 +27,29 @@ interface TokenResponse {
   token_type: string;
 }
 
+export function getRedirectUri(): string {
+  // Use Fly.io URL if deployed there
+  const flyAppName = process.env.FLY_APP_NAME;
+  if (flyAppName) {
+    return `https://${flyAppName}.fly.dev/callback`;
+  }
+
+  // Use explicit redirect URI if set
+  if (process.env.WHOOP_REDIRECT_URI) {
+    return process.env.WHOOP_REDIRECT_URI;
+  }
+
+  // Default to localhost
+  return 'http://localhost:3000/callback';
+}
+
 async function main() {
   console.log('\n🏋️  Whoop OAuth Setup\n');
 
   // Check required environment variables
   const clientId = process.env.WHOOP_CLIENT_ID;
   const clientSecret = process.env.WHOOP_CLIENT_SECRET;
-  const redirectUri = process.env.WHOOP_REDIRECT_URI ?? 'http://localhost:3000/callback';
+  const redirectUri = getRedirectUri();
   const redisUrl = process.env.REDIS_URL;
 
   if (!clientId || !clientSecret) {
@@ -182,7 +202,13 @@ async function exchangeCodeForTokens(
   return response.json() as Promise<TokenResponse>;
 }
 
-main().catch((error) => {
-  console.error('Unexpected error:', error);
-  process.exit(1);
-});
+// Only run main() when executed directly, not when imported
+const isMainModule = process.argv[1]?.endsWith('whoop-oauth.js') ||
+                     process.argv[1]?.endsWith('whoop-oauth.ts');
+
+if (isMainModule) {
+  main().catch((error) => {
+    console.error('Unexpected error:', error);
+    process.exit(1);
+  });
+}

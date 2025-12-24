@@ -55,8 +55,10 @@ For Intervals.icu integration:
 For Whoop integration:
 - `WHOOP_CLIENT_ID`
 - `WHOOP_CLIENT_SECRET`
-- `WHOOP_REDIRECT_URI` - Defaults to `http://localhost:3000/callback`
 - `REDIS_URL` - Required for token storage (e.g., `redis://localhost:6379`)
+- `WHOOP_REDIRECT_URI` - Optional. Auto-detected based on environment:
+  - On Fly.io: `https://{FLY_APP_NAME}.fly.dev/callback`
+  - Otherwise: `http://localhost:3000/callback`
 
 For TrainerRoad integration:
 - `TRAINERROAD_CALENDAR_URL` - Private iCal feed URL
@@ -83,12 +85,9 @@ Whoop uses OAuth 2.0, which requires a one-time authorization flow to obtain ref
 
 5. The script will display an authorization URL. Open it in your browser and log in to Whoop
 
-6. After authorizing, you'll be redirected to a URL like:
-   ```
-   http://localhost:3000/callback?code=AUTHORIZATION_CODE
-   ```
+6. After authorizing, you'll be redirected to a callback page that displays your authorization code
 
-7. Copy the `code` parameter value and paste it into the script
+7. Copy the authorization code and paste it into the script
 
 8. The script exchanges the code for tokens and stores them in Redis. You're done!
 
@@ -230,6 +229,8 @@ After deploying, run the OAuth setup to get initial Whoop tokens:
 ```bash
 fly ssh console -C "npm run whoop:auth"
 ```
+
+The redirect URI is automatically set to `https://{your-app}.fly.dev/callback` when running on Fly.io. Make sure this URL is registered in your Whoop developer app settings.
 
 Follow the prompts to authorize with Whoop and store the tokens in Redis.
 

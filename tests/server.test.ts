@@ -101,9 +101,63 @@ describe('Server', () => {
         },
         body: JSON.stringify({}),
       });
-      
+
       // The endpoint exists - we get a response (not 404)
       expect(response.status).not.toBe(404);
+    });
+  });
+
+  describe('Root redirect', () => {
+    it('should redirect to GitHub repository', async () => {
+      const response = await fetch(`${baseUrl}/`, {
+        redirect: 'manual',
+      });
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toBe('https://github.com/gesteves/domestique');
+    });
+  });
+
+  describe('OAuth callback endpoint', () => {
+    it('should display authorization code when provided', async () => {
+      const response = await fetch(`${baseUrl}/callback?code=test-auth-code`);
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(body).toContain('Authorization Successful');
+      expect(body).toContain('test-auth-code');
+      expect(body).toContain('Copy');
+      expect(body).toContain('Next steps');
+    });
+
+    it('should display error when OAuth error is returned', async () => {
+      const response = await fetch(
+        `${baseUrl}/callback?error=access_denied&error_description=User+denied+access`
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(body).toContain('Authorization Failed');
+      expect(body).toContain('User denied access');
+      expect(body).toContain('try authorizing again');
+    });
+
+    it('should display info message when no code or error present', async () => {
+      const response = await fetch(`${baseUrl}/callback`);
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(body).toContain('No Authorization Code');
+      expect(body).toContain('OAuth authorization codes');
+      expect(body).toContain('npm run whoop:auth');
+    });
+
+    it('should not require authentication', async () => {
+      const response = await fetch(`${baseUrl}/callback`);
+      expect(response.status).toBe(200);
     });
   });
 });
