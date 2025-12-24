@@ -279,5 +279,22 @@ export class ToolRegistry {
         };
       }
     );
+
+    server.tool(
+      'get_workout_weather',
+      'Get weather conditions during a specific OUTDOOR workout. Returns wind, temperature, precipitation, and cloud data. Only relevant for outdoor activities - will return null for indoor/trainer workouts.',
+      {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+      },
+      async (args) => {
+        const result = await this.historicalTools.getWorkoutWeather(args.activity_id);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({
+            _field_descriptions: getFieldDescriptions('weather'),
+            data: result,
+          }, null, 2) }],
+        };
+      }
+    );
   }
 }

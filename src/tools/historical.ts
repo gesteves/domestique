@@ -211,4 +211,21 @@ export class HistoricalTools {
       throw error;
     }
   }
+
+  // ============================================
+  // Workout Weather
+  // ============================================
+
+  /**
+   * Get weather summary for a specific workout.
+   * Only relevant for outdoor activities.
+   */
+  async getWorkoutWeather(activityId: string): Promise<{ activity_id: string; weather_description: string | null }> {
+    try {
+      return await this.intervals.getActivityWeather(activityId);
+    } catch (error) {
+      console.error('Error fetching workout weather:', error);
+      throw error;
+    }
+  }
 }

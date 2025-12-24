@@ -182,10 +182,10 @@ interface IntervalsWellness {
 }
 
 interface IntervalsEvent {
-  id: number;
+    id: number;
   uid?: string;
   start_date_local: string;
-  name: string;
+    name: string;
   description?: string;
   type: string;
   category?: string;
@@ -197,7 +197,7 @@ interface IntervalsEvent {
 
 // Raw interval from Intervals.icu API
 interface IntervalsRawInterval {
-  id: number;
+    id: number;
   type: 'WORK' | 'RECOVERY';
   label?: string;
   group_id?: string;
@@ -661,6 +661,37 @@ export class IntervalsClient {
   }
 
   /**
+   * Get weather summary for a specific activity.
+   * Only relevant for outdoor activities.
+   */
+  async getActivityWeather(activityId: string): Promise<{ activity_id: string; weather_description: string | null }> {
+    try {
+      const response = await this.fetchActivity<{ description?: string }>(
+        activityId,
+        '/weather-summary'
+      );
+
+      let description = response.description ?? null;
+      
+      // Remove the "-- Intervals icu --\n" prefix if present
+      if (description) {
+        description = description.replace(/^-- Intervals icu --\n/i, '').trim();
+      }
+
+      return {
+        activity_id: activityId,
+        weather_description: description,
+      };
+    } catch (error) {
+      // Weather data may not be available for all activities
+      return {
+        activity_id: activityId,
+        weather_description: null,
+      };
+    }
+  }
+
+  /**
    * Normalize a raw interval from the API
    */
   private normalizeInterval(raw: IntervalsRawInterval): WorkoutInterval {
@@ -921,7 +952,7 @@ export class IntervalsClient {
   }
 
   private normalizePlannedEvent(event: IntervalsEvent): PlannedWorkout {
-    return {
+      return {
       id: event.uid ?? String(event.id),
       date: event.start_date_local,
       name: event.name,

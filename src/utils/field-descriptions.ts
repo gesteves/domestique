@@ -282,6 +282,11 @@ export const NOTES_FIELD_DESCRIPTIONS = {
   attachment_mime_type: 'MIME type of the attachment (e.g., image/jpeg)',
 };
 
+export const WEATHER_FIELD_DESCRIPTIONS = {
+  activity_id: 'Unique identifier of the activity in Intervals.icu',
+  weather_description: 'Human-readable weather summary including wind direction/speed, headwind/tailwind percentages, precipitation, temperature, feels-like temperature, and cloud cover. Null if weather data is unavailable (e.g., indoor activities).',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
@@ -290,7 +295,8 @@ type FieldCategory =
   | 'planned'
   | 'athlete_profile'
   | 'intervals'
-  | 'notes';
+  | 'notes'
+  | 'weather';
 
 /**
  * Get descriptions for a specific category
@@ -313,6 +319,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return INTERVALS_FIELD_DESCRIPTIONS;
     case 'notes':
       return NOTES_FIELD_DESCRIPTIONS;
+    case 'weather':
+      return WEATHER_FIELD_DESCRIPTIONS;
   }
 }
 
