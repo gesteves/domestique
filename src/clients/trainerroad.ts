@@ -72,10 +72,12 @@ export class TrainerRoadClient {
   }
 
   /**
-   * Get today's planned workouts
+   * Get today's planned workouts for a specific timezone
    */
-  async getTodayWorkouts(): Promise<PlannedWorkout[]> {
-    const today = new Date().toISOString().split('T')[0];
+  async getTodayWorkouts(timezone?: string): Promise<PlannedWorkout[]> {
+    const today = timezone
+      ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+      : new Date().toISOString().split('T')[0];
     return this.getPlannedWorkouts(today, today);
   }
 

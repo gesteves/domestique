@@ -151,7 +151,7 @@ export class CurrentTools {
 
     // Fetch from both sources in parallel
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
-      this.trainerroad?.getTodayWorkouts().catch((e) => {
+      this.trainerroad?.getTodayWorkouts(timezone).catch((e) => {
         console.error('Error fetching TrainerRoad workouts:', e);
         return [];
       }) ?? Promise.resolve([]),
