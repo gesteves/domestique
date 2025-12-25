@@ -88,10 +88,14 @@ export interface NormalizedWorkout {
   is_commute?: boolean;
   is_race?: boolean;
 
-  // Zone thresholds used for this activity
-  hr_zones?: number[]; // HR zone boundaries
-  power_zones?: number[]; // Power zone boundaries (% of FTP)
-  pace_zones?: number[]; // Pace zone boundaries
+  // Threshold pace for this activity
+  threshold_pace?: string; // Human-readable, e.g., "4:00/km"
+  pace_units?: string; // "MINS_KM", "SECS_100M", etc.
+
+  // Zone thresholds used for this activity (normalized with names)
+  hr_zones?: HRZone[];
+  power_zones?: PowerZone[];
+  pace_zones?: PaceZone[];
 
   // Time in zones (seconds)
   power_zone_times?: ZoneTime[];
@@ -307,17 +311,15 @@ export interface PowerZone {
   high_watts: number | null;
 }
 
-// Pace zone with name, percentages, values, and human-readable format
+// Pace zone with name, percentages, and human-readable format
 // Note: low_percent corresponds to slow pace, high_percent to fast pace
 // (higher % = faster = less time per unit distance)
 export interface PaceZone {
   name: string;
   low_percent: number;
   high_percent: number | null;
-  slow_pace: number | null; // slower boundary (more time) - null if unbounded slow
-  fast_pace: number | null; // faster boundary (less time) - null if unbounded fast
-  slow_pace_human: string | null; // e.g., "5:30/km" or null if unbounded
-  fast_pace_human: string | null; // e.g., "4:30/km" or null if unbounded
+  slow_pace: string | null; // e.g., "5:30/km" or null if unbounded
+  fast_pace: string | null; // e.g., "4:30/km" or null if unbounded
 }
 
 // Sport-specific settings
@@ -336,8 +338,7 @@ export interface SportSettings {
   hr_zones?: HRZone[];
 
   // Pace thresholds
-  threshold_pace?: number;
-  threshold_pace_human?: string; // e.g., "4:00/km" or "1:30/100m"
+  threshold_pace?: string; // e.g., "4:00/km" or "1:30/100m"
   pace_units?: string;
 
   // Power zones (merged with names and values)

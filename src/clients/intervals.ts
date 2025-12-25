@@ -110,6 +110,10 @@ interface IntervalsActivity {
   icu_power_zones?: number[]; // Power zone boundaries (% of FTP)
   pace_zones?: number[]; // Pace zone boundaries
 
+  // Threshold pace for this activity
+  threshold_pace?: number; // Speed in m/s (needs conversion based on pace_units)
+  pace_units?: string; // "MINS_KM", "SECS_100M", etc.
+
   // Time in zones
   icu_zone_times?: IntervalsZoneTime[]; // Power zone times with zone IDs
   icu_hr_zone_times?: number[]; // Seconds per HR zone
@@ -269,6 +273,7 @@ export class IntervalsClient {
   private config: IntervalsConfig;
   private authHeader: string;
   private cachedTimezone: string | null = null;
+  private cachedSportSettings: IntervalsSportSettings[] | null = null;
 
   constructor(config: IntervalsConfig) {
     this.config = config;
@@ -297,12 +302,24 @@ export class IntervalsClient {
   }
 
   /**
+   * Get sport settings (cached after first fetch).
+   */
+  private async getSportSettings(): Promise<IntervalsSportSettings[]> {
+    if (this.cachedSportSettings) {
+      return this.cachedSportSettings;
+    }
+
+    this.cachedSportSettings = await this.fetch<IntervalsSportSettings[]>('/sport-settings');
+    return this.cachedSportSettings;
+  }
+
+  /**
    * Get the complete athlete profile including sport settings.
    */
   async getAthleteProfile(): Promise<AthleteProfile> {
     const [profile, sportSettings] = await Promise.all([
       this.fetch<IntervalsAthleteProfile>('/profile'),
-      this.fetch<IntervalsSportSettings[]>('/sport-settings'),
+      this.getSportSettings(),
     ]);
 
     const sports = sportSettings
@@ -319,6 +336,27 @@ export class IntervalsClient {
       sex: profile.athlete.sex,
       sports,
     };
+  }
+
+  /**
+   * Find sport settings matching an activity type.
+   * Returns the first matching sport settings or null if not found.
+   */
+  private findMatchingSportSettings(
+    activityType: string,
+    sportSettings: IntervalsSportSettings[]
+  ): IntervalsSportSettings | null {
+    // Normalize activity type for matching (e.g., "VirtualRide" → "Ride")
+    const normalizedType = activityType.replace(/^Virtual/, '');
+
+    for (const settings of sportSettings) {
+      // Check if activity type matches any of the types in this sport setting
+      if (settings.types.some((t) => t === activityType || t === normalizedType)) {
+        return settings;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -356,9 +394,8 @@ export class IntervalsClient {
       // For SECS_100M (swimming), threshold_pace is stored as speed in m/s
       // Convert to actual pace (time per distance) for display
       const paceValue = this.convertToPaceValue(settings.threshold_pace, settings.pace_units);
-      result.threshold_pace = paceValue;
+      result.threshold_pace = this.formatPaceValue(paceValue, settings.pace_units);
       result.pace_units = settings.pace_units;
-      result.threshold_pace_human = this.formatPaceValue(paceValue, settings.pace_units);
     }
 
     // Power zones
@@ -474,17 +511,15 @@ export class IntervalsClient {
       // pace = threshold / (percentage / 100)
       // low_percent (lower %) = slower pace (more time per km)
       // high_percent (higher %) = faster pace (less time per km)
-      const slowPace = lowPercent > 0 ? thresholdPace / (lowPercent / 100) : null;
-      const fastPace = highPercent ? thresholdPace / (highPercent / 100) : null;
+      const slowPaceValue = lowPercent > 0 ? thresholdPace / (lowPercent / 100) : null;
+      const fastPaceValue = highPercent ? thresholdPace / (highPercent / 100) : null;
 
       result.push({
         name: names[i],
         low_percent: lowPercent,
         high_percent: highPercent,
-        slow_pace: slowPace,
-        fast_pace: fastPace,
-        slow_pace_human: slowPace ? this.formatPaceValue(slowPace, paceUnits) : null,
-        fast_pace_human: fastPace ? this.formatPaceValue(fastPace, paceUnits) : null,
+        slow_pace: slowPaceValue ? this.formatPaceValue(slowPaceValue, paceUnits) : null,
+        fast_pace: fastPaceValue ? this.formatPaceValue(fastPaceValue, paceUnits) : null,
       });
     }
 
@@ -535,6 +570,55 @@ export class IntervalsClient {
     }
     // Default: just return the raw value
     return `${pace.toFixed(2)} ${units}`;
+  }
+
+  /**
+   * Normalize HR zones for an activity using zone boundaries from the activity
+   * and zone names from sport settings.
+   */
+  private normalizeActivityHRZones(
+    zoneBoundaries: number[] | undefined,
+    zoneNames: string[] | undefined,
+    maxHR: number | undefined
+  ): HRZone[] | undefined {
+    if (!zoneBoundaries || !zoneNames) {
+      return undefined;
+    }
+
+    return this.mergeHRZones(zoneBoundaries, zoneNames, maxHR);
+  }
+
+  /**
+   * Normalize power zones for an activity using zone boundaries from the activity
+   * and zone names from sport settings.
+   */
+  private normalizeActivityPowerZones(
+    zoneBoundaries: number[] | undefined,
+    zoneNames: string[] | undefined,
+    ftp: number | undefined
+  ): PowerZone[] | undefined {
+    if (!zoneBoundaries || !zoneNames || !ftp) {
+      return undefined;
+    }
+
+    return this.mergePowerZones(zoneBoundaries, zoneNames, ftp);
+  }
+
+  /**
+   * Normalize pace zones for an activity using zone boundaries from the activity
+   * and zone names from sport settings.
+   */
+  private normalizeActivityPaceZones(
+    zoneBoundaries: number[] | undefined,
+    zoneNames: string[] | undefined,
+    thresholdPace: number | undefined,
+    paceUnits: string | undefined
+  ): PaceZone[] | undefined {
+    if (!zoneBoundaries || !zoneNames || !thresholdPace || !paceUnits) {
+      return undefined;
+    }
+
+    return this.mergePaceZones(zoneBoundaries, zoneNames, thresholdPace, paceUnits);
   }
 
   private async fetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
@@ -604,7 +688,7 @@ export class IntervalsClient {
       );
     }
 
-    return filtered.map((a) => this.normalizeActivity(a));
+    return Promise.all(filtered.map((a) => this.normalizeActivity(a)));
   }
 
   /**
@@ -612,7 +696,7 @@ export class IntervalsClient {
    */
   async getActivity(activityId: string): Promise<NormalizedWorkout> {
     const activity = await this.fetch<IntervalsActivity>(`/activities/${activityId}`);
-    return this.normalizeActivity(activity);
+    return await this.normalizeActivity(activity);
   }
 
   /**
@@ -817,7 +901,11 @@ export class IntervalsClient {
     return metrics.length > 0 ? metrics[0] : null;
   }
 
-  private normalizeActivity(activity: IntervalsActivity): NormalizedWorkout {
+  private async normalizeActivity(activity: IntervalsActivity): Promise<NormalizedWorkout> {
+    // Fetch sport settings for zone normalization
+    const sportSettings = await this.getSportSettings();
+    const matchingSport = this.findMatchingSportSettings(activity.type, sportSettings);
+
     // Calculate coasting percentage if we have both values
     const coastingPercentage =
       activity.coasting_time && activity.moving_time
@@ -849,6 +937,38 @@ export class IntervalsClient {
 
     // Calculate distance in km
     const distanceKm = activity.distance ? activity.distance / 1000 : undefined;
+
+    // Normalize threshold pace if available
+    // Note: pace_units is not returned by the API for activities, so we use sport settings
+    let thresholdPaceHuman: string | undefined;
+    let thresholdPaceValue: number | undefined;
+    let paceUnits: string | undefined;
+    if (activity.threshold_pace) {
+      // Use pace_units from sport settings (API doesn't return it for activities)
+      paceUnits = matchingSport?.pace_units;
+      if (paceUnits) {
+        thresholdPaceValue = this.convertToPaceValue(activity.threshold_pace, paceUnits);
+        thresholdPaceHuman = this.formatPaceValue(thresholdPaceValue, paceUnits);
+      }
+    }
+
+    // Normalize zones using sport settings zone names
+    const hrZones = this.normalizeActivityHRZones(
+      activity.icu_hr_zones,
+      matchingSport?.hr_zone_names,
+      matchingSport?.max_hr
+    );
+    const powerZones = this.normalizeActivityPowerZones(
+      activity.icu_power_zones,
+      matchingSport?.power_zone_names,
+      activity.icu_ftp
+    );
+    const paceZones = this.normalizeActivityPaceZones(
+      activity.pace_zones,
+      matchingSport?.pace_zone_names,
+      thresholdPaceValue,
+      paceUnits
+    );
 
     return {
       id: activity.id,
@@ -929,10 +1049,14 @@ export class IntervalsClient {
       is_commute: activity.commute,
       is_race: activity.race,
 
-      // Zone thresholds
-      hr_zones: activity.icu_hr_zones,
-      power_zones: activity.icu_power_zones,
-      pace_zones: activity.pace_zones,
+      // Threshold pace
+      threshold_pace: thresholdPaceHuman,
+      pace_units: paceUnits,
+
+      // Zone thresholds (normalized with names)
+      hr_zones: hrZones,
+      power_zones: powerZones,
+      pace_zones: paceZones,
 
       // Time in zones
       power_zone_times: powerZoneTimes,
