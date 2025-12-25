@@ -60,7 +60,9 @@ export class CurrentTools {
    * Get today's completed workouts from Intervals.icu with matched Whoop data
    */
   async getTodaysCompletedWorkouts(): Promise<WorkoutWithWhoop[]> {
-    const today = getToday();
+    // Use athlete's timezone to determine "today"
+    const timezone = await this.intervals.getAthleteTimezone();
+    const today = getTodayInTimezone(timezone);
 
     try {
       // Fetch Intervals.icu activities
@@ -143,7 +145,9 @@ export class CurrentTools {
    * Returns a single merged array, preferring TrainerRoad for duplicates (has more detail).
    */
   async getTodaysPlannedWorkouts(): Promise<PlannedWorkout[]> {
-    const today = getToday();
+    // Use athlete's timezone to determine "today"
+    const timezone = await this.intervals.getAthleteTimezone();
+    const today = getTodayInTimezone(timezone);
 
     // Fetch from both sources in parallel
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
@@ -211,7 +215,9 @@ export class CurrentTools {
    * are included directly in the recovery and strain objects.
    */
   async getDailySummary(): Promise<DailySummary> {
-    const today = getToday();
+    // Use athlete's timezone to determine "today"
+    const timezone = await this.intervals.getAthleteTimezone();
+    const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
     const [recovery, strain, completedWorkouts, plannedWorkouts] = await Promise.all([
