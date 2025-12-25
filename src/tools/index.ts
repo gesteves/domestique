@@ -297,6 +297,8 @@ Fetches planned workouts for today from both TrainerRoad and Intervals.icu:
 - Expected duration and TSS
 - Workout type and discipline (Swim/Bike/Run)
 - General structure and goals of the workout (if available)
+- Note that planned workouts may not be in the order the user intends to do them;
+ask them for clarification if necessary
 
 Deduplicates workouts that appear in both calendars.
 Returns empty array if no workouts planned today.
@@ -388,6 +390,8 @@ Fetches a complete snapshot of today in a single call:
 - Completed workouts from Intervals.icu with matched Whoop data
 - Planned workouts from TrainerRoad and Intervals.icu
 - Summary stats: workouts completed/remaining, TSS completed/planned
+- Note that planned workouts may not be in the order the user intends to do them;
+ask them for clarification if necessary
 
 More efficient than calling individual tools when you need the full picture.
 For deeper analysis of any component, use the specific tool.
@@ -566,6 +570,8 @@ Fetches planned workouts for a future date range:
 - Default: next 7 days (max: 30 days)
 - Optional sport filter: cycling, running, swimming, etc.
 - Deduplicates workouts that appear in both calendars
+- Note that planned workouts may not be in the order the user intends to do them;
+ask them for clarification if necessary
 
 Returns:
 - Workout name and description
