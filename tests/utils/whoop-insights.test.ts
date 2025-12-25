@@ -31,9 +31,9 @@ describe('whoop-insights', () => {
 
   describe('getRecoveryLevelDescription', () => {
     it('should return Whoop official descriptions', () => {
-      expect(getRecoveryLevelDescription('SUFFICIENT')).toBe('Well recovered, ready to perform');
-      expect(getRecoveryLevelDescription('ADEQUATE')).toBe('Maintaining health, can handle moderate stress');
-      expect(getRecoveryLevelDescription('LOW')).toBe('Working hard to recover, needs rest');
+      expect(getRecoveryLevelDescription('SUFFICIENT')).toBe('Your body is well recovered and ready to perform. Whether it\'s at work or the gym, your body is signaling it can handle a strenuous day.');
+      expect(getRecoveryLevelDescription('ADEQUATE')).toBe('Your body is maintaining health. You may not need rest and can still handle a moderately strenuous day.');
+      expect(getRecoveryLevelDescription('LOW')).toBe('Your body is working hard to recover. Your body is signaling it needs an active rest day.');
     });
   });
 
@@ -58,9 +58,9 @@ describe('whoop-insights', () => {
 
   describe('getSleepPerformanceLevelDescription', () => {
     it('should return Whoop official descriptions', () => {
-      expect(getSleepPerformanceLevelDescription('OPTIMAL')).toBe('Got enough sleep to fully recover');
-      expect(getSleepPerformanceLevelDescription('SUFFICIENT')).toBe('Got adequate sleep for basic recovery');
-      expect(getSleepPerformanceLevelDescription('POOR')).toBe('Did not get enough sleep, recovery impacted');
+      expect(getSleepPerformanceLevelDescription('OPTIMAL')).toBe('You\'re getting most or all of your Sleep Need with consistent timing, high efficiency, and low sleep stress that best support recovery and long-term health.');
+      expect(getSleepPerformanceLevelDescription('SUFFICIENT')).toBe('Your sleep is generally workable for day-to-day functioning but not fully optimized for recovery or long-term health.');
+      expect(getSleepPerformanceLevelDescription('POOR')).toBe('You\'re meaningfully under-sleeping or your timing/quality is disrupted enough that it\'s likely to undermine your recovery and next-day performance.');
     });
   });
 
@@ -95,10 +95,10 @@ describe('whoop-insights', () => {
 
   describe('getStrainLevelDescription', () => {
     it('should return Whoop official descriptions', () => {
-      expect(getStrainLevelDescription('LIGHT')).toBe('Minimal exertion, encourages active recovery');
-      expect(getStrainLevelDescription('MODERATE')).toBe('Balances fitness gains and recovery');
-      expect(getStrainLevelDescription('HIGH')).toBe('Builds fitness, harder to recover next day');
-      expect(getStrainLevelDescription('ALL_OUT')).toBe('Significant exertion, risk for injury/overtraining');
+      expect(getStrainLevelDescription('LIGHT')).toBe('Minimal exertion is being put on the body, which encourages active recovery.');
+      expect(getStrainLevelDescription('MODERATE')).toBe('Moderate exertion is being put on the body, which balances fitness gains and recovery.');
+      expect(getStrainLevelDescription('HIGH')).toBe('Increased exertion which builds fitness gains, but makes it more difficult for your body to recover the next day.');
+      expect(getStrainLevelDescription('ALL_OUT')).toBe('Significant exertion which increases fitness gains, but puts your body at greater risk for injury or overtraining.');
     });
   });
 });
