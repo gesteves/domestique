@@ -21,7 +21,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   intensity_factor: 'Intensity Factor (IF)',
   trimp: 'Training Impulse',
   session_rpe: 'Session RPE = RPE × duration in minutes',
-  strain_score: 'Intervals.icu strain score (unrealted to Whoop\'s strain)',
+  strain_score: 'Intervals.icu strain score (unrelated to Whoop\'s strain)',
 
   // Power metrics
   normalized_power: 'Normalized Power (NP) in watts',
@@ -92,15 +92,10 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   is_race: 'Whether activity was marked as a race',
   workout_class: 'Workout classification: Endurance, Tempo, Threshold, VO2max, etc.',
 
-  // Zone thresholds
-  hr_zones: 'Heart rate zone boundaries in BPM at the time of the activity. May differ from the current heart rate zones in the athlete\'s profile.',
-  power_zones: 'Power zone boundaries as percentage of FTP at the time of the activity. May differ from the current power zones in the athlete\'s profile.',
-  pace_zones: 'Pace zone boundaries in seconds per km at the time of the activity. May differ from the current pace zones in the athlete\'s profile.',
-
-  // Time in zones
-  power_zone_times: 'Array of {zone_id, seconds} - time spent in each power zone.',
-  hr_zone_times: 'Array of seconds spent in each HR zone',
-  pace_zone_times: 'Array of seconds spent in each pace zone',
+  // Zone data (normalized with names, thresholds, and time in zones)
+  hr_zones: 'Array of heart rate zone objects. Each object contains: name (e.g., "Z1", "Z2"), low_bpm, high_bpm (null for highest zone), and time_in_zone (human-readable duration like "1:49:44"). These zones are from the time of the activity and may differ from current athlete profile zones.',
+  power_zones: 'Array of power zone objects. Each object contains: name (e.g., "Active Recovery", "Endurance"), low_percent, high_percent (null for highest zone), low_watts, high_watts (null for highest zone), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
+  pace_zones: 'Array of pace zone objects. Each object contains: name (e.g., "Easy", "Tempo"), low_percent, high_percent (null for highest zone), slow_pace (slower pace at low %), fast_pace (faster pace at high %), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
 
   // Polarization
   polarization_index: 'Training polarization index (0-2). Higher = more polarized (Z1 + Z5+ with little Z3-Z4)',
@@ -216,7 +211,7 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   max_hr: 'Maximum heart rate in BPM',
 
   // HR zones
-  hr_zones: 'Current heart rate zones for the athlete. Note that these may be different than the Whoop HR zones.',
+  hr_zones: 'Array of current heart rate zone objects for the athlete. Each object contains: name (e.g., "Z1", "Z2"), low_bpm, and high_bpm (null for highest zone). Note that these may be different than the Whoop HR zones, which use the Heart Rate Reserve (HRR) method.',
 
   // Pace thresholds
   threshold_pace: 'Threshold pace in the units specified by pace_units (e.g., 4.17 for MINS_KM = 4:10/km, or 120 for SECS_100M = 2:00/100m)',
@@ -224,11 +219,11 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   pace_units: 'Units for all pace values: MINS_KM (minutes per kilometer, running) or SECS_100M (seconds per 100 meters, swimming)',
 
   // Power zones
-  power_zones: 'Current power zones for the athlete',
-  indoor_power_zones: 'Current indoor-specific power zones for the athlete (only present if indoor_ftp differs from ftp)',
+  power_zones: 'Array of current power zone objects for the athlete. Each object contains: name (e.g., "Active Recovery", "Endurance"), low_percent, high_percent (null for highest zone), low_watts, and high_watts (null for highest zone).',
+  indoor_power_zones: 'Array of indoor-specific power zone objects for the athlete (only present if indoor_ftp differs from ftp). Same structure as power_zones.',
 
   // Pace zones
-  pace_zones: 'Current pace zones for the athlete',
+  pace_zones: 'Array of current pace zone objects for the athlete. Each object contains: name (e.g., "Easy", "Tempo"), low_percent, high_percent (null for highest zone), slow_pace (slower pace at low %), and fast_pace (faster pace at high %).',
 };
 
 export const INTERVALS_FIELD_DESCRIPTIONS = {
