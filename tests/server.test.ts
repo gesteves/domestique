@@ -31,20 +31,31 @@ vi.mock('../src/tools/index.js', () => ({
 }));
 
 // Mock MCP SDK
-vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
-  Server: vi.fn().mockImplementation(function() {
+vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
+  McpServer: vi.fn().mockImplementation(function() {
     return {
       setRequestHandler: vi.fn(),
       connect: vi.fn(),
+      close: vi.fn(),
     };
   }),
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: vi.fn().mockImplementation(function() {
+  StreamableHTTPServerTransport: vi.fn().mockImplementation(function(options?: any) {
+    // Call session initialized callback if provided
+    if (options?.onsessioninitialized) {
+      setTimeout(() => options.onsessioninitialized('test-session-id'), 0);
+    }
     return {
-      handleRequest: vi.fn(),
-      close: vi.fn(),
+      start: vi.fn(),
+      handleRequest: vi.fn().mockImplementation(async (req: any, res: any) => {
+        // Mock a successful response
+        if (!res.headersSent) {
+          res.status(200).json({ success: true });
+        }
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
       sessionId: 'test-session-id',
     };
   }),

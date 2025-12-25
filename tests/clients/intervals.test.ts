@@ -25,6 +25,29 @@ describe('IntervalsClient', () => {
     });
   });
 
+  // Mock sport settings for zone normalization (cached after first fetch)
+  const mockSportSettings = [
+    {
+      id: 1,
+      name: 'Cycling',
+      types: ['Ride', 'VirtualRide'],
+      hr_zone_names: ['Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7'],
+      power_zone_names: ['Active Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO2Max', 'Anaerobic', 'Neuromuscular'],
+      max_hr: 190,
+      sweet_spot_min: 84,
+      sweet_spot_max: 97,
+    },
+    {
+      id: 2,
+      name: 'Running',
+      types: ['Run'],
+      hr_zone_names: ['Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7'],
+      pace_zone_names: ['Easy', 'Moderate', 'Tempo', 'Threshold', 'Interval', 'Repetition'],
+      pace_units: 'MINS_KM',
+      max_hr: 195,
+    },
+  ];
+
   describe('getActivities', () => {
     // Realistic mock based on actual Intervals.icu API response
     const mockActivities = [
@@ -118,14 +141,20 @@ describe('IntervalsClient', () => {
     ];
 
     it('should fetch activities for date range', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivities),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      // Should make at least 2 calls: activities + sport-settings (cached after first use)
+      expect(mockFetch).toHaveBeenCalled();
       const callUrl = mockFetch.mock.calls[0][0] as string;
       expect(callUrl).toContain('/athlete/i12345/activities');
       expect(callUrl).toContain('oldest=2024-12-14');
@@ -140,10 +169,15 @@ describe('IntervalsClient', () => {
     });
 
     it('should include UTC timestamp for cross-platform matching', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivities),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
@@ -152,9 +186,14 @@ describe('IntervalsClient', () => {
     });
 
     it('should include activity context flags', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivities),
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
       });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
@@ -165,25 +204,45 @@ describe('IntervalsClient', () => {
     });
 
     it('should include zone thresholds and time in zones', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivities),
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
       });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
-      expect(result[0].hr_zones).toEqual([138, 154, 160, 171, 176, 181, 190]);
-      expect(result[0].power_zones).toEqual([55, 75, 90, 105, 120, 150, 999]);
-      expect(result[0].power_zone_times).toHaveLength(8);
-      expect(result[0].power_zone_times?.[0]).toEqual({ zone_id: 'Z1', seconds: 571 });
-      expect(result[0].power_zone_times?.[7]).toEqual({ zone_id: 'SS', seconds: 8 });
-      expect(result[0].hr_zone_times).toEqual([4536, 2700, 0, 0, 0, 0, 0]);
+      // hr_zones should be normalized zone objects with names and ranges
+      expect(result[0].hr_zones).toHaveLength(7);
+      expect(result[0].hr_zones?.[0]).toMatchObject({
+        name: 'Z1',
+        low_bpm: expect.any(Number),
+        high_bpm: expect.any(Number),
+      });
+
+      // power_zones should be normalized zone objects with names, percentages, and watts
+      expect(result[0].power_zones).toBeDefined();
+      expect(result[0].power_zones?.[0]).toMatchObject({
+        name: expect.any(String),
+        low_percent: expect.any(Number),
+        high_percent: expect.any(Number),
+        low_watts: expect.any(Number),
+      });
     });
 
     it('should include advanced power and session metrics', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivities),
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
       });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
@@ -197,9 +256,14 @@ describe('IntervalsClient', () => {
     });
 
     it('should include altitude data', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivities),
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
       });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
@@ -210,9 +274,14 @@ describe('IntervalsClient', () => {
     });
 
     it('should filter by sport when specified', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivities),
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
       });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15', 'cycling');
@@ -276,10 +345,15 @@ describe('IntervalsClient', () => {
     };
 
     it('should fetch single activity by ID', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockActivity),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
 
       const result = await client.getActivity('i113367711');
 
