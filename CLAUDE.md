@@ -203,4 +203,8 @@ curl -X POST http://localhost:3000/mcp \
 
 5. After completing any changes, restart the docker container with `docker compose restart domestique` if it's running, so the changes can be tested by the user.
 
-6. When making changes, ensure that @AGENTS.md and @README.md are up to date.
+6. When making changes, ensure that @README.md is up to date.
+
+7. When adding new tools or modifying existing ones, ensure that the tool descriptions and the field descriptions are up to date.
+
+8. Always ensure tests pass with `nvm use && npm test`; add new tests as needed.
