@@ -14,22 +14,22 @@ export type SleepPerformanceLevel = 'OPTIMAL' | 'SUFFICIENT' | 'POOR';
 
 // Whoop's official descriptions for each level
 const STRAIN_DESCRIPTIONS: Record<StrainLevel, string> = {
-  LIGHT: 'Minimal exertion, encourages active recovery',
-  MODERATE: 'Balances fitness gains and recovery',
-  HIGH: 'Builds fitness, harder to recover next day',
-  ALL_OUT: 'Significant exertion, risk for injury/overtraining',
+  LIGHT: 'Minimal exertion is being put on the body, which encourages active recovery.',
+  MODERATE: 'Moderate exertion is being put on the body, which balances fitness gains and recovery.',
+  HIGH: 'Increased exertion which builds fitness gains, but makes it more difficult for your body to recover the next day.',
+  ALL_OUT: 'Significant exertion which increases fitness gains, but puts your body at greater risk for injury or overtraining.',
 };
 
 const RECOVERY_DESCRIPTIONS: Record<RecoveryLevel, string> = {
-  SUFFICIENT: 'Well recovered, ready to perform',
-  ADEQUATE: 'Maintaining health, can handle moderate stress',
-  LOW: 'Working hard to recover, needs rest',
+  SUFFICIENT: 'Your body is well recovered and ready to perform. Whether it\'s at work or the gym, your body is signaling it can handle a strenuous day.',
+  ADEQUATE: 'Your body is maintaining health. You may not need rest and can still handle a moderately strenuous day.',
+  LOW: 'Your body is working hard to recover. Your body is signaling it needs an active rest day.',
 };
 
 const SLEEP_PERFORMANCE_DESCRIPTIONS: Record<SleepPerformanceLevel, string> = {
-  OPTIMAL: 'Got enough sleep to fully recover',
-  SUFFICIENT: 'Got adequate sleep for basic recovery',
-  POOR: 'Did not get enough sleep, recovery impacted',
+  OPTIMAL: 'You\'re getting most or all of your Sleep Need with consistent timing, high efficiency, and low sleep stress that best support recovery and long-term health.',
+  SUFFICIENT: 'Your sleep is generally workable for day-to-day functioning but not fully optimized for recovery or long-term health.',
+  POOR: 'You\'re meaningfully under-sleeping or your timing/quality is disrupted enough that it\'s likely to undermine your recovery and next-day performance.',
 };
 
 /**
