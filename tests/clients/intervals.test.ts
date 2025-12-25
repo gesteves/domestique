@@ -450,4 +450,297 @@ describe('IntervalsClient', () => {
       expect(result).toBeNull();
     });
   });
+
+  // ============================================
+  // Performance Curves
+  // ============================================
+
+  describe('getPowerCurves', () => {
+    const mockPowerCurvesResponse = {
+      after_kj: 0,
+      secs: [5, 30, 60, 300, 1200, 3600],
+      curves: [
+        {
+          id: 'i113367711',
+          start_date_local: '2025-12-22T16:54:12',
+          weight: 73.5,
+          watts: [850, 450, 350, 280, 260, 220],
+        },
+        {
+          id: 'i113367712',
+          start_date_local: '2025-12-20T14:30:00',
+          weight: 73.5,
+          watts: [800, 420, 340, 290, 270, 230],
+        },
+      ],
+    };
+
+    it('should fetch and transform power curves', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPowerCurvesResponse),
+      });
+
+      const result = await client.getPowerCurves('2025-12-01', '2025-12-22', 'Ride');
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('/activity-power-curves');
+      expect(callUrl).toContain('oldest=2025-12-01');
+      expect(callUrl).toContain('newest=2025-12-22');
+      expect(callUrl).toContain('type=Ride');
+
+      expect(result.durations).toEqual([5, 30, 60, 300, 1200, 3600]);
+      expect(result.activities).toHaveLength(2);
+    });
+
+    it('should include activity data with watts and W/kg', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPowerCurvesResponse),
+      });
+
+      const result = await client.getPowerCurves('2025-12-01', '2025-12-22');
+
+      const firstActivity = result.activities[0];
+      expect(firstActivity.activity_id).toBe('i113367711');
+      expect(firstActivity.date).toBe('2025-12-22T16:54:12');
+      expect(firstActivity.weight_kg).toBe(73.5);
+      expect(firstActivity.curve).toHaveLength(6);
+    });
+
+    it('should calculate watts per kg correctly', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPowerCurvesResponse),
+      });
+
+      const result = await client.getPowerCurves('2025-12-01', '2025-12-22');
+
+      const firstPoint = result.activities[0].curve[0];
+      expect(firstPoint.duration_seconds).toBe(5);
+      expect(firstPoint.duration_label).toBe('5s');
+      expect(firstPoint.watts).toBe(850);
+      // 850 / 73.5 ≈ 11.56
+      expect(firstPoint.watts_per_kg).toBeCloseTo(11.56, 1);
+    });
+
+    it('should format duration labels correctly', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPowerCurvesResponse),
+      });
+
+      const result = await client.getPowerCurves('2025-12-01', '2025-12-22');
+
+      const labels = result.activities[0].curve.map((p) => p.duration_label);
+      expect(labels).toEqual(['5s', '30s', '1min', '5min', '20min', '1hr']);
+    });
+
+    it('should pass custom durations when provided', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ secs: [5, 7200], curves: [] }),
+      });
+
+      await client.getPowerCurves('2025-12-01', '2025-12-22', 'Ride', [5, 7200]);
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      // URL encodes comma as %2C
+      expect(callUrl).toContain('secs=5%2C7200');
+    });
+  });
+
+  describe('getPaceCurves', () => {
+    const mockPaceCurvesResponse = {
+      distances: [400, 1000, 1609, 5000, 10000],
+      gap: false,
+      curves: [
+        {
+          id: 'i113367711',
+          start_date_local: '2025-12-22T07:00:00',
+          weight: 73.5,
+          secs: [72, 195, 320, 1020, 2100], // Time to cover each distance
+        },
+      ],
+    };
+
+    it('should fetch and transform pace curves', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPaceCurvesResponse),
+      });
+
+      const result = await client.getPaceCurves(
+        '2025-12-01',
+        '2025-12-22',
+        'Run',
+        [400, 1000, 1609, 5000, 10000]
+      );
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('/activity-pace-curves');
+      expect(callUrl).toContain('type=Run');
+      // URL encodes comma as %2C
+      expect(callUrl).toContain('distances=400%2C1000%2C1609%2C5000%2C10000');
+
+      expect(result.distances).toEqual([400, 1000, 1609, 5000, 10000]);
+      expect(result.gap_adjusted).toBe(false);
+      expect(result.activities).toHaveLength(1);
+    });
+
+    it('should format running pace correctly', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockPaceCurvesResponse),
+      });
+
+      const result = await client.getPaceCurves(
+        '2025-12-01',
+        '2025-12-22',
+        'Run',
+        [400, 1000, 1609, 5000, 10000]
+      );
+
+      const firstActivity = result.activities[0];
+      expect(firstActivity.curve[0].distance_meters).toBe(400);
+      expect(firstActivity.curve[0].distance_label).toBe('400m');
+      expect(firstActivity.curve[0].time_seconds).toBe(72);
+      // 72 seconds for 400m = 3:00/km pace
+      expect(firstActivity.curve[0].pace).toBe('3:00/km');
+    });
+
+    it('should format swimming pace correctly', async () => {
+      const mockSwimCurves = {
+        distances: [100, 200, 400],
+        gap: false,
+        curves: [
+          {
+            id: 'swim1',
+            start_date_local: '2025-12-22T07:00:00',
+            weight: 73.5,
+            secs: [90, 195, 420], // Time in seconds
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSwimCurves),
+      });
+
+      const result = await client.getPaceCurves(
+        '2025-12-01',
+        '2025-12-22',
+        'Swim',
+        [100, 200, 400]
+      );
+
+      const firstPoint = result.activities[0].curve[0];
+      expect(firstPoint.distance_meters).toBe(100);
+      expect(firstPoint.distance_label).toBe('100m');
+      // 90 seconds for 100m = 1:30/100m pace
+      expect(firstPoint.pace).toBe('1:30/100m');
+    });
+
+    it('should pass GAP parameter when specified', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ distances: [], gap: true, curves: [] }),
+      });
+
+      await client.getPaceCurves('2025-12-01', '2025-12-22', 'Run', [1000], true);
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('gap=true');
+    });
+  });
+
+  describe('getHRCurves', () => {
+    const mockHRCurvesResponse = {
+      secs: [5, 30, 60, 300, 1200, 3600],
+      curves: [
+        {
+          id: 'i113367711',
+          start_date_local: '2025-12-22T16:54:12',
+          weight: 73.5,
+          bpm: [185, 178, 172, 165, 158, 150],
+        },
+        {
+          id: 'i113367712',
+          start_date_local: '2025-12-20T14:30:00',
+          weight: 73.5,
+          bpm: [182, 175, 170, 162, 155, 148],
+        },
+      ],
+    };
+
+    it('should fetch and transform HR curves', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockHRCurvesResponse),
+      });
+
+      const result = await client.getHRCurves('2025-12-01', '2025-12-22');
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('/activity-hr-curves');
+      expect(callUrl).toContain('oldest=2025-12-01');
+      expect(callUrl).toContain('newest=2025-12-22');
+
+      expect(result.durations).toEqual([5, 30, 60, 300, 1200, 3600]);
+      expect(result.activities).toHaveLength(2);
+    });
+
+    it('should include activity HR data', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockHRCurvesResponse),
+      });
+
+      const result = await client.getHRCurves('2025-12-01', '2025-12-22');
+
+      const firstActivity = result.activities[0];
+      expect(firstActivity.activity_id).toBe('i113367711');
+      expect(firstActivity.date).toBe('2025-12-22T16:54:12');
+      expect(firstActivity.curve).toHaveLength(6);
+      expect(firstActivity.curve[0].bpm).toBe(185);
+    });
+
+    it('should format duration labels correctly', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockHRCurvesResponse),
+      });
+
+      const result = await client.getHRCurves('2025-12-01', '2025-12-22');
+
+      const labels = result.activities[0].curve.map((p) => p.duration_label);
+      expect(labels).toEqual(['5s', '30s', '1min', '5min', '20min', '1hr']);
+    });
+
+    it('should filter by sport type when specified', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockHRCurvesResponse),
+      });
+
+      await client.getHRCurves('2025-12-01', '2025-12-22', 'Ride');
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('type=Ride');
+    });
+
+    it('should pass custom durations when provided', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ secs: [5, 60], curves: [] }),
+      });
+
+      await client.getHRCurves('2025-12-01', '2025-12-22', undefined, [5, 60]);
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      // URL encodes comma as %2C
+      expect(callUrl).toContain('secs=5%2C60');
+    });
+  });
 });

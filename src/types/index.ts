@@ -506,3 +506,198 @@ export interface DailySummary {
   /** Total TSS from planned workouts */
   tss_planned: number;
 }
+
+// ============================================
+// Performance Curves
+// ============================================
+
+// Power curve data point for a specific duration
+export interface PowerCurvePoint {
+  duration_seconds: number;
+  duration_label: string; // e.g., "5s", "1min", "5min", "20min"
+  watts: number;
+  watts_per_kg: number;
+}
+
+// Per-activity power curve
+export interface ActivityPowerCurve {
+  activity_id: string;
+  date: string;
+  weight_kg: number;
+  curve: PowerCurvePoint[];
+}
+
+// Best value at a specific duration
+export interface PowerBest {
+  watts: number;
+  watts_per_kg: number;
+  activity_id: string;
+  date: string;
+}
+
+// Summary statistics for power curves - key durations
+export interface PowerCurveSummary {
+  best_5s: PowerBest | null;
+  best_30s: PowerBest | null;
+  best_1min: PowerBest | null;
+  best_5min: PowerBest | null;
+  best_20min: PowerBest | null;
+  best_60min: PowerBest | null;
+  best_2hr: PowerBest | null;
+  estimated_ftp: number | null; // 95% of best 20min
+}
+
+// Comparison between two periods for power curves
+export interface PowerCurveComparison {
+  duration_label: string;
+  current_watts: number;
+  previous_watts: number;
+  change_watts: number;
+  change_percent: number;
+  improved: boolean;
+}
+
+// Full power curves response
+export interface PowerCurvesResponse {
+  period_start: string;
+  period_end: string;
+  sport: string;
+  activity_count: number;
+  durations_analyzed: string[]; // Human-readable labels
+  summary: PowerCurveSummary;
+  // Comparison data (only present when compare_to_* params used)
+  comparison?: {
+    previous_period_start: string;
+    previous_period_end: string;
+    previous_activity_count: number;
+    changes: PowerCurveComparison[];
+  };
+}
+
+// Pace curve data point for a specific distance
+export interface PaceCurvePoint {
+  distance_meters: number;
+  distance_label: string; // e.g., "400m", "1km", "5km"
+  time_seconds: number;
+  pace: string; // Human-readable: "4:30/km" or "1:45/100m"
+}
+
+// Per-activity pace curve
+export interface ActivityPaceCurve {
+  activity_id: string;
+  date: string;
+  weight_kg: number;
+  curve: PaceCurvePoint[];
+}
+
+// Best value at a specific distance
+export interface PaceBest {
+  time_seconds: number;
+  pace: string;
+  activity_id: string;
+  date: string;
+}
+
+// Summary statistics for pace curves - key distances
+export interface PaceCurveSummary {
+  // Running-specific
+  best_400m: PaceBest | null;
+  best_1km: PaceBest | null;
+  best_mile: PaceBest | null;
+  best_5km: PaceBest | null;
+  best_10km: PaceBest | null;
+  best_half_marathon: PaceBest | null;
+  best_marathon: PaceBest | null;
+  // Swimming-specific
+  best_100m: PaceBest | null;
+  best_200m: PaceBest | null;
+  best_1500m: PaceBest | null;
+  best_half_iron_swim: PaceBest | null;
+  best_iron_swim: PaceBest | null;
+}
+
+// Comparison between two periods for pace curves
+export interface PaceCurveComparison {
+  distance_label: string;
+  current_seconds: number;
+  previous_seconds: number;
+  change_seconds: number;
+  change_percent: number;
+  improved: boolean; // For pace, improved = faster = lower time
+}
+
+// Full pace curves response
+export interface PaceCurvesResponse {
+  period_start: string;
+  period_end: string;
+  sport: string;
+  gap_adjusted: boolean;
+  activity_count: number;
+  distances_analyzed: string[];
+  summary: PaceCurveSummary;
+  // Comparison data (only present when compare_to_* params used)
+  comparison?: {
+    previous_period_start: string;
+    previous_period_end: string;
+    previous_activity_count: number;
+    changes: PaceCurveComparison[];
+  };
+}
+
+// HR curve data point for a specific duration
+export interface HRCurvePoint {
+  duration_seconds: number;
+  duration_label: string;
+  bpm: number;
+}
+
+// Per-activity HR curve
+export interface ActivityHRCurve {
+  activity_id: string;
+  date: string;
+  curve: HRCurvePoint[];
+}
+
+// Best value at a specific duration
+export interface HRBest {
+  bpm: number;
+  activity_id: string;
+  date: string;
+}
+
+// Summary statistics for HR curves - key durations
+export interface HRCurveSummary {
+  max_5s: HRBest | null;
+  max_30s: HRBest | null;
+  max_1min: HRBest | null;
+  max_5min: HRBest | null;
+  max_20min: HRBest | null;
+  max_60min: HRBest | null;
+  max_2hr: HRBest | null;
+}
+
+// Comparison between two periods for HR curves
+export interface HRCurveComparison {
+  duration_label: string;
+  current_bpm: number;
+  previous_bpm: number;
+  change_bpm: number;
+  change_percent: number;
+}
+
+// Full HR curves response
+export interface HRCurvesResponse {
+  period_start: string;
+  period_end: string;
+  sport: string | null;
+  activity_count: number;
+  durations_analyzed: string[];
+  summary: HRCurveSummary;
+  // Comparison data (only present when compare_to_* params used)
+  comparison?: {
+    previous_period_start: string;
+    previous_period_end: string;
+    previous_activity_count: number;
+    changes: HRCurveComparison[];
+  };
+}

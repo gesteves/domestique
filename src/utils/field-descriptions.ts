@@ -292,6 +292,138 @@ export const WEATHER_FIELD_DESCRIPTIONS = {
   weather_description: 'Weather summary for the activity. Null if weather data is unavailable (e.g., indoor activities).',
 };
 
+export const POWER_CURVE_FIELD_DESCRIPTIONS = {
+  // Response structure
+  period_start: 'Start date of analysis period (ISO 8601 YYYY-MM-DD)',
+  period_end: 'End date of analysis period (ISO 8601 YYYY-MM-DD)',
+  sport: 'Sport type analyzed (cycling)',
+  activity_count: 'Number of activities analyzed in this period',
+  durations_analyzed: 'Human-readable list of durations analyzed (e.g., ["5s", "1min", "5min", "20min"])',
+
+  // Curve point fields
+  duration_seconds: 'Duration in seconds for this power data point',
+  duration_label: 'Human-readable duration (e.g., "5s", "1min", "20min", "1hr")',
+  watts: 'Best power output in watts for this duration',
+  watts_per_kg: 'Power-to-weight ratio in watts per kilogram',
+
+  // Activity curve fields
+  activity_id: 'Unique ID of the activity in Intervals.icu',
+  date: 'Activity date (ISO 8601)',
+  weight_kg: 'Athlete weight in kilograms at time of activity',
+  curve: 'Array of power curve points for this activity',
+
+  // Summary fields (best values at key durations)
+  best_5s: 'Best 5-second power (neuromuscular/sprint power)',
+  best_30s: 'Best 30-second power (anaerobic capacity)',
+  best_1min: 'Best 1-minute power (anaerobic endurance)',
+  best_5min: 'Best 5-minute power (VO2max proxy)',
+  best_20min: 'Best 20-minute power (FTP proxy)',
+  best_60min: 'Best 60-minute power (endurance)',
+  best_2hr: 'Best 2-hour power (long endurance)',
+  estimated_ftp: 'Estimated FTP based on 95% of best 20-minute power, in watts',
+
+  // Comparison fields
+  comparison: 'Comparison data vs a previous period (only present when compare_to_* params used)',
+  previous_period_start: 'Start date of comparison period',
+  previous_period_end: 'End date of comparison period',
+  previous_activity_count: 'Number of activities in comparison period',
+  changes: 'Array of changes at each duration between periods',
+  current_watts: 'Power in current period',
+  previous_watts: 'Power in previous period',
+  change_watts: 'Absolute change in watts (current - previous)',
+  change_percent: 'Percentage change from previous period',
+  improved: 'Whether performance improved (true) or declined (false)',
+};
+
+export const PACE_CURVE_FIELD_DESCRIPTIONS = {
+  // Response structure
+  period_start: 'Start date of analysis period (ISO 8601 YYYY-MM-DD)',
+  period_end: 'End date of analysis period (ISO 8601 YYYY-MM-DD)',
+  sport: 'Sport type analyzed (running or swimming)',
+  gap_adjusted: 'Whether pace is gradient-adjusted (accounts for elevation changes). Only applicable for running.',
+  activity_count: 'Number of activities analyzed in this period',
+  distances_analyzed: 'Human-readable list of distances analyzed (e.g., ["400m", "1km", "5km"])',
+
+  // Curve point fields
+  distance_meters: 'Distance in meters for this pace data point',
+  distance_label: 'Human-readable distance (e.g., "400m", "1km", "5km", "mile")',
+  time_seconds: 'Best time in seconds to cover this distance',
+  pace: 'Pace in human-readable format: "min:ss/km" for running, "min:ss/100m" for swimming',
+
+  // Activity curve fields
+  activity_id: 'Unique ID of the activity in Intervals.icu',
+  date: 'Activity date (ISO 8601)',
+  weight_kg: 'Athlete weight in kilograms at time of activity',
+  curve: 'Array of pace curve points for this activity',
+
+  // Summary fields (best values at key distances)
+  // Running
+  best_400m: 'Best 400m time and pace (sprint/track)',
+  best_1km: 'Best 1km time and pace (middle distance)',
+  best_mile: 'Best mile time and pace',
+  best_5km: 'Best 5km time and pace (aerobic endurance)',
+  best_10km: 'Best 10km time and pace',
+  best_half_marathon: 'Best half marathon time and pace (21.1km)',
+  best_marathon: 'Best marathon time and pace (42.2km)',
+  // Swimming
+  best_100m: 'Best 100m time and pace (sprint)',
+  best_200m: 'Best 200m time and pace',
+  best_800m: 'Best 800m time and pace',
+  best_1500m: 'Best 1500m time and pace (Olympic distance)',
+  best_half_iron_swim: 'Best Half Ironman swim time and pace (1.9km)',
+  best_iron_swim: 'Best Ironman swim time and pace (3.8km)',
+
+  // Comparison fields
+  comparison: 'Comparison data vs a previous period (only present when compare_to_* params used)',
+  previous_period_start: 'Start date of comparison period',
+  previous_period_end: 'End date of comparison period',
+  previous_activity_count: 'Number of activities in comparison period',
+  changes: 'Array of changes at each distance between periods',
+  current_time_seconds: 'Time in current period',
+  previous_time_seconds: 'Time in previous period',
+  change_seconds: 'Absolute change in seconds (current - previous, negative = faster)',
+  change_percent: 'Percentage change from previous period (negative = faster)',
+  improved: 'Whether performance improved (true = faster) or declined (false = slower)',
+};
+
+export const HR_CURVE_FIELD_DESCRIPTIONS = {
+  // Response structure
+  period_start: 'Start date of analysis period (ISO 8601 YYYY-MM-DD)',
+  period_end: 'End date of analysis period (ISO 8601 YYYY-MM-DD)',
+  sport: 'Sport type analyzed (cycling, running, swimming, or null for all sports)',
+  activity_count: 'Number of activities analyzed in this period',
+  durations_analyzed: 'Human-readable list of durations analyzed (e.g., ["5s", "1min", "5min", "20min"])',
+
+  // Curve point fields
+  duration_seconds: 'Duration in seconds for this HR data point',
+  duration_label: 'Human-readable duration (e.g., "5s", "1min", "20min", "1hr")',
+  bpm: 'Maximum sustained heart rate in beats per minute for this duration',
+
+  // Activity curve fields
+  activity_id: 'Unique ID of the activity in Intervals.icu',
+  date: 'Activity date (ISO 8601)',
+  curve: 'Array of HR curve points for this activity',
+
+  // Summary fields (max values at key durations)
+  max_1s: 'Maximum 1-second HR (peak HR)',
+  max_5s: 'Maximum 5-second sustained HR',
+  max_1min: 'Maximum 1-minute sustained HR',
+  max_5min: 'Maximum 5-minute sustained HR',
+  max_20min: 'Maximum 20-minute sustained HR (threshold proxy)',
+  max_2hr: 'Maximum 2-hour sustained HR (endurance)',
+
+  // Comparison fields
+  comparison: 'Comparison data vs a previous period (only present when compare_to_* params used)',
+  previous_period_start: 'Start date of comparison period',
+  previous_period_end: 'End date of comparison period',
+  previous_activity_count: 'Number of activities in comparison period',
+  changes: 'Array of changes at each duration between periods',
+  current_bpm: 'HR in current period',
+  previous_bpm: 'HR in previous period',
+  change_bpm: 'Absolute change in BPM (current - previous)',
+  change_percent: 'Percentage change from previous period',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
@@ -301,7 +433,10 @@ type FieldCategory =
   | 'athlete_profile'
   | 'intervals'
   | 'notes'
-  | 'weather';
+  | 'weather'
+  | 'power_curve'
+  | 'pace_curve'
+  | 'hr_curve';
 
 /**
  * Get descriptions for a specific category
@@ -326,6 +461,12 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return NOTES_FIELD_DESCRIPTIONS;
     case 'weather':
       return WEATHER_FIELD_DESCRIPTIONS;
+    case 'power_curve':
+      return POWER_CURVE_FIELD_DESCRIPTIONS;
+    case 'pace_curve':
+      return PACE_CURVE_FIELD_DESCRIPTIONS;
+    case 'hr_curve':
+      return HR_CURVE_FIELD_DESCRIPTIONS;
   }
 }
 

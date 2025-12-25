@@ -26,6 +26,11 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time.
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, etc.
 
+### Performance Curves
+- `get_power_curve` - Cycling power curve analysis showing best watts at various durations (5s, 30s, 1min, 5min, 20min, 60min). Includes W/kg, estimated FTP, and period comparison.
+- `get_pace_curve` - Running/swimming pace curve analysis showing best times at key distances. For running: 400m, 1km, mile, 5km, 10km. For swimming: 100m, 200m, 400m, 800m, 1500m. Includes gradient-adjusted pace (GAP) option.
+- `get_hr_curve` - Heart rate curve analysis showing max sustained HR at various durations. Works for all sports.
+
 ### Workout Analysis
 - `get_workout_intervals` - Detailed interval breakdown for a specific workout including power, HR, cadence, and timing data.
 - `get_workout_notes` - Notes and comments written by the athlete about a specific workout in Intervals.icu.
@@ -268,3 +273,7 @@ Once connected, you can ask Claude:
 - "Show me my workouts from last Friday"
 - "How many workouts did I complete in the last 2 weeks?"
 - "What was my training load in the last 42 days?"
+- "What's my power curve for the last 90 days?"
+- "How has my 5-minute power improved compared to last quarter?"
+- "Show me my running pace curve - what's my best 5km time?"
+- "Compare my cycling power from the last 3 months vs the previous 3 months"

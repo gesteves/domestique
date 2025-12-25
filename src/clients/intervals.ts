@@ -19,6 +19,12 @@ import type {
   WorkoutIntervalsResponse,
   WorkoutNote,
   WorkoutNotesResponse,
+  PowerCurvePoint,
+  ActivityPowerCurve,
+  PaceCurvePoint,
+  ActivityPaceCurve,
+  HRCurvePoint,
+  ActivityHRCurve,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
@@ -270,6 +276,48 @@ interface IntervalsRawMessage {
   deleted: string | null;
   attachment_url?: string | null;
   attachment_mime_type?: string | null;
+}
+
+// ============================================
+// Raw API response types for performance curves
+// ============================================
+
+interface RawActivityPowerCurve {
+  id: string;
+  start_date_local: string;
+  weight: number;
+  watts: number[];
+}
+
+interface RawPowerCurvesResponse {
+  after_kj: number;
+  secs: number[];
+  curves: RawActivityPowerCurve[];
+}
+
+interface RawActivityPaceCurve {
+  id: string;
+  start_date_local: string;
+  weight: number;
+  secs: number[]; // Time to cover each distance
+}
+
+interface RawPaceCurvesResponse {
+  distances: number[]; // meters
+  gap: boolean;
+  curves: RawActivityPaceCurve[];
+}
+
+interface RawActivityHRCurve {
+  id: string;
+  start_date_local: string;
+  weight: number;
+  bpm: number[];
+}
+
+interface RawHRCurvesResponse {
+  secs: number[];
+  curves: RawActivityHRCurve[];
 }
 
 export class IntervalsClient {
@@ -1314,5 +1362,213 @@ export class IntervalsClient {
       acwr: Math.round(acwr * 100) / 100,
       acwr_status: acwrStatus,
     };
+  }
+
+  // ============================================
+  // Performance Curves
+  // ============================================
+
+  /**
+   * Format duration in seconds to human-readable label.
+   * e.g., 5 -> "5s", 60 -> "1min", 3600 -> "1hr"
+   */
+  private formatDurationLabel(seconds: number): string {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) {
+      const mins = Math.floor(seconds / 60);
+      return `${mins}min`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    return `${hours}hr`;
+  }
+
+  /**
+   * Format distance in meters to human-readable label.
+   * e.g., 400 -> "400m", 1000 -> "1km", 1609 -> "1mi"
+   */
+  private formatDistanceLabel(meters: number): string {
+    if (meters === 1609 || meters === 1610) return '1mi';
+    if (meters >= 1000) {
+      const km = meters / 1000;
+      if (Number.isInteger(km)) return `${km}km`;
+      return `${km.toFixed(1)}km`;
+    }
+    return `${meters}m`;
+  }
+
+  /**
+   * Format time in seconds to pace string.
+   * For running: min:ss/km
+   * For swimming: min:ss/100m
+   */
+  private formatPaceFromTime(
+    timeSeconds: number,
+    distanceMeters: number,
+    isSwimming: boolean
+  ): string {
+    if (isSwimming) {
+      // Seconds per 100m
+      const per100m = (timeSeconds / distanceMeters) * 100;
+      const mins = Math.floor(per100m / 60);
+      const secs = Math.round(per100m % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}/100m`;
+    } else {
+      // Minutes per km
+      const perKm = (timeSeconds / distanceMeters) * 1000;
+      const mins = Math.floor(perKm / 60);
+      const secs = Math.round(perKm % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}/km`;
+    }
+  }
+
+  /**
+   * Get power curves for activities in a date range.
+   * Returns best power at each duration for each activity.
+   */
+  async getPowerCurves(
+    startDate: string,
+    endDate: string,
+    type?: string,
+    secs?: number[]
+  ): Promise<{
+    durations: number[];
+    activities: ActivityPowerCurve[];
+  }> {
+    const params: Record<string, string> = {
+      oldest: startDate,
+      newest: endDate,
+    };
+
+    if (type) {
+      params.type = type;
+    }
+
+    if (secs && secs.length > 0) {
+      params.secs = secs.join(',');
+    }
+
+    const response = await this.fetch<RawPowerCurvesResponse>(
+      '/activity-power-curves',
+      params
+    );
+
+    const durations = response.secs;
+    const activities: ActivityPowerCurve[] = response.curves.map((curve) => ({
+      activity_id: curve.id,
+      date: curve.start_date_local,
+      weight_kg: curve.weight,
+      curve: curve.watts.map((watts, index) => ({
+        duration_seconds: durations[index],
+        duration_label: this.formatDurationLabel(durations[index]),
+        watts,
+        watts_per_kg:
+          curve.weight > 0 ? Math.round((watts / curve.weight) * 100) / 100 : 0,
+      })),
+    }));
+
+    return { durations, activities };
+  }
+
+  /**
+   * Get pace curves for activities in a date range.
+   * Returns best time at each distance for each activity.
+   */
+  async getPaceCurves(
+    startDate: string,
+    endDate: string,
+    type: string,
+    distances: number[],
+    gap?: boolean
+  ): Promise<{
+    distances: number[];
+    gap_adjusted: boolean;
+    activities: ActivityPaceCurve[];
+  }> {
+    const params: Record<string, string> = {
+      oldest: startDate,
+      newest: endDate,
+      type,
+      distances: distances.join(','),
+    };
+
+    if (gap !== undefined) {
+      params.gap = String(gap);
+    }
+
+    const response = await this.fetch<RawPaceCurvesResponse>(
+      '/activity-pace-curves',
+      params
+    );
+
+    const responseDistances = response.distances;
+    const isSwimming = type === 'Swim' || type === 'OpenWaterSwim';
+
+    const activities: ActivityPaceCurve[] = response.curves.map((curve) => ({
+      activity_id: curve.id,
+      date: curve.start_date_local,
+      weight_kg: curve.weight,
+      // Filter to only include distances where we have time data
+      curve: curve.secs.map((timeSeconds, index) => ({
+        distance_meters: responseDistances[index],
+        distance_label: this.formatDistanceLabel(responseDistances[index]),
+        time_seconds: timeSeconds,
+        pace: this.formatPaceFromTime(
+          timeSeconds,
+          responseDistances[index],
+          isSwimming
+        ),
+      })),
+    }));
+
+    return {
+      distances: responseDistances,
+      gap_adjusted: response.gap,
+      activities,
+    };
+  }
+
+  /**
+   * Get HR curves for activities in a date range.
+   * Returns max sustained HR at each duration for each activity.
+   */
+  async getHRCurves(
+    startDate: string,
+    endDate: string,
+    type?: string,
+    secs?: number[]
+  ): Promise<{
+    durations: number[];
+    activities: ActivityHRCurve[];
+  }> {
+    const params: Record<string, string> = {
+      oldest: startDate,
+      newest: endDate,
+    };
+
+    if (type) {
+      params.type = type;
+    }
+
+    if (secs && secs.length > 0) {
+      params.secs = secs.join(',');
+    }
+
+    const response = await this.fetch<RawHRCurvesResponse>(
+      '/activity-hr-curves',
+      params
+    );
+
+    const durations = response.secs;
+    const activities: ActivityHRCurve[] = response.curves.map((curve) => ({
+      activity_id: curve.id,
+      date: curve.start_date_local,
+      curve: curve.bpm.map((bpm, index) => ({
+        duration_seconds: durations[index],
+        duration_label: this.formatDurationLabel(durations[index]),
+        bpm,
+      })),
+    }));
+
+    return { durations, activities };
   }
 }

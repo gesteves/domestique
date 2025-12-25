@@ -893,5 +893,204 @@ Returns null if weather data is not available.
         }
       )
     );
+
+    // ============================================
+    // Performance Curves
+    // ============================================
+
+    server.tool(
+      'get_power_curve',
+      `<usecase>
+Use when the user asks about:
+- Cycling power curve or power profile
+- Best power at specific durations (5s, 1min, 5min, 20min, etc.)
+- Power improvements or changes over time
+- Comparing power between two time periods
+- W/kg analysis
+- FTP estimation from power data
+
+Do NOT use for:
+- Running or swimming (use get_pace_curve instead - pace is the primary metric)
+- Current/today's workout data (use get_todays_completed_workouts)
+</usecase>
+
+<instructions>
+Fetches cycling power curves showing best power output at various durations:
+- Returns per-activity curves with watts and W/kg
+- Summary includes best values at key durations (5s, 30s, 1min, 5min, 20min, 60min)
+- Includes estimated FTP (95% of best 20min power)
+- Only for cycling activities (Ride, VirtualRide)
+- Custom durations can be specified (e.g., 7200 for 2-hour power)
+- Comparison mode: provide compare_to_start and compare_to_end to see changes vs a previous period
+
+Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month").
+</instructions>`,
+      {
+        start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
+        end_date: z.string().optional().describe('End of analysis period (defaults to today)'),
+        durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200, 7200])'),
+        compare_to_start: z.string().optional().describe('Start of comparison period for before/after analysis'),
+        compare_to_end: z.string().optional().describe('End of comparison period'),
+      },
+      withToolResponse(
+        async (args: { start_date: string; end_date?: string; durations?: number[]; compare_to_start?: string; compare_to_end?: string }) =>
+          this.historicalTools.getPowerCurve(args),
+        {
+          fieldDescriptions: getFieldDescriptions('power_curve'),
+          getMessage: (data) => {
+            if (!data || data.activity_count === 0) {
+              return 'No cycling activities found in this period.';
+            }
+            const parts = [`Analyzed ${data.activity_count} cycling activities from ${data.period_start} to ${data.period_end}.`];
+            if (data.summary.best_20min) {
+              parts.push(`Best 20min: ${data.summary.best_20min.watts}W (${data.summary.best_20min.watts_per_kg} W/kg).`);
+            }
+            if (data.summary.estimated_ftp) {
+              parts.push(`Estimated FTP: ${data.summary.estimated_ftp}W.`);
+            }
+            if (data.comparison) {
+              const improved = data.comparison.changes.filter((c: { improved: boolean }) => c.improved).length;
+              parts.push(`Compared to previous period: ${improved}/${data.comparison.changes.length} durations improved.`);
+            }
+            return parts.join(' ');
+          },
+          getNextActions: (data) => {
+            const actions = ['Use get_training_load_trends to correlate power with fitness'];
+            if (data && data.activity_count > 0) {
+              actions.push('Use get_workout_history to see the workouts that produced these bests');
+            }
+            return actions;
+          },
+        }
+      )
+    );
+
+    server.tool(
+      'get_pace_curve',
+      `<usecase>
+Use when the user asks about:
+- Running pace curve or pace profile
+- Swimming pace or split times
+- Best times at specific distances (400m, 1km, 5km, etc.)
+- Pace improvements or changes over time
+- Comparing pace between two time periods
+
+Do NOT use for:
+- Cycling (use get_power_curve instead)
+
+**IMPORTANT**: Pace curves are the PRIMARY metric for analyzing running and swimming performance.
+Running power curves exist but often have incomplete data - use pace curves for running/swimming.
+</usecase>
+
+<instructions>
+Fetches pace curves showing best times at various distances:
+- For running: analyzes 400m, 1km, mile, 5km, 10km distances
+- For swimming: analyzes 100m, 200m, 400m, 800m, 1500m distances
+- Returns pace in appropriate units (min/km for running, /100m for swimming)
+- GAP (gradient-adjusted pace) available for running to normalize for hills
+- Custom distances can be specified (e.g., [800, 3000])
+- Comparison mode: provide compare_to_start and compare_to_end to see changes vs a previous period
+
+Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month").
+</instructions>`,
+      {
+        start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
+        end_date: z.string().optional().describe('End of analysis period (defaults to today)'),
+        sport: z.enum(['running', 'swimming']).describe('Sport to analyze'),
+        distances: z.array(z.number()).optional().describe('Custom distances in meters (e.g., [400, 1000, 5000])'),
+        gap: z.boolean().optional().describe('Use gradient-adjusted pace for running (normalizes for hills)'),
+        compare_to_start: z.string().optional().describe('Start of comparison period for before/after analysis'),
+        compare_to_end: z.string().optional().describe('End of comparison period'),
+      },
+      withToolResponse(
+        async (args: { start_date: string; end_date?: string; sport: 'running' | 'swimming'; distances?: number[]; gap?: boolean; compare_to_start?: string; compare_to_end?: string }) =>
+          this.historicalTools.getPaceCurve(args),
+        {
+          fieldDescriptions: getFieldDescriptions('pace_curve'),
+          getMessage: (data) => {
+            if (!data || data.activity_count === 0) {
+              return `No ${data?.sport || ''} activities found in this period.`;
+            }
+            const parts = [`Analyzed ${data.activity_count} ${data.sport} activities from ${data.period_start} to ${data.period_end}.`];
+            if (data.sport === 'running' && data.summary.best_5km) {
+              parts.push(`Best 5km: ${Math.floor(data.summary.best_5km.time_seconds / 60)}:${(data.summary.best_5km.time_seconds % 60).toFixed(0).padStart(2, '0')} (${data.summary.best_5km.pace}).`);
+            }
+            if (data.sport === 'swimming' && data.summary.best_100m) {
+              parts.push(`Best 100m: ${Math.floor(data.summary.best_100m.time_seconds / 60)}:${(data.summary.best_100m.time_seconds % 60).toFixed(0).padStart(2, '0')} (${data.summary.best_100m.pace}).`);
+            }
+            if (data.comparison) {
+              const improved = data.comparison.changes.filter((c: { improved: boolean }) => c.improved).length;
+              parts.push(`Compared to previous period: ${improved}/${data.comparison.changes.length} distances improved.`);
+            }
+            return parts.join(' ');
+          },
+          getNextActions: (data) => {
+            const actions = ['Use get_training_load_trends to correlate pace with fitness'];
+            if (data && data.activity_count > 0) {
+              actions.push('Use get_workout_history to see the workouts that produced these bests');
+            }
+            return actions;
+          },
+        }
+      )
+    );
+
+    server.tool(
+      'get_hr_curve',
+      `<usecase>
+Use when the user asks about:
+- Heart rate curve or HR profile
+- Maximum sustainable heart rate at various durations
+- HR changes over time
+- Comparing HR between two time periods
+- Cardiac drift analysis
+
+Works for all sports (cycling, running, swimming, etc.)
+</usecase>
+
+<instructions>
+Fetches HR curves showing maximum sustained heart rate at various durations:
+- Returns per-activity curves with BPM at each duration
+- Summary includes max values at key durations (5s, 30s, 1min, 5min, 20min, 60min)
+- Can be filtered by sport or show all activities
+- Custom durations can be specified
+- Comparison mode: provide compare_to_start and compare_to_end to see changes vs a previous period
+
+Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month").
+</instructions>`,
+      {
+        start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
+        end_date: z.string().optional().describe('End of analysis period (defaults to today)'),
+        sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport (omit for all sports)'),
+        durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200])'),
+        compare_to_start: z.string().optional().describe('Start of comparison period for before/after analysis'),
+        compare_to_end: z.string().optional().describe('End of comparison period'),
+      },
+      withToolResponse(
+        async (args: { start_date: string; end_date?: string; sport?: 'cycling' | 'running' | 'swimming'; durations?: number[]; compare_to_start?: string; compare_to_end?: string }) =>
+          this.historicalTools.getHRCurve(args),
+        {
+          fieldDescriptions: getFieldDescriptions('hr_curve'),
+          getMessage: (data) => {
+            if (!data || data.activity_count === 0) {
+              return 'No activities found in this period.';
+            }
+            const sportLabel = data.sport ? `${data.sport} ` : '';
+            const parts = [`Analyzed ${data.activity_count} ${sportLabel}activities from ${data.period_start} to ${data.period_end}.`];
+            if (data.summary.max_20min) {
+              parts.push(`Max 20min HR: ${data.summary.max_20min.bpm} BPM.`);
+            }
+            if (data.comparison) {
+              parts.push(`Compared to previous period: ${data.comparison.changes.length} durations analyzed.`);
+            }
+            return parts.join(' ');
+          },
+          getNextActions: () => [
+            'Use get_training_load_trends to correlate HR with fitness',
+            'Use get_recovery_trends to see how HR relates to recovery',
+          ],
+        }
+      )
+    );
   }
 }
