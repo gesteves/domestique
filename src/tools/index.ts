@@ -405,7 +405,7 @@ For deeper analysis of any component, use the specific tool.
             if (data.strain) {
               parts.push(`Strain: ${data.strain.strain_score.toFixed(1)} (${data.strain.strain_level})`);
             }
-            parts.push(`Completed: ${data.workouts_completed}/${data.workouts_completed + data.workouts_remaining} workouts`);
+            parts.push(`Completed: ${data.workouts_completed} workout${data.workouts_completed !== 1 ? 's' : ''}, Planned: ${data.workouts_planned} workout${data.workouts_planned !== 1 ? 's' : ''}`);
             return parts.join('. ') + '.';
           },
           getNextActions: (data) => {

@@ -256,7 +256,7 @@ export class CurrentTools {
       completed_workouts: completedWorkouts,
       planned_workouts: plannedWorkouts,
       workouts_completed: completedWorkouts.length,
-      workouts_remaining: plannedWorkouts.length,
+      workouts_planned: plannedWorkouts.length,
       tss_completed: Math.round(tssCompleted),
       tss_planned: Math.round(tssPlanned),
     };

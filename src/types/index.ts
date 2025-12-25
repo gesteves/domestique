@@ -498,8 +498,8 @@ export interface DailySummary {
   planned_workouts: PlannedWorkout[];
   /** Number of workouts completed today */
   workouts_completed: number;
-  /** Number of planned workouts remaining */
-  workouts_remaining: number;
+  /** Number of workouts planned for today */
+  workouts_planned: number;
   /** Total TSS from completed workouts */
   tss_completed: number;
   /** Total TSS from planned workouts */
