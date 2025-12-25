@@ -1,6 +1,6 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
-import { parseDateString, getToday } from '../utils/date-parser.js';
+import { parseDateString, getToday, parseDateStringInTimezone, getTodayInTimezone } from '../utils/date-parser.js';
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import { parseDurationToHours } from '../utils/format-units.js';
 import type {
@@ -30,8 +30,12 @@ export class HistoricalTools {
   async getWorkoutHistory(
     params: GetWorkoutHistoryInput
   ): Promise<WorkoutWithWhoop[]> {
-    const startDate = parseDateString(params.start_date);
-    const endDate = params.end_date ? parseDateString(params.end_date) : getToday();
+    // Use athlete's timezone for date parsing
+    const timezone = await this.intervals.getAthleteTimezone();
+    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const endDate = params.end_date
+      ? parseDateStringInTimezone(params.end_date, timezone)
+      : getTodayInTimezone(timezone);
 
     try {
       // Fetch Intervals.icu activities
@@ -114,8 +118,12 @@ export class HistoricalTools {
       };
     }
 
-    const startDate = parseDateString(params.start_date);
-    const endDate = params.end_date ? parseDateString(params.end_date) : getToday();
+    // Use athlete's timezone for date parsing
+    const timezone = await this.intervals.getAthleteTimezone();
+    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const endDate = params.end_date
+      ? parseDateStringInTimezone(params.end_date, timezone)
+      : getTodayInTimezone(timezone);
 
     try {
       const data = await this.whoop.getRecoveries(startDate, endDate);
