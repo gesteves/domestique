@@ -182,6 +182,7 @@ export class WhoopClient {
   private tokenExpiresAt: number = 0;
   private refreshToken: string;
   private timezoneGetter: (() => Promise<string>) | null = null;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(config: WhoopConfig) {
     this.config = config;
@@ -219,8 +220,16 @@ export class WhoopClient {
    * Get a valid access token, refreshing if necessary.
    * Tries Redis cache first, then falls back to refresh.
    * Includes retry logic for transient failures.
+   * Uses a mutex to prevent concurrent refresh attempts.
    */
   private async ensureValidToken(): Promise<void> {
+    // If a refresh is already in progress, wait for it
+    if (this.refreshPromise) {
+      console.log('[Whoop] Token refresh already in progress, waiting...');
+      await this.refreshPromise;
+      return;
+    }
+
     // First, try to get a cached access token from Redis
     const cachedToken = await getWhoopAccessToken();
     if (cachedToken) {
@@ -236,6 +245,22 @@ export class WhoopClient {
       return;
     }
 
+    // Start the refresh process and store the promise
+    this.refreshPromise = this.performTokenRefresh();
+
+    try {
+      await this.refreshPromise;
+    } finally {
+      // Clear the promise when done (success or failure)
+      this.refreshPromise = null;
+    }
+  }
+
+  /**
+   * Perform the actual token refresh with retry logic.
+   * This is separated from ensureValidToken to allow mutex-based concurrency control.
+   */
+  private async performTokenRefresh(): Promise<void> {
     // Try to get refresh token from Redis, fall back to config
     const storedRefreshToken = await getWhoopRefreshToken();
     const refreshToken = storedRefreshToken ?? this.refreshToken;
