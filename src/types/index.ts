@@ -92,15 +92,10 @@ export interface NormalizedWorkout {
   threshold_pace?: string; // Human-readable, e.g., "4:00/km"
   pace_units?: string; // "MINS_KM", "SECS_100M", etc.
 
-  // Zone thresholds used for this activity (normalized with names)
+  // Zone thresholds used for this activity (normalized with names and time in zone)
   hr_zones?: HRZone[];
   power_zones?: PowerZone[];
   pace_zones?: PaceZone[];
-
-  // Time in zones (seconds)
-  power_zone_times?: ZoneTime[];
-  hr_zone_times?: number[]; // seconds per HR zone
-  pace_zone_times?: number[]; // seconds per pace zone
 
   // Advanced power metrics
   joules_above_ftp?: number;
@@ -300,6 +295,7 @@ export interface HRZone {
   name: string;
   low_bpm: number;
   high_bpm: number | null; // null for highest zone (unbounded)
+  time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
 }
 
 // Power zone with name, percentages, and absolute values
@@ -309,6 +305,7 @@ export interface PowerZone {
   high_percent: number | null; // null for highest zone (unbounded)
   low_watts: number;
   high_watts: number | null;
+  time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
 }
 
 // Pace zone with name, percentages, and human-readable format
@@ -320,6 +317,7 @@ export interface PaceZone {
   high_percent: number | null;
   slow_pace: string | null; // e.g., "5:30/km" or null if unbounded
   fast_pace: string | null; // e.g., "4:30/km" or null if unbounded
+  time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
 }
 
 // Sport-specific settings
@@ -329,6 +327,8 @@ export interface SportSettings {
   // Power thresholds
   ftp?: number;
   indoor_ftp?: number; // Only included if different from ftp
+  sweet_spot_min?: number; // Sweet spot lower bound (% of FTP)
+  sweet_spot_max?: number; // Sweet spot upper bound (% of FTP)
 
   // Heart rate thresholds
   lthr?: number;

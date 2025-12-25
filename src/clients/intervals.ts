@@ -13,6 +13,7 @@ import type {
   HRZone,
   PowerZone,
   PaceZone,
+  ZoneTime,
   WorkoutInterval,
   IntervalGroup,
   WorkoutIntervalsResponse,
@@ -50,6 +51,8 @@ interface IntervalsSportSettings {
   types: string[];
   ftp?: number;
   indoor_ftp?: number;
+  sweet_spot_min?: number;
+  sweet_spot_max?: number;
   lthr?: number;
   max_hr?: number;
   hr_zones?: number[];
@@ -343,9 +346,13 @@ export class IntervalsClient {
    * Returns the first matching sport settings or null if not found.
    */
   private findMatchingSportSettings(
-    activityType: string,
+    activityType: string | undefined,
     sportSettings: IntervalsSportSettings[]
   ): IntervalsSportSettings | null {
+    if (!activityType) {
+      return null;
+    }
+
     // Normalize activity type for matching (e.g., "VirtualRide" → "Ride")
     const normalizedType = activityType.replace(/^Virtual/, '');
 
@@ -374,6 +381,14 @@ export class IntervalsClient {
       if (settings.indoor_ftp && settings.indoor_ftp !== settings.ftp) {
         result.indoor_ftp = settings.indoor_ftp;
       }
+    }
+
+    // Sweet spot
+    if (settings.sweet_spot_min !== undefined) {
+      result.sweet_spot_min = settings.sweet_spot_min;
+    }
+    if (settings.sweet_spot_max !== undefined) {
+      result.sweet_spot_max = settings.sweet_spot_max;
     }
 
     // Heart rate thresholds
@@ -579,13 +594,25 @@ export class IntervalsClient {
   private normalizeActivityHRZones(
     zoneBoundaries: number[] | undefined,
     zoneNames: string[] | undefined,
-    maxHR: number | undefined
+    maxHR: number | undefined,
+    zoneTimes: number[] | undefined
   ): HRZone[] | undefined {
     if (!zoneBoundaries || !zoneNames) {
       return undefined;
     }
 
-    return this.mergeHRZones(zoneBoundaries, zoneNames, maxHR);
+    const zones = this.mergeHRZones(zoneBoundaries, zoneNames, maxHR);
+
+    // Merge in time data if available
+    if (zoneTimes) {
+      zones.forEach((zone, index) => {
+        if (index < zoneTimes.length) {
+          zone.time_in_zone = formatDuration(zoneTimes[index]);
+        }
+      });
+    }
+
+    return zones;
   }
 
   /**
@@ -595,13 +622,46 @@ export class IntervalsClient {
   private normalizeActivityPowerZones(
     zoneBoundaries: number[] | undefined,
     zoneNames: string[] | undefined,
-    ftp: number | undefined
+    ftp: number | undefined,
+    zoneTimes: ZoneTime[] | undefined,
+    sweetSpotMin: number | undefined,
+    sweetSpotMax: number | undefined
   ): PowerZone[] | undefined {
     if (!zoneBoundaries || !zoneNames || !ftp) {
       return undefined;
     }
 
-    return this.mergePowerZones(zoneBoundaries, zoneNames, ftp);
+    const zones = this.mergePowerZones(zoneBoundaries, zoneNames, ftp);
+
+    // Merge in time data if available
+    if (zoneTimes) {
+      // Create a map of zone_id to seconds for quick lookup
+      const timeMap = new Map(zoneTimes.map(zt => [zt.zone_id, zt.seconds]));
+
+      zones.forEach((zone, index) => {
+        // Zone IDs are typically "Z1", "Z2", etc.
+        const zoneId = `Z${index + 1}`;
+        const seconds = timeMap.get(zoneId);
+        if (seconds !== undefined) {
+          zone.time_in_zone = formatDuration(seconds);
+        }
+      });
+
+      // Add sweet spot zone if there's time in it
+      const sweetSpotSeconds = timeMap.get('SS');
+      if (sweetSpotSeconds && sweetSpotSeconds > 0 && sweetSpotMin !== undefined && sweetSpotMax !== undefined) {
+        zones.push({
+          name: 'Sweet Spot',
+          low_percent: sweetSpotMin,
+          high_percent: sweetSpotMax,
+          low_watts: Math.round((sweetSpotMin / 100) * ftp),
+          high_watts: Math.round((sweetSpotMax / 100) * ftp),
+          time_in_zone: formatDuration(sweetSpotSeconds),
+        });
+      }
+    }
+
+    return zones;
   }
 
   /**
@@ -612,13 +672,25 @@ export class IntervalsClient {
     zoneBoundaries: number[] | undefined,
     zoneNames: string[] | undefined,
     thresholdPace: number | undefined,
-    paceUnits: string | undefined
+    paceUnits: string | undefined,
+    zoneTimes: number[] | undefined
   ): PaceZone[] | undefined {
     if (!zoneBoundaries || !zoneNames || !thresholdPace || !paceUnits) {
       return undefined;
     }
 
-    return this.mergePaceZones(zoneBoundaries, zoneNames, thresholdPace, paceUnits);
+    const zones = this.mergePaceZones(zoneBoundaries, zoneNames, thresholdPace, paceUnits);
+
+    // Merge in time data if available
+    if (zoneTimes) {
+      zones.forEach((zone, index) => {
+        if (index < zoneTimes.length) {
+          zone.time_in_zone = formatDuration(zoneTimes[index]);
+        }
+      });
+    }
+
+    return zones;
   }
 
   private async fetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
@@ -923,12 +995,6 @@ export class IntervalsClient {
     // Convert GAP from sec/m to sec/km if available
     const gapSecPerKm = activity.gap ? activity.gap * 1000 : undefined;
 
-    // Normalize power zone times to our format
-    const powerZoneTimes = activity.icu_zone_times?.map((zt) => ({
-      zone_id: zt.id,
-      seconds: zt.secs,
-    }));
-
     // Determine if this is a swimming activity for unit formatting
     const isSwim = isSwimmingActivity(activity.type);
 
@@ -952,22 +1018,33 @@ export class IntervalsClient {
       }
     }
 
-    // Normalize zones using sport settings zone names
+    // Normalize power zone times to our format
+    const powerZoneTimes = activity.icu_zone_times?.map((zt) => ({
+      zone_id: zt.id,
+      seconds: zt.secs,
+    }));
+
+    // Normalize zones using sport settings zone names and merge in time data
     const hrZones = this.normalizeActivityHRZones(
       activity.icu_hr_zones,
       matchingSport?.hr_zone_names,
-      matchingSport?.max_hr
+      matchingSport?.max_hr,
+      activity.icu_hr_zone_times
     );
     const powerZones = this.normalizeActivityPowerZones(
       activity.icu_power_zones,
       matchingSport?.power_zone_names,
-      activity.icu_ftp
+      activity.icu_ftp,
+      powerZoneTimes,
+      matchingSport?.sweet_spot_min,
+      matchingSport?.sweet_spot_max
     );
     const paceZones = this.normalizeActivityPaceZones(
       activity.pace_zones,
       matchingSport?.pace_zone_names,
       thresholdPaceValue,
-      paceUnits
+      paceUnits,
+      activity.pace_zone_times
     );
 
     return {
@@ -1053,15 +1130,10 @@ export class IntervalsClient {
       threshold_pace: thresholdPaceHuman,
       pace_units: paceUnits,
 
-      // Zone thresholds (normalized with names)
+      // Zone thresholds (normalized with names and time in zone)
       hr_zones: hrZones,
       power_zones: powerZones,
       pace_zones: paceZones,
-
-      // Time in zones
-      power_zone_times: powerZoneTimes,
-      hr_zone_times: activity.icu_hr_zone_times,
-      pace_zone_times: activity.pace_zone_times,
 
       // Advanced power metrics
       joules_above_ftp: activity.icu_joules_above_ftp,
