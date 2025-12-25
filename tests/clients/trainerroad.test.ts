@@ -359,6 +359,85 @@ END:VCALENDAR`;
     });
   });
 
+  describe('source detection', () => {
+    it('should detect Zwift source from workout name', async () => {
+      const zwiftIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:zwift@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - Zwift Race
+DESCRIPTION:TSS 80, IF 0.90.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(zwiftIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result[0].source).toBe('zwift');
+    });
+
+    it('should detect Zwift source from description', async () => {
+      const zwiftIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:zwift@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - Group Ride
+DESCRIPTION:TSS 60, IF 0.70. Join the Zwift group ride!
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(zwiftIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result[0].source).toBe('zwift');
+    });
+
+    it('should detect Zwift source case-insensitively', async () => {
+      const zwiftIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:zwift@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - ZWIFT Event
+DESCRIPTION:TSS 75, IF 0.85.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(zwiftIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result[0].source).toBe('zwift');
+    });
+
+    it('should default to trainerroad source for regular workouts', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(mockIcsData),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result[0].source).toBe('trainerroad');
+    });
+  });
+
   describe('description parsing', () => {
     it('should parse real TrainerRoad description format', async () => {
       // Real format: "TSS 81, IF 0.64, kJ(Cal) 1263.  Description: ..."

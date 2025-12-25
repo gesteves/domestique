@@ -116,6 +116,9 @@ export class TrainerRoadClient {
     // Clean up the name by stripping the duration prefix (e.g., "2:00 - Gibbs" → "Gibbs")
     const cleanName = this.stripDurationFromName(event.summary);
 
+    // Detect source based on workout name/description
+    const source = this.detectSource(event.summary, event.description);
+
     return {
       id: event.uid,
       date: event.start.toISOString(),
@@ -129,7 +132,7 @@ export class TrainerRoadClient {
       discipline,
       workout_type: parsed.workoutType,
       intervals: parsed.intervals,
-      source: 'trainerroad',
+      source,
     };
   }
 
@@ -172,6 +175,22 @@ export class TrainerRoadClient {
       return 'Swim';
     }
     return 'Bike';
+  }
+
+  /**
+   * Detect workout source based on name or description
+   * Returns 'zwift' if the name or description contains "Zwift", otherwise 'trainerroad'
+   */
+  private detectSource(
+    name: string,
+    description?: string
+  ): 'trainerroad' | 'zwift' {
+    const lowerName = name.toLowerCase();
+    const lowerDescription = description?.toLowerCase() ?? '';
+    if (lowerName.includes('zwift') || lowerDescription.includes('zwift')) {
+      return 'zwift';
+    }
+    return 'trainerroad';
   }
 
   private parseDescription(description?: string): {
