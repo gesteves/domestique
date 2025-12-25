@@ -13,6 +13,7 @@ import type {
   WhoopMatchedData,
   AthleteProfile,
   DailySummary,
+  SportSettingsResponse,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -201,10 +202,19 @@ export class CurrentTools {
   }
 
   /**
-   * Get athlete profile including sport-specific settings (FTP, zones, etc.)
+   * Get athlete profile including unit preferences, age, and location.
+   * Note: Sport-specific settings are now retrieved via getSportSettings().
    */
   async getAthleteProfile(): Promise<AthleteProfile> {
     return await this.intervals.getAthleteProfile();
+  }
+
+  /**
+   * Get sport-specific settings (FTP, zones, etc.) for a specific sport.
+   * @param sport - "cycling", "running", or "swimming"
+   */
+  async getSportSettings(sport: 'cycling' | 'running' | 'swimming'): Promise<SportSettingsResponse | null> {
+    return await this.intervals.getSportSettingsForSport(sport);
   }
 
   /**

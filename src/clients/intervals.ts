@@ -10,6 +10,8 @@ import type {
   ACWRStatus,
   AthleteProfile,
   SportSettings,
+  SportSettingsResponse,
+  UnitPreferences,
   HRZone,
   PowerZone,
   PaceZone,
@@ -37,16 +39,29 @@ import {
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
-// Athlete profile from /profile endpoint
+// Athlete data from root /athlete/{id} endpoint
+// Note: /profile endpoint has nested { athlete: { ... } } structure, but root endpoint is flat
+interface IntervalsAthleteData {
+  id: string;
+  name?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  timezone?: string;
+  sex?: string;
+  // Unit preferences (only available at root endpoint, not /profile)
+  measurement_preference?: 'meters' | 'feet'; // "meters" = metric, "feet" = imperial
+  weight_pref_lb?: boolean; // true = use pounds for weight regardless of measurement_preference
+  fahrenheit?: boolean; // true = use Fahrenheit regardless of measurement_preference
+  // Date of birth (only available at root endpoint, not /profile)
+  icu_date_of_birth?: string; // ISO date (YYYY-MM-DD)
+}
+
+// Profile endpoint returns nested structure (used for timezone caching)
 interface IntervalsAthleteProfile {
   athlete: {
     id: string;
-    name?: string;
-    city?: string;
-    state?: string;
-    country?: string;
     timezone?: string;
-    sex?: string;
   };
 }
 
@@ -325,6 +340,7 @@ export class IntervalsClient {
   private authHeader: string;
   private cachedTimezone: string | null = null;
   private cachedSportSettings: IntervalsSportSettings[] | null = null;
+  private cachedUnitPreferences: UnitPreferences | null = null;
 
   constructor(config: IntervalsConfig) {
     this.config = config;
@@ -365,28 +381,147 @@ export class IntervalsClient {
   }
 
   /**
-   * Get the complete athlete profile including sport settings.
+   * Compute unit preferences from raw API values.
+   * @param measurementPreference - "meters" (metric) or "feet" (imperial)
+   * @param weightPrefLb - true = use pounds for weight regardless of measurement_preference
+   * @param fahrenheit - true = use Fahrenheit regardless of measurement_preference
+   */
+  private computeUnitPreferences(
+    measurementPreference: 'meters' | 'feet' | undefined,
+    weightPrefLb: boolean | undefined,
+    fahrenheit: boolean | undefined
+  ): UnitPreferences {
+    // Default to metric if not specified
+    const isMetric = measurementPreference !== 'feet';
+    const system = isMetric ? 'metric' : 'imperial';
+
+    // Weight: use lb if explicitly set, otherwise follow system preference
+    const weight = weightPrefLb ? 'lb' : (isMetric ? 'kg' : 'lb');
+
+    // Temperature: use fahrenheit if explicitly set, otherwise follow system preference
+    const temperature = fahrenheit ? 'fahrenheit' : (isMetric ? 'celsius' : 'fahrenheit');
+
+    return { system, weight, temperature };
+  }
+
+  /**
+   * Calculate age from date of birth.
+   * @param dateOfBirth - ISO date string (YYYY-MM-DD)
+   * @returns Age in years, or undefined if dateOfBirth is not provided
+   */
+  private calculateAge(dateOfBirth: string | undefined): number | undefined {
+    if (!dateOfBirth) {
+      return undefined;
+    }
+
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    return age;
+  }
+
+  /**
+   * Get the athlete's unit preferences.
+   * Result is cached after first fetch.
+   * Uses root athlete endpoint which has unit preference fields.
+   */
+  async getUnitPreferences(): Promise<UnitPreferences> {
+    if (this.cachedUnitPreferences) {
+      return this.cachedUnitPreferences;
+    }
+
+    // Use root endpoint (empty string) which has unit preference fields
+    const athlete = await this.fetch<IntervalsAthleteData>('');
+    this.cachedUnitPreferences = this.computeUnitPreferences(
+      athlete.measurement_preference,
+      athlete.weight_pref_lb,
+      athlete.fahrenheit
+    );
+    return this.cachedUnitPreferences;
+  }
+
+  /**
+   * Get the complete athlete profile.
+   * Note: Sport-specific settings are now retrieved via getSportSettingsForSport().
+   * Uses root athlete endpoint which has unit preferences and DOB.
    */
   async getAthleteProfile(): Promise<AthleteProfile> {
-    const [profile, sportSettings] = await Promise.all([
-      this.fetch<IntervalsAthleteProfile>('/profile'),
-      this.getSportSettings(),
-    ]);
+    // Use root endpoint (empty string) which has all fields including DOB and unit prefs
+    const athlete = await this.fetch<IntervalsAthleteData>('');
 
-    const sports = sportSettings
-      .filter((s) => !s.types.includes('Other')) // Exclude 'Other' catch-all
-      .map((s) => this.normalizeSportSettings(s));
+    // Compute and cache unit preferences
+    const unitPreferences = this.computeUnitPreferences(
+      athlete.measurement_preference,
+      athlete.weight_pref_lb,
+      athlete.fahrenheit
+    );
+    this.cachedUnitPreferences = unitPreferences;
 
-    return {
-      id: profile.athlete.id,
-      name: profile.athlete.name,
-      city: profile.athlete.city,
-      state: profile.athlete.state,
-      country: profile.athlete.country,
-      timezone: profile.athlete.timezone,
-      sex: profile.athlete.sex,
-      sports,
+    // Calculate age if date of birth is set
+    const age = this.calculateAge(athlete.icu_date_of_birth);
+
+    const result: AthleteProfile = {
+      id: athlete.id,
+      name: athlete.name,
+      city: athlete.city,
+      state: athlete.state,
+      country: athlete.country,
+      timezone: athlete.timezone,
+      sex: athlete.sex,
+      unit_preferences: unitPreferences,
     };
+
+    // Only include date_of_birth and age if DOB is set
+    if (athlete.icu_date_of_birth) {
+      result.date_of_birth = athlete.icu_date_of_birth;
+      result.age = age;
+    }
+
+    return result;
+  }
+
+  /**
+   * Get sport settings for a specific sport.
+   * @param sport - "cycling", "running", or "swimming"
+   * @returns Sport settings with unit preferences, or null if not found
+   */
+  async getSportSettingsForSport(sport: 'cycling' | 'running' | 'swimming'): Promise<SportSettingsResponse | null> {
+    // Map sport names to Intervals.icu activity types
+    const sportTypeMap: Record<string, string[]> = {
+      cycling: ['Ride', 'VirtualRide', 'GravelRide', 'MountainBikeRide'],
+      running: ['Run', 'VirtualRun', 'TrailRun'],
+      swimming: ['Swim', 'OpenWaterSwim'],
+    };
+
+    const activityTypes = sportTypeMap[sport];
+    if (!activityTypes) {
+      return null;
+    }
+
+    const sportSettings = await this.getSportSettings();
+
+    // Find the first sport settings that matches any of the activity types
+    for (const settings of sportSettings) {
+      if (settings.types.some(t => activityTypes.includes(t))) {
+        const normalized = this.normalizeSportSettings(settings);
+        const unitPreferences = await this.getUnitPreferences();
+
+        return {
+          sport,
+          types: settings.types,
+          settings: normalized,
+          unit_preferences: unitPreferences,
+        };
+      }
+    }
+
+    return null;
   }
 
   /**

@@ -197,10 +197,27 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   country: 'Country of residence',
   timezone: 'Athlete\'s timezone',
   sex: 'Athlete\'s gender',
+  date_of_birth: 'Date of birth in ISO format (YYYY-MM-DD). Only present if set in Intervals.icu.',
+  age: 'Current age in years. Only present if date_of_birth is set.',
 
-  // Sport settings
-  sports: 'Array of sport-specific settings for each activity type the athlete trains',
+  // Unit preferences - CRITICAL for LLM responses
+  unit_preferences: 'CRITICAL: User\'s preferred unit system. You MUST use these units in all responses to the user.',
+  system: 'Base unit system: "metric" or "imperial". Use metric units (km, m, kg, celsius) for metric, imperial units (mi, ft, lb, fahrenheit) for imperial.',
+  weight: 'Weight unit: "kg" or "lb". May differ from system preference - always use this for weight.',
+  temperature: 'Temperature unit: "celsius" or "fahrenheit". May differ from system preference - always use this for temperatures.',
+};
+
+export const SPORT_SETTINGS_FIELD_DESCRIPTIONS = {
+  // Sport settings response structure
+  sport: 'The sport queried (cycling, running, or swimming)',
   types: 'Activity types this sport setting applies to (e.g., ["Ride", "VirtualRide", "GravelRide"])',
+  settings: 'The sport-specific settings object containing thresholds and zones',
+
+  // Unit preferences - included in response for LLM guidance
+  unit_preferences: 'User\'s preferred unit system. You MUST use these units in all responses to the user.',
+  system: 'Base unit system: "metric" or "imperial".',
+  weight: 'Weight unit: "kg" or "lb".',
+  temperature: 'Temperature unit: "celsius" or "fahrenheit".',
 
   // Power thresholds
   ftp: 'Functional Threshold Power in watts',
@@ -214,8 +231,7 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   hr_zones: 'Array of current heart rate zone objects for the athlete. Each object contains: name (e.g., "Z1", "Z2"), low_bpm, and high_bpm (null for highest zone). Note that these may be different than the Whoop HR zones, which use the Heart Rate Reserve (HRR) method.',
 
   // Pace thresholds
-  threshold_pace: 'Threshold pace in the units specified by pace_units (e.g., 4.17 for MINS_KM = 4:10/km, or 120 for SECS_100M = 2:00/100m)',
-  threshold_pace_human: 'Human-readable threshold pace (e.g., "4:10/km" or "2:00/100m")',
+  threshold_pace: 'Threshold pace in human-readable format (e.g., "4:10/km" or "2:00/100m")',
   pace_units: 'Units for all pace values: MINS_KM (minutes per kilometer, running) or SECS_100M (seconds per 100 meters, swimming)',
 
   // Power zones
@@ -431,6 +447,7 @@ type FieldCategory =
   | 'fitness'
   | 'planned'
   | 'athlete_profile'
+  | 'sport_settings'
   | 'intervals'
   | 'notes'
   | 'weather'
@@ -455,6 +472,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return PLANNED_WORKOUT_FIELD_DESCRIPTIONS;
     case 'athlete_profile':
       return ATHLETE_PROFILE_FIELD_DESCRIPTIONS;
+    case 'sport_settings':
+      return SPORT_SETTINGS_FIELD_DESCRIPTIONS;
     case 'intervals':
       return INTERVALS_FIELD_DESCRIPTIONS;
     case 'notes':

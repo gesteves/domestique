@@ -743,4 +743,248 @@ describe('IntervalsClient', () => {
       expect(callUrl).toContain('secs=5%2C60');
     });
   });
+
+  // ============================================
+  // Athlete Profile & Unit Preferences
+  // ============================================
+
+  describe('getAthleteProfile', () => {
+    it('should fetch athlete profile with unit preferences', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+          name: 'Test Athlete',
+          city: 'Boston',
+          state: 'MA',
+          country: 'USA',
+          timezone: 'America/New_York',
+          sex: 'M',
+          measurement_preference: 'meters',
+          weight_pref_lb: false,
+          fahrenheit: false,
+        }),
+      });
+
+      const result = await client.getAthleteProfile();
+
+      expect(result.id).toBe('i12345');
+      expect(result.name).toBe('Test Athlete');
+      expect(result.unit_preferences).toEqual({
+        system: 'metric',
+        weight: 'kg',
+        temperature: 'celsius',
+      });
+    });
+
+    it('should handle imperial system with overrides', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+          measurement_preference: 'feet',
+          weight_pref_lb: true,
+          fahrenheit: true,
+        }),
+      });
+
+      const result = await client.getAthleteProfile();
+
+      expect(result.unit_preferences).toEqual({
+        system: 'imperial',
+        weight: 'lb',
+        temperature: 'fahrenheit',
+      });
+    });
+
+    it('should handle metric system with lb/fahrenheit overrides', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+          measurement_preference: 'meters',
+          weight_pref_lb: true,
+          fahrenheit: true,
+        }),
+      });
+
+      const result = await client.getAthleteProfile();
+
+      expect(result.unit_preferences).toEqual({
+        system: 'metric',
+        weight: 'lb',
+        temperature: 'fahrenheit',
+      });
+    });
+
+    it('should include date of birth and age when set', async () => {
+      // Mock a date of birth that will give a predictable age
+      const dob = '1990-06-15';
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+          icu_date_of_birth: dob,
+          measurement_preference: 'meters',
+        }),
+      });
+
+      const result = await client.getAthleteProfile();
+
+      expect(result.date_of_birth).toBe(dob);
+      expect(result.age).toBeDefined();
+      expect(typeof result.age).toBe('number');
+      expect(result.age).toBeGreaterThan(30);
+    });
+
+    it('should not include date of birth or age when not set', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+          measurement_preference: 'meters',
+        }),
+      });
+
+      const result = await client.getAthleteProfile();
+
+      expect(result.date_of_birth).toBeUndefined();
+      expect(result.age).toBeUndefined();
+    });
+
+    it('should default to metric when measurement_preference is not set', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+        }),
+      });
+
+      const result = await client.getAthleteProfile();
+
+      expect(result.unit_preferences).toEqual({
+        system: 'metric',
+        weight: 'kg',
+        temperature: 'celsius',
+      });
+    });
+  });
+
+  describe('getUnitPreferences', () => {
+    it('should cache unit preferences after first fetch', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+          measurement_preference: 'meters',
+          weight_pref_lb: false,
+          fahrenheit: false,
+        }),
+      });
+
+      // First call
+      const result1 = await client.getUnitPreferences();
+      // Second call
+      const result2 = await client.getUnitPreferences();
+
+      expect(result1).toEqual(result2);
+      // Should only fetch once due to caching
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('getSportSettingsForSport', () => {
+    it('should return cycling settings', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i12345',
+            measurement_preference: 'meters',
+          }),
+        });
+
+      const result = await client.getSportSettingsForSport('cycling');
+
+      expect(result).toBeDefined();
+      expect(result?.sport).toBe('cycling');
+      expect(result?.types).toContain('Ride');
+      expect(result?.settings).toBeDefined();
+      expect(result?.unit_preferences).toBeDefined();
+    });
+
+    it('should return running settings', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i12345',
+            measurement_preference: 'meters',
+          }),
+        });
+
+      const result = await client.getSportSettingsForSport('running');
+
+      expect(result).toBeDefined();
+      expect(result?.sport).toBe('running');
+      expect(result?.types).toContain('Run');
+    });
+
+    it('should return null for sport with no settings', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const result = await client.getSportSettingsForSport('swimming');
+
+      expect(result).toBeNull();
+    });
+
+    it('should include FTP in cycling settings', async () => {
+      const cyclingSettings = [{
+        id: 1,
+        athlete_id: 'i12345',
+        types: ['Ride', 'VirtualRide'],
+        ftp: 280,
+        indoor_ftp: 290,
+        lthr: 165,
+        max_hr: 190,
+        hr_zone_names: ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'],
+        hr_zones: [130, 145, 160, 175, 190],
+        power_zone_names: ['Active Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO2Max'],
+        power_zones: [55, 75, 90, 105, 120],
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(cyclingSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i12345',
+            measurement_preference: 'meters',
+          }),
+        });
+
+      const result = await client.getSportSettingsForSport('cycling');
+
+      expect(result?.settings.ftp).toBe(280);
+      expect(result?.settings.indoor_ftp).toBe(290);
+      expect(result?.settings.lthr).toBe(165);
+      expect(result?.settings.max_hr).toBe(190);
+      expect(result?.settings.hr_zones).toBeDefined();
+      expect(result?.settings.power_zones).toBeDefined();
+    });
+  });
 });

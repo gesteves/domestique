@@ -3,6 +3,8 @@
  * Constructs responses with contextual guidance for the LLM.
  */
 
+import type { UnitPreferences } from '../types/index.js';
+
 export interface ResponseBuilderOptions {
   /** The main data payload */
   data: unknown;
@@ -14,6 +16,8 @@ export interface ResponseBuilderOptions {
   nextActions?: string[];
   /** Warnings or notes about the data (e.g., "Whoop data unavailable") */
   warnings?: string[];
+  /** User's unit preferences to include in responses (for LLM guidance) */
+  unitPreferences?: UnitPreferences;
 }
 
 /**
@@ -21,6 +25,7 @@ export interface ResponseBuilderOptions {
  *
  * Response format:
  * - Message: Summary of what was returned
+ * - Unit Preferences: User's preferred units (if provided)
  * - Warnings: Any issues or limitations
  * - Data: The actual JSON data
  * - Next Actions: Suggested follow-up tools
@@ -29,13 +34,22 @@ export interface ResponseBuilderOptions {
 export function buildToolResponse(options: ResponseBuilderOptions): {
   content: Array<{ type: 'text'; text: string }>;
 } {
-  const { data, fieldDescriptions, message, nextActions, warnings } = options;
+  const { data, fieldDescriptions, message, nextActions, warnings, unitPreferences } = options;
 
   const parts: string[] = [];
 
   // Add contextual message if provided
   if (message) {
     parts.push(message);
+    parts.push('');
+  }
+
+  // Add unit preferences reminder if provided
+  if (unitPreferences) {
+    parts.push('USER\'S PREFERRED UNITS (you MUST use these when responding):');
+    parts.push(`  - Distance: ${unitPreferences.system === 'metric' ? 'kilometers/meters' : 'miles/feet/yards'}`);
+    parts.push(`  - Weight: ${unitPreferences.weight === 'kg' ? 'kilograms' : 'pounds'}`);
+    parts.push(`  - Temperature: ${unitPreferences.temperature === 'celsius' ? 'Celsius' : 'Fahrenheit'}`);
     parts.push('');
   }
 

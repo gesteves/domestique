@@ -11,12 +11,15 @@ import {
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
 import { buildToolResponse } from '../utils/response-builder.js';
+import type { UnitPreferences } from '../types/index.js';
 
 interface ResponseOptions<TResult> {
   fieldDescriptions: Record<string, string>;
   getMessage?: (data: TResult) => string | undefined;
   getNextActions?: (data: TResult) => string[] | undefined;
   getWarnings?: (data: TResult) => string[] | undefined;
+  /** Optional function to get unit preferences to include in response */
+  getUnitPreferences?: () => Promise<UnitPreferences>;
 }
 
 /**
@@ -30,12 +33,17 @@ function withToolResponse<TArgs, TResult>(
   return async (args: TArgs) => {
     try {
       const data = await handler(args);
+      // Fetch unit preferences if a getter is provided
+      const unitPreferences = options.getUnitPreferences
+        ? await options.getUnitPreferences()
+        : undefined;
       return buildToolResponse({
         data,
         fieldDescriptions: options.fieldDescriptions,
         message: options.getMessage?.(data),
         nextActions: options.getNextActions?.(data),
         warnings: options.getWarnings?.(data),
+        unitPreferences,
       });
     } catch (error) {
       if (error instanceof WhoopApiError && error.isRetryable) {
@@ -71,9 +79,10 @@ export class ToolRegistry {
   private currentTools: CurrentTools;
   private historicalTools: HistoricalTools;
   private planningTools: PlanningTools;
+  private intervalsClient: IntervalsClient;
 
   constructor(config: ToolsConfig) {
-    const intervalsClient = new IntervalsClient(config.intervals);
+    this.intervalsClient = new IntervalsClient(config.intervals);
     const whoopClient = config.whoop ? new WhoopClient(config.whoop) : null;
     const trainerroadClient = config.trainerroad
       ? new TrainerRoadClient(config.trainerroad)
@@ -81,16 +90,23 @@ export class ToolRegistry {
 
     // Connect Whoop client to Intervals.icu timezone for proper date filtering
     if (whoopClient) {
-      whoopClient.setTimezoneGetter(() => intervalsClient.getAthleteTimezone());
+      whoopClient.setTimezoneGetter(() => this.intervalsClient.getAthleteTimezone());
     }
 
     this.currentTools = new CurrentTools(
-      intervalsClient,
+      this.intervalsClient,
       whoopClient,
       trainerroadClient
     );
-    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient);
-    this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
+    this.historicalTools = new HistoricalTools(this.intervalsClient, whoopClient);
+    this.planningTools = new PlanningTools(this.intervalsClient, trainerroadClient);
+  }
+
+  /**
+   * Get unit preferences for inclusion in tool responses.
+   */
+  private getUnitPreferences(): Promise<UnitPreferences> {
+    return this.intervalsClient.getUnitPreferences();
   }
 
   /**
@@ -132,6 +148,7 @@ Returns null if Whoop is not configured.
           getNextActions: (data) => data
             ? ['Use get_recovery_trends to see patterns over time', 'Use get_daily_summary for full today overview']
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -170,6 +187,7 @@ Returns null if Whoop is not configured.
           getNextActions: (data) => data
             ? ['Use get_strain_history for trends over time', 'Use get_daily_summary for full today overview']
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -223,6 +241,7 @@ Returns empty array if no workouts completed today.
                 'Use get_workout_weather(activity_id) for outdoor workout conditions',
               ]
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -273,6 +292,7 @@ Returns empty array if Whoop is not configured.
                 'Use get_workout_history for detailed workout data from Intervals.icu',
               ]
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -321,6 +341,7 @@ Returns empty array if no workouts planned today.
                 'Use get_upcoming_workouts to see the full week ahead',
               ]
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -328,28 +349,30 @@ Returns empty array if no workouts planned today.
     server.tool(
       'get_athlete_profile',
       `<usecase>
-Use when the user asks about:
-- Their FTP, threshold power, or current fitness settings
-- Training zones (power, heart rate, or pace)
-- How to interpret zone data from workouts
-- Their profile settings or thresholds
+Use when:
+- You need to know the user's preferred unit system (metric/imperial) BEFORE responding with data
+- The user asks about their profile, age, or location
+- The user asks how they want data displayed
 
 Do NOT use for:
+- Sport-specific settings like FTP, zones, thresholds (use get_sports_settings)
 - Workout data (use get_workout_history or get_todays_completed_workouts)
 - Fitness trends over time (use get_training_load_trends)
 </usecase>
 
 <instructions>
-Fetches the athlete's profile from Intervals.icu including:
-- Sport-specific settings for each activity type (Ride, Run, Swim, etc.)
-- Power thresholds: FTP, indoor FTP (if different)
-- Heart rate thresholds: LTHR, max HR
-- Pace thresholds: threshold pace
-- Zone definitions with names, ranges, and absolute values
-- Athlete info: name, location, timezone
+If you don't know the user's preferred unit system, you **MUST** call this tool before responding to the user, so you can get their preferences.
+In addition, users may prefer weights and temperatures displayed in a different unit system (e.g. they may prefer to use metric, but use Fahrenheit for the weather).
 
-Use this to interpret zone data in workout responses. Note that this returns the athlete's
-**current** zones, which may not match the ones in historical workouts.
+Returns the athlete's profile from Intervals.icu including:
+- unit_preferences: The user's preferred unit system. You MUST use these units in all responses:
+  - system: "metric" or "imperial" - use kilometers/meters or miles/feet/yards for distances
+  - weight: "kg" or "lb" - use this for weight regardless of the user's preferred unit system
+  - temperature: "celsius" or "fahrenheit" - use this for temps regardless of the user's preferred unit system
+- Athlete info: name, location, timezone, sex
+- Age and date of birth (if set)
+
+For sport-specific settings (FTP, zones, thresholds), use get_sports_settings with the sport name.
 </instructions>`,
       {},
       withToolResponse(
@@ -357,12 +380,70 @@ Use this to interpret zone data in workout responses. Note that this returns the
         {
           fieldDescriptions: getFieldDescriptions('athlete_profile'),
           getMessage: (data) => {
-            const sports = data.sports?.map((s: { types?: string[] }) => s.types?.[0]).filter(Boolean).join(', ') ?? 'none';
-            return `Athlete profile loaded. Sports configured: ${sports}.`;
+            const parts = [`Athlete profile loaded.`];
+            if (data.unit_preferences) {
+              parts.push(`Units: ${data.unit_preferences.system}, weight in ${data.unit_preferences.weight}, temp in ${data.unit_preferences.temperature}.`);
+            }
+            return parts.join(' ');
           },
           getNextActions: () => [
-            'Use this zone information to interpret power/HR data in workouts',
+            'Use get_sports_settings(sport) for FTP, zones, and thresholds',
             'Use get_training_load_trends to see how fitness has evolved',
+          ],
+        }
+      )
+    );
+
+    server.tool(
+      'get_sports_settings',
+      `<usecase>
+Use when the user asks about:
+- Their FTP, threshold power, or cycling settings
+- Running threshold pace or running zones
+- Swimming pace or swimming zones
+- Training zones (power, heart rate, or pace) for a specific sport
+- How to interpret zone data from workouts
+
+Do NOT use for:
+- General profile info or unit preferences (use get_athlete_profile)
+- Workout data (use get_workout_history or get_todays_completed_workouts)
+- Fitness trends over time (use get_training_load_trends)
+</usecase>
+
+<instructions>
+Fetches sport-specific settings from Intervals.icu for a single sport:
+- Cycling: FTP, indoor FTP (if different), power zones
+- Running: threshold pace, pace zones, HR zones
+- Swimming: threshold pace, pace zones
+
+Also includes unit_preferences so you know how to format responses.
+
+Note: This returns the athlete's **current** zones, which may not match zones in historical workouts.
+Use this to interpret zone data or answer questions like "What's my FTP?" or "What are my running zones?"
+</instructions>`,
+      {
+        sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
+      },
+      withToolResponse(
+        async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
+        {
+          fieldDescriptions: getFieldDescriptions('sport_settings'),
+          getMessage: (data) => {
+            if (!data) {
+              return 'No settings found for this sport.';
+            }
+            const parts = [`${data.sport} settings loaded.`];
+            if (data.settings.ftp) {
+              parts.push(`FTP: ${data.settings.ftp}W.`);
+            }
+            if (data.settings.threshold_pace) {
+              parts.push(`Threshold pace: ${data.settings.threshold_pace}.`);
+            }
+            return parts.join(' ');
+          },
+          getNextActions: () => [
+            'Use this zone information to interpret power/HR/pace data in workouts',
+            'Use get_workout_history to see workouts for this sport',
           ],
         }
       )
@@ -433,6 +514,7 @@ For deeper analysis of any component, use the specific tool.
             }
             return warnings.length > 0 ? warnings : undefined;
           },
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -491,6 +573,7 @@ Returns empty array if no workouts match.
                 'Use get_recovery_trends for same period to correlate with training',
               ]
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -544,6 +627,7 @@ Returns empty array if Whoop is not configured.
                 'Use get_workout_history for same period to see training patterns',
               ]
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -602,6 +686,7 @@ Returns empty array if no workouts planned.
                 'Use get_training_load_trends to see current fitness/fatigue',
               ]
             : undefined,
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -655,6 +740,7 @@ Returns empty array if no workouts match.
                 'Use get_todays_recovery to check readiness if workout is today',
               ]
             : ['Use get_upcoming_workouts to find workouts on other dates'],
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -735,6 +821,7 @@ Use with get_recovery_trends to correlate load with recovery.
             }
             return warnings.length > 0 ? warnings : undefined;
           },
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -787,6 +874,7 @@ Get the activity_id first from:
             'Use get_workout_notes for athlete comments on this workout',
             'Use get_workout_weather for outdoor workout conditions',
           ],
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -838,6 +926,7 @@ Returns empty notes array if no notes exist.
             'Use get_workout_intervals for objective interval data',
             'Use get_workout_weather for outdoor workout conditions',
           ],
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -890,6 +979,7 @@ Returns null if weather data is not available.
             'Use get_workout_intervals for power/HR data',
             'Use get_workout_notes for athlete comments',
           ],
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -961,6 +1051,7 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
             }
             return actions;
           },
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -1031,6 +1122,7 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
             }
             return actions;
           },
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -1089,6 +1181,7 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
             'Use get_training_load_trends to correlate HR with fitness',
             'Use get_recovery_trends to see how HR relates to recovery',
           ],
+          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );

@@ -290,6 +290,24 @@ export interface DateRange {
 // Athlete Profile
 // ============================================
 
+// Unit preferences for displaying data to the user
+export type UnitSystem = 'metric' | 'imperial';
+export type WeightUnit = 'kg' | 'lb';
+export type TemperatureUnit = 'celsius' | 'fahrenheit';
+
+/**
+ * User's preferred unit system for displaying data.
+ * IMPORTANT: The LLM MUST use these units when responding to the user.
+ */
+export interface UnitPreferences {
+  /** Base unit system: "metric" or "imperial". Use metric units (km, m, kg, celsius) or imperial (mi, ft, lb, fahrenheit). */
+  system: UnitSystem;
+  /** Weight unit override: "kg" or "lb". May differ from system preference. */
+  weight: WeightUnit;
+  /** Temperature unit override: "celsius" or "fahrenheit". May differ from system preference. */
+  temperature: TemperatureUnit;
+}
+
 // Heart rate zone with name and range
 export interface HRZone {
   name: string;
@@ -358,7 +376,30 @@ export interface AthleteProfile {
   country?: string;
   timezone?: string;
   sex?: string;
-  sports: SportSettings[];
+  /** Date of birth in ISO format (YYYY-MM-DD). Only present if set in Intervals.icu. */
+  date_of_birth?: string;
+  /** Current age in years. Only present if date_of_birth is set. */
+  age?: number;
+  /**
+   * User's preferred unit system for displaying data.
+   * CRITICAL: The LLM MUST use these units when responding to the user.
+   */
+  unit_preferences: UnitPreferences;
+}
+
+// Sport settings response for get_sports_settings tool
+export interface SportSettingsResponse {
+  /** The sport queried (e.g., "cycling", "running", "swimming") */
+  sport: string;
+  /** Activity types this sport setting applies to (e.g., ["Ride", "VirtualRide"]) */
+  types: string[];
+  /** The sport-specific settings */
+  settings: SportSettings;
+  /**
+   * User's preferred unit system for displaying data.
+   * CRITICAL: The LLM MUST use these units when responding to the user.
+   */
+  unit_preferences: UnitPreferences;
 }
 
 // ============================================

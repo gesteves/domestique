@@ -17,7 +17,8 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_todays_strain` - Today's Whoop strain data including strain score, heart rate, and logged activities
 - `get_todays_completed_workouts` - Today's completed workouts from Intervals.icu with matched Whoop strain data
 - `get_todays_planned_workouts` - Today's scheduled workouts from both TrainerRoad and Intervals.icu calendars
-- `get_athlete_profile` - Athlete's profile including  power zones, heart rate zones, pace zones, FTP, etc.
+- `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location.
+- `get_sports_settings` - Sport-specific settings (FTP, zones, thresholds) for cycling, running, or swimming
 - `get_daily_summary` - Complete summary of today including recovery, strain, completed workouts, and planned workouts.
 
 ### Historical/Trends
@@ -277,3 +278,5 @@ Once connected, you can ask Claude:
 - "How has my 5-minute power improved compared to last quarter?"
 - "Show me my running pace curve - what's my best 5km time?"
 - "Compare my cycling power from the last 3 months vs the previous 3 months"
+- "What's my FTP?" (uses get_sports_settings for cycling)
+- "What are my running zones?"
