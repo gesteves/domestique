@@ -20,7 +20,6 @@ const STRAIN_DESCRIPTIONS: Record<StrainLevel, string> = {
   ALL_OUT: 'Significant exertion which increases fitness gains, but puts your body at greater risk for injury or overtraining.',
 };
 
-
 // Same as above.
 const RECOVERY_DESCRIPTIONS: Record<RecoveryLevel, string> = {
   SUFFICIENT: 'Your body is well recovered and ready to perform. Whether it\'s at work or the gym, your body is signaling it can handle a strenuous day.',
