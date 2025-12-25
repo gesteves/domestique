@@ -46,7 +46,7 @@ export function buildToolResponse(options: ResponseBuilderOptions): {
 
   // Add unit preferences reminder if provided
   if (unitPreferences) {
-    parts.push('USER\'S PREFERRED UNITS (you MUST use these when responding):');
+    parts.push('User\'s preferred units (you MUST use these when responding):');
     parts.push(`  - Distance: ${unitPreferences.system === 'metric' ? 'kilometers/meters' : 'miles/feet/yards'}`);
     parts.push(`  - Weight: ${unitPreferences.weight === 'kg' ? 'kilograms' : 'pounds'}`);
     parts.push(`  - Temperature: ${unitPreferences.temperature === 'celsius' ? 'Celsius' : 'Fahrenheit'}`);

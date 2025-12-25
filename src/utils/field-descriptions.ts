@@ -201,7 +201,7 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   age: 'Current age in years. Only present if date_of_birth is set.',
 
   // Unit preferences - CRITICAL for LLM responses
-  unit_preferences: 'CRITICAL: User\'s preferred unit system. You MUST use these units in all responses to the user.',
+  unit_preferences: 'User\'s preferred unit system. You MUST use these units in all responses to the user.',
   system: 'Base unit system: "metric" or "imperial". Use metric units (km, m, kg, celsius) for metric, imperial units (mi, ft, lb, fahrenheit) for imperial.',
   weight: 'Weight unit: "kg" or "lb". May differ from system preference - always use this for weight.',
   temperature: 'Temperature unit: "celsius" or "fahrenheit". May differ from system preference - always use this for temperatures.',
