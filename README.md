@@ -27,9 +27,9 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, etc.
 
 ### Performance Curves
-- `get_power_curve` - Cycling power curve analysis showing best watts at various durations (5s, 30s, 1min, 5min, 20min, 60min). Includes W/kg, estimated FTP, and period comparison.
-- `get_pace_curve` - Running/swimming pace curve analysis showing best times at key distances. For running: 400m, 1km, mile, 5km, 10km. For swimming: 100m, 200m, 400m, 800m, 1500m. Includes gradient-adjusted pace (GAP) option.
-- `get_hr_curve` - Heart rate curve analysis showing max sustained HR at various durations. Works for all sports.
+- `get_power_curve` - Cycling power curve analysis showing best watts at various durations. Includes W/kg, estimated FTP, and period comparison.
+- `get_pace_curve` - Running/swimming pace curve analysis showing best times at key distances.
+- `get_hr_curve` - Heart rate curve analysis showing max sustained HR at various durations.
 
 ### Workout Analysis
 - `get_workout_intervals` - Detailed interval breakdown for a specific workout including power, HR, cadence, and timing data.

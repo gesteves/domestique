@@ -917,7 +917,7 @@ Do NOT use for:
 <instructions>
 Fetches cycling power curves showing best power output at various durations:
 - Returns per-activity curves with watts and W/kg
-- Summary includes best values at key durations (5s, 30s, 1min, 5min, 20min, 60min)
+- Summary includes best values at key durations (5s, 30s, 1min, 5min, 20min, 60min, 120min)
 - Includes estimated FTP (95% of best 20min power)
 - Only for cycling activities (Ride, VirtualRide)
 - Custom durations can be specified (e.g., 7200 for 2-hour power)
@@ -984,8 +984,8 @@ Running power curves exist but often have incomplete data - use pace curves for 
 
 <instructions>
 Fetches pace curves showing best times at various distances:
-- For running: analyzes 400m, 1km, mile, 5km, 10km distances
-- For swimming: analyzes 100m, 200m, 400m, 800m, 1500m distances
+- For running: analyzes 400m, 1km, mile, 5km, 10km, half-marathon, and marathon distances
+- For swimming: analyzes 100m, 200m, 400m, 800m, 1500m, half-iron, and full-iron distances
 - Returns pace in appropriate units (min/km for running, /100m for swimming)
 - GAP (gradient-adjusted pace) available for running to normalize for hills
 - Custom distances can be specified (e.g., [800, 3000])
