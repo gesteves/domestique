@@ -245,7 +245,7 @@ export interface PlannedWorkout {
   discipline?: Discipline;
   workout_type?: string;
   intervals?: string;
-  source: 'intervals.icu' | 'trainerroad';
+  source: 'intervals.icu' | 'trainerroad' | 'zwift';
 }
 
 // Fitness metrics from Intervals.icu
