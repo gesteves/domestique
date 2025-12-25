@@ -120,7 +120,7 @@ describe('activity-matcher', () => {
       expect(result[0].whoop_activity?.id).toBe('a1');
     });
 
-    it('should match activities by date and type when timestamps differ', () => {
+    it('should not match activities when timestamps differ by more than 5 minutes', () => {
       const workouts = [
         createWorkout('w1', '2024-12-15T10:00:00Z', 'Ride'),
       ];
@@ -130,12 +130,14 @@ describe('activity-matcher', () => {
 
       const result = matchActivities(workouts, activities);
 
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
       expect(result[0].intervals_workout?.id).toBe('w1');
-      expect(result[0].whoop_activity?.id).toBe('a1');
+      expect(result[0].whoop_activity).toBeUndefined();
+      expect(result[1].whoop_activity?.id).toBe('a1');
+      expect(result[1].intervals_workout).toBeUndefined();
     });
 
-    it('should match activities by date only when types differ', () => {
+    it('should not match activities when types differ', () => {
       const workouts = [
         createWorkout('w1', '2024-12-15T10:00:00Z', 'Ride'),
       ];
@@ -145,9 +147,11 @@ describe('activity-matcher', () => {
 
       const result = matchActivities(workouts, activities);
 
-      expect(result).toHaveLength(1);
+      expect(result).toHaveLength(2);
       expect(result[0].intervals_workout?.id).toBe('w1');
-      expect(result[0].whoop_activity?.id).toBe('a1');
+      expect(result[0].whoop_activity).toBeUndefined();
+      expect(result[1].whoop_activity?.id).toBe('a1');
+      expect(result[1].intervals_workout).toBeUndefined();
     });
 
     it('should include unmatched workouts', () => {
@@ -237,7 +241,7 @@ describe('activity-matcher', () => {
       expect(result?.id).toBe('a1');
     });
 
-    it('should find matching activity by date and type', () => {
+    it('should return null when timestamps differ by more than 5 minutes', () => {
       const activities: StrainActivity[] = [
         {
           id: 'a1',
@@ -250,7 +254,7 @@ describe('activity-matcher', () => {
 
       const result = findMatchingWhoopActivity(workout, activities);
 
-      expect(result?.id).toBe('a1');
+      expect(result).toBeNull();
     });
 
     it('should return null when no match found', () => {
@@ -269,18 +273,18 @@ describe('activity-matcher', () => {
       expect(result).toBeNull();
     });
 
-    it('should prefer timestamp match over date match', () => {
+    it('should return the first high confidence match found', () => {
       const activities: StrainActivity[] = [
         {
           id: 'a1',
-          start_time: '2024-12-15T10:01:00Z', // Close timestamp
+          start_time: '2024-12-15T10:01:00Z', // Close timestamp (high confidence)
           end_time: '2024-12-15T11:01:00Z',
           activity_type: 'Cycling',
           strain_score: 10,
         },
         {
           id: 'a2',
-          start_time: '2024-12-15T15:00:00Z', // Same day, different time
+          start_time: '2024-12-15T15:00:00Z', // Same day, but >5 min difference (no match)
           end_time: '2024-12-15T16:00:00Z',
           activity_type: 'Cycling',
           strain_score: 10,
