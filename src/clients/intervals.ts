@@ -200,16 +200,19 @@ interface IntervalsActivity {
   icu_ftp?: number;
   icu_eftp?: number;
   icu_pm_ftp?: number; // activity-derived eFTP
+  lthr?: number; // Lactate threshold HR at time of activity
 
   // Energy
   joules?: number;
   carbs_used?: number;
   carbs_ingested?: number;
 
-  // Intervals/laps
-  icu_intervals?: unknown[];
-  laps?: unknown[];
-  icu_lap_count?: number;
+  // Athlete metrics at time of activity
+  icu_weight?: number; // Weight in kg
+  icu_resting_hr?: number; // Resting HR
+
+  // Source information
+  source?: string; // e.g., "Zwift", "Garmin", etc.
 }
 
 interface IntervalsWellness {
@@ -1326,9 +1329,6 @@ export class IntervalsClient {
       rpe: this.pickHighestRpe(activity.rpe, activity.icu_rpe),
       feel: activity.feel,
 
-      // Classification
-      workout_class: activity.workout_doc?.class,
-
       // HR metrics
       hrrc: activity.hrrc,
       trimp: activity.trimp,
@@ -1354,18 +1354,22 @@ export class IntervalsClient {
       ftp: activity.icu_ftp,
       eftp: activity.icu_eftp,
       activity_eftp: activity.icu_pm_ftp,
+      lthr: activity.lthr,
 
       // Energy
       work_kj: activity.joules ? activity.joules / 1000 : undefined,
       cho_used_g: activity.carbs_used,
       cho_intake_g: activity.carbs_ingested,
 
-      // Intervals/laps count
-      intervals_count: activity.icu_intervals?.length,
-      laps_count: activity.icu_lap_count ?? activity.laps?.length,
+      // Athlete metrics at time of activity
+      weight: activity.icu_weight != null ? `${activity.icu_weight} kg` : undefined,
+      resting_hr: activity.icu_resting_hr,
 
       // Activity context flags
-      is_indoor: activity.trainer,
+      // is_indoor: true if trainer flag is set, OR activity type contains "virtual", OR source is Zwift
+      is_indoor: activity.trainer === true ||
+        activity.type.toLowerCase().includes('virtual') ||
+        activity.source?.toLowerCase() === 'zwift',
       is_commute: activity.commute,
       is_race: activity.race,
 
@@ -1378,11 +1382,6 @@ export class IntervalsClient {
       power_zones: powerZones,
       pace_zones: paceZones,
 
-      // Advanced power metrics
-      joules_above_ftp: activity.icu_joules_above_ftp,
-      max_wbal_depletion: activity.icu_max_wbal_depletion,
-      polarization_index: activity.polarization_index,
-
       // Running/pace metrics
       average_stride_m: activity.average_stride,
       gap: gapSecPerKm !== undefined ? formatPace(gapSecPerKm, isSwim) : undefined,
@@ -1392,18 +1391,9 @@ export class IntervalsClient {
       min_altitude_m: activity.min_altitude,
       max_altitude_m: activity.max_altitude,
 
-      // Temperature
-      average_temp_c: activity.average_temp,
-      min_temp_c: activity.min_temp,
-      max_temp_c: activity.max_temp,
-
       // Session metrics
       session_rpe: activity.session_rpe,
       strain_score: activity.strain_score,
-
-      // Device info
-      device_name: activity.device_name,
-      power_meter: activity.power_meter,
     };
   }
 

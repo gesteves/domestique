@@ -121,8 +121,9 @@ describe('IntervalsClient', () => {
         variability_index: 1.0110497,
         decoupling: -0.95401156,
         efficiency_factor: 1.3555555,
-        icu_lap_count: 17,
-        workout_doc: { class: 'Endurance' },
+        lthr: 165,
+        icu_weight: 74.5,
+        icu_resting_hr: 52,
       },
       {
         id: 'act2',
@@ -198,9 +199,68 @@ describe('IntervalsClient', () => {
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
+      // VirtualRide with trainer: true should be indoor
       expect(result[0].is_indoor).toBe(true);
       expect(result[0].is_commute).toBe(false);
       expect(result[0].is_race).toBe(false);
+      
+      // Run with trainer: false should not be indoor
+      expect(result[1].is_indoor).toBe(false);
+    });
+
+    it('should mark activity as indoor if type contains "virtual"', async () => {
+      const virtualRunActivity = [{
+        id: 'vrun1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'VirtualRun',
+        name: 'Virtual Run',
+        moving_time: 2400,
+        distance: 8000,
+        trainer: false, // trainer is false, but type contains "virtual"
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(virtualRunActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].is_indoor).toBe(true);
+    });
+
+    it('should mark activity as indoor if source is Zwift', async () => {
+      const zwiftActivity = [{
+        id: 'zwift1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride', // Not VirtualRide
+        name: 'Zwift Ride',
+        moving_time: 3600,
+        distance: 30000,
+        trainer: false, // trainer is false
+        source: 'Zwift', // but source is Zwift
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(zwiftActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].is_indoor).toBe(true);
     });
 
     it('should include zone thresholds and time in zones', async () => {
@@ -234,7 +294,7 @@ describe('IntervalsClient', () => {
       });
     });
 
-    it('should include advanced power and session metrics', async () => {
+    it('should include session metrics', async () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -247,12 +307,26 @@ describe('IntervalsClient', () => {
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
-      expect(result[0].joules_above_ftp).toBe(0);
-      expect(result[0].max_wbal_depletion).toBe(0);
-      expect(result[0].polarization_index).toBe(0);
       expect(result[0].session_rpe).toBe(361);
       expect(result[0].strain_score).toBeCloseTo(118.565, 2);
-      expect(result[0].device_name).toBe('ZWIFT');
+    });
+
+    it('should include athlete metrics at time of activity', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+      });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].lthr).toBe(165);
+      expect(result[0].weight).toBe('74.5 kg');
+      expect(result[0].resting_hr).toBe(52);
     });
 
     it('should include altitude data', async () => {

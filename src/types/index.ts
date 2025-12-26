@@ -45,9 +45,8 @@ export interface NormalizedWorkout {
   rpe?: number; // Rate of Perceived Exertion (1-10)
   feel?: number; // How athlete felt (1-5)
 
-  // Sweetspot & classification
+  // Sweetspot
   ss_score?: number;
-  workout_class?: string; // Base, Tempo, Threshold, VO2max, etc.
 
   // HR metrics
   hrrc?: number; // Heart rate recovery
@@ -73,15 +72,16 @@ export interface NormalizedWorkout {
   activity_eftp?: number; // eFTP derived from this activity
   w_prime?: number; // Anaerobic work capacity
   pmax?: number; // Maximum power
+  lthr?: number; // Lactate threshold heart rate at time of activity
 
   // Energy expenditure
   work_kj?: number;
   cho_used_g?: number; // Carbohydrates used
   cho_intake_g?: number; // Carbohydrates consumed
 
-  // Intervals/laps summary
-  intervals_count?: number;
-  laps_count?: number;
+  // Athlete metrics at time of activity
+  weight?: string; // Human-readable, e.g., "74.5 kg"
+  resting_hr?: number; // Resting heart rate at time of activity
 
   // Activity context flags
   is_indoor?: boolean; // trainer/indoor workout
@@ -97,11 +97,6 @@ export interface NormalizedWorkout {
   power_zones?: PowerZone[];
   pace_zones?: PaceZone[];
 
-  // Advanced power metrics
-  joules_above_ftp?: number;
-  max_wbal_depletion?: number; // W'bal depletion
-  polarization_index?: number; // Training polarization (0-2)
-
   // Running/pace metrics
   average_stride_m?: number; // meters per stride
   gap?: string; // Gradient adjusted pace, e.g., "4:30/km"
@@ -111,18 +106,9 @@ export interface NormalizedWorkout {
   min_altitude_m?: number;
   max_altitude_m?: number;
 
-  // Temperature
-  average_temp_c?: number;
-  min_temp_c?: number;
-  max_temp_c?: number;
-
   // Session metrics
   session_rpe?: number; // RPE × duration
   strain_score?: number; // Intervals.icu strain score
-
-  // Device info
-  device_name?: string;
-  power_meter?: string;
 }
 
 // Zone time entry for power zones

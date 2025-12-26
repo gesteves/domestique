@@ -32,8 +32,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   w_prime: "W' (W prime), anaerobic work capacity in joules, the amount of energy in Joules you have available when riding above threshold",
   pmax: 'Highest instant power that can be produced for a very short duration',
   work_kj: 'Total work done, in kilojoules',
-  joules_above_ftp: 'Work done above FTP, in joules',
-  max_wbal_depletion: "Maximum W'bal depletion during activity, in joules",
+  lthr: 'Lactate Threshold Heart Rate at time of activity, in beats per minute',
 
   // Heart rate
   average_heart_rate: 'Average heart rate in beats per minute',
@@ -72,41 +71,28 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   min_altitude_m: 'Minimum altitude in meters',
   max_altitude_m: 'Maximum altitude in meters',
 
-  // Temperature
-  average_temp_c: 'Average temperature in Celsius',
-  min_temp_c: 'Minimum temperature in Celsius',
-  max_temp_c: 'Maximum temperature in Celsius',
-
   // Energy
   calories: 'Estimated calories burned',
   cho_used_g: 'Estimated carbohydrates used, in grams',
-  cho_intake_g: 'Carbohydrates consumed during activity, in grams. Seldom used, its absence doesn’t imply lack of consumption.',
+  cho_intake_g: 'Carbohydrates consumed during activity, in grams. Seldom used, its absence doesn\'t imply lack of consumption.',
+
+  // Athlete metrics at time of activity
+  weight: 'Athlete weight at time of activity',
+  resting_hr: 'Resting heart rate at time of activity, in beats per minute',
 
   // Running specific
   average_stride_m: 'Average stride length in meters',
   gap: 'Gradient Adjusted Pace',
 
   // Activity context
-  is_indoor: 'Whether activity was on a trainer/treadmill/indoor',
+  is_indoor: 'Whether activity was indoor',
   is_commute: 'Whether activity was marked as a commute',
   is_race: 'Whether activity was marked as a race',
-  workout_class: 'Workout classification: Endurance, Tempo, Threshold, VO2max, etc.',
 
   // Zone data (normalized with names, thresholds, and time in zones)
   hr_zones: 'Array of heart rate zone objects. Each object contains: name (e.g., "Z1", "Z2"), low_bpm, high_bpm (null for highest zone), and time_in_zone (human-readable duration like "1:49:44"). These zones are from the time of the activity and may differ from current athlete profile zones.',
   power_zones: 'Array of power zone objects. Each object contains: name (e.g., "Active Recovery", "Endurance"), low_percent, high_percent (null for highest zone), low_watts, high_watts (null for highest zone), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
   pace_zones: 'Array of pace zone objects. Each object contains: name (e.g., "Easy", "Tempo"), low_percent, high_percent (null for highest zone), slow_pace (slower pace at low %), fast_pace (faster pace at high %), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
-
-  // Polarization
-  polarization_index: 'Training polarization index (0-2). Higher = more polarized (Z1 + Z5+ with little Z3-Z4)',
-
-  // Device
-  device_name: 'Recording device name (e.g., Garmin Edge, ZWIFT)',
-  power_meter: 'Power meter used',
-
-  // Counts
-  intervals_count: 'Number of structured intervals in workout',
-  laps_count: 'Number of laps/segments',
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
