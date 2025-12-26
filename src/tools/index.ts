@@ -207,8 +207,8 @@ and will not be updated throughout the day.
     server.tool(
       'get_athlete_profile',
       `Returns the athlete's profile from Intervals.icu including:
-- Athlete info: name, location, timezone, gender, date of birth, and age.
-- The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
+  - Athlete info: name, location, timezone, gender, date of birth, and age.
+  - The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
 
 <instructions>
 - You **MUST** use the user\'s preferred units in all responses.
@@ -499,13 +499,11 @@ Get the activity_id from:
       `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
 
 <instructions>
-**ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
-
-Get the activity_id from:
-- get_workout_history (for past workouts)
-- get_todays_completed_workouts (for today's workouts)
-
-Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
+- **ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
+- Get the activity_id from:
+ - get_workout_history (for past workouts)
+ - get_todays_completed_workouts (for today's workouts)
+- Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
 </instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
@@ -527,13 +525,11 @@ Make sure to identify which comments are coming from the user when interpreting 
       `Fetches the weather conditions during a given outdoor workout.
 
 <instructions>
-**ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user\'s performance.
-
-**NEVER** fetch this when analyzing an **INDOOR** workout; weather conditions are irrelevant for indoor activities.
-
-Get the activity_id from:
-- get_workout_history (for past workouts)
-- get_todays_completed_workouts (for today's workouts)
+- **ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user\'s performance.
+- **NEVER** fetch this when analyzing an **INDOOR** workout; weather conditions are irrelevant for indoor activities.
+- Get the activity_id from:
+  - get_workout_history (for past workouts)
+  - get_todays_completed_workouts (for today's workouts)
 </instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
