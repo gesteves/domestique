@@ -447,6 +447,7 @@ Do NOT use for:
 Fetches a complete snapshot of today in a single call:
 - Whoop recovery: score, HRV, sleep metrics with level classifications
 - Whoop strain: score, calories, activities with level classifications
+- Fitness metrics from Intervals.icu: CTL (fitness), ATL (fatigue), TSB (form), plus ctl_load/atl_load showing today's training impact
 - Completed workouts from Intervals.icu with matched Whoop data
 - Planned workouts from TrainerRoad and Intervals.icu
 - Summary stats: workouts completed/remaining, TSS completed/planned
@@ -460,7 +461,7 @@ For deeper analysis of any component, use the specific tool.
       withToolResponse(
         async () => this.currentTools.getDailySummary(),
         {
-          fieldDescriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned'),
+          fieldDescriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned', 'fitness'),
           getMessage: (data) => {
             const parts: string[] = [];
             if (data.recovery) {
@@ -468,6 +469,9 @@ For deeper analysis of any component, use the specific tool.
             }
             if (data.strain) {
               parts.push(`Strain: ${data.strain.strain_score.toFixed(1)} (${data.strain.strain_level})`);
+            }
+            if (data.fitness) {
+              parts.push(`Fitness: CTL ${data.fitness.ctl.toFixed(0)}, TSB ${data.fitness.tsb.toFixed(0)}`);
             }
             parts.push(`Completed: ${data.workouts_completed} workout${data.workouts_completed !== 1 ? 's' : ''}, Planned: ${data.workouts_planned} workout${data.workouts_planned !== 1 ? 's' : ''}`);
             return parts.join('. ') + '.';
@@ -757,6 +761,8 @@ Key metrics:
   • Optimal: 0.8-1.3
   • Caution: 1.3-1.5
   • High injury risk: >1.5
+- ctl_load: Weighted contribution to CTL from each day's training
+- atl_load: Weighted contribution to ATL from each day's training
 
 Returns daily time series (oldest to newest) plus summary statistics.
 Use with get_recovery_trends to correlate load with recovery.

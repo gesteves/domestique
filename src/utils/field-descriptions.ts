@@ -162,7 +162,8 @@ export const FITNESS_FIELD_DESCRIPTIONS = {
   atl: 'Acute Training Load (fatigue) - 7-day exponentially weighted average of daily TSS',
   tsb: 'Training Stress Balance (form) = CTL - ATL. Positive = fresh, negative = fatigued. -10 to +25 typical for optimal performance',
   ramp_rate: 'Rate of CTL change per week. Safe: 3-7 pts/week. Aggressive: 7+ pts/week. Injury risk increases above 10 pts/week',
-  daily_tss: 'Training Stress Score for that specific day',
+  ctl_load: 'Weighted contribution to CTL from this day\'s training. Shows how much this day\'s training impacted the 42-day fitness average.',
+  atl_load: 'Weighted contribution to ATL from this day\'s training. Shows how much this day\'s training impacted the 7-day fatigue average.',
 
   // Summary fields
   current_ctl: 'Most recent CTL value (current fitness level)',

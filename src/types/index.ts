@@ -255,6 +255,8 @@ export interface FitnessMetrics {
   atl: number; // Acute Training Load (fatigue)
   tsb: number; // Training Stress Balance (form)
   ramp_rate?: number;
+  ctl_load?: number; // Weighted contribution to CTL from this day's training
+  atl_load?: number; // Weighted contribution to ATL from this day's training
 }
 
 // Activity matching result
@@ -412,7 +414,8 @@ export interface DailyTrainingLoad {
   atl: number; // Acute Training Load (fatigue)
   tsb: number; // Training Stress Balance (form)
   ramp_rate?: number; // Weekly CTL change rate
-  daily_tss?: number; // That day's training stress
+  ctl_load?: number; // Weighted contribution to CTL from this day's training
+  atl_load?: number; // Weighted contribution to ATL from this day's training
 }
 
 export type CTLTrend = 'increasing' | 'stable' | 'decreasing';
@@ -534,6 +537,8 @@ export interface DailySummary {
   recovery: RecoveryData | null;
   /** Today's Whoop strain data with insight fields, null if unavailable */
   strain: StrainData | null;
+  /** Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu, null if unavailable */
+  fitness: FitnessMetrics | null;
   /** Completed workouts from Intervals.icu with matched Whoop data */
   completed_workouts: WorkoutWithWhoop[];
   /** Planned workouts from TrainerRoad and Intervals.icu */

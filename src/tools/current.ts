@@ -6,6 +6,7 @@ import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import type {
   RecoveryData,
   StrainData,
+  FitnessMetrics,
   PlannedWorkout,
   NormalizedWorkout,
   WorkoutWithWhoop,
@@ -230,13 +231,17 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recovery, strain, completedWorkouts, plannedWorkouts] = await Promise.all([
+    const [recovery, strain, fitness, completedWorkouts, plannedWorkouts] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return null;
       }),
       this.getTodaysStrain().catch((e) => {
         console.error('Error fetching strain for daily summary:', e);
+        return null;
+      }),
+      this.intervals.getTodayFitness().catch((e) => {
+        console.error('Error fetching fitness for daily summary:', e);
         return null;
       }),
       this.getTodaysCompletedWorkouts().catch((e) => {
@@ -263,6 +268,7 @@ export class CurrentTools {
       date: today,
       recovery,
       strain,
+      fitness,
       completed_workouts: completedWorkouts,
       planned_workouts: plannedWorkouts,
       workouts_completed: completedWorkouts.length,

@@ -3,7 +3,7 @@ import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity } from '../../src/types/index.js';
+import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
@@ -306,6 +306,137 @@ describe('CurrentTools', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(intervalsWorkouts[0]);
+    });
+  });
+
+  describe('getDailySummary', () => {
+    const mockRecovery: RecoveryData = {
+      date: '2024-12-15',
+      recovery_score: 85,
+      hrv_rmssd: 65,
+      resting_heart_rate: 52,
+      sleep_performance_percentage: 90,
+      sleep_duration: '7:30:00',
+      recovery_level: 'SUFFICIENT',
+      recovery_level_description: 'Your recovery is sufficient',
+      sleep_performance_level: 'OPTIMAL',
+      sleep_performance_level_description: 'Your sleep performance is optimal',
+    };
+
+    const mockStrain: StrainData = {
+      date: '2024-12-15',
+      strain_score: 15.5,
+      strain_level: 'HIGH',
+      strain_level_description: 'High strain',
+      average_heart_rate: 75,
+      max_heart_rate: 185,
+      calories: 2500,
+      activities: [],
+    };
+
+    const mockFitness: FitnessMetrics = {
+      date: '2024-12-15',
+      ctl: 65,
+      atl: 72,
+      tsb: -7,
+      ramp_rate: 4.5,
+      ctl_load: 1.8,
+      atl_load: 10.2,
+    };
+
+    const mockWorkouts: NormalizedWorkout[] = [
+      {
+        id: '1',
+        date: '2024-12-15T10:00:00Z',
+        start_date_utc: '2024-12-15T10:00:00Z',
+        activity_type: 'Cycling',
+        duration: '1:00:00',
+        tss: 85,
+        source: 'intervals.icu',
+      },
+    ];
+
+    const mockPlannedWorkouts: PlannedWorkout[] = [
+      {
+        id: 'tr-1',
+        date: '2024-12-15T09:00:00Z',
+        name: 'Sweet Spot Base',
+        expected_tss: 88,
+        source: 'trainerroad',
+      },
+    ];
+
+    beforeEach(() => {
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
+    });
+
+    it('should return complete daily summary with all data', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(mockRecovery);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(mockStrain);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue(mockPlannedWorkouts);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.recovery).toEqual(mockRecovery);
+      expect(result.strain).toEqual(mockStrain);
+      expect(result.fitness).toEqual(mockFitness);
+      expect(result.completed_workouts).toHaveLength(1);
+      expect(result.planned_workouts).toHaveLength(1);
+      expect(result.workouts_completed).toBe(1);
+      expect(result.workouts_planned).toBe(1);
+      expect(result.tss_completed).toBe(85);
+      expect(result.tss_planned).toBe(88);
+    });
+
+    it('should include fitness metrics with ctl_load and atl_load', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.fitness).not.toBeNull();
+      expect(result.fitness?.ctl).toBe(65);
+      expect(result.fitness?.atl).toBe(72);
+      expect(result.fitness?.tsb).toBe(-7);
+      expect(result.fitness?.ctl_load).toBe(1.8);
+      expect(result.fitness?.atl_load).toBe(10.2);
+    });
+
+    it('should handle null fitness when fetch fails', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockRejectedValue(new Error('Failed'));
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.fitness).toBeNull();
+    });
+
+    it('should handle missing Whoop client gracefully', async () => {
+      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await toolsWithoutWhoop.getDailySummary();
+
+      expect(result.recovery).toBeNull();
+      expect(result.strain).toBeNull();
+      expect(result.fitness).toEqual(mockFitness);
     });
   });
 });

@@ -36,6 +36,7 @@ import {
   formatPace,
   isSwimmingActivity,
 } from '../utils/format-units.js';
+import { getTodayInTimezone } from '../utils/date-parser.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
@@ -213,7 +214,8 @@ interface IntervalsWellness {
   ctl: number;
   atl: number;
   rampRate?: number;
-  load?: number; // daily training load
+  ctlLoad?: number; // Weighted contribution to CTL from this day's training
+  atlLoad?: number; // Weighted contribution to ATL from this day's training
 }
 
 interface IntervalsEvent {
@@ -1124,6 +1126,8 @@ export class IntervalsClient {
       atl: w.atl,
       tsb: w.ctl - w.atl, // Training Stress Balance = CTL - ATL
       ramp_rate: w.rampRate,
+      ctl_load: w.ctlLoad,
+      atl_load: w.atlLoad,
     }));
   }
 
@@ -1148,10 +1152,11 @@ export class IntervalsClient {
   }
 
   /**
-   * Get today's fitness metrics
+   * Get today's fitness metrics using the athlete's timezone.
    */
   async getTodayFitness(): Promise<FitnessMetrics | null> {
-    const today = new Date().toISOString().split('T')[0];
+    const timezone = await this.getAthleteTimezone();
+    const today = getTodayInTimezone(timezone);
     const metrics = await this.getFitnessMetrics(today, today);
     return metrics.length > 0 ? metrics[0] : null;
   }
@@ -1402,7 +1407,8 @@ export class IntervalsClient {
       atl: w.atl,
       tsb: w.ctl - w.atl,
       ramp_rate: w.rampRate,
-      daily_tss: w.load,
+      ctl_load: w.ctlLoad,
+      atl_load: w.atlLoad,
     }));
 
     // Calculate summary

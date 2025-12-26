@@ -427,7 +427,15 @@ describe('IntervalsClient', () => {
 
   describe('getTodayFitness', () => {
     it('should return today\'s fitness metrics', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
       const mockWellness = [{ id: '1', date: '2024-12-15', ctl: 55, atl: 50 }];
+
+      // First call: getAthleteTimezone (fetches /profile)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+      // Second call: getFitnessMetrics (fetches /wellness)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockWellness),
@@ -440,6 +448,14 @@ describe('IntervalsClient', () => {
     });
 
     it('should return null when no data', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+
+      // First call: getAthleteTimezone (fetches /profile)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+      // Second call: getFitnessMetrics (fetches /wellness)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve([]),
