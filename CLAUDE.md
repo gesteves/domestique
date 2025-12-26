@@ -56,32 +56,6 @@ The development server runs on `http://localhost:3000` with hot reload enabled.
 | `domestique-prod` | 3001 | Production-like build (use `--profile prod`) |
 | `redis` | 6379 | Token storage for Whoop OAuth |
 
-## Project Structure
-
-```
-src/
-├── index.ts              # Entry point
-├── server.ts             # Express server with MCP transport
-├── stdio.ts              # Stdio transport (alternative to HTTP)
-├── auth/
-│   └── middleware.ts     # Token validation (Bearer header or query param)
-├── clients/
-│   ├── intervals.ts      # Intervals.icu API client
-│   ├── whoop.ts          # Whoop API client (OAuth)
-│   └── trainerroad.ts    # TrainerRoad iCal parser
-├── tools/
-│   ├── index.ts          # Tool registry
-│   ├── current.ts        # Current/recent data tools
-│   ├── historical.ts     # Historical data tools
-│   ├── planning.ts       # Future workout tools
-│   └── types.ts          # Shared types
-├── types/
-│   └── index.ts          # Type definitions
-└── utils/
-    ├── activity-matcher.ts  # Cross-platform activity matching
-    ├── date-parser.ts       # Natural language date parsing
-    └── redis.ts             # Redis client for token storage
-```
 
 ## Key Technologies
 
@@ -159,6 +133,9 @@ docker run domestique-test
 1. Add tool implementation in appropriate file (`tools/current.ts`, `tools/historical.ts`, or `tools/planning.ts`)
 2. Register in `tools/index.ts` in the `registerTools()` method
 3. Add any new API methods to the relevant client (`clients/*.ts`)
+4. Ensure the new tool, any new API methods to the existing clients, and/or new clients have extensive test coverage.
+5. Ensure the tool description and field descriptions are accurate.
+6. Ensure the new tool is represented in the @README.md file.
 
 ### Adding a New API Client
 
@@ -194,17 +171,9 @@ curl -X POST http://localhost:3000/mcp \
 ## Important Notes
 
 1. **Whoop uses OAuth** - Tokens stored in Redis, refreshed automatically. Initial setup requires running `npm run whoop:auth` interactively.
-
 2. **Hot reload** - The dev container uses `tsx watch` for hot reload of `src/` files.
-
 3. **express.json() middleware** - Used for Streamable HTTP transport to parse JSON request bodies.
-
 4. **Tool registry is shared** - Created once at server start, but each MCP session gets its own `McpServer` instance.
-
-5. After completing any changes, restart the docker container with `docker compose restart domestique` if it's running, so the changes can be tested by the user.
-
-6. When making changes, ensure that @README.md is up to date.
-
-7. When adding new tools or modifying existing ones, ensure that the tool descriptions and the field descriptions are up to date.
-
-8. Always ensure tests pass with `nvm use && npm test`; add new tests as needed.
+5. When making changes, ensure that @README.md is up to date.
+6. When adding new tools or modifying existing ones, ensure that the tool descriptions and the field descriptions are up to date.
+7. Always ensure tests pass with `nvm use && npm test` and always add tests for new functionality.
