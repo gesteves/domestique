@@ -2,7 +2,18 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HistoricalTools } from '../../src/tools/historical.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
-import type { NormalizedWorkout, RecoveryData, StrainActivity, WellnessTrends } from '../../src/types/index.js';
+import type {
+  NormalizedWorkout,
+  RecoveryData,
+  StrainActivity,
+  WellnessTrends,
+  TrainingLoadTrends,
+  WorkoutIntervalsResponse,
+  WorkoutNotesResponse,
+  ActivityPowerCurve,
+  ActivityPaceCurve,
+  ActivityHRCurve,
+} from '../../src/types/index.js';
 
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
@@ -284,6 +295,562 @@ describe('HistoricalTools', () => {
 
       expect(result.data).toEqual([]);
       expect(result.period_days).toBe(7);
+    });
+  });
+
+  describe('getTrainingLoadTrends', () => {
+    const mockTrainingLoadTrends: TrainingLoadTrends = {
+      period_days: 42,
+      sport: 'all',
+      data: [
+        { date: '2024-12-01', ctl: 50, atl: 45, tsb: 5, ramp_rate: 3, ctl_load: 40, atl_load: 60 },
+        { date: '2024-12-15', ctl: 55, atl: 50, tsb: 5, ramp_rate: 4, ctl_load: 45, atl_load: 65 },
+      ],
+      summary: {
+        current_ctl: 55,
+        current_atl: 50,
+        current_tsb: 5,
+        ctl_trend: 'increasing',
+        avg_ramp_rate: 3.5,
+        peak_ctl: 55,
+        peak_ctl_date: '2024-12-15',
+        acwr: 0.91,
+        acwr_status: 'optimal',
+      },
+    };
+
+    it('should fetch training load trends with default days', async () => {
+      vi.mocked(mockIntervalsClient.getTrainingLoadTrends).mockResolvedValue(mockTrainingLoadTrends);
+
+      const result = await tools.getTrainingLoadTrends();
+
+      expect(result).toEqual(mockTrainingLoadTrends);
+      expect(mockIntervalsClient.getTrainingLoadTrends).toHaveBeenCalledWith(42);
+    });
+
+    it('should fetch training load trends with custom days', async () => {
+      vi.mocked(mockIntervalsClient.getTrainingLoadTrends).mockResolvedValue(mockTrainingLoadTrends);
+
+      const result = await tools.getTrainingLoadTrends(90);
+
+      expect(result).toEqual(mockTrainingLoadTrends);
+      expect(mockIntervalsClient.getTrainingLoadTrends).toHaveBeenCalledWith(90);
+    });
+
+    it('should propagate errors from client', async () => {
+      vi.mocked(mockIntervalsClient.getTrainingLoadTrends).mockRejectedValue(new Error('API error'));
+
+      await expect(tools.getTrainingLoadTrends()).rejects.toThrow('API error');
+    });
+  });
+
+  describe('getWorkoutIntervals', () => {
+    const mockIntervalsResponse: WorkoutIntervalsResponse = {
+      activity_id: 'i12345',
+      intervals: [
+        {
+          type: 'WORK',
+          label: 'Interval 1',
+          start_seconds: 600,
+          duration: '0:04:00',
+          average_watts: 300,
+          max_watts: 350,
+          average_hr: 165,
+          max_hr: 175,
+          power_zone: 4,
+        },
+        {
+          type: 'RECOVERY',
+          start_seconds: 840,
+          duration: '0:02:00',
+          average_watts: 150,
+          average_hr: 120,
+          power_zone: 1,
+        },
+      ],
+      groups: [
+        {
+          id: '4min@300w165hr',
+          count: 5,
+          average_watts: 300,
+          average_hr: 165,
+          duration: '0:04:00',
+        },
+      ],
+    };
+
+    it('should fetch workout intervals for activity', async () => {
+      vi.mocked(mockIntervalsClient.getActivityIntervals).mockResolvedValue(mockIntervalsResponse);
+
+      const result = await tools.getWorkoutIntervals('i12345');
+
+      expect(result).toEqual(mockIntervalsResponse);
+      expect(result.activity_id).toBe('i12345');
+      expect(result.intervals).toHaveLength(2);
+      expect(result.groups).toHaveLength(1);
+      expect(mockIntervalsClient.getActivityIntervals).toHaveBeenCalledWith('i12345');
+    });
+
+    it('should propagate errors from client', async () => {
+      vi.mocked(mockIntervalsClient.getActivityIntervals).mockRejectedValue(new Error('Activity not found'));
+
+      await expect(tools.getWorkoutIntervals('invalid-id')).rejects.toThrow('Activity not found');
+    });
+  });
+
+  describe('getWorkoutNotes', () => {
+    const mockNotesResponse: WorkoutNotesResponse = {
+      activity_id: 'i12345',
+      notes: [
+        {
+          id: 1,
+          athlete_id: 'athlete-1',
+          name: 'John Doe',
+          created: '2024-12-15T10:00:00Z',
+          type: 'TEXT',
+          content: 'Felt strong today, legs were fresh after rest day.',
+        },
+        {
+          id: 2,
+          athlete_id: 'athlete-1',
+          name: 'John Doe',
+          created: '2024-12-15T11:00:00Z',
+          type: 'TEXT',
+          content: 'Power numbers were great on the intervals.',
+        },
+      ],
+    };
+
+    it('should fetch workout notes for activity', async () => {
+      vi.mocked(mockIntervalsClient.getActivityNotes).mockResolvedValue(mockNotesResponse);
+
+      const result = await tools.getWorkoutNotes('i12345');
+
+      expect(result).toEqual(mockNotesResponse);
+      expect(result.activity_id).toBe('i12345');
+      expect(result.notes).toHaveLength(2);
+      expect(result.notes[0].content).toContain('Felt strong today');
+      expect(mockIntervalsClient.getActivityNotes).toHaveBeenCalledWith('i12345');
+    });
+
+    it('should return empty notes array when no notes exist', async () => {
+      vi.mocked(mockIntervalsClient.getActivityNotes).mockResolvedValue({
+        activity_id: 'i12345',
+        notes: [],
+      });
+
+      const result = await tools.getWorkoutNotes('i12345');
+
+      expect(result.notes).toEqual([]);
+    });
+
+    it('should propagate errors from client', async () => {
+      vi.mocked(mockIntervalsClient.getActivityNotes).mockRejectedValue(new Error('API error'));
+
+      await expect(tools.getWorkoutNotes('i12345')).rejects.toThrow('API error');
+    });
+  });
+
+  describe('getWorkoutWeather', () => {
+    it('should fetch workout weather for activity', async () => {
+      vi.mocked(mockIntervalsClient.getActivityWeather).mockResolvedValue({
+        activity_id: 'i12345',
+        weather_description: 'Sunny, 22°C, light wind from NW at 10 km/h',
+      });
+
+      const result = await tools.getWorkoutWeather('i12345');
+
+      expect(result.activity_id).toBe('i12345');
+      expect(result.weather_description).toContain('Sunny');
+      expect(mockIntervalsClient.getActivityWeather).toHaveBeenCalledWith('i12345');
+    });
+
+    it('should return null weather for indoor activities', async () => {
+      vi.mocked(mockIntervalsClient.getActivityWeather).mockResolvedValue({
+        activity_id: 'i12345',
+        weather_description: null,
+      });
+
+      const result = await tools.getWorkoutWeather('i12345');
+
+      expect(result.weather_description).toBeNull();
+    });
+
+    it('should propagate errors from client', async () => {
+      vi.mocked(mockIntervalsClient.getActivityWeather).mockRejectedValue(new Error('API error'));
+
+      await expect(tools.getWorkoutWeather('i12345')).rejects.toThrow('API error');
+    });
+  });
+
+  describe('getPowerCurve', () => {
+    const mockPowerCurveActivities: ActivityPowerCurve[] = [
+      {
+        activity_id: 'i12345',
+        date: '2024-12-10',
+        weight_kg: 75,
+        curve: [
+          { duration_seconds: 5, duration_label: '5s', watts: 900, watts_per_kg: 12 },
+          { duration_seconds: 30, duration_label: '30s', watts: 600, watts_per_kg: 8 },
+          { duration_seconds: 60, duration_label: '1min', watts: 450, watts_per_kg: 6 },
+          { duration_seconds: 300, duration_label: '5min', watts: 350, watts_per_kg: 4.67 },
+          { duration_seconds: 1200, duration_label: '20min', watts: 300, watts_per_kg: 4 },
+          { duration_seconds: 3600, duration_label: '60min', watts: 270, watts_per_kg: 3.6 },
+          { duration_seconds: 7200, duration_label: '2hr', watts: 240, watts_per_kg: 3.2 },
+        ],
+      },
+    ];
+
+    it('should fetch power curve with summary', async () => {
+      vi.mocked(mockIntervalsClient.getPowerCurves).mockResolvedValue({
+        durations: [5, 30, 60, 300, 1200, 3600, 7200],
+        activities: mockPowerCurveActivities,
+      });
+
+      const result = await tools.getPowerCurve({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+      });
+
+      expect(result.period_start).toBe('2024-12-01');
+      expect(result.period_end).toBe('2024-12-15');
+      expect(result.sport).toBe('cycling');
+      expect(result.activity_count).toBe(1);
+      expect(result.summary.best_5s).toBeDefined();
+      expect(result.summary.best_5s?.watts).toBe(900);
+      expect(result.summary.best_20min?.watts).toBe(300);
+      expect(result.summary.estimated_ftp).toBe(285); // 300 * 0.95
+    });
+
+    it('should parse natural language dates', async () => {
+      vi.mocked(mockIntervalsClient.getPowerCurves).mockResolvedValue({
+        durations: [5, 30, 60, 300, 1200, 3600, 7200],
+        activities: mockPowerCurveActivities,
+      });
+
+      await tools.getPowerCurve({
+        start_date: '90 days ago',
+      });
+
+      expect(mockIntervalsClient.getPowerCurves).toHaveBeenCalledWith(
+        '2024-09-16',
+        '2024-12-15',
+        'Ride',
+        [5, 30, 60, 300, 1200, 3600, 7200]
+      );
+    });
+
+    it('should handle custom durations', async () => {
+      vi.mocked(mockIntervalsClient.getPowerCurves).mockResolvedValue({
+        durations: [10, 120],
+        activities: [],
+      });
+
+      await tools.getPowerCurve({
+        start_date: '2024-12-01',
+        durations: [10, 120],
+      });
+
+      expect(mockIntervalsClient.getPowerCurves).toHaveBeenCalledWith(
+        '2024-12-01',
+        '2024-12-15',
+        'Ride',
+        [10, 120]
+      );
+    });
+
+    it('should include comparison when compare_to params provided', async () => {
+      vi.mocked(mockIntervalsClient.getPowerCurves)
+        .mockResolvedValueOnce({
+          durations: [5, 30, 60, 300, 1200, 3600, 7200],
+          activities: mockPowerCurveActivities,
+        })
+        .mockResolvedValueOnce({
+          durations: [5, 30, 60, 300, 1200, 3600, 7200],
+          activities: [
+            {
+              ...mockPowerCurveActivities[0],
+              curve: mockPowerCurveActivities[0].curve.map((p) => ({
+                ...p,
+                watts: p.watts - 20,
+                watts_per_kg: p.watts_per_kg - 0.2,
+              })),
+            },
+          ],
+        });
+
+      const result = await tools.getPowerCurve({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+        compare_to_start: '2024-11-01',
+        compare_to_end: '2024-11-15',
+      });
+
+      expect(result.comparison).toBeDefined();
+      expect(result.comparison?.previous_period_start).toBe('2024-11-01');
+      expect(result.comparison?.previous_period_end).toBe('2024-11-15');
+      expect(result.comparison?.changes.length).toBeGreaterThan(0);
+      expect(result.comparison?.changes[0].improved).toBe(true);
+    });
+
+    it('should handle empty activities', async () => {
+      vi.mocked(mockIntervalsClient.getPowerCurves).mockResolvedValue({
+        durations: [5, 30, 60, 300, 1200, 3600, 7200],
+        activities: [],
+      });
+
+      const result = await tools.getPowerCurve({
+        start_date: '2024-12-01',
+      });
+
+      expect(result.activity_count).toBe(0);
+      expect(result.summary.best_5s).toBeNull();
+      expect(result.summary.estimated_ftp).toBeNull();
+    });
+  });
+
+  describe('getPaceCurve', () => {
+    const mockRunningPaceActivities: ActivityPaceCurve[] = [
+      {
+        activity_id: 'i12346',
+        date: '2024-12-10',
+        weight_kg: 75,
+        curve: [
+          { distance_meters: 400, distance_label: '400m', time_seconds: 90, pace: '3:45/km' },
+          { distance_meters: 1000, distance_label: '1km', time_seconds: 240, pace: '4:00/km' },
+          { distance_meters: 1609, distance_label: 'mile', time_seconds: 400, pace: '4:08/km' },
+          { distance_meters: 5000, distance_label: '5km', time_seconds: 1200, pace: '4:00/km' },
+        ],
+      },
+    ];
+
+    it('should fetch running pace curve with summary', async () => {
+      vi.mocked(mockIntervalsClient.getPaceCurves).mockResolvedValue({
+        distances: [400, 1000, 1609, 5000],
+        gap_adjusted: false,
+        activities: mockRunningPaceActivities,
+      });
+
+      const result = await tools.getPaceCurve({
+        start_date: '2024-12-01',
+        sport: 'running',
+      });
+
+      expect(result.period_start).toBe('2024-12-01');
+      expect(result.sport).toBe('running');
+      expect(result.gap_adjusted).toBe(false);
+      expect(result.summary.best_400m).toBeDefined();
+      expect(result.summary.best_400m?.time_seconds).toBe(90);
+      expect(result.summary.best_1km?.pace).toBe('4:00/km');
+    });
+
+    it('should fetch swimming pace curve', async () => {
+      const mockSwimmingActivities: ActivityPaceCurve[] = [
+        {
+          activity_id: 'i12347',
+          date: '2024-12-10',
+          weight_kg: 75,
+          curve: [
+            { distance_meters: 100, distance_label: '100m', time_seconds: 90, pace: '1:30/100m' },
+            { distance_meters: 200, distance_label: '200m', time_seconds: 200, pace: '1:40/100m' },
+          ],
+        },
+      ];
+
+      vi.mocked(mockIntervalsClient.getPaceCurves).mockResolvedValue({
+        distances: [100, 200],
+        gap_adjusted: false,
+        activities: mockSwimmingActivities,
+      });
+
+      const result = await tools.getPaceCurve({
+        start_date: '2024-12-01',
+        sport: 'swimming',
+      });
+
+      expect(result.sport).toBe('swimming');
+      expect(result.summary.best_100m).toBeDefined();
+      expect(result.summary.best_100m?.time_seconds).toBe(90);
+      // Running-specific fields should not be in swimming response
+      expect(result.summary.best_400m).toBeUndefined();
+    });
+
+    it('should use GAP when specified for running', async () => {
+      vi.mocked(mockIntervalsClient.getPaceCurves).mockResolvedValue({
+        distances: [400, 1000],
+        gap_adjusted: true,
+        activities: mockRunningPaceActivities,
+      });
+
+      const result = await tools.getPaceCurve({
+        start_date: '2024-12-01',
+        sport: 'running',
+        gap: true,
+      });
+
+      expect(result.gap_adjusted).toBe(true);
+      expect(mockIntervalsClient.getPaceCurves).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        'Run',
+        expect.any(Array),
+        true
+      );
+    });
+
+    it('should include comparison when compare_to params provided', async () => {
+      vi.mocked(mockIntervalsClient.getPaceCurves)
+        .mockResolvedValueOnce({
+          distances: [400, 1000],
+          gap_adjusted: false,
+          activities: mockRunningPaceActivities,
+        })
+        .mockResolvedValueOnce({
+          distances: [400, 1000],
+          gap_adjusted: false,
+          activities: [
+            {
+              ...mockRunningPaceActivities[0],
+              curve: mockRunningPaceActivities[0].curve.map((p) => ({
+                ...p,
+                time_seconds: p.time_seconds + 10, // Slower previous period
+              })),
+            },
+          ],
+        });
+
+      const result = await tools.getPaceCurve({
+        start_date: '2024-12-01',
+        sport: 'running',
+        compare_to_start: '2024-11-01',
+        compare_to_end: '2024-11-15',
+      });
+
+      expect(result.comparison).toBeDefined();
+      expect(result.comparison?.changes[0].improved).toBe(true); // Faster now
+    });
+  });
+
+  describe('getHRCurve', () => {
+    const mockHRActivities: ActivityHRCurve[] = [
+      {
+        activity_id: 'i12348',
+        date: '2024-12-10',
+        curve: [
+          { duration_seconds: 5, duration_label: '5s', bpm: 190 },
+          { duration_seconds: 30, duration_label: '30s', bpm: 185 },
+          { duration_seconds: 60, duration_label: '1min', bpm: 180 },
+          { duration_seconds: 300, duration_label: '5min', bpm: 170 },
+          { duration_seconds: 1200, duration_label: '20min', bpm: 165 },
+          { duration_seconds: 3600, duration_label: '60min', bpm: 155 },
+          { duration_seconds: 7200, duration_label: '2hr', bpm: 145 },
+        ],
+      },
+    ];
+
+    it('should fetch HR curve with summary', async () => {
+      vi.mocked(mockIntervalsClient.getHRCurves).mockResolvedValue({
+        durations: [5, 30, 60, 300, 1200, 3600, 7200],
+        activities: mockHRActivities,
+      });
+
+      const result = await tools.getHRCurve({
+        start_date: '2024-12-01',
+      });
+
+      expect(result.period_start).toBe('2024-12-01');
+      expect(result.sport).toBeNull(); // No sport filter
+      expect(result.summary.max_5s?.bpm).toBe(190);
+      expect(result.summary.max_20min?.bpm).toBe(165);
+    });
+
+    it('should filter by sport', async () => {
+      vi.mocked(mockIntervalsClient.getHRCurves).mockResolvedValue({
+        durations: [5, 30, 60, 300, 1200, 3600, 7200],
+        activities: mockHRActivities,
+      });
+
+      const result = await tools.getHRCurve({
+        start_date: '2024-12-01',
+        sport: 'cycling',
+      });
+
+      expect(result.sport).toBe('cycling');
+      expect(mockIntervalsClient.getHRCurves).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        'Ride',
+        expect.any(Array)
+      );
+    });
+
+    it('should include comparison when compare_to params provided', async () => {
+      vi.mocked(mockIntervalsClient.getHRCurves)
+        .mockResolvedValueOnce({
+          durations: [5, 30, 60, 300, 1200, 3600, 7200],
+          activities: mockHRActivities,
+        })
+        .mockResolvedValueOnce({
+          durations: [5, 30, 60, 300, 1200, 3600, 7200],
+          activities: [
+            {
+              ...mockHRActivities[0],
+              curve: mockHRActivities[0].curve.map((p) => ({
+                ...p,
+                bpm: p.bpm - 5,
+              })),
+            },
+          ],
+        });
+
+      const result = await tools.getHRCurve({
+        start_date: '2024-12-01',
+        compare_to_start: '2024-11-01',
+        compare_to_end: '2024-11-15',
+      });
+
+      expect(result.comparison).toBeDefined();
+      expect(result.comparison?.changes[0].change_bpm).toBe(5); // 190 - 185
+    });
+
+    it('should handle empty activities', async () => {
+      vi.mocked(mockIntervalsClient.getHRCurves).mockResolvedValue({
+        durations: [5, 30, 60, 300, 1200, 3600, 7200],
+        activities: [],
+      });
+
+      const result = await tools.getHRCurve({
+        start_date: '2024-12-01',
+      });
+
+      expect(result.activity_count).toBe(0);
+      expect(result.summary.max_5s).toBeNull();
+    });
+  });
+
+  describe('error handling across methods', () => {
+    it('should handle Whoop errors gracefully in getWorkoutHistory', async () => {
+      const mockWorkouts: NormalizedWorkout[] = [
+        {
+          id: '1',
+          date: '2024-12-10T10:00:00Z',
+          start_date_utc: '2024-12-10T10:00:00Z',
+          activity_type: 'Cycling',
+          duration: '1:00:00',
+          source: 'intervals.icu',
+        },
+      ];
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockRejectedValue(new Error('Whoop API down'));
+
+      // Should not throw, just return workouts without Whoop data
+      const result = await tools.getWorkoutHistory({
+        start_date: '2024-12-01',
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].whoop).toBeNull();
     });
   });
 });
