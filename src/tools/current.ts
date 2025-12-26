@@ -15,6 +15,10 @@ import type {
   AthleteProfile,
   DailySummary,
   SportSettingsResponse,
+  TodaysRecoveryResponse,
+  TodaysStrainResponse,
+  TodaysCompletedWorkoutsResponse,
+  TodaysPlannedWorkoutsResponse,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -26,15 +30,26 @@ export class CurrentTools {
   ) {}
 
   /**
-   * Get today's recovery data from Whoop
+   * Get today's recovery data from Whoop with current date/time in user's timezone
    */
-  async getTodaysRecovery(): Promise<RecoveryData | null> {
+  async getTodaysRecovery(): Promise<TodaysRecoveryResponse> {
+    // Use athlete's timezone to get current date/time
+    const timezone = await this.intervals.getAthleteTimezone();
+    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
+
     if (!this.whoop) {
-      return null;
+      return {
+        current_date: currentDateTime,
+        recovery: null,
+      };
     }
 
     try {
-      return await this.whoop.getTodayRecovery();
+      const recovery = await this.whoop.getTodayRecovery();
+      return {
+        current_date: currentDateTime,
+        recovery,
+      };
     } catch (error) {
       console.error('Error fetching today\'s recovery:', error);
       throw error;
@@ -42,16 +57,27 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's strain data from Whoop.
+   * Get today's strain data from Whoop with current date/time in user's timezone.
    * Uses Whoop's physiological day model - returns the most recent scored cycle.
    */
-  async getTodaysStrain(): Promise<StrainData | null> {
+  async getTodaysStrain(): Promise<TodaysStrainResponse> {
+    // Use athlete's timezone to get current date/time
+    const timezone = await this.intervals.getAthleteTimezone();
+    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
+
     if (!this.whoop) {
-      return null;
+      return {
+        current_date: currentDateTime,
+        strain: null,
+      };
     }
 
     try {
-      return await this.whoop.getTodayStrain();
+      const strain = await this.whoop.getTodayStrain();
+      return {
+        current_date: currentDateTime,
+        strain,
+      };
     } catch (error) {
       console.error('Error fetching today\'s strain:', error);
       throw error;
@@ -60,11 +86,13 @@ export class CurrentTools {
 
   /**
    * Get today's completed workouts from Intervals.icu with matched Whoop data
+   * and current date/time in user's timezone
    */
-  async getTodaysCompletedWorkouts(): Promise<WorkoutWithWhoop[]> {
-    // Use athlete's timezone to determine "today"
+  async getTodaysCompletedWorkouts(): Promise<TodaysCompletedWorkoutsResponse> {
+    // Use athlete's timezone to determine "today" and get current date/time
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
+    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
 
     try {
       // Fetch Intervals.icu activities
@@ -72,10 +100,13 @@ export class CurrentTools {
 
       // If no Whoop client, return workouts without Whoop data
       if (!this.whoop) {
-        return workouts.map((workout) => ({
-          ...workout,
-          whoop: null,
-        }));
+        return {
+          current_date: currentDateTime,
+          workouts: workouts.map((workout) => ({
+            ...workout,
+            whoop: null,
+          })),
+        };
       }
 
       // Fetch Whoop activities for today
@@ -88,10 +119,13 @@ export class CurrentTools {
       }
 
       // Match and merge
-      return workouts.map((workout) => ({
-        ...workout,
-        whoop: this.findAndMatchWhoopActivity(workout, whoopActivities),
-      }));
+      return {
+        current_date: currentDateTime,
+        workouts: workouts.map((workout) => ({
+          ...workout,
+          whoop: this.findAndMatchWhoopActivity(workout, whoopActivities),
+        })),
+      };
     } catch (error) {
       console.error('Error fetching today\'s completed workouts:', error);
       throw error;
@@ -143,13 +177,15 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's planned workouts from both TrainerRoad and Intervals.icu.
+   * Get today's planned workouts from both TrainerRoad and Intervals.icu
+   * with current date/time in user's timezone.
    * Returns a single merged array, preferring TrainerRoad for duplicates (has more detail).
    */
-  async getTodaysPlannedWorkouts(): Promise<PlannedWorkout[]> {
-    // Use athlete's timezone to determine "today"
+  async getTodaysPlannedWorkouts(): Promise<TodaysPlannedWorkoutsResponse> {
+    // Use athlete's timezone to determine "today" and get current date/time
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
+    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
 
     // Fetch from both sources in parallel
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
@@ -176,7 +212,10 @@ export class CurrentTools {
       }
     }
 
-    return merged;
+    return {
+      current_date: currentDateTime,
+      workouts: merged,
+    };
   }
 
   /**
@@ -231,14 +270,14 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recovery, strain, fitness, wellness, completedWorkouts, plannedWorkouts] = await Promise.all([
+    const [recoveryResponse, strainResponse, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
-        return null;
+        return { current_date: getCurrentDateTimeInTimezone(timezone), recovery: null };
       }),
       this.getTodaysStrain().catch((e) => {
         console.error('Error fetching strain for daily summary:', e);
-        return null;
+        return { current_date: getCurrentDateTimeInTimezone(timezone), strain: null };
       }),
       this.intervals.getTodayFitness().catch((e) => {
         console.error('Error fetching fitness for daily summary:', e);
@@ -250,13 +289,19 @@ export class CurrentTools {
       }),
       this.getTodaysCompletedWorkouts().catch((e) => {
         console.error('Error fetching completed workouts for daily summary:', e);
-        return [];
+        return { current_date: getCurrentDateTimeInTimezone(timezone), workouts: [] };
       }),
       this.getTodaysPlannedWorkouts().catch((e) => {
         console.error('Error fetching planned workouts for daily summary:', e);
-        return [];
+        return { current_date: getCurrentDateTimeInTimezone(timezone), workouts: [] };
       }),
     ]);
+
+    // Extract data from response objects
+    const recovery = recoveryResponse.recovery;
+    const strain = strainResponse.strain;
+    const completedWorkouts = completedWorkoutsResponse.workouts;
+    const plannedWorkouts = plannedWorkoutsResponse.workouts;
 
     // Calculate TSS totals
     const tssCompleted = completedWorkouts.reduce(

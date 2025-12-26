@@ -594,6 +594,54 @@ export interface DailySummary {
 }
 
 // ============================================
+// Today's Data with Timezone Context
+// ============================================
+
+/**
+ * Today's recovery data with current date/time in user's timezone.
+ * Returned by get_todays_recovery tool.
+ */
+export interface TodaysRecoveryResponse {
+  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
+  current_date: string;
+  /** Today's Whoop recovery data, null if unavailable */
+  recovery: RecoveryData | null;
+}
+
+/**
+ * Today's strain data with current date/time in user's timezone.
+ * Returned by get_todays_strain tool.
+ */
+export interface TodaysStrainResponse {
+  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
+  current_date: string;
+  /** Today's Whoop strain data, null if unavailable */
+  strain: StrainData | null;
+}
+
+/**
+ * Today's completed workouts with current date/time in user's timezone.
+ * Returned by get_todays_completed_workouts tool.
+ */
+export interface TodaysCompletedWorkoutsResponse {
+  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
+  current_date: string;
+  /** Completed workouts from Intervals.icu with matched Whoop data */
+  workouts: WorkoutWithWhoop[];
+}
+
+/**
+ * Today's planned workouts with current date/time in user's timezone.
+ * Returned by get_todays_planned_workouts tool.
+ */
+export interface TodaysPlannedWorkoutsResponse {
+  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
+  current_date: string;
+  /** Planned workouts from TrainerRoad and Intervals.icu */
+  workouts: PlannedWorkout[];
+}
+
+// ============================================
 // Performance Curves
 // ============================================
 
