@@ -462,6 +462,26 @@ export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {
   tss_planned: 'Total expected Training Stress Score from planned workouts',
 };
 
+export const TODAYS_RECOVERY_FIELD_DESCRIPTIONS = {
+  current_date: 'Current date and time in the user\'s local timezone (ISO 8601 with timezone offset, e.g., "2024-12-25T10:30:45-05:00"). Use this to understand the time of day; this context is important as recovery data represents last night\'s sleep and this morning\'s metrics.',
+  recovery: 'Today\'s Whoop recovery data. Null if Whoop is not configured or data is unavailable.',
+};
+
+export const TODAYS_STRAIN_FIELD_DESCRIPTIONS = {
+  current_date: 'Current date and time in the user\'s local timezone (ISO 8601 with timezone offset, e.g., "2024-12-25T10:30:45-05:00"). Use this to understand the time of day; this context shows how much strain has been accumulated so far today.',
+  strain: 'Today\'s Whoop strain data. Null if Whoop is not configured or data is unavailable.',
+};
+
+export const TODAYS_COMPLETED_WORKOUTS_FIELD_DESCRIPTIONS = {
+  current_date: 'Current date and time in the user\'s local timezone (ISO 8601 with timezone offset, e.g., "2024-12-25T10:30:45-05:00"). Use this to understand the time of day; workouts completed before this time are included.',
+  workouts: 'Array of completed workouts from Intervals.icu with matched Whoop data. Empty array if no workouts completed today.',
+};
+
+export const TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS = {
+  current_date: 'Current date and time in the user\'s local timezone (ISO 8601 with timezone offset, e.g., "2024-12-25T10:30:45-05:00"). Use this to understand the time of day; planned workouts may be scheduled for specific times that have passed or are upcoming.',
+  workouts: 'Array of planned workouts from TrainerRoad and Intervals.icu for today. Empty array if no workouts planned.',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
@@ -477,7 +497,11 @@ type FieldCategory =
   | 'pace_curve'
   | 'hr_curve'
   | 'wellness'
-  | 'daily_summary';
+  | 'daily_summary'
+  | 'todays_recovery'
+  | 'todays_strain'
+  | 'todays_completed_workouts'
+  | 'todays_planned_workouts';
 
 /**
  * Get descriptions for a specific category
@@ -514,6 +538,14 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return WELLNESS_FIELD_DESCRIPTIONS;
     case 'daily_summary':
       return DAILY_SUMMARY_FIELD_DESCRIPTIONS;
+    case 'todays_recovery':
+      return TODAYS_RECOVERY_FIELD_DESCRIPTIONS;
+    case 'todays_strain':
+      return TODAYS_STRAIN_FIELD_DESCRIPTIONS;
+    case 'todays_completed_workouts':
+      return TODAYS_COMPLETED_WORKOUTS_FIELD_DESCRIPTIONS;
+    case 'todays_planned_workouts':
+      return TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS;
   }
 }
 

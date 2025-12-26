@@ -123,8 +123,8 @@ Returns null if Whoop is not configured.
       withToolResponse(
         async () => this.currentTools.getTodaysRecovery(),
         {
-          fieldDescriptions: getFieldDescriptions('recovery'),
-          getNextActions: (data) => data
+          fieldDescriptions: combineFieldDescriptions('todays_recovery', 'recovery'),
+          getNextActions: (data) => data.recovery
             ? ['Use get_recovery_trends to see patterns over time', 'Use get_daily_summary for full today overview']
             : undefined,
         }
@@ -158,8 +158,8 @@ Returns null if Whoop is not configured.
       withToolResponse(
         async () => this.currentTools.getTodaysStrain(),
         {
-          fieldDescriptions: getFieldDescriptions('whoop'),
-          getNextActions: (data) => data
+          fieldDescriptions: combineFieldDescriptions('todays_strain', 'whoop'),
+          getNextActions: (data) => data.strain
             ? ['Use get_strain_history for trends over time', 'Use get_daily_summary for full today overview']
             : undefined,
         }
@@ -200,8 +200,8 @@ Returns empty array if no workouts completed today.
       withToolResponse(
         async () => this.currentTools.getTodaysCompletedWorkouts(),
         {
-          fieldDescriptions: getFieldDescriptions('workout'),
-          getNextActions: (data) => data && data.length > 0
+          fieldDescriptions: combineFieldDescriptions('todays_completed_workouts', 'workout', 'whoop'),
+          getNextActions: (data) => data.workouts && data.workouts.length > 0
             ? [
                 'Use get_workout_intervals(activity_id) for interval breakdown',
                 'Use get_workout_notes(activity_id) for athlete comments',
@@ -285,8 +285,8 @@ Returns empty array if no workouts planned today.
       withToolResponse(
         async () => this.currentTools.getTodaysPlannedWorkouts(),
         {
-          fieldDescriptions: getFieldDescriptions('planned'),
-          getNextActions: (data) => data && data.length > 0
+          fieldDescriptions: combineFieldDescriptions('todays_planned_workouts', 'planned'),
+          getNextActions: (data) => data.workouts && data.workouts.length > 0
             ? [
                 'Use get_todays_recovery to check readiness for planned workouts',
                 'Use get_upcoming_workouts to see the full week ahead',
