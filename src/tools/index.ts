@@ -215,6 +215,7 @@ and will not be updated throughout the day.
 - Checking training load (TSS) accumulated so far today.
 - Identifying workouts that may need detailed analysis via get_workout_intervals.
 - Understanding the user's training volume and intensity for the day.
+- Understanding total time in zones for the day (power, pace, heart race, and/or heat zones).
 </use-cases>`,
       {},
       withToolResponse(
@@ -365,6 +366,7 @@ and will not be updated throughout the day.
 - Identifying specific workouts for detailed analysis via get_workout_intervals.
 - Correlating workout history with recovery trends to understand training impact.
 - Filtering workouts by sport to analyze sport-specific training patterns.
+- Understanding total time in zones for the period (power, pace, heart race, and/or heat zones).
 </use-cases>
 
 <notes>
@@ -658,6 +660,40 @@ Get the activity_id from:
           getNextActions: () => [
             'Use get_workout_intervals for detailed power/HR data',
             'Use get_workout_notes for athlete comments',
+          ],
+        }
+      )
+    );
+
+    server.tool(
+      'get_workout_heat_zones',
+      `Fetches heat zone data for a specific workout, showing time spent in each heat strain zone.
+
+<use-cases>
+- Understanding how heat stress affected the user during a workout.
+- Analyzing heat training adaptations and heat strain exposure.
+- Evaluating whether the user trained in optimal heat zones for heat acclimation.
+</use-cases>
+
+<instructions>
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
+- Returns null if heat strain data is not available for this activity.
+</instructions>
+
+<notes>
+- Heat zones are based on the Heat Strain Index (HSI) metric recorded with a CORE body temperature sensor.
+- Heat strain data may not be available for every activity.
+</notes>`,
+      {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+      },
+      withToolResponse(
+        async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
+        {
+          fieldDescriptions: getFieldDescriptions('heat_zones'),
+          getNextActions: () => [
+            'Use get_workout_intervals for detailed power/HR data',
+            'Use get_workout_weather to correlate heat zones with weather conditions',
           ],
         }
       )

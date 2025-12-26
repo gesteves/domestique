@@ -15,6 +15,7 @@ import type {
   HRZone,
   PowerZone,
   PaceZone,
+  HeatZone,
   ZoneTime,
   WorkoutInterval,
   IntervalGroup,
@@ -40,6 +41,10 @@ import {
   isSwimmingActivity,
 } from '../utils/format-units.js';
 import { getTodayInTimezone } from '../utils/date-parser.js';
+import {
+  calculateHeatZones,
+  parseHeatStrainStreams,
+} from '../utils/heat-zones.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
@@ -1036,7 +1041,7 @@ export class IntervalsClient {
       );
 
       let description = response.description ?? null;
-      
+
       // Remove the "-- Intervals icu --\n" prefix if present
       if (description) {
         description = description.replace(/^-- Intervals icu --\n/i, '').trim();
@@ -1052,6 +1057,34 @@ export class IntervalsClient {
         activity_id: activityId,
         weather_description: null,
       };
+    }
+  }
+
+  /**
+   * Get heat zones for a specific activity.
+   * Returns null if heat strain data is not available.
+   */
+  async getActivityHeatZones(activityId: string): Promise<HeatZone[] | null> {
+    try {
+      interface StreamData {
+        type: string;
+        data: number[];
+      }
+
+      const streams = await this.fetchActivity<StreamData[]>(
+        activityId,
+        '/streams?types=heat_strain_index&types=time'
+      );
+
+      const parsed = parseHeatStrainStreams(streams);
+      if (!parsed) {
+        return null;
+      }
+
+      return calculateHeatZones(parsed.time, parsed.heat_strain_index);
+    } catch (error) {
+      // Heat strain data may not be available for all activities
+      return null;
     }
   }
 
@@ -1302,6 +1335,9 @@ export class IntervalsClient {
       activity.pace_zone_times
     );
 
+    // Fetch heat zones from stream data
+    const heatZones = await this.getActivityHeatZones(activity.id);
+
     return {
       id: activity.id,
       date: activity.start_date_local,
@@ -1395,6 +1431,7 @@ export class IntervalsClient {
       hr_zones: hrZones,
       power_zones: powerZones,
       pace_zones: paceZones,
+      heat_zones: heatZones ?? undefined,
 
       // Running/pace metrics
       average_stride_m: activity.average_stride,

@@ -93,6 +93,33 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   hr_zones: 'Array of heart rate zone objects. Each object contains: name (e.g., "Z1", "Z2"), low_bpm, high_bpm (null for highest zone), and time_in_zone (human-readable duration like "1:49:44"). These zones are from the time of the activity and may differ from current athlete profile zones.',
   power_zones: 'Array of power zone objects. Each object contains: name (e.g., "Active Recovery", "Endurance"), low_percent, high_percent (null for highest zone), low_watts, high_watts (null for highest zone), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
   pace_zones: 'Array of pace zone objects. Each object contains: name (e.g., "Easy", "Tempo"), low_percent, high_percent (null for highest zone), slow_pace (slower pace at low %), fast_pace (faster pace at high %), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
+  heat_zones: `Array of heat zone objects. Each object contains: name (e.g., "Zone 1: No Heat Strain", "Zone 2: Moderate Heat Strain"), low_heat_strain_index, high_heat_strain_index (null for highest zone), and time_in_zone (human-readable duration). Heat zones are based on the Heat Strain Index (HSI) and are only present if heat strain data is available for the activity.
+
+Heat Zones Summary
+
+Zone 1: No Heat Strain (0-0.9 HSI)
+Impact on the Body: You are not experiencing heat strain. While core temperature may be elevated, skin temperature is neutral, allowing you to cool down and perform.
+Impact on Performance: Optimal power/pace during training and racing.
+Guidelines for Pacing: Pacing Not Affected - Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
+Guidelines for Heat Training: No Heat Training - Training in this zone does not result in heat adaptations.
+
+Zone 2: Moderate Heat Strain (1-2.9 HSI)
+Impact on the Body: Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
+Impact on Performance: Potential Performance Decline - Performance may be lower than usual.
+Guidelines for Pacing: Use Discretion - Adjust pacing if needed, hydrate, and cool.
+Guidelines for Heat Training: Partial Heat Training - Training in this zone may result in partial heat adaptations.
+
+Zone 3: High Heat Strain (3-6.9 HSI)
+Impact on the Body: You have high core and skin temperatures. You are sweating heavily, and more blood is transported to the skin to cool down. To maintain the same power/pace, your heart will have to pump faster to maintain oxygen supply to the muscles. This means you will have a higher heart rate than usual. You are feeling hot, and perhaps less motivated to exercise.
+Impact on Performance: Performance Decline - Your exercise capacity is substantially reduced. A higher effort is required to maintain a given power/pace. Exhaustion will occur earlier.
+Guidelines for Pacing: Adjust Pacing, Hydrate, and Cool - Take into account that for a given power/pace, your heart rate will be higher. Adjust pacing according to your heart rate and subjective feeling. Good hydration and cooling can help you finish faster.
+Guidelines for Heat Training: Optimal Heat Training - Training in this zone results in optimal heat adaptations. To gain adaptations, you need to feel hot and sweat heavily.
+
+Zone 4: Extremely High Heat Strain (>7 HSI)
+Impact on the Body: Exercising in this zone for too long may have severe consequences for your health and may place you at risk for heat-related illness. Warning signals are muscle cramps, dizziness, nausea, headache and/or collapse.
+Impact on Performance: Dangerous - Exercising in this zone for too long can cause serious health problems. Performance will be drastically reduced, and you may even need to stop exercising.
+Guidelines for Pacing: Reduce HSI Rapidly - Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.
+Guidelines for Heat Training: Harmful - Training in this zone may cause harm. Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.`,
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
@@ -295,6 +322,11 @@ export const WEATHER_FIELD_DESCRIPTIONS = {
   weather_description: 'Weather summary for the activity. Null if weather data is unavailable (e.g., indoor activities).',
 };
 
+export const HEAT_ZONES_FIELD_DESCRIPTIONS = {
+  activity_id: 'Unique ID of the activity in Intervals.icu',
+  heat_zones: WORKOUT_FIELD_DESCRIPTIONS.heat_zones,
+};
+
 export const POWER_CURVE_FIELD_DESCRIPTIONS = {
   // Response structure
   period_start: 'Start date of analysis period (ISO 8601 YYYY-MM-DD)',
@@ -479,6 +511,7 @@ type FieldCategory =
   | 'intervals'
   | 'notes'
   | 'weather'
+  | 'heat_zones'
   | 'power_curve'
   | 'pace_curve'
   | 'hr_curve'
@@ -514,6 +547,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return NOTES_FIELD_DESCRIPTIONS;
     case 'weather':
       return WEATHER_FIELD_DESCRIPTIONS;
+    case 'heat_zones':
+      return HEAT_ZONES_FIELD_DESCRIPTIONS;
     case 'power_curve':
       return POWER_CURVE_FIELD_DESCRIPTIONS;
     case 'pace_curve':

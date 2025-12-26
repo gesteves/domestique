@@ -96,6 +96,7 @@ export interface NormalizedWorkout {
   hr_zones?: HRZone[];
   power_zones?: PowerZone[];
   pace_zones?: PaceZone[];
+  heat_zones?: HeatZone[];
 
   // Running/pace metrics
   average_stride_m?: number; // meters per stride
@@ -323,6 +324,14 @@ export interface PaceZone {
   high_percent: number | null;
   slow_pace: string | null; // e.g., "5:30/km" or null if unbounded
   fast_pace: string | null; // e.g., "4:30/km" or null if unbounded
+  time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
+}
+
+// Heat zone with name and heat strain index range
+export interface HeatZone {
+  name: string;
+  low_heat_strain_index: number;
+  high_heat_strain_index: number | null; // null for highest zone (unbounded)
   time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
 }
 

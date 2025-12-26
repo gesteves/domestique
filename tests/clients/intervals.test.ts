@@ -1291,4 +1291,99 @@ describe('IntervalsClient', () => {
       expect(result?.settings.power_zones).toBeDefined();
     });
   });
+
+  describe('getActivityHeatZones', () => {
+    it('should return heat zones when data is available', async () => {
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        },
+        {
+          type: 'heat_strain_index',
+          data: [0.5, 0.8, 1.5, 2.0, 3.5, 5.0, 6.0, 7.5, 8.0, 9.0],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityHeatZones('i113367711');
+
+      expect(result).not.toBeNull();
+      expect(result).toHaveLength(4);
+      expect(result?.[0].name).toBe('Zone 1: No Heat Strain');
+      expect(result?.[0].low_heat_strain_index).toBe(0);
+      expect(result?.[0].high_heat_strain_index).toBe(0.9);
+      expect(result?.[1].name).toBe('Zone 2: Moderate Heat Strain');
+      expect(result?.[2].name).toBe('Zone 3: High Heat Strain');
+      expect(result?.[3].name).toBe('Zone 4: Extremely High Heat Strain');
+      expect(result?.[3].high_heat_strain_index).toBe(null);
+    });
+
+    it('should return null when heat strain data is not available', async () => {
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 1, 2, 3, 4],
+        },
+        {
+          type: 'power',
+          data: [100, 200, 150, 180, 220],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityHeatZones('i113367711');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when API call fails', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      const result = await client.getActivityHeatZones('i113367711');
+
+      expect(result).toBeNull();
+    });
+
+    it('should use correct API endpoint', async () => {
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 1],
+        },
+        {
+          type: 'heat_strain_index',
+          data: [0.5, 1.5],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      await client.getActivityHeatZones('i113367711');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://intervals.icu/api/v1/activity/i113367711/streams?types=heat_strain_index&types=time',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: expect.stringContaining('Basic'),
+          }),
+        })
+      );
+    });
+  });
 });

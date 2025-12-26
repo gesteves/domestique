@@ -33,6 +33,7 @@ import type {
   GetWorkoutHistoryInput,
   GetRecoveryTrendsInput,
 } from './types.js';
+import type { HeatZone } from '../types/index.js';
 
 export class HistoricalTools {
   constructor(
@@ -276,6 +277,27 @@ export class HistoricalTools {
       return await this.intervals.getActivityWeather(activityId);
     } catch (error) {
       console.error('Error fetching workout weather:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // Heat Zones
+  // ============================================
+
+  /**
+   * Get heat zones for a specific workout.
+   * Returns null if heat strain data is not available for this activity.
+   */
+  async getWorkoutHeatZones(activityId: string): Promise<{ activity_id: string; heat_zones: HeatZone[] | null }> {
+    try {
+      const heatZones = await this.intervals.getActivityHeatZones(activityId);
+      return {
+        activity_id: activityId,
+        heat_zones: heatZones,
+      };
+    } catch (error) {
+      console.error('Error fetching workout heat zones:', error);
       throw error;
     }
   }
