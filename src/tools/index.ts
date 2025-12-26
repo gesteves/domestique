@@ -11,15 +11,12 @@ import {
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
 import { buildToolResponse } from '../utils/response-builder.js';
-import type { UnitPreferences } from '../types/index.js';
 
 interface ResponseOptions<TResult> {
   fieldDescriptions: Record<string, string>;
   getMessage?: (data: TResult) => string | undefined;
   getNextActions?: (data: TResult) => string[] | undefined;
   getWarnings?: (data: TResult) => string[] | undefined;
-  /** Optional function to get unit preferences to include in response */
-  getUnitPreferences?: () => Promise<UnitPreferences>;
 }
 
 /**
@@ -33,17 +30,12 @@ function withToolResponse<TArgs, TResult>(
   return async (args: TArgs) => {
     try {
       const data = await handler(args);
-      // Fetch unit preferences if a getter is provided
-      const unitPreferences = options.getUnitPreferences
-        ? await options.getUnitPreferences()
-        : undefined;
       return buildToolResponse({
         data,
         fieldDescriptions: options.fieldDescriptions,
         message: options.getMessage?.(data),
         nextActions: options.getNextActions?.(data),
         warnings: options.getWarnings?.(data),
-        unitPreferences,
       });
     } catch (error) {
       if (error instanceof WhoopApiError && error.isRetryable) {
@@ -79,10 +71,9 @@ export class ToolRegistry {
   private currentTools: CurrentTools;
   private historicalTools: HistoricalTools;
   private planningTools: PlanningTools;
-  private intervalsClient: IntervalsClient;
 
   constructor(config: ToolsConfig) {
-    this.intervalsClient = new IntervalsClient(config.intervals);
+    const intervalsClient = new IntervalsClient(config.intervals);
     const whoopClient = config.whoop ? new WhoopClient(config.whoop) : null;
     const trainerroadClient = config.trainerroad
       ? new TrainerRoadClient(config.trainerroad)
@@ -90,23 +81,16 @@ export class ToolRegistry {
 
     // Connect Whoop client to Intervals.icu timezone for proper date filtering
     if (whoopClient) {
-      whoopClient.setTimezoneGetter(() => this.intervalsClient.getAthleteTimezone());
+      whoopClient.setTimezoneGetter(() => intervalsClient.getAthleteTimezone());
     }
 
     this.currentTools = new CurrentTools(
-      this.intervalsClient,
+      intervalsClient,
       whoopClient,
       trainerroadClient
     );
-    this.historicalTools = new HistoricalTools(this.intervalsClient, whoopClient);
-    this.planningTools = new PlanningTools(this.intervalsClient, trainerroadClient);
-  }
-
-  /**
-   * Get unit preferences for inclusion in tool responses.
-   */
-  private getUnitPreferences(): Promise<UnitPreferences> {
-    return this.intervalsClient.getUnitPreferences();
+    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient);
+    this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
   }
 
   /**
@@ -148,7 +132,6 @@ Returns null if Whoop is not configured.
           getNextActions: (data) => data
             ? ['Use get_recovery_trends to see patterns over time', 'Use get_daily_summary for full today overview']
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -187,7 +170,6 @@ Returns null if Whoop is not configured.
           getNextActions: (data) => data
             ? ['Use get_strain_history for trends over time', 'Use get_daily_summary for full today overview']
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -241,7 +223,6 @@ Returns empty array if no workouts completed today.
                 'Use get_workout_weather(activity_id) for outdoor workout conditions',
               ]
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -292,7 +273,6 @@ Returns empty array if Whoop is not configured.
                 'Use get_workout_history for detailed workout data from Intervals.icu',
               ]
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -341,7 +321,6 @@ Returns empty array if no workouts planned today.
                 'Use get_upcoming_workouts to see the full week ahead',
               ]
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -514,7 +493,6 @@ For deeper analysis of any component, use the specific tool.
             }
             return warnings.length > 0 ? warnings : undefined;
           },
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -573,7 +551,6 @@ Returns empty array if no workouts match.
                 'Use get_recovery_trends for same period to correlate with training',
               ]
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -627,7 +604,6 @@ Returns empty array if Whoop is not configured.
                 'Use get_workout_history for same period to see training patterns',
               ]
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -686,7 +662,6 @@ Returns empty array if no workouts planned.
                 'Use get_training_load_trends to see current fitness/fatigue',
               ]
             : undefined,
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -740,7 +715,6 @@ Returns empty array if no workouts match.
                 'Use get_todays_recovery to check readiness if workout is today',
               ]
             : ['Use get_upcoming_workouts to find workouts on other dates'],
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -821,7 +795,6 @@ Use with get_recovery_trends to correlate load with recovery.
             }
             return warnings.length > 0 ? warnings : undefined;
           },
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -874,7 +847,6 @@ Get the activity_id first from:
             'Use get_workout_notes for athlete comments on this workout',
             'Use get_workout_weather for outdoor workout conditions',
           ],
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -926,7 +898,6 @@ Returns empty notes array if no notes exist.
             'Use get_workout_intervals for objective interval data',
             'Use get_workout_weather for outdoor workout conditions',
           ],
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -979,7 +950,6 @@ Returns null if weather data is not available.
             'Use get_workout_intervals for power/HR data',
             'Use get_workout_notes for athlete comments',
           ],
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -1051,7 +1021,6 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
             }
             return actions;
           },
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -1122,7 +1091,6 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
             }
             return actions;
           },
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
@@ -1181,7 +1149,6 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
             'Use get_training_load_trends to correlate HR with fitness',
             'Use get_recovery_trends to see how HR relates to recovery',
           ],
-          getUnitPreferences: () => this.getUnitPreferences(),
         }
       )
     );
