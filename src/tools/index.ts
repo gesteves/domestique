@@ -95,7 +95,63 @@ export class ToolRegistry {
    * Register all tools with the MCP server
    */
   registerTools(server: McpServer): void {
-    // Current/Recent Data Tools
+    // Daily Summary (most likely to be called first)
+    server.tool(
+      'get_daily_summary',
+      `Fetches a complete snapshot of the user\'s status today, including:
+- Whoop recovery, sleep performance, and strain
+- Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
+- The user\'s weight
+- All workouts and fitness activities completed today
+- All workouts and fitness activities scheduled for today
+
+<use-cases>
+- Getting a comprehensive overview of the user's current status in a single call.
+- Assessing readiness for training by combining recovery, fitness, and planned workouts.
+- Understanding the balance between completed and planned training load.
+- Providing a complete daily status report without multiple tool calls.
+</use-cases>
+
+<instructions>
+- Use this if you need a complete picture of the user\'s status today; it's more efficient than calling individual tools when you need the full picture.
+</instructions>
+
+<notes>
+- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+</notes>`,
+      {},
+      withToolResponse(
+        async () => this.currentTools.getDailySummary(),
+        {
+          fieldDescriptions: combineFieldDescriptions('daily_summary', 'recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
+          getNextActions: (data) => {
+            const actions: string[] = [];
+            if (data.completed_workouts && data.completed_workouts.length > 0) {
+              actions.push('Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals');
+              actions.push('Use get_workout_notes(activity_id) to get the user\'s comments about a workout');
+              actions.push('Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors');
+            }
+            if (data.whoop.recovery) {
+              actions.push('Use get_recovery_trends to see patterns over time');
+            }
+            actions.push('Use get_training_load_trends for fitness/fatigue analysis');
+            return actions;
+          },
+          getWarnings: (data) => {
+            const warnings: string[] = [];
+            if (!data.whoop.recovery) {
+              warnings.push('Whoop recovery data unavailable');
+            }
+            if (!data.whoop.strain) {
+              warnings.push('Whoop strain data unavailable');
+            }
+            return warnings.length > 0 ? warnings : undefined;
+          },
+        }
+      )
+    );
+
+    // Daily Tools (in order of likelihood)
     server.tool(
       'get_todays_recovery',
       `Returns today's Whoop recovery and sleep data.
@@ -177,40 +233,6 @@ and will not be updated throughout the day.
     );
 
     server.tool(
-      'get_strain_history',
-      `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
-
-<use-cases>
-- Analyzing strain patterns over time to identify trends in training intensity.
-- Correlating strain with recovery trends to understand training-recovery balance.
-- Identifying periods of high or low strain to assess training consistency.
-- Comparing strain across different time periods to evaluate training progression.
-</use-cases>
-
-<notes>
-- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
-- If you only need to get today\'s strain data, it's more efficient to call get_todays_strain.
-- Returns empty array if Whoop is not configured.
-</notes>`,
-      {
-        start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
-        end_date: z.string().optional().describe('End date (defaults to today)'),
-      },
-      withToolResponse(
-        async (args: { start_date: string; end_date?: string }) => this.currentTools.getStrainHistory(args),
-        {
-          fieldDescriptions: getFieldDescriptions('whoop'),
-          getNextActions: (data) => data && data.length > 0
-            ? [
-                'Use get_recovery_trends for same period to correlate strain with recovery',
-                'Use get_workout_history for detailed workout data from Intervals.icu',
-              ]
-            : undefined,
-        }
-      )
-    );
-
-    server.tool(
       'get_todays_planned_workouts',
       `Fetches all workouts and fitness activities the user has planned for today, from both TrainerRoad and Intervals.icu calendars.
 
@@ -239,6 +261,7 @@ and will not be updated throughout the day.
       )
     );
 
+    // Profile and Settings (needed early for context)
     server.tool(
       'get_athlete_profile',
       `Returns the athlete's profile from Intervals.icu including:
@@ -297,62 +320,41 @@ and will not be updated throughout the day.
       )
     );
 
+    // Historical/Trends Tools
     server.tool(
-      'get_daily_summary',
-      `Fetches a complete snapshot of the user\'s status today, including:
-- Whoop recovery, sleep performance, and strain
-- Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
-- The user\'s weight
-- All workouts and fitness activities completed today
-- All workouts and fitness activities scheduled for today
+      'get_strain_history',
+      `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
 
 <use-cases>
-- Getting a comprehensive overview of the user's current status in a single call.
-- Assessing readiness for training by combining recovery, fitness, and planned workouts.
-- Understanding the balance between completed and planned training load.
-- Providing a complete daily status report without multiple tool calls.
+- Analyzing strain patterns over time to identify trends in training intensity.
+- Correlating strain with recovery trends to understand training-recovery balance.
+- Identifying periods of high or low strain to assess training consistency.
+- Comparing strain across different time periods to evaluate training progression.
 </use-cases>
 
-<instructions>
-- Use this if you need a complete picture of the user\'s status today; it's more efficient than calling individual tools when you need the full picture.
-</instructions>
-
 <notes>
-- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
+- If you only need to get today\'s strain data, it's more efficient to call get_todays_strain.
+- Returns empty array if Whoop is not configured.
 </notes>`,
-      {},
+      {
+        start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
+        end_date: z.string().optional().describe('End date (defaults to today)'),
+      },
       withToolResponse(
-        async () => this.currentTools.getDailySummary(),
+        async (args: { start_date: string; end_date?: string }) => this.currentTools.getStrainHistory(args),
         {
-          fieldDescriptions: combineFieldDescriptions('daily_summary', 'recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
-          getNextActions: (data) => {
-            const actions: string[] = [];
-            if (data.completed_workouts && data.completed_workouts.length > 0) {
-              actions.push('Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals');
-              actions.push('Use get_workout_notes(activity_id) to get the user\'s comments about a workout');
-              actions.push('Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors');
-            }
-            if (data.whoop.recovery) {
-              actions.push('Use get_recovery_trends to see patterns over time');
-            }
-            actions.push('Use get_training_load_trends for fitness/fatigue analysis');
-            return actions;
-          },
-          getWarnings: (data) => {
-            const warnings: string[] = [];
-            if (!data.whoop.recovery) {
-              warnings.push('Whoop recovery data unavailable');
-            }
-            if (!data.whoop.strain) {
-              warnings.push('Whoop strain data unavailable');
-            }
-            return warnings.length > 0 ? warnings : undefined;
-          },
+          fieldDescriptions: getFieldDescriptions('whoop'),
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_recovery_trends for same period to correlate strain with recovery',
+                'Use get_workout_history for detailed workout data from Intervals.icu',
+              ]
+            : undefined,
         }
       )
     );
 
-    // Historical/Trends Tools
     server.tool(
       'get_workout_history',
       `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
