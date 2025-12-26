@@ -465,11 +465,11 @@ For deeper analysis of any component, use the specific tool.
           fieldDescriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
           getMessage: (data) => {
             const parts: string[] = [];
-            if (data.recovery) {
-              parts.push(`Recovery: ${data.recovery.recovery_score}% (${data.recovery.recovery_level})`);
+            if (data.whoop.recovery) {
+              parts.push(`Recovery: ${data.whoop.recovery.recovery_score}% (${data.whoop.recovery.recovery_level})`);
             }
-            if (data.strain) {
-              parts.push(`Strain: ${data.strain.strain_score.toFixed(1)} (${data.strain.strain_level})`);
+            if (data.whoop.strain) {
+              parts.push(`Strain: ${data.whoop.strain.strain_score.toFixed(1)} (${data.whoop.strain.strain_level})`);
             }
             if (data.fitness) {
               parts.push(`Fitness: CTL ${data.fitness.ctl.toFixed(0)}, TSB ${data.fitness.tsb.toFixed(0)}`);
@@ -482,7 +482,7 @@ For deeper analysis of any component, use the specific tool.
             if (data.completed_workouts && data.completed_workouts.length > 0) {
               actions.push('Use get_workout_intervals(activity_id) for detailed workout analysis');
             }
-            if (data.recovery) {
+            if (data.whoop.recovery) {
               actions.push('Use get_recovery_trends to see patterns over time');
             }
             actions.push('Use get_training_load_trends for fitness/fatigue analysis');
@@ -490,10 +490,10 @@ For deeper analysis of any component, use the specific tool.
           },
           getWarnings: (data) => {
             const warnings: string[] = [];
-            if (!data.recovery) {
+            if (!data.whoop.recovery) {
               warnings.push('Whoop recovery data unavailable');
             }
-            if (!data.strain) {
+            if (!data.whoop.strain) {
               warnings.push('Whoop strain data unavailable');
             }
             return warnings.length > 0 ? warnings : undefined;

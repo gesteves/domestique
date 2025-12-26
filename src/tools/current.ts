@@ -270,8 +270,10 @@ export class CurrentTools {
 
     return {
       date: today,
-      recovery,
-      strain,
+      whoop: {
+        recovery,
+        strain,
+      },
       fitness,
       wellness,
       completed_workouts: completedWorkouts,

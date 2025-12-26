@@ -386,8 +386,8 @@ describe('CurrentTools', () => {
 
       const result = await tools.getDailySummary();
 
-      expect(result.recovery).toEqual(mockRecovery);
-      expect(result.strain).toEqual(mockStrain);
+      expect(result.whoop.recovery).toEqual(mockRecovery);
+      expect(result.whoop.strain).toEqual(mockStrain);
       expect(result.fitness).toEqual(mockFitness);
       expect(result.wellness).toEqual(mockWellness);
       expect(result.completed_workouts).toHaveLength(1);
@@ -443,8 +443,8 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithoutWhoop.getDailySummary();
 
-      expect(result.recovery).toBeNull();
-      expect(result.strain).toBeNull();
+      expect(result.whoop.recovery).toBeNull();
+      expect(result.whoop.strain).toBeNull();
       expect(result.fitness).toEqual(mockFitness);
       expect(result.wellness).toEqual(mockWellness);
     });

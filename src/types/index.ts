@@ -554,19 +554,27 @@ export interface WorkoutNotesResponse {
 // ============================================
 
 /**
- * Complete daily summary combining recovery, strain, and workout data.
- * Returned by get_daily_summary tool.
- *
- * Note: Whoop insight fields (recovery_level, strain_level, sleep_performance_level, etc.)
- * are included directly in the recovery and strain objects.
+ * Whoop data for the daily summary.
  */
-export interface DailySummary {
-  /** Date in ISO 8601 format */
-  date: string;
+export interface DailySummaryWhoop {
   /** Today's Whoop recovery data with insight fields, null if unavailable */
   recovery: RecoveryData | null;
   /** Today's Whoop strain data with insight fields, null if unavailable */
   strain: StrainData | null;
+}
+
+/**
+ * Complete daily summary combining recovery, strain, and workout data.
+ * Returned by get_daily_summary tool.
+ *
+ * Note: Whoop insight fields (recovery_level, strain_level, sleep_performance_level, etc.)
+ * are included in the recovery and strain objects within the whoop property.
+ */
+export interface DailySummary {
+  /** Date in ISO 8601 format */
+  date: string;
+  /** Today's Whoop recovery and strain data */
+  whoop: DailySummaryWhoop;
   /** Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu, null if unavailable */
   fitness: FitnessMetrics | null;
   /** Today's wellness data (weight, etc.) from Intervals.icu, null if unavailable */
