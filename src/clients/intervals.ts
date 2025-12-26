@@ -1195,11 +1195,13 @@ export class IntervalsClient {
       newest: endDate,
     });
 
-    const data: DailyWellness[] = wellness.map((w) => ({
-      date: w.id,
-      // Use != null to handle both null and undefined
-      weight: w.weight != null ? `${w.weight} kg` : undefined,
-    }));
+    // Filter to only include entries with weight data
+    const data: DailyWellness[] = wellness
+      .filter((w) => w.weight != null)
+      .map((w) => ({
+        date: w.id,
+        weight: `${w.weight} kg`,
+      }));
 
     // Calculate period days
     const start = new Date(startDate);

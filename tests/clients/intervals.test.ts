@@ -559,10 +559,10 @@ describe('IntervalsClient', () => {
       expect(result.period_days).toBe(3);
     });
 
-    it('should handle entries with null weight', async () => {
+    it('should filter out entries with null weight', async () => {
       const mockWellness = [
         { id: '2024-12-13', weight: 74.5 },
-        { id: '2024-12-14', weight: null }, // Null weight (API returns null, not undefined)
+        { id: '2024-12-14', weight: null }, // Null weight should be filtered out
         { id: '2024-12-15', weight: 74.8 },
       ];
 
@@ -573,10 +573,12 @@ describe('IntervalsClient', () => {
 
       const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
 
-      expect(result.data).toHaveLength(3);
+      // Only entries with weight data should be included
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].date).toBe('2024-12-13');
       expect(result.data[0].weight).toBe('74.5 kg');
-      expect(result.data[1].weight).toBeUndefined();
-      expect(result.data[2].weight).toBe('74.8 kg');
+      expect(result.data[1].date).toBe('2024-12-15');
+      expect(result.data[1].weight).toBe('74.8 kg');
     });
   });
 
