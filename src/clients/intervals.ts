@@ -168,7 +168,7 @@ interface IntervalsActivity {
 
   // Session metrics
   session_rpe?: number;
-  strain_score?: number;
+  strain_score?: number; // Intervals.icu strain score (XSS-like)
 
   // Device info
   device_name?: string;
@@ -183,14 +183,18 @@ interface IntervalsActivity {
   hrrc?: number;
   trimp?: number;
 
-  // Power efficiency
+  // Power efficiency (API returns both prefixed and non-prefixed depending on endpoint)
   variability_index?: number;
+  icu_variability_index?: number;
   decoupling?: number;
   efficiency_factor?: number;
+  icu_efficiency_factor?: number;
 
-  // Fitness at activity time
+  // Fitness at activity time (API returns both prefixed and non-prefixed depending on endpoint)
   ctl?: number;
   atl?: number;
+  icu_ctl?: number;
+  icu_atl?: number;
 
   // Cadence
   average_cadence?: number;
@@ -202,10 +206,17 @@ interface IntervalsActivity {
   icu_pm_ftp?: number; // activity-derived eFTP
   lthr?: number; // Lactate threshold HR at time of activity
 
-  // Energy
+  // Energy (API returns both prefixed and non-prefixed depending on endpoint)
   joules?: number;
+  icu_joules?: number;
   carbs_used?: number;
   carbs_ingested?: number;
+
+  // Power metrics (API returns both prefixed and non-prefixed depending on endpoint)
+  weighted_avg_watts?: number;
+  icu_weighted_avg_watts?: number;
+  average_watts?: number;
+  icu_average_watts?: number;
 
   // Athlete metrics at time of activity
   icu_weight?: number; // Weight in kg
@@ -1303,8 +1314,9 @@ export class IntervalsClient {
       duration: formatDuration(durationSeconds),
       distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
       tss: activity.icu_training_load,
-      normalized_power: activity.weighted_avg_watts,
-      average_power: activity.average_watts,
+      // Handle both API field naming conventions (icu_ prefixed and non-prefixed)
+      normalized_power: activity.icu_weighted_avg_watts ?? activity.weighted_avg_watts,
+      average_power: activity.icu_average_watts ?? activity.average_watts,
       average_heart_rate: activity.average_heartrate,
       max_heart_rate: activity.max_heartrate,
       intensity_factor: activity.icu_intensity,
@@ -1333,18 +1345,19 @@ export class IntervalsClient {
       hrrc: activity.hrrc,
       trimp: activity.trimp,
 
-      // Power efficiency
-      variability_index: activity.variability_index,
+      // Power efficiency (handle both API field naming conventions)
+      variability_index: activity.icu_variability_index ?? activity.variability_index,
       power_hr_ratio: activity.decoupling,
-      efficiency_factor: activity.efficiency_factor,
+      efficiency_factor: activity.icu_efficiency_factor ?? activity.efficiency_factor,
 
-      // Fitness snapshot
-      ctl_at_activity: activity.ctl,
-      atl_at_activity: activity.atl,
-      tsb_at_activity:
-        activity.ctl !== undefined && activity.atl !== undefined
-          ? activity.ctl - activity.atl
-          : undefined,
+      // Fitness snapshot (handle both API field naming conventions)
+      ctl_at_activity: activity.icu_ctl ?? activity.ctl,
+      atl_at_activity: activity.icu_atl ?? activity.atl,
+      tsb_at_activity: (() => {
+        const ctl = activity.icu_ctl ?? activity.ctl;
+        const atl = activity.icu_atl ?? activity.atl;
+        return ctl !== undefined && atl !== undefined ? ctl - atl : undefined;
+      })(),
 
       // Cadence
       average_cadence: activity.average_cadence,
@@ -1356,8 +1369,11 @@ export class IntervalsClient {
       activity_eftp: activity.icu_pm_ftp,
       lthr: activity.lthr,
 
-      // Energy
-      work_kj: activity.joules ? activity.joules / 1000 : undefined,
+      // Energy (handle both API field naming conventions)
+      work_kj: (() => {
+        const joules = activity.icu_joules ?? activity.joules;
+        return joules ? joules / 1000 : undefined;
+      })(),
       cho_used_g: activity.carbs_used,
       cho_intake_g: activity.carbs_ingested,
 
@@ -1393,7 +1409,7 @@ export class IntervalsClient {
 
       // Session metrics
       session_rpe: activity.session_rpe,
-      strain_score: activity.strain_score,
+      icu_strain_score: activity.strain_score,
     };
   }
 

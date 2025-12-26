@@ -104,7 +104,7 @@ describe('IntervalsClient', () => {
         min_temp: null,
         max_temp: null,
         session_rpe: 361,
-        strain_score: 118.56503,
+        strain_score: 118.56503, // API returns strain_score, normalized to icu_strain_score
         device_name: 'ZWIFT',
         power_meter: null,
         trimp: 145.78423,
@@ -308,7 +308,7 @@ describe('IntervalsClient', () => {
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
       expect(result[0].session_rpe).toBe(361);
-      expect(result[0].strain_score).toBeCloseTo(118.565, 2);
+      expect(result[0].icu_strain_score).toBeCloseTo(118.565, 2);
     });
 
     it('should include athlete metrics at time of activity', async () => {
@@ -327,6 +327,36 @@ describe('IntervalsClient', () => {
       expect(result[0].lthr).toBe(165);
       expect(result[0].weight).toBe('74.5 kg');
       expect(result[0].resting_hr).toBe(52);
+    });
+
+    it('should include power, efficiency, fitness, and energy metrics from list endpoint (non-prefixed fields)', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+      });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      // Power metrics (from non-prefixed fields in list endpoint)
+      expect(result[0].normalized_power).toBe(183);
+      expect(result[0].average_power).toBe(181);
+
+      // Efficiency metrics
+      expect(result[0].variability_index).toBeCloseTo(1.011, 2);
+      expect(result[0].efficiency_factor).toBeCloseTo(1.356, 2);
+
+      // Fitness snapshot
+      expect(result[0].ctl_at_activity).toBeCloseTo(63.48, 1);
+      expect(result[0].atl_at_activity).toBeCloseTo(49.26, 1);
+      expect(result[0].tsb_at_activity).toBeCloseTo(14.21, 1);
+
+      // Energy
+      expect(result[0].work_kj).toBeCloseTo(1307.3, 1);
     });
 
     it('should include altitude data', async () => {
@@ -436,6 +466,75 @@ describe('IntervalsClient', () => {
       expect(result.id).toBe('i113367711');
       expect(result.is_indoor).toBe(true);
       expect(result.start_date_utc).toBe('2025-12-22T23:54:12Z');
+    });
+
+    it('should handle icu_ prefixed fields from single activity endpoint', async () => {
+      // The /activities/{id} endpoint returns icu_ prefixed fields for power, efficiency, fitness, and energy
+      const mockSingleActivityResponse = {
+        id: 'i113796426',
+        start_date_local: '2025-12-25T12:01:55',
+        start_date: '2025-12-25T19:01:55Z',
+        type: 'VirtualRide',
+        name: 'Zwift - TrainerRoad: Bald on Big Flat 8 in Watopia',
+        moving_time: 3636,
+        distance: 35774.63,
+        icu_training_load: 45,
+        trainer: null, // Not set in single endpoint
+        source: 'ZWIFT', // But source indicates it's Zwift
+        // Single activity endpoint uses icu_ prefixed fields
+        icu_weighted_avg_watts: 186,
+        icu_average_watts: 184,
+        icu_variability_index: 1.0108696,
+        icu_efficiency_factor: 1.3285714,
+        icu_ctl: 64.22861,
+        icu_atl: 59.80257,
+        icu_joules: 669232,
+        icu_ftp: 279,
+        decoupling: 1.0321792,
+        lthr: 172,
+        icu_weight: 74.8,
+        icu_resting_hr: 52,
+        icu_zone_times: [
+          { id: 'Z1', secs: 308 },
+          { id: 'Z2', secs: 3310 },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSingleActivityResponse),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivity('i113796426');
+
+      // Power metrics (from icu_ prefixed fields)
+      expect(result.normalized_power).toBe(186);
+      expect(result.average_power).toBe(184);
+
+      // Efficiency metrics
+      expect(result.variability_index).toBeCloseTo(1.011, 2);
+      expect(result.efficiency_factor).toBeCloseTo(1.329, 2);
+
+      // Fitness snapshot (from icu_ prefixed fields)
+      expect(result.ctl_at_activity).toBeCloseTo(64.23, 1);
+      expect(result.atl_at_activity).toBeCloseTo(59.80, 1);
+      expect(result.tsb_at_activity).toBeCloseTo(4.43, 1);
+
+      // Energy (from icu_ prefixed fields)
+      expect(result.work_kj).toBeCloseTo(669.2, 1);
+
+      // Athlete metrics
+      expect(result.lthr).toBe(172);
+      expect(result.weight).toBe('74.8 kg');
+      expect(result.resting_hr).toBe(52);
+
+      // is_indoor should be true since source is 'ZWIFT'
+      expect(result.is_indoor).toBe(true);
     });
   });
 

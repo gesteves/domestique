@@ -21,7 +21,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   intensity_factor: 'Intensity Factor (IF), a measure of how hard it was compared to your FTP',
   trimp: 'Training Impulse, a measure of training load derived from the average HR for the activity relative to resting HR and max HR and the moving time',
   session_rpe: 'Session RPE = RPE × duration in minutes, a method of quantifying training load by considering the intensity (RPE) and duration of the training session (or competition)',
-  strain_score: 'Strain score, similar to XSS in Xert, a power based training load metric that considers time spent above the maximal metabolic steady state to estimate the level of strain for the activity. Unrelated to Whoop\'s Strain score.',
+  icu_strain_score: 'Intervals.icu strain score, similar to XSS in Xert, a power based training load metric that considers time spent above the maximal metabolic steady state to estimate the level of strain for the activity. Unrelated to Whoop\'s strain score.',
 
   // Power metrics
   normalized_power: 'Normalized Power (NP) in watts',

@@ -108,7 +108,7 @@ export interface NormalizedWorkout {
 
   // Session metrics
   session_rpe?: number; // RPE × duration
-  strain_score?: number; // Intervals.icu strain score
+  icu_strain_score?: number; // Intervals.icu strain score (XSS-like)
 }
 
 // Zone time entry for power zones
