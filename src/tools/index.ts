@@ -117,6 +117,9 @@ Fetches today's Whoop recovery data including:
 - Sleep performance percentage and durations
 - Sleep stages (light, deep/SWS, REM, awake)
 
+Note that sleep and recovery metrics are calculated by Whoop once, when the user wakes up,
+and will not be updated throughout the day.
+
 Returns null if Whoop is not configured.
 </instructions>`,
       {},
@@ -151,6 +154,7 @@ Fetches today's Whoop strain data including:
 - Average and max heart rate
 - Calories burned
 - List of Whoop-tracked activities
+- Current time for the user, as the strain will usually increase as the day progresses.
 
 Returns null if Whoop is not configured.
 </instructions>`,
