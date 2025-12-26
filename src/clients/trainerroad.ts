@@ -9,6 +9,8 @@ interface CalendarEvent {
   end: Date;
   summary: string;
   description?: string;
+  /** Whether this is a date-only event ('date') or has a specific time ('date-time') */
+  dateType: 'date' | 'date-time';
 }
 
 export class TrainerRoadClient {
@@ -44,6 +46,7 @@ export class TrainerRoadClient {
             end: event.end || event.start,
             summary: event.summary,
             description: event.description,
+            dateType: event.datetype || 'date-time',
           });
         }
       }
@@ -119,9 +122,16 @@ export class TrainerRoadClient {
     // Detect source based on workout name/description
     const source = this.detectSource(event.summary, event.description);
 
+    // For date-only events, output just the date (yyyy-MM-dd)
+    // For date-time events, output full ISO string
+    const date =
+      event.dateType === 'date'
+        ? format(event.start, 'yyyy-MM-dd')
+        : event.start.toISOString();
+
     return {
       id: event.uid,
-      date: event.start.toISOString(),
+      date,
       name: cleanName,
       description: event.description,
       expected_tss: parsed.tss,

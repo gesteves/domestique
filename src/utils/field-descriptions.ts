@@ -179,7 +179,7 @@ export const FITNESS_FIELD_DESCRIPTIONS = {
 
 export const PLANNED_WORKOUT_FIELD_DESCRIPTIONS = {
   id: 'Unique workout identifier',
-  date: 'Scheduled date/time (ISO 8601)',
+  date: 'Scheduled date/time for the workout. May include the time at which the user intends to do the workout, if they have specified one; otherwise it will be just the date.',
   name: 'Workout name',
   description: 'Workout description, possibly including structure',
   expected_tss: 'Expected Training Stress Score',

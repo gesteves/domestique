@@ -438,6 +438,95 @@ END:VCALENDAR`;
     });
   });
 
+  describe('date formatting', () => {
+    it('should output date-only format for DATE events (no specific time)', async () => {
+      // Events with VALUE=DATE represent all-day events without a specific time
+      const dateOnlyIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:date-only@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - Bald
+DESCRIPTION:TSS 44, IF 0.66.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(dateOnlyIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      // Should output just the date, not a full ISO datetime
+      expect(result[0].date).toBe('2024-12-16');
+    });
+
+    it('should output full ISO datetime for DATE-TIME events (specific time set)', async () => {
+      // Events with VALUE=DATE-TIME represent events with a specific start time
+      const dateTimeIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:date-time@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T160000Z
+DTEND;VALUE=DATE-TIME:20241216T173000Z
+SUMMARY:Eric Min's Festive 500 Christmas Ride
+DESCRIPTION:TSS 51. Description: Holiday Spirit.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(dateTimeIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      // Should output full ISO datetime with time and Z suffix
+      expect(result[0].date).toBe('2024-12-16T16:00:00.000Z');
+    });
+
+    it('should handle mixed DATE and DATE-TIME events correctly', async () => {
+      const mixedIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:date-time@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T160000Z
+DTEND;VALUE=DATE-TIME:20241216T173000Z
+SUMMARY:Zwift Group Ride
+DESCRIPTION:TSS 51.
+END:VEVENT
+BEGIN:VEVENT
+UID:date-only@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:00 - Bald
+DESCRIPTION:TSS 44.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(mixedIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result).toHaveLength(2);
+
+      // Find each workout by name
+      const zwiftRide = result.find((w) => w.name === 'Zwift Group Ride');
+      const baldWorkout = result.find((w) => w.name === 'Bald');
+
+      // DATE-TIME event should have full ISO datetime
+      expect(zwiftRide?.date).toBe('2024-12-16T16:00:00.000Z');
+
+      // DATE event should have just the date
+      expect(baldWorkout?.date).toBe('2024-12-16');
+    });
+  });
+
   describe('description parsing', () => {
     it('should parse real TrainerRoad description format', async () => {
       // Real format: "TSS 81, IF 0.64, kJ(Cal) 1263.  Description: ..."
