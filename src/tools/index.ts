@@ -98,8 +98,13 @@ export class ToolRegistry {
     // Current/Recent Data Tools
     server.tool(
       'get_todays_recovery',
-      `Returns today's Whoop recovery and sleep data. Note that sleep and recovery metrics are calculated by Whoop once a day, when the user wakes up,
-and will not be updated throughout the day. Returns null if Whoop is not configured.`,
+      `Returns today's Whoop recovery and sleep data.
+
+<notes>
+- Sleep and recovery metrics are calculated by Whoop once a day, when the user wakes up,
+and will not be updated throughout the day.
+- Returns null if Whoop is not configured.
+</notes>`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysRecovery(),
@@ -114,7 +119,11 @@ and will not be updated throughout the day. Returns null if Whoop is not configu
 
     server.tool(
       'get_todays_strain',
-      `Fetches today's Whoop strain data, including any activities logged in the Whoop app. Returns null if Whoop is not configured.`,
+      `Fetches today's Whoop strain data, including any activities logged in the Whoop app.
+
+<notes>
+- Returns null if Whoop is not configured.
+</notes>`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysStrain(),
@@ -150,11 +159,11 @@ and will not be updated throughout the day. Returns null if Whoop is not configu
       'get_strain_history',
       `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
 
-Date parameters accept ISO format (YYYY-MM-DD) or natural language: "Yesterday", "7 days ago", "last week", "2 weeks ago", etc.
-
-Note: If you only need to get today\'s strain data, it's more efficient to call get_todays_strain.
-
-Returns empty array if Whoop is not configured.`,
+<notes>
+- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
+- If you only need to get today\'s strain data, it's more efficient to call get_todays_strain.
+- Returns empty array if Whoop is not configured.
+</notes>`,
       {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -175,8 +184,11 @@ Returns empty array if Whoop is not configured.`,
 
     server.tool(
       'get_todays_planned_workouts',
-      `Fetches all workouts and fitness activities the user has planned for today, from both TrainerRoad and Intervals.icu calendars. Note that planned workouts may not necessarily be in the order the user intends to do them;
-ask them for clarification if necessary.`,
+      `Fetches all workouts and fitness activities the user has planned for today, from both TrainerRoad and Intervals.icu calendars.
+
+<notes>
+- Planned workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+</notes>`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysPlannedWorkouts(),
@@ -196,9 +208,12 @@ ask them for clarification if necessary.`,
       'get_athlete_profile',
       `Returns the athlete's profile from Intervals.icu including:
 - Athlete info: name, location, timezone, gender, date of birth, and age.
-- The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature). You MUST use these units in all responses.
+- The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
 
-If you don't know the user's preferred unit system, you **MUST** call this tool before responding to the user, so you can get their preferences.`,
+<instructions>
+- You **MUST** use the user\'s preferred units in all responses.
+- If you don't know the user's preferred units, you **MUST** call this tool before responding to the user, so you can get their preferences.
+</instructions>`,
       {},
       withToolResponse(
         async () => this.currentTools.getAthleteProfile(),
@@ -216,7 +231,9 @@ If you don't know the user's preferred unit system, you **MUST** call this tool 
       'get_sports_settings',
       `Fetches settings from Intervals.icu for a single sport, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
 
-Note: This returns the athlete's **current** zones, which may not match zones in historical workouts.`,
+<notes>
+- This returns the athlete's **current** zones, which may not match the zones in historical workouts.
+</notes>`,
       {
         sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
       },
@@ -239,10 +256,15 @@ Note: This returns the athlete's **current** zones, which may not match zones in
 - Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
 - The user\'s weight
 - All workouts and fitness activities completed today
-- All workouts and fitness activities scheduled for today (note that these may not be in the order the user intends to do them;
-ask them for clarification if necessary)
+- All workouts and fitness activities scheduled for today
 
-More efficient than calling individual tools when you need the full picture.`,
+<instructions>
+- Use this if you need a complete picture of the user\'s status today; it's more efficient than calling individual tools when you need the full picture.
+</instructions>
+
+<notes>
+- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+</notes>`,
       {},
       withToolResponse(
         async () => this.currentTools.getDailySummary(),
@@ -278,7 +300,12 @@ More efficient than calling individual tools when you need the full picture.`,
     // Historical/Trends Tools
     server.tool(
       'get_workout_history',
-      `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics. Accepts ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month"), and an optional sports filter.`,
+      `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
+
+<notes>
+- Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
+- You can optionally filter activities by sport, as needed.
+</notes>`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -302,7 +329,13 @@ More efficient than calling individual tools when you need the full picture.`,
 
     server.tool(
       'get_recovery_trends',
-      `Fetches Whoop recovery and sleep data over a date range. Date parameters accept ISO format (YYYY-MM-DD) or natural language ("today", "yesterday", "30 days ago", "last month", "2 weeks ago", etc.)`,
+      `Fetches Whoop recovery and sleep data over a date range.
+
+<notes>
+- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
+- If you only need to get today\'s recovery and sleep data, it's more efficient to call get_todays_recovery.
+- Returns empty array if Whoop is not configured.
+</notes>`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -323,7 +356,13 @@ More efficient than calling individual tools when you need the full picture.`,
 
     server.tool(
       'get_wellness_trends',
-      `Fetches wellness data over a date range from Intervals.icu. Currently only includes weight. Date parameters accept ISO format (YYYY-MM-DD) or natural language ("today", "yesterday", "30 days ago", "last month", "2 weeks ago", etc.) Returns data only for days where wellness data was recorded.`,
+      `Fetches wellness data over a date range from Intervals.icu.
+
+<notes>
+- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
+- Wellness data currently only includes the user\'s weight.
+- Only returns days on which wellness data was recorded.
+</notes>`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -345,8 +384,11 @@ More efficient than calling individual tools when you need the full picture.`,
     // Planning Tools
     server.tool(
       'get_upcoming_workouts',
-      `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter. Note that planned workouts on a given day may not be in the order the user intends to do them;
-ask them for clarification if necessary.`,
+      `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter.
+
+<notes>
+- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+</notes>`,
       {
         days: z.number().optional().default(7).describe('Number of days ahead to look (default: 7, max: 30)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
@@ -366,8 +408,12 @@ ask them for clarification if necessary.`,
 
     server.tool(
       'get_planned_workout_details',
-      `Fetches planned workouts and fitness activity for a future date, with an optional sport filter. Date parameter accepts ISO format (YYYY-MM-DD) or natural language ("tomorrow", "next Tuesday", etc.) Note that planned workouts may not be in the order the user intends to do them;
-ask them for clarification if necessary.`,
+      `Fetches planned workouts and fitness activity for a future date, with an optional sport filter.
+      
+<notes>
+- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Tomorrow", "Next monday", etc.)
+- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+</notes>`,
       {
         date: z.string().describe('Date to find workout on - ISO format (YYYY-MM-DD) or natural language (e.g., "next wednesday", "tomorrow")'),
         sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport type'),
@@ -513,10 +559,12 @@ Get the activity_id from:
       `Fetches cycling power curves showing best power output at various durations for a given date range.
 
 <instructions>
-Optionally, use compare_to_start and compare_to_end if you need to compare changes to a previous period
+- Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period.
+</instructions>
 
-All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
-</instructions>`,
+<notes>
+- All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
+</notes>`,
       {
         start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
         end_date: z.string().optional().describe('End of analysis period (defaults to today)'),
@@ -547,8 +595,11 @@ All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days
 <instructions>
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
 - Optional: Use the GAP setting to use gradient-adjusted pace, which normalizes for hills (only applicable for running)
+</instructions>
+
+<notes>
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
-</instructions>`,
+</notes>`,
       {
         start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
         end_date: z.string().optional().describe('End of analysis period (defaults to today)'),
@@ -577,10 +628,14 @@ All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days
     server.tool(
       'get_hr_curve',
       `Fetches HR curves showing maximum sustained heart rate at various durations for a given date range.
+
 <instructions>
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
+</instructions>
+
+<notes>
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
-</instructions>`,
+</notes>`,
       {
         start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
         end_date: z.string().optional().describe('End of analysis period (defaults to today)'),
