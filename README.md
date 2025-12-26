@@ -12,35 +12,39 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ## Available Tools
 
-### Current/Today
+### Daily Overview
+- `get_daily_summary` - Complete snapshot of today including recovery, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts, and planned workouts
+
+### Today's Data
 - `get_todays_recovery` - Today's Whoop recovery, sleep, and HRV data
 - `get_todays_strain` - Today's Whoop strain data including strain score, heart rate, and logged activities
 - `get_todays_completed_workouts` - Today's completed workouts from Intervals.icu with matched Whoop strain data
 - `get_todays_planned_workouts` - Today's scheduled workouts from both TrainerRoad and Intervals.icu calendars
-- `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location.
+
+### Profile & Settings
+- `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location
 - `get_sports_settings` - Sport-specific settings (FTP, zones, thresholds) for cycling, running, or swimming
-- `get_daily_summary` - Complete summary of today including recovery, strain, fitness metrics, wellness, completed workouts, and planned workouts.
 
 ### Historical/Trends
-- `get_workout_history` - Historical workouts with matched Whoop strain data.
-- `get_strain_history` - Whoop strain scores and activities for a date range.
-- `get_recovery_trends` - HRV, sleep, and recovery patterns over time.
-- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, etc.
-- `get_wellness_trends` - Wellness data trends over a date range.
-
-### Performance Curves
-- `get_power_curve` - Cycling power curve analysis showing best watts at various durations. Includes W/kg, estimated FTP, and period comparison.
-- `get_pace_curve` - Running/swimming pace curve analysis showing best times at key distances.
-- `get_hr_curve` - Heart rate curve analysis showing max sustained HR at various durations.
-
-### Workout Analysis
-- `get_workout_intervals` - Detailed interval breakdown for a specific workout including power, HR, cadence, and timing data.
-- `get_workout_notes` - Notes and comments written by the athlete about a specific workout in Intervals.icu.
-- `get_workout_weather` - Weather conditions during a specific outdoor workout.
+- `get_strain_history` - Whoop strain scores and activities for a date range
+- `get_workout_history` - Historical workouts with matched Whoop strain data
+- `get_recovery_trends` - HRV, sleep, and recovery patterns over time
+- `get_wellness_trends` - Wellness data trends (weight) over a date range
 
 ### Planning
-- `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars.
-- `get_planned_workout_details` - Detailed information about a specific planned workout.
+- `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
+- `get_planned_workout_details` - Detailed information about a specific planned workout for a future date
+
+### Analysis
+- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR
+- `get_workout_intervals` - Detailed interval breakdown for a specific workout including power, HR, cadence, and timing data
+- `get_workout_notes` - Notes and comments written by the athlete about a specific workout in Intervals.icu
+- `get_workout_weather` - Weather conditions during a specific outdoor workout
+
+### Performance Curves
+- `get_power_curve` - Cycling power curve analysis showing best watts at various durations with W/kg, estimated FTP, and period comparison
+- `get_pace_curve` - Running/swimming pace curve analysis showing best times at key distances
+- `get_hr_curve` - Heart rate curve analysis showing max sustained HR at various durations
 
 ## Setup
 
