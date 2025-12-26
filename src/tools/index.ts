@@ -210,6 +210,12 @@ and will not be updated throughout the day.
   - Athlete info: name, location, timezone, gender, date of birth, and age.
   - The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
 
+<use-cases>
+- Fetching the user\'s preferred unit system, which **MUST** be used in all responses.
+- Fetching the user\'s name, which may be useful to identify the user\'s notes from a workout in get_workout_notes.
+- Fetching the user\'s age, which may be important to interpret their fitness and performance trends over time.
+</use-cases>
+
 <instructions>
 - You **MUST** use the user\'s preferred units in all responses.
 - If you don't know the user's preferred units, you **MUST** call this tool before responding to the user, so you can get their preferences.
@@ -498,9 +504,15 @@ Get the activity_id from:
       'get_workout_notes',
       `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
 
+<use-cases>
+- Understanding how the user may have subjectively felt during a workout, and anything else not captured by objective fitness metrics.
+- Reading feedback left by other Intervals.icu users, which could be a coach or a follower.
+</use-cases>
+
 <instructions>
 - **ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
 - Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
+- Make sure to fetch attachments and follow links left in the notes.
 - Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
 </instructions>`,
       {
@@ -521,6 +533,10 @@ Get the activity_id from:
     server.tool(
       'get_workout_weather',
       `Fetches the weather conditions during a given outdoor workout.
+
+<use-cases>
+- Understanding how weather conditions may or may not have impacted the user\'s performance during outdoor workouts or fitness activities.
+</use-cases>
 
 <instructions>
 - **ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user\'s performance.
