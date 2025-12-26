@@ -620,11 +620,6 @@ Use when the user asks about:
 - Weight trends over time
 - Body composition changes
 - How weight has changed over a training period
-
-Do NOT use for:
-- Today's weight only (use get_daily_summary)
-- Recovery/sleep data (use get_recovery_trends)
-- Training load analysis (use get_training_load_trends)
 </usecase>
 
 <instructions>
