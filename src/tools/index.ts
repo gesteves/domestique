@@ -680,6 +680,7 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
+- This tool returns data for the following durations: 5s, 30s, 1min, 5min, 20min, 60min, 2hr. If you need data for a different set of durations, use the optional durations input.
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period.
 </instructions>
 
@@ -722,6 +723,10 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
+- This tool returns data for the following distances:
+  - Running: 400m, 1km, 1 mile, 5km, 10km, half marathon, marathon.
+  - Swimming: 100m, 200m, 400m, 800m, 1500m, half iron swim, iron swim,
+  - If you need data for a different set of distances, use the optional distances input.
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
 - Optional: Use the GAP setting to use gradient-adjusted pace, which normalizes for hills (only applicable for running)
 </instructions>
@@ -767,6 +772,7 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
+- This tool returns data for the following durations: 5s, 30s, 1min, 5min, 20min, 60min, 2hr. If you need data for a different set of durations, use the optional durations input.
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
 </instructions>
 
