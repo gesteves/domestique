@@ -115,12 +115,12 @@ export const WHOOP_FIELD_DESCRIPTIONS = {
   average_heart_rate: 'Average heart rate in BPM',
   max_heart_rate: 'Maximum heart rate in BPM',
   calories: 'Estimated calories burned',
-  duration: 'Human-readable duration (e.g., "1:30:00")',
-  distance: 'Human-readable distance (e.g., "45.2 km" or "2500 m" for swimming)',
-  elevation_gain: 'Human-readable elevation gain (e.g., "500 m")',
+  duration: 'Duration of the activity',
+  distance: 'Distance of the activity',
+  elevation_gain: 'Elevation gain of the activity',
   zone_durations: 'Time spent in each Whoop HR zone. Note: Whoop uses the Heart Rate Reserve (HRR) method to calculate; they may not match Intervals.icu HR zones.',
-  strain_level: 'Strain level',
-  strain_level_description: 'Whoop\'s official description for this strain level',
+  strain_level: 'Whoop strain level: Light, Moderate, High, All out',
+  strain_level_description: 'Whoop\'s official description for the strain level',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {
