@@ -130,6 +130,7 @@ export class ToolRegistry {
               actions.push('Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals');
               actions.push('Use get_workout_notes(activity_id) to get the user\'s comments about a workout');
               actions.push('Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors');
+              actions.push('Use get_workout_heat_zones(activity_id) to get the heat zone data for a workout');
             }
             if (data.whoop.recovery) {
               actions.push('Use get_recovery_trends to see patterns over time');
@@ -227,6 +228,7 @@ and will not be updated throughout the day.
                 'Use get_workout_intervals(activity_id) for interval breakdown',
                 'Use get_workout_notes(activity_id) for athlete comments',
                 'Use get_workout_weather(activity_id) for outdoor workout conditions',
+                'Use get_workout_heat_zones(activity_id) to get the heat zone data for a workout',
               ]
             : undefined,
         }
@@ -582,6 +584,7 @@ and will not be updated throughout the day.
 <use-cases>
 - Analyzing the structure and intensity of interval-based workouts.
 - Understanding power, pace, or heart rate distribution across workout intervals.
+- Understanding the Heat Strain Index (HSI) distribution across workout intervals.
 - Identifying specific intervals that were particularly challenging or successful.
 - Reviewing interval targets vs. actual performance to assess workout execution.
 - Providing detailed feedback on interval training quality and pacing.
@@ -602,6 +605,7 @@ Get the activity_id from:
           getNextActions: () => [
             'Use get_workout_notes for athlete comments on this workout',
             'Use get_workout_weather for outdoor workout conditions',
+            'Use get_workout_heat_zones for heat zone data for this activity',
           ],
         }
       )
@@ -660,6 +664,7 @@ Get the activity_id from:
           getNextActions: () => [
             'Use get_workout_intervals for detailed power/HR data',
             'Use get_workout_notes for athlete comments',
+            'Use get_workout_heat_zones for heat zone data for this activity',
           ],
         }
       )

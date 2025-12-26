@@ -280,6 +280,13 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
   wbal_end_j: 'W\'bal at interval end in joules',
   joules_above_ftp: 'Work done above FTP in joules; anaerobic contribution',
 
+  // Heat metrics (only present if heat strain data available)
+  min_heat_strain_index: 'Minimum heat strain index during the interval',
+  max_heat_strain_index: 'Maximum heat strain index during the interval',
+  avg_heat_strain_index: 'Average heat strain index during the interval',
+  start_heat_strain_index: 'Heat strain index at the start of the interval',
+  end_heat_strain_index: 'Heat strain index at the end of the interval',
+
   // Group fields
   count: 'Number of repetitions in this interval set',
 };

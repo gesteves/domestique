@@ -512,6 +512,13 @@ export interface WorkoutInterval {
   wbal_start_j?: number;
   wbal_end_j?: number;
   joules_above_ftp?: number;
+
+  // Heat metrics (only present if heat strain data available)
+  min_heat_strain_index?: number;
+  max_heat_strain_index?: number;
+  avg_heat_strain_index?: number;
+  start_heat_strain_index?: number;
+  end_heat_strain_index?: number;
 }
 
 export interface IntervalGroup {

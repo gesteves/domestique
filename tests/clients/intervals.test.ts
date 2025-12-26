@@ -1422,4 +1422,209 @@ describe('IntervalsClient', () => {
     });
 
   });
+
+  describe('getActivityIntervals with heat metrics', () => {
+    it('should include heat metrics in intervals when heat data is available', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            label: 'Interval 1',
+            start_time: 100,
+            end_time: 200,
+            moving_time: 100,
+            distance: 1000,
+            average_watts: 250,
+            max_watts: 300,
+          },
+          {
+            id: 2,
+            type: 'RECOVERY',
+            label: 'Recovery 1',
+            start_time: 200,
+            end_time: 300,
+            moving_time: 100,
+            distance: 500,
+            average_watts: 100,
+            max_watts: 150,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 50, 100, 120, 150, 180, 200, 250, 300],
+        },
+        {
+          type: 'heat_strain_index',
+          data: [0, 1.0, 2.0, 3.0, 4.0, 5.0, 2.5, 1.5, 0.5],
+        },
+      ];
+
+      // First call: getActivityIntervals endpoint
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      // Second call: heat strain streams endpoint
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      expect(result.intervals).toHaveLength(2);
+
+      // First interval (100-200 seconds) should have heat metrics
+      // Data points at times 100, 120, 150, 180, 200 with HSI values 2.0, 3.0, 4.0, 5.0, 2.5
+      const interval1 = result.intervals[0];
+      expect(interval1.min_heat_strain_index).toBe(2.0);
+      expect(interval1.max_heat_strain_index).toBe(5.0);
+      expect(interval1.avg_heat_strain_index).toBe(3.3); // (2+3+4+5+2.5)/5 = 16.5/5 = 3.3
+      expect(interval1.start_heat_strain_index).toBe(2.0);
+      expect(interval1.end_heat_strain_index).toBe(2.5);
+
+      // Second interval (200-300 seconds) should have heat metrics
+      // Data points at times 200, 250, 300 with HSI values 2.5, 1.5, 0.5
+      const interval2 = result.intervals[1];
+      expect(interval2.min_heat_strain_index).toBe(0.5);
+      expect(interval2.max_heat_strain_index).toBe(2.5);
+      expect(interval2.avg_heat_strain_index).toBe(1.5); // (2.5+1.5+0.5)/3
+      expect(interval2.start_heat_strain_index).toBe(2.5);
+      expect(interval2.end_heat_strain_index).toBe(0.5);
+    });
+
+    it('should not include heat metrics when heat data is unavailable', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            label: 'Interval 1',
+            start_time: 100,
+            end_time: 200,
+            moving_time: 100,
+            distance: 1000,
+            average_watts: 250,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 50, 100, 150, 200],
+        },
+        {
+          type: 'power',
+          data: [100, 200, 250, 300, 200],
+        },
+      ];
+
+      // First call: getActivityIntervals endpoint
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      // Second call: streams endpoint (no heat strain data)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      expect(result.intervals).toHaveLength(1);
+      const interval = result.intervals[0];
+      expect(interval.min_heat_strain_index).toBeUndefined();
+      expect(interval.max_heat_strain_index).toBeUndefined();
+      expect(interval.avg_heat_strain_index).toBeUndefined();
+      expect(interval.start_heat_strain_index).toBeUndefined();
+      expect(interval.end_heat_strain_index).toBeUndefined();
+    });
+
+    it('should handle intervals with no matching heat data points', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            start_time: 500, // No heat data in this time range
+            end_time: 600,
+            moving_time: 100,
+            distance: 1000,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 50, 100, 150, 200],
+        },
+        {
+          type: 'heat_strain_index',
+          data: [1.0, 2.0, 3.0, 4.0, 5.0],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      const interval = result.intervals[0];
+      expect(interval.min_heat_strain_index).toBeUndefined();
+      expect(interval.max_heat_strain_index).toBeUndefined();
+      expect(interval.avg_heat_strain_index).toBeUndefined();
+    });
+
+    it('should handle heat stream fetch failure gracefully', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            start_time: 100,
+            end_time: 200,
+            moving_time: 100,
+            distance: 1000,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      expect(result.intervals).toHaveLength(1);
+      const interval = result.intervals[0];
+      expect(interval.min_heat_strain_index).toBeUndefined();
+    });
+  });
 });

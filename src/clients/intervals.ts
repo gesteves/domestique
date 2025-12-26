@@ -986,8 +986,24 @@ export class IntervalsClient {
       '/intervals'
     );
 
+    // Fetch heat strain stream data if available
+    let heatStreamData: { time: number[]; heat_strain_index: number[] } | null = null;
+    try {
+      interface StreamData {
+        type: string;
+        data: number[];
+      }
+      const streams = await this.fetchActivity<StreamData[]>(
+        activityId,
+        '/streams?types=heat_strain_index&types=time'
+      );
+      heatStreamData = parseHeatStrainStreams(streams);
+    } catch (error) {
+      // Heat strain data may not be available for this activity
+    }
+
     const intervals = (response.icu_intervals || []).map((i) =>
-      this.normalizeInterval(i)
+      this.normalizeInterval(i, heatStreamData)
     );
     const groups = (response.icu_groups || []).map((g) =>
       this.normalizeIntervalGroup(g)
@@ -1110,10 +1126,62 @@ export class IntervalsClient {
   /**
    * Normalize a raw interval from the API
    */
-  private normalizeInterval(raw: IntervalsRawInterval): WorkoutInterval {
+  private normalizeInterval(
+    raw: IntervalsRawInterval,
+    heatStreamData: { time: number[]; heat_strain_index: number[] } | null = null
+  ): WorkoutInterval {
     const distanceKm = raw.distance ? raw.distance / 1000 : undefined;
     const speedKph = raw.average_speed ? raw.average_speed * 3.6 : undefined;
     const elevationGain = raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined;
+
+    // Calculate heat metrics for this interval if heat data is available
+    let heatMetrics:
+      | {
+          min_heat_strain_index: number;
+          max_heat_strain_index: number;
+          avg_heat_strain_index: number;
+          start_heat_strain_index: number;
+          end_heat_strain_index: number;
+        }
+      | undefined;
+
+    if (heatStreamData && heatStreamData.time.length > 0) {
+      // Find indices in the stream data that fall within this interval's time range
+      const intervalHSI: number[] = [];
+      let startHSI: number | undefined;
+      let endHSI: number | undefined;
+
+      for (let i = 0; i < heatStreamData.time.length; i++) {
+        const time = heatStreamData.time[i];
+        const hsi = heatStreamData.heat_strain_index[i];
+
+        if (time >= raw.start_time && time <= raw.end_time) {
+          intervalHSI.push(hsi);
+
+          // Capture start HSI (first data point in interval)
+          if (startHSI === undefined) {
+            startHSI = hsi;
+          }
+          // Keep updating end HSI (will be last data point in interval)
+          endHSI = hsi;
+        }
+      }
+
+      // Only include metrics if we found data points in this interval
+      if (intervalHSI.length > 0) {
+        const minHSI = Math.min(...intervalHSI);
+        const maxHSI = Math.max(...intervalHSI);
+        const avgHSI = intervalHSI.reduce((sum, hsi) => sum + hsi, 0) / intervalHSI.length;
+
+        heatMetrics = {
+          min_heat_strain_index: Math.round(minHSI * 10) / 10,
+          max_heat_strain_index: Math.round(maxHSI * 10) / 10,
+          avg_heat_strain_index: Math.round(avgHSI * 10) / 10,
+          start_heat_strain_index: startHSI !== undefined ? Math.round(startHSI * 10) / 10 : 0,
+          end_heat_strain_index: endHSI !== undefined ? Math.round(endHSI * 10) / 10 : 0,
+        };
+      }
+    }
 
     return {
       type: raw.type,
@@ -1152,6 +1220,9 @@ export class IntervalsClient {
       wbal_start_j: raw.wbal_start,
       wbal_end_j: raw.wbal_end,
       joules_above_ftp: raw.joules_above_ftp,
+
+      // Heat metrics (only if heat data available for this interval)
+      ...heatMetrics,
     };
   }
 
