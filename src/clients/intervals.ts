@@ -108,8 +108,6 @@ interface IntervalsActivity {
   distance?: number;
   icu_training_load?: number;
   icu_intensity?: number;
-  weighted_avg_watts?: number;
-  average_watts?: number;
   average_heartrate?: number;
   max_heartrate?: number;
   total_elevation_gain?: number;
