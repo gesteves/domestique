@@ -14,7 +14,6 @@ import { buildToolResponse } from '../utils/response-builder.js';
 
 interface ResponseOptions<TResult> {
   fieldDescriptions: Record<string, string>;
-  getMessage?: (data: TResult) => string | undefined;
   getNextActions?: (data: TResult) => string[] | undefined;
   getWarnings?: (data: TResult) => string[] | undefined;
 }
@@ -33,7 +32,6 @@ function withToolResponse<TArgs, TResult>(
       return buildToolResponse({
         data,
         fieldDescriptions: options.fieldDescriptions,
-        message: options.getMessage?.(data),
         nextActions: options.getNextActions?.(data),
         warnings: options.getWarnings?.(data),
       });
@@ -126,9 +124,6 @@ Returns null if Whoop is not configured.
         async () => this.currentTools.getTodaysRecovery(),
         {
           fieldDescriptions: getFieldDescriptions('recovery'),
-          getMessage: (data) => data
-            ? `Recovery: ${data.recovery_score}% (${data.recovery_level}). Sleep: ${data.sleep_duration}.`
-            : 'No recovery data available (Whoop not configured or no data for today).',
           getNextActions: (data) => data
             ? ['Use get_recovery_trends to see patterns over time', 'Use get_daily_summary for full today overview']
             : undefined,
@@ -164,9 +159,6 @@ Returns null if Whoop is not configured.
         async () => this.currentTools.getTodaysStrain(),
         {
           fieldDescriptions: getFieldDescriptions('whoop'),
-          getMessage: (data) => data
-            ? `Strain: ${data.strain_score.toFixed(1)} (${data.strain_level}). ${data.activities?.length ?? 0} activities tracked.`
-            : 'No strain data available (Whoop not configured or no data for today).',
           getNextActions: (data) => data
             ? ['Use get_strain_history for trends over time', 'Use get_daily_summary for full today overview']
             : undefined,
@@ -209,13 +201,6 @@ Returns empty array if no workouts completed today.
         async () => this.currentTools.getTodaysCompletedWorkouts(),
         {
           fieldDescriptions: getFieldDescriptions('workout'),
-          getMessage: (data) => {
-            if (!data || data.length === 0) {
-              return 'No workouts completed today.';
-            }
-            const totalTss = data.reduce((sum, w) => sum + (w.tss ?? 0), 0);
-            return `${data.length} workout${data.length === 1 ? '' : 's'} completed today. Total TSS: ${totalTss.toFixed(0)}.`;
-          },
           getNextActions: (data) => data && data.length > 0
             ? [
                 'Use get_workout_intervals(activity_id) for interval breakdown',
@@ -260,13 +245,6 @@ Returns empty array if Whoop is not configured.
         async (args: { start_date: string; end_date?: string }) => this.currentTools.getStrainHistory(args),
         {
           fieldDescriptions: getFieldDescriptions('whoop'),
-          getMessage: (data) => {
-            if (!data || data.length === 0) {
-              return 'No strain data available for this period (Whoop not configured or no data).';
-            }
-            const avgStrain = data.reduce((sum, d) => sum + d.strain_score, 0) / data.length;
-            return `${data.length} days of strain data. Average strain: ${avgStrain.toFixed(1)}.`;
-          },
           getNextActions: (data) => data && data.length > 0
             ? [
                 'Use get_recovery_trends for same period to correlate strain with recovery',
@@ -308,13 +286,6 @@ Returns empty array if no workouts planned today.
         async () => this.currentTools.getTodaysPlannedWorkouts(),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
-          getMessage: (data) => {
-            if (!data || data.length === 0) {
-              return 'No workouts planned for today.';
-            }
-            const totalTss = data.reduce((sum, w) => sum + (w.expected_tss ?? 0), 0);
-            return `${data.length} workout${data.length === 1 ? '' : 's'} planned for today. Expected TSS: ${totalTss.toFixed(0)}.`;
-          },
           getNextActions: (data) => data && data.length > 0
             ? [
                 'Use get_todays_recovery to check readiness for planned workouts',
@@ -358,13 +329,6 @@ For sport-specific settings (FTP, zones, thresholds), use get_sports_settings wi
         async () => this.currentTools.getAthleteProfile(),
         {
           fieldDescriptions: getFieldDescriptions('athlete_profile'),
-          getMessage: (data) => {
-            const parts = [`Athlete profile loaded.`];
-            if (data.unit_preferences) {
-              parts.push(`Units: ${data.unit_preferences.system}, weight in ${data.unit_preferences.weight}, temp in ${data.unit_preferences.temperature}.`);
-            }
-            return parts.join(' ');
-          },
           getNextActions: () => [
             'Use get_sports_settings(sport) for FTP, zones, and thresholds',
             'Use get_training_load_trends to see how fitness has evolved',
@@ -407,19 +371,6 @@ Use this to interpret zone data or answer questions like "What's my FTP?" or "Wh
         async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
         {
           fieldDescriptions: getFieldDescriptions('sport_settings'),
-          getMessage: (data) => {
-            if (!data) {
-              return 'No settings found for this sport.';
-            }
-            const parts = [`${data.sport} settings loaded.`];
-            if (data.settings.ftp) {
-              parts.push(`FTP: ${data.settings.ftp}W.`);
-            }
-            if (data.settings.threshold_pace) {
-              parts.push(`Threshold pace: ${data.settings.threshold_pace}.`);
-            }
-            return parts.join(' ');
-          },
           getNextActions: () => [
             'Use this zone information to interpret power/HR/pace data in workouts',
             'Use get_workout_history to see workouts for this sport',
@@ -463,20 +414,6 @@ For deeper analysis of any component, use the specific tool.
         async () => this.currentTools.getDailySummary(),
         {
           fieldDescriptions: combineFieldDescriptions('daily_summary', 'recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
-          getMessage: (data) => {
-            const parts: string[] = [];
-            if (data.whoop.recovery) {
-              parts.push(`Recovery: ${data.whoop.recovery.recovery_score}% (${data.whoop.recovery.recovery_level})`);
-            }
-            if (data.whoop.strain) {
-              parts.push(`Strain: ${data.whoop.strain.strain_score.toFixed(1)} (${data.whoop.strain.strain_level})`);
-            }
-            if (data.fitness) {
-              parts.push(`Fitness: CTL ${data.fitness.ctl.toFixed(0)}, TSB ${data.fitness.tsb.toFixed(0)}`);
-            }
-            parts.push(`Completed: ${data.workouts_completed} workout${data.workouts_completed !== 1 ? 's' : ''}, Planned: ${data.workouts_planned} workout${data.workouts_planned !== 1 ? 's' : ''}`);
-            return parts.join('. ') + '.';
-          },
           getNextActions: (data) => {
             const actions: string[] = [];
             if (data.completed_workouts && data.completed_workouts.length > 0) {
@@ -542,13 +479,6 @@ Returns empty array if no workouts match.
         async (args: { start_date: string; end_date?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
         {
           fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
-          getMessage: (data) => {
-            if (!data || data.length === 0) {
-              return 'No workouts found for this period.';
-            }
-            const totalTss = data.reduce((sum, w) => sum + (w.tss ?? 0), 0);
-            return `${data.length} workout${data.length === 1 ? '' : 's'} found. Total TSS: ${totalTss.toFixed(0)}.`;
-          },
           getNextActions: (data) => data && data.length > 0
             ? [
                 'Use get_workout_intervals(activity_id) for interval breakdown',
@@ -597,12 +527,6 @@ Returns empty array if Whoop is not configured.
         async (args: { start_date: string; end_date?: string }) => this.historicalTools.getRecoveryTrends(args),
         {
           fieldDescriptions: getFieldDescriptions('recovery'),
-          getMessage: (data) => {
-            if (!data || !data.data || data.data.length === 0) {
-              return 'No recovery data available for this period (Whoop not configured or no data).';
-            }
-            return `${data.data.length} days of recovery data. Avg recovery: ${data.summary.avg_recovery.toFixed(0)}%. Avg HRV: ${data.summary.avg_hrv.toFixed(0)} ms.`;
-          },
           getNextActions: (data) => data && data.data && data.data.length > 0
             ? [
                 'Use get_training_load_trends to correlate with training stress',
@@ -641,13 +565,6 @@ Returns data only for days where wellness data was recorded.
         async (args: { start_date: string; end_date?: string }) => this.historicalTools.getWellnessTrends(args),
         {
           fieldDescriptions: getFieldDescriptions('wellness'),
-          getMessage: (data) => {
-            if (!data || !data.data || data.data.length === 0) {
-              return 'No wellness data available for this period.';
-            }
-            const weightEntries = data.data.filter((d) => d.weight);
-            return `${data.period_days} day period. ${weightEntries.length} weight entries recorded.`;
-          },
           getNextActions: (data) => data && data.data && data.data.length > 0
             ? [
                 'Use get_training_load_trends to correlate with training stress',
@@ -699,13 +616,6 @@ Returns empty array if no workouts planned.
         async (args: { days?: number; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts({ days: args.days ?? 7, sport: args.sport }),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
-          getMessage: (data) => {
-            if (!data || data.length === 0) {
-              return 'No workouts planned in this period.';
-            }
-            const totalTss = data.reduce((sum, w) => sum + (w.expected_tss ?? 0), 0);
-            return `${data.length} workout${data.length === 1 ? '' : 's'} planned. Total expected TSS: ${totalTss.toFixed(0)}.`;
-          },
           getNextActions: (data) => data && data.length > 0
             ? [
                 'Use get_planned_workout_details(date) for specific day details',
@@ -752,13 +662,6 @@ Returns empty array if no workouts match.
         async (args: { date: string; sport?: 'cycling' | 'running' | 'swimming' }) => this.planningTools.getPlannedWorkoutDetails(args),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
-          getMessage: (data) => {
-            if (!data || data.length === 0) {
-              return 'No workouts planned for this date.';
-            }
-            const totalTss = data.reduce((sum, w) => sum + (w.expected_tss ?? 0), 0);
-            return `${data.length} workout${data.length === 1 ? '' : 's'} planned. Expected TSS: ${totalTss.toFixed(0)}.`;
-          },
           getNextActions: (data) => data && data.length > 0
             ? [
                 'Use get_upcoming_workouts to see the full schedule',
@@ -824,13 +727,6 @@ Use with get_recovery_trends to correlate load with recovery.
         async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
         {
           fieldDescriptions: getFieldDescriptions('fitness'),
-          getMessage: (data) => {
-            if (!data || !data.summary) {
-              return 'No training load data available.';
-            }
-            const { current_ctl, current_atl, current_tsb, acwr } = data.summary;
-            return `Current fitness: CTL ${current_ctl?.toFixed(0) ?? 'N/A'}, ATL ${current_atl?.toFixed(0) ?? 'N/A'}, TSB ${current_tsb?.toFixed(0) ?? 'N/A'}, ACWR ${acwr?.toFixed(2) ?? 'N/A'}.`;
-          },
           getNextActions: () => [
             'Use get_recovery_trends to correlate with sleep/HRV',
             'Use get_workout_history to see what drove these trends',
@@ -888,14 +784,7 @@ Get the activity_id first from:
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('intervals'),
-          getMessage: (data) => {
-            if (!data || !data.intervals || data.intervals.length === 0) {
-              return 'No interval data available for this workout.';
-            }
-            const workIntervals = data.intervals.filter((i: { type?: string }) => i.type === 'WORK').length;
-            return `${data.intervals.length} intervals found (${workIntervals} work intervals).`;
-          },
-          getNextActions: (data) => [
+          getNextActions: () => [
             'Use get_workout_notes for athlete comments on this workout',
             'Use get_workout_weather for outdoor workout conditions',
           ],
@@ -940,12 +829,6 @@ Returns empty notes array if no notes exist.
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('notes'),
-          getMessage: (data) => {
-            if (!data || !data.notes || data.notes.length === 0) {
-              return 'No notes found for this workout.';
-            }
-            return `${data.notes.length} note${data.notes.length === 1 ? '' : 's'} found.`;
-          },
           getNextActions: () => [
             'Use get_workout_intervals for objective interval data',
             'Use get_workout_weather for outdoor workout conditions',
@@ -992,12 +875,6 @@ Returns null if weather data is not available.
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('weather'),
-          getMessage: (data) => {
-            if (!data || !data.weather_description) {
-              return 'No weather data available (indoor workout or data not recorded).';
-            }
-            return `Weather: ${data.weather_description}`;
-          },
           getNextActions: () => [
             'Use get_workout_intervals for power/HR data',
             'Use get_workout_notes for athlete comments',
@@ -1049,23 +926,6 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
           this.historicalTools.getPowerCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('power_curve'),
-          getMessage: (data) => {
-            if (!data || data.activity_count === 0) {
-              return 'No cycling activities found in this period.';
-            }
-            const parts = [`Analyzed ${data.activity_count} cycling activities from ${data.period_start} to ${data.period_end}.`];
-            if (data.summary.best_20min) {
-              parts.push(`Best 20min: ${data.summary.best_20min.watts}W (${data.summary.best_20min.watts_per_kg} W/kg).`);
-            }
-            if (data.summary.estimated_ftp) {
-              parts.push(`Estimated FTP: ${data.summary.estimated_ftp}W.`);
-            }
-            if (data.comparison) {
-              const improved = data.comparison.changes.filter((c: { improved: boolean }) => c.improved).length;
-              parts.push(`Compared to previous period: ${improved}/${data.comparison.changes.length} durations improved.`);
-            }
-            return parts.join(' ');
-          },
           getNextActions: (data) => {
             const actions = ['Use get_training_load_trends to correlate power with fitness'];
             if (data && data.activity_count > 0) {
@@ -1119,23 +979,6 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
           this.historicalTools.getPaceCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('pace_curve'),
-          getMessage: (data) => {
-            if (!data || data.activity_count === 0) {
-              return `No ${data?.sport || ''} activities found in this period.`;
-            }
-            const parts = [`Analyzed ${data.activity_count} ${data.sport} activities from ${data.period_start} to ${data.period_end}.`];
-            if (data.sport === 'running' && data.summary.best_5km) {
-              parts.push(`Best 5km: ${Math.floor(data.summary.best_5km.time_seconds / 60)}:${(data.summary.best_5km.time_seconds % 60).toFixed(0).padStart(2, '0')} (${data.summary.best_5km.pace}).`);
-            }
-            if (data.sport === 'swimming' && data.summary.best_100m) {
-              parts.push(`Best 100m: ${Math.floor(data.summary.best_100m.time_seconds / 60)}:${(data.summary.best_100m.time_seconds % 60).toFixed(0).padStart(2, '0')} (${data.summary.best_100m.pace}).`);
-            }
-            if (data.comparison) {
-              const improved = data.comparison.changes.filter((c: { improved: boolean }) => c.improved).length;
-              parts.push(`Compared to previous period: ${improved}/${data.comparison.changes.length} distances improved.`);
-            }
-            return parts.join(' ');
-          },
           getNextActions: (data) => {
             const actions = ['Use get_training_load_trends to correlate pace with fitness'];
             if (data && data.activity_count > 0) {
@@ -1183,20 +1026,6 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
           this.historicalTools.getHRCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('hr_curve'),
-          getMessage: (data) => {
-            if (!data || data.activity_count === 0) {
-              return 'No activities found in this period.';
-            }
-            const sportLabel = data.sport ? `${data.sport} ` : '';
-            const parts = [`Analyzed ${data.activity_count} ${sportLabel}activities from ${data.period_start} to ${data.period_end}.`];
-            if (data.summary.max_20min) {
-              parts.push(`Max 20min HR: ${data.summary.max_20min.bpm} BPM.`);
-            }
-            if (data.comparison) {
-              parts.push(`Compared to previous period: ${data.comparison.changes.length} durations analyzed.`);
-            }
-            return parts.join(' ');
-          },
           getNextActions: () => [
             'Use get_training_load_trends to correlate HR with fitness',
             'Use get_recovery_trends to see how HR relates to recovery',
