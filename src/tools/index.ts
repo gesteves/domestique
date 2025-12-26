@@ -500,9 +500,7 @@ Get the activity_id from:
 
 <instructions>
 - **ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
-- Get the activity_id from:
- - get_workout_history (for past workouts)
- - get_todays_completed_workouts (for today's workouts)
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
 - Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
 </instructions>`,
       {
@@ -527,9 +525,7 @@ Get the activity_id from:
 <instructions>
 - **ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user\'s performance.
 - **NEVER** fetch this when analyzing an **INDOOR** workout; weather conditions are irrelevant for indoor activities.
-- Get the activity_id from:
-  - get_workout_history (for past workouts)
-  - get_todays_completed_workouts (for today's workouts)
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
 </instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
