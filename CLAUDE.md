@@ -56,15 +56,23 @@ The development server runs on `http://localhost:3000` with hot reload enabled.
 | `domestique-prod` | 3001 | Production-like build (use `--profile prod`) |
 | `redis` | 6379 | Token storage for Whoop OAuth |
 
+### Claude Code on the Web
 
-## Key Technologies
+When using Claude Code on the Web, Docker is not available in the cloud environment. Commands should be run directly using Node.js:
 
-- **TypeScript** with ES modules (`"type": "module"`)
-- **Express** for HTTP server
-- **@modelcontextprotocol/sdk**
-- **StreamableHTTPServerTransport**
-- **Vitest** for testing
-- **tsx** for development (hot reload)
+```bash
+# Install dependencies (done automatically via SessionStart hook)
+npm install
+
+# Run tests
+npm test
+
+# Type checking
+npm run typecheck
+
+# Build
+npm run build
+```
 
 ## MCP Transport
 
