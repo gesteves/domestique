@@ -506,7 +506,7 @@ export interface WorkoutInterval {
 
   // Elevation
   elevation_gain?: string; // Human-readable, e.g., "45 m"
-  average_gradient_pct?: number;
+  average_gradient?: string; // Human-readable, e.g., "1.9%"
 
   // W'bal (anaerobic capacity)
   wbal_start_j?: number;

@@ -1214,7 +1214,7 @@ export class IntervalsClient {
 
       // Elevation
       elevation_gain: elevationGain !== undefined ? `${elevationGain} m` : undefined,
-      average_gradient_pct: raw.average_gradient ? raw.average_gradient * 100 : undefined,
+      average_gradient: raw.average_gradient !== undefined ? `${(raw.average_gradient * 100).toFixed(1)}%` : undefined,
 
       // W'bal
       wbal_start_j: raw.wbal_start,

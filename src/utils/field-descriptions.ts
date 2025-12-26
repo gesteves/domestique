@@ -273,7 +273,7 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
 
   // Elevation
   elevation_gain: 'Elevation gain of the interval',
-  average_gradient_pct: 'Average gradient as percentage',
+  average_gradient: 'Average gradient as a percentage',
 
   // W\'bal (anaerobic capacity)
   wbal_start_j: 'W\'bal at interval start in joules; remaining anaerobic capacity',
