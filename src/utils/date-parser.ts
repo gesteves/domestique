@@ -156,6 +156,47 @@ export function getTodayInTimezone(timezone: string): string {
 }
 
 /**
+ * Get the current date and time in the specified timezone as an ISO 8601 string
+ * with timezone offset.
+ *
+ * Example output: "2024-12-25T10:30:45-05:00" (for America/New_York)
+ */
+export function getCurrentDateTimeInTimezone(timezone: string): string {
+  const now = new Date();
+
+  // Format the date/time parts in the target timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? '00';
+
+  const datePart = `${get('year')}-${get('month')}-${get('day')}`;
+  const timePart = `${get('hour')}:${get('minute')}:${get('second')}`;
+
+  // Calculate the timezone offset
+  // Get the time in the target timezone as a string, then parse it to compare with UTC
+  const tzDate = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+  const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const offsetMinutes = Math.round((tzDate.getTime() - utcDate.getTime()) / 60000);
+
+  const offsetSign = offsetMinutes >= 0 ? '+' : '-';
+  const absOffset = Math.abs(offsetMinutes);
+  const offsetHours = Math.floor(absOffset / 60).toString().padStart(2, '0');
+  const offsetMins = (absOffset % 60).toString().padStart(2, '0');
+
+  return `${datePart}T${timePart}${offsetSign}${offsetHours}:${offsetMins}`;
+}
+
+/**
  * Parse a natural language date string into an ISO date string,
  * using the specified timezone for relative dates.
  *

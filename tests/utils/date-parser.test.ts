@@ -6,6 +6,7 @@ import {
   getDaysBackRange,
   getToday,
   getTodayInTimezone,
+  getCurrentDateTimeInTimezone,
   getStartOfDay,
   getEndOfDay,
 } from '../../src/utils/date-parser.js';
@@ -214,6 +215,65 @@ describe('date-parser', () => {
       vi.setSystemTime(new Date('2024-12-15T02:00:00Z'));
       // At 02:00 UTC, in America/Denver (UTC-7), it's 19:00 on Dec 14
       expect(getTodayInTimezone('America/Denver')).toBe('2024-12-14');
+    });
+  });
+
+  describe('getCurrentDateTimeInTimezone', () => {
+    it('should return ISO 8601 datetime with timezone offset', () => {
+      // At 12:00:00 UTC on Dec 15
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('UTC');
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+      expect(result).toBe('2024-12-15T12:00:00+00:00');
+    });
+
+    it('should show correct time for America/New_York (UTC-5)', () => {
+      // At 12:00:00 UTC on Dec 15, it's 07:00:00 in New York (EST, UTC-5)
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('America/New_York');
+      expect(result).toBe('2024-12-15T07:00:00-05:00');
+    });
+
+    it('should show correct time for America/Los_Angeles (UTC-8)', () => {
+      // At 12:00:00 UTC on Dec 15, it's 04:00:00 in LA (PST, UTC-8)
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('America/Los_Angeles');
+      expect(result).toBe('2024-12-15T04:00:00-08:00');
+    });
+
+    it('should show correct time for Europe/London (UTC+0 in winter)', () => {
+      // At 12:00:00 UTC on Dec 15, it's 12:00:00 in London (GMT)
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('Europe/London');
+      expect(result).toBe('2024-12-15T12:00:00+00:00');
+    });
+
+    it('should show correct time for Europe/Paris (UTC+1 in winter)', () => {
+      // At 12:00:00 UTC on Dec 15, it's 13:00:00 in Paris (CET, UTC+1)
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('Europe/Paris');
+      expect(result).toBe('2024-12-15T13:00:00+01:00');
+    });
+
+    it('should handle date boundary crossing to next day', () => {
+      // At 23:00:00 UTC on Dec 15, it's 08:00:00 on Dec 16 in Asia/Tokyo (JST, UTC+9)
+      vi.setSystemTime(new Date('2024-12-15T23:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('Asia/Tokyo');
+      expect(result).toBe('2024-12-16T08:00:00+09:00');
+    });
+
+    it('should handle date boundary crossing to previous day', () => {
+      // At 02:00:00 UTC on Dec 15, it's 19:00:00 on Dec 14 in America/Denver (MST, UTC-7)
+      vi.setSystemTime(new Date('2024-12-15T02:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('America/Denver');
+      expect(result).toBe('2024-12-14T19:00:00-07:00');
+    });
+
+    it('should handle half-hour offset timezones', () => {
+      // At 12:00:00 UTC on Dec 15, it's 17:30:00 in India (IST, UTC+5:30)
+      vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
+      const result = getCurrentDateTimeInTimezone('Asia/Kolkata');
+      expect(result).toBe('2024-12-15T17:30:00+05:30');
     });
   });
 

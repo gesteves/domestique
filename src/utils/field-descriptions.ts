@@ -453,6 +453,15 @@ export const WELLNESS_FIELD_DESCRIPTIONS = {
   weight: 'Body weight with unit (e.g., "74.8 kg"). Only present if recorded for this day.',
 };
 
+export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {
+  // Top-level daily summary fields
+  current_date: 'Current date and time in the user\'s local timezone (ISO 8601 with timezone offset, e.g., "2024-12-25T10:30:45-05:00"). Use this to understand the time of day when the summary was requested; that context may be important for the metrics shown.',
+  workouts_completed: 'Number of workouts completed so far today',
+  workouts_planned: 'Number of workouts planned for today',
+  tss_completed: 'Total Training Stress Score from completed workouts',
+  tss_planned: 'Total expected Training Stress Score from planned workouts',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
@@ -467,7 +476,8 @@ type FieldCategory =
   | 'power_curve'
   | 'pace_curve'
   | 'hr_curve'
-  | 'wellness';
+  | 'wellness'
+  | 'daily_summary';
 
 /**
  * Get descriptions for a specific category
@@ -502,6 +512,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return HR_CURVE_FIELD_DESCRIPTIONS;
     case 'wellness':
       return WELLNESS_FIELD_DESCRIPTIONS;
+    case 'daily_summary':
+      return DAILY_SUMMARY_FIELD_DESCRIPTIONS;
   }
 }
 

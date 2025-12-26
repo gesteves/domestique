@@ -398,6 +398,30 @@ describe('CurrentTools', () => {
       expect(result.tss_planned).toBe(88);
     });
 
+    it('should include current_date with full datetime in user timezone', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
+
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/New_York');
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      // Should be ISO 8601 format with timezone offset
+      // 10:30:45 UTC = 05:30:45 America/New_York (UTC-5)
+      expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+      expect(result.current_date).toBe('2024-12-15T05:30:45-05:00');
+
+      vi.useRealTimers();
+    });
+
     it('should include fitness metrics with ctl_load and atl_load', async () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);

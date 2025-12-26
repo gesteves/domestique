@@ -1,7 +1,7 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone } from '../utils/date-parser.js';
+import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone, getCurrentDateTimeInTimezone } from '../utils/date-parser.js';
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import type {
   RecoveryData,
@@ -268,8 +268,11 @@ export class CurrentTools {
       0
     );
 
+    // Get current datetime in user's timezone for context
+    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
+
     return {
-      date: today,
+      current_date: currentDateTime,
       whoop: {
         recovery,
         strain,

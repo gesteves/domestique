@@ -462,7 +462,7 @@ For deeper analysis of any component, use the specific tool.
       withToolResponse(
         async () => this.currentTools.getDailySummary(),
         {
-          fieldDescriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
+          fieldDescriptions: combineFieldDescriptions('daily_summary', 'recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
           getMessage: (data) => {
             const parts: string[] = [];
             if (data.whoop.recovery) {

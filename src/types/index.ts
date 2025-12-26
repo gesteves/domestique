@@ -571,8 +571,8 @@ export interface DailySummaryWhoop {
  * are included in the recovery and strain objects within the whoop property.
  */
 export interface DailySummary {
-  /** Date in ISO 8601 format */
-  date: string;
+  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
+  current_date: string;
   /** Today's Whoop recovery and strain data */
   whoop: DailySummaryWhoop;
   /** Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu, null if unavailable */
