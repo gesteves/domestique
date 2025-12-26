@@ -98,30 +98,8 @@ export class ToolRegistry {
     // Current/Recent Data Tools
     server.tool(
       'get_todays_recovery',
-      `<usecase>
-Use when the user asks about:
-- How they recovered overnight or their readiness for today
-- Sleep quality, HRV, or resting heart rate from last night
-- Whether they should train hard today based on recovery
-
-Do NOT use for:
-- Historical recovery trends (use get_recovery_trends)
-- General "how am I doing today" questions (use get_daily_summary)
-</usecase>
-
-<instructions>
-Fetches today's Whoop recovery data including:
-- Recovery score (0-100%) with level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%)
-- HRV RMSSD in milliseconds
-- Resting heart rate
-- Sleep performance percentage and durations
-- Sleep stages (light, deep/SWS, REM, awake)
-
-Note that sleep and recovery metrics are calculated by Whoop once, when the user wakes up,
-and will not be updated throughout the day.
-
-Returns null if Whoop is not configured.
-</instructions>`,
+      `Returns today's Whoop recovery and sleep data. Note that sleep and recovery metrics are calculated by Whoop once a day, when the user wakes up,
+and will not be updated throughout the day. Returns null if Whoop is not configured.`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysRecovery(),
@@ -136,28 +114,7 @@ Returns null if Whoop is not configured.
 
     server.tool(
       'get_todays_strain',
-      `<usecase>
-Use when the user asks about:
-- Today's strain or exertion level
-- How hard they've worked today (from Whoop's perspective)
-- Calories burned or heart rate data from Whoop today
-
-Do NOT use for:
-- Historical strain data (use get_strain_history)
-- Detailed workout metrics (use get_todays_completed_workouts)
-- General "how am I doing today" questions (use get_daily_summary)
-</usecase>
-
-<instructions>
-Fetches today's Whoop strain data including:
-- Strain score (0-21) with level: LIGHT (0-9), MODERATE (10-13), HIGH (14-17), ALL_OUT (18-21)
-- Average and max heart rate
-- Calories burned
-- List of Whoop-tracked activities
-- Current time for the user, as the strain will usually increase as the day progresses.
-
-Returns null if Whoop is not configured.
-</instructions>`,
+      `Fetches today's Whoop strain data, including any activities logged in the Whoop app. Returns null if Whoop is not configured.`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysStrain(),
@@ -172,34 +129,7 @@ Returns null if Whoop is not configured.
 
     server.tool(
       'get_todays_completed_workouts',
-      `<usecase>
-Use when the user asks about:
-- Workouts completed today
-- How today's training went
-- Comparing planned vs completed workouts for today
-- Today's power, TSS, or training metrics
-
-Do NOT use for:
-- Historical workouts (use get_workout_history)
-- Deep analysis of intervals (use get_workout_intervals with the activity_id)
-- General "how am I doing today" questions (use get_daily_summary)
-</usecase>
-
-<instructions>
-Fetches all completed workouts from Intervals.icu for today:
-- Basic metrics: duration, distance, TSS, intensity factor
-- Power data: normalized power, average power
-- Heart rate: average and max HR
-- Matched Whoop strain data (if available)
-- Fitness snapshot: CTL, ATL, TSB at time of activity
-
-For detailed analysis, use the activity_id with:
-- get_workout_intervals: Interval-by-interval breakdown
-- get_workout_notes: Athlete's subjective notes
-- get_workout_weather: Weather conditions (outdoor only)
-
-Returns empty array if no workouts completed today.
-</instructions>`,
+      `Fetches all workouts and fitness activities the user has completed today from Intervals.icu.`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysCompletedWorkouts(),
@@ -218,29 +148,13 @@ Returns empty array if no workouts completed today.
 
     server.tool(
       'get_strain_history',
-      `<usecase>
-Use when the user asks about:
-- Strain patterns over a period of time
-- Historical exertion or activity levels from Whoop
-- Comparing strain across different days or weeks
+      `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
 
-Do NOT use for:
-- Today's strain only (use get_todays_strain)
-- Workout details from Intervals.icu (use get_workout_history)
-</usecase>
+Date parameters accept ISO format (YYYY-MM-DD) or natural language: "Yesterday", "7 days ago", "last week", "2 weeks ago", etc.
 
-<instructions>
-Fetches Whoop strain data for a date range:
-- Daily strain scores (0-21) with level classifications
-- Heart rate metrics (average, max)
-- Calories burned
-- Activities tracked by Whoop
+Note: If you only need to get today\'s strain data, it's more efficient to call get_todays_strain.
 
-Date parameters accept ISO format (YYYY-MM-DD) or natural language:
-- "7 days ago", "last week", "2 weeks ago"
-
-Returns empty array if Whoop is not configured.
-</instructions>`,
+Returns empty array if Whoop is not configured.`,
       {
         start_date: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -261,30 +175,8 @@ Returns empty array if Whoop is not configured.
 
     server.tool(
       'get_todays_planned_workouts',
-      `<usecase>
-Use when the user asks about:
-- What workouts are planned for today
-- Today's training schedule
-- What they should do today
-
-Do NOT use for:
-- Future workouts beyond today (use get_upcoming_workouts)
-- Completed workouts (use get_todays_completed_workouts)
-- General "how am I doing today" questions (use get_daily_summary)
-</usecase>
-
-<instructions>
-Fetches planned workouts for today from both TrainerRoad and Intervals.icu:
-- Workout name and description
-- Expected duration and TSS
-- Workout type and discipline (Swim/Bike/Run)
-- General structure and goals of the workout (if available)
-- Note that planned workouts may not be in the order the user intends to do them;
-ask them for clarification if necessary
-
-Deduplicates workouts that appear in both calendars.
-Returns empty array if no workouts planned today.
-</instructions>`,
+      `Fetches all workouts and fitness activities the user has planned for today, from both TrainerRoad and Intervals.icu calendars. Note that planned workouts may not necessarily be in the order the user intends to do them;
+ask them for clarification if necessary.`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysPlannedWorkouts(),
@@ -302,32 +194,11 @@ Returns empty array if no workouts planned today.
 
     server.tool(
       'get_athlete_profile',
-      `<usecase>
-Use when:
-- You need to know the user's preferred unit system (metric/imperial) BEFORE responding with data
-- The user asks about their profile, age, or location
-- The user asks how they want data displayed
+      `Returns the athlete's profile from Intervals.icu including:
+- Athlete info: name, location, timezone, gender, date of birth, and age.
+- The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature). You MUST use these units in all responses.
 
-Do NOT use for:
-- Sport-specific settings like FTP, zones, thresholds (use get_sports_settings)
-- Workout data (use get_workout_history or get_todays_completed_workouts)
-- Fitness trends over time (use get_training_load_trends)
-</usecase>
-
-<instructions>
-If you don't know the user's preferred unit system, you **MUST** call this tool before responding to the user, so you can get their preferences.
-In addition, users may prefer weights and temperatures displayed in a different unit system (e.g. they may prefer to use metric, but use Fahrenheit for the weather).
-
-Returns the athlete's profile from Intervals.icu including:
-- unit_preferences: The user's preferred unit system. You MUST use these units in all responses:
-  - system: "metric" or "imperial" - use kilometers/meters or miles/feet/yards for distances
-  - weight: "kg" or "lb" - use this for weight regardless of the user's preferred unit system
-  - temperature: "celsius" or "fahrenheit" - use this for temps regardless of the user's preferred unit system
-- Athlete info: name, location, timezone, sex
-- Age and date of birth (if set)
-
-For sport-specific settings (FTP, zones, thresholds), use get_sports_settings with the sport name.
-</instructions>`,
+If you don't know the user's preferred unit system, you **MUST** call this tool before responding to the user, so you can get their preferences.`,
       {},
       withToolResponse(
         async () => this.currentTools.getAthleteProfile(),
@@ -343,31 +214,9 @@ For sport-specific settings (FTP, zones, thresholds), use get_sports_settings wi
 
     server.tool(
       'get_sports_settings',
-      `<usecase>
-Use when the user asks about:
-- Their FTP, threshold power, or cycling settings
-- Running threshold pace or running zones
-- Swimming pace or swimming zones
-- Training zones (power, heart rate, or pace) for a specific sport
-- How to interpret zone data from workouts
+      `Fetches settings from Intervals.icu for a single sport, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
 
-Do NOT use for:
-- General profile info or unit preferences (use get_athlete_profile)
-- Workout data (use get_workout_history or get_todays_completed_workouts)
-- Fitness trends over time (use get_training_load_trends)
-</usecase>
-
-<instructions>
-Fetches sport-specific settings from Intervals.icu for a single sport:
-- Cycling: FTP, indoor FTP (if different), power zones
-- Running: threshold pace, pace zones, HR zones
-- Swimming: threshold pace, pace zones
-
-Also includes unit_preferences so you know how to format responses.
-
-Note: This returns the athlete's **current** zones, which may not match zones in historical workouts.
-Use this to interpret zone data or answer questions like "What's my FTP?" or "What are my running zones?"
-</instructions>`,
+Note: This returns the athlete's **current** zones, which may not match zones in historical workouts.`,
       {
         sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
       },
@@ -376,7 +225,7 @@ Use this to interpret zone data or answer questions like "What's my FTP?" or "Wh
         {
           fieldDescriptions: getFieldDescriptions('sport_settings'),
           getNextActions: () => [
-            'Use this zone information to interpret power/HR/pace data in workouts',
+            'Use this tool to understand the user\'s current zones for a given sport',
             'Use get_workout_history to see workouts for this sport',
           ],
         }
@@ -385,34 +234,15 @@ Use this to interpret zone data or answer questions like "What's my FTP?" or "Wh
 
     server.tool(
       'get_daily_summary',
-      `<usecase>
-Use when the user asks general questions about today like:
-- "How am I doing today?"
-- "Give me a summary of today"
-- "What's my status?"
-- When you need multiple pieces of today's data at once
+      `Fetches a complete snapshot of the user\'s status today, including:
+- Whoop recovery, sleep performance, and strain
+- Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
+- The user\'s weight
+- All workouts and fitness activities completed today
+- All workouts and fitness activities scheduled for today (note that these may not be in the order the user intends to do them;
+ask them for clarification if necessary)
 
-Do NOT use for:
-- Specific deep-dives (use individual tools for recovery, strain, workouts)
-- Historical data (use get_workout_history, get_recovery_trends)
-- Future plans (use get_upcoming_workouts)
-</usecase>
-
-<instructions>
-Fetches a complete snapshot of today in a single call:
-- Whoop recovery: score, HRV, sleep metrics with level classifications
-- Whoop strain: score, calories, activities with level classifications
-- Fitness metrics from Intervals.icu: CTL (fitness), ATL (fatigue), TSB (form), plus ctl_load/atl_load showing today's training impact
-- Wellness data from Intervals.icu: weight (in kg)
-- Completed workouts from Intervals.icu with matched Whoop data
-- Planned workouts from TrainerRoad and Intervals.icu
-- Summary stats: workouts completed/remaining, TSS completed/planned
-- Note that planned workouts may not be in the order the user intends to do them;
-ask them for clarification if necessary
-
-More efficient than calling individual tools when you need the full picture.
-For deeper analysis of any component, use the specific tool.
-</instructions>`,
+More efficient than calling individual tools when you need the full picture.`,
       {},
       withToolResponse(
         async () => this.currentTools.getDailySummary(),
@@ -421,7 +251,9 @@ For deeper analysis of any component, use the specific tool.
           getNextActions: (data) => {
             const actions: string[] = [];
             if (data.completed_workouts && data.completed_workouts.length > 0) {
-              actions.push('Use get_workout_intervals(activity_id) for detailed workout analysis');
+              actions.push('Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals');
+              actions.push('Use get_workout_notes(activity_id) to get the user\'s comments about a workout');
+              actions.push('Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors');
             }
             if (data.whoop.recovery) {
               actions.push('Use get_recovery_trends to see patterns over time');
@@ -446,34 +278,7 @@ For deeper analysis of any component, use the specific tool.
     // Historical/Trends Tools
     server.tool(
       'get_workout_history',
-      `<usecase>
-Use when the user asks about:
-- Workouts over a time period ("last week", "past 30 days")
-- Training patterns or volume over time
-- Specific sport history ("my runs this month")
-- Finding a specific past workout
-
-Do NOT use for:
-- Today's workouts only (use get_todays_completed_workouts)
-- Single workout deep-dive (get the ID first, then use get_workout_intervals)
-- Fitness/load trends (use get_training_load_trends)
-</usecase>
-
-<instructions>
-Queries completed workouts with flexible date filtering:
-- Accepts ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1")
-- Optional sport filter: cycling, running, swimming, skiing, hiking, rowing, strength
-- Returns comprehensive metrics for each workout
-- Includes matched Whoop strain data when available
-- Results sorted by date (oldest to newest)
-
-For detailed analysis of specific workouts, use the activity_id with:
-- get_workout_intervals: Interval structure and power/HR data
-- get_workout_notes: Athlete's comments and observations
-- get_workout_weather: Weather conditions (outdoor activities only)
-
-Returns empty array if no workouts match.
-</instructions>`,
+      `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics. Accepts ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month"), and an optional sports filter.`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -485,9 +290,10 @@ Returns empty array if no workouts match.
           fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
           getNextActions: (data) => data && data.length > 0
             ? [
-                'Use get_workout_intervals(activity_id) for interval breakdown',
-                'Use get_workout_notes(activity_id) for athlete comments',
-                'Use get_recovery_trends for same period to correlate with training',
+                'Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals',
+                'Use get_workout_notes(activity_id) to get the user\'s comments about a workout',
+                'Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors',
+                'Use get_recovery_trends for the same period to correlate with training',
               ]
             : undefined,
         }
@@ -496,33 +302,7 @@ Returns empty array if no workouts match.
 
     server.tool(
       'get_recovery_trends',
-      `<usecase>
-Use when the user asks about:
-- Recovery patterns over time
-- HRV trends or sleep quality trends
-- How recovery correlates with training
-- Historical sleep or recovery data
-
-Do NOT use for:
-- Today's recovery only (use get_todays_recovery)
-- Workout data (use get_workout_history)
-- Training load analysis (use get_training_load_trends)
-</usecase>
-
-<instructions>
-Fetches Whoop recovery data over a date range:
-- Daily recovery scores with level classifications (SUFFICIENT/ADEQUATE/LOW)
-- HRV RMSSD values
-- Resting heart rate trends
-- Sleep performance percentages with level classifications
-- Sleep durations and stages
-
-Date parameters accept ISO format (YYYY-MM-DD) or natural language:
-- "today", "yesterday", "30 days ago", "last month", "2 weeks ago"
-
-Use alongside get_training_load_trends to correlate recovery with training stress.
-Returns empty array if Whoop is not configured.
-</instructions>`,
+      `Fetches Whoop recovery and sleep data over a date range. Date parameters accept ISO format (YYYY-MM-DD) or natural language ("today", "yesterday", "30 days ago", "last month", "2 weeks ago", etc.)`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -543,24 +323,7 @@ Returns empty array if Whoop is not configured.
 
     server.tool(
       'get_wellness_trends',
-      `<usecase>
-Use when the user asks about:
-- Weight trends over time
-- Body composition changes
-- How weight has changed over a training period
-</usecase>
-
-<instructions>
-Fetches wellness data over a date range from Intervals.icu:
-- Daily weight readings (in kg)
-- Period summary showing start and end dates
-
-Date parameters accept ISO format (YYYY-MM-DD) or natural language:
-- "today", "yesterday", "30 days ago", "last month", "2 weeks ago"
-
-Use alongside get_training_load_trends to correlate weight changes with training.
-Returns data only for days where wellness data was recorded.
-</instructions>`,
+      `Fetches wellness data over a date range from Intervals.icu. Currently only includes weight. Date parameters accept ISO format (YYYY-MM-DD) or natural language ("today", "yesterday", "30 days ago", "last month", "2 weeks ago", etc.) Returns data only for days where wellness data was recorded.`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
         end_date: z.string().optional().describe('End date (defaults to today)'),
@@ -572,7 +335,7 @@ Returns data only for days where wellness data was recorded.
           getNextActions: (data) => data && data.data && data.data.length > 0
             ? [
                 'Use get_training_load_trends to correlate with training stress',
-                'Use get_daily_summary for today\'s wellness data',
+                'Use get_workout_history to correlate with workout history',
               ]
             : undefined,
         }
@@ -582,36 +345,8 @@ Returns data only for days where wellness data was recorded.
     // Planning Tools
     server.tool(
       'get_upcoming_workouts',
-      `<usecase>
-Use when the user asks about:
-- Upcoming training schedule
-- Workouts planned for the next few days/weeks
-- What's coming up in their training plan
-- Specific sport schedule ("my bike workouts this week")
-
-Do NOT use for:
-- Today's planned workouts only (use get_todays_planned_workouts)
-- Specific date lookup (use get_planned_workout_details)
-- Completed workouts (use get_workout_history)
-</usecase>
-
-<instructions>
-Fetches planned workouts for a future date range:
-- Combines TrainerRoad and Intervals.icu calendars
-- Default: next 7 days (max: 30 days)
-- Optional sport filter: cycling, running, swimming, etc.
-- Deduplicates workouts that appear in both calendars
-- Note that planned workouts may not be in the order the user intends to do them;
-ask them for clarification if necessary
-
-Returns:
-- Workout name and description
-- Expected duration and TSS
-- Workout type and discipline
-- General description of the interval structure and workout goals (if available)
-
-Returns empty array if no workouts planned.
-</instructions>`,
+      `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter. Note that planned workouts on a given day may not be in the order the user intends to do them;
+ask them for clarification if necessary.`,
       {
         days: z.number().optional().default(7).describe('Number of days ahead to look (default: 7, max: 30)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
@@ -622,7 +357,6 @@ Returns empty array if no workouts planned.
           fieldDescriptions: getFieldDescriptions('planned'),
           getNextActions: (data) => data && data.length > 0
             ? [
-                'Use get_planned_workout_details(date) for specific day details',
                 'Use get_training_load_trends to see current fitness/fatigue',
               ]
             : undefined,
@@ -632,35 +366,11 @@ Returns empty array if no workouts planned.
 
     server.tool(
       'get_planned_workout_details',
-      `<usecase>
-Use when the user asks about:
-- A specific day's planned workout ("What's my workout on Thursday?")
-- Details about an upcoming workout on a particular date
-- Sport-specific workout on a date ("What's my bike workout next Tuesday?")
-
-Do NOT use for:
-- Today's workouts (use get_todays_planned_workouts)
-- Range of upcoming workouts (use get_upcoming_workouts)
-- Completed workouts (use get_workout_history)
-</usecase>
-
-<instructions>
-Fetches planned workouts for a specific date:
-- Accepts natural language: "today", "yesterday", "next wednesday", "tomorrow", "December 28"
-- Accepts ISO format: YYYY-MM-DD
-- Optional sport filter: cycling (bike), running (run), swimming (swim)
-- Combines TrainerRoad and Intervals.icu calendars
-
-Returns full workout details:
-- Name and description
-- Expected duration and TSS
-- Interval structure (if available)
-
-Returns empty array if no workouts match.
-</instructions>`,
+      `Fetches planned workouts and fitness activity for a future date, with an optional sport filter. Date parameter accepts ISO format (YYYY-MM-DD) or natural language ("tomorrow", "next Tuesday", etc.) Note that planned workouts may not be in the order the user intends to do them;
+ask them for clarification if necessary.`,
       {
         date: z.string().describe('Date to find workout on - ISO format (YYYY-MM-DD) or natural language (e.g., "next wednesday", "tomorrow")'),
-        sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport type (cycling = bike, running = run, swimming = swim)'),
+        sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport type'),
       },
       withToolResponse(
         async (args: { date: string; sport?: 'cycling' | 'running' | 'swimming' }) => this.planningTools.getPlannedWorkoutDetails(args),
@@ -682,44 +392,7 @@ Returns empty array if no workouts match.
 
     server.tool(
       'get_training_load_trends',
-      `<usecase>
-Use when the user asks about:
-- Fitness trends or training load over time
-- Whether they're building or losing fitness
-- If they're overtraining or at injury risk
-- Form/freshness for an upcoming race
-- CTL, ATL, TSB, or ACWR metrics
-
-Do NOT use for:
-- Individual workout details (use get_workout_history)
-- Recovery/sleep data (use get_recovery_trends)
-- Today's summary (use get_daily_summary)
-</usecase>
-
-<instructions>
-Analyzes training load trends over a specified period (default: 42 days, max: 365):
-
-Key metrics:
-- CTL (Chronic Training Load): 42-day rolling fitness
-- ATL (Acute Training Load): 7-day rolling fatigue
-- TSB (Training Stress Balance): Form = CTL - ATL
-  • Positive = fresh/rested
-  • Negative = fatigued
-  • Race-ready: -10 to +25
-- Ramp rate: Weekly CTL change
-  • Safe: 3-7 pts/week
-  • Aggressive: 7-10 pts/week
-  • Injury risk: >10 pts/week
-- ACWR (Acute:Chronic Workload Ratio): ATL/CTL
-  • Optimal: 0.8-1.3
-  • Caution: 1.3-1.5
-  • High injury risk: >1.5
-- ctl_load: Weighted contribution to CTL from each day's training
-- atl_load: Weighted contribution to ATL from each day's training
-
-Returns daily time series (oldest to newest) plus summary statistics.
-Use with get_recovery_trends to correlate load with recovery.
-</instructions>`,
+      `Returns training load metrics, including CTL, ATL, TSB, ramp rate, and ACWR, over a specified period of time.`,
       {
         days: z
           .number()
@@ -753,31 +426,10 @@ Use with get_recovery_trends to correlate load with recovery.
 
     server.tool(
       'get_workout_intervals',
-      `<usecase>
-Use when the user asks about:
-- Interval details or structure of a specific workout
-- Power or HR data for individual efforts within a workout
-- How well they hit their interval targets
-- Detailed breakdown of a workout's efforts
-
-Requires: activity_id from get_workout_history or get_todays_completed_workouts
-
-Do NOT use for:
-- General workout overview (use get_workout_history first)
-- Workout notes or comments (use get_workout_notes)
-- Weather during workout (use get_workout_weather)
-</usecase>
+      `Fetches a detailed interval breakdown for a specific workout.
 
 <instructions>
-Fetches detailed interval breakdown for a specific workout:
-- Individual intervals with type (WORK/RECOVERY)
-- Power metrics: average watts, max watts, normalized power, watts/kg
-- Heart rate: average and max HR, HR decoupling
-- Cadence and stride length
-- Interval groups summarizing repeated efforts (e.g., "5 x 56s @ 314w")
-- W'bal (anaerobic capacity) depletion
-
-Get the activity_id first from:
+Get the activity_id from:
 - get_workout_history (for past workouts)
 - get_todays_completed_workouts (for today's workouts)
 </instructions>`,
@@ -798,33 +450,16 @@ Get the activity_id first from:
 
     server.tool(
       'get_workout_notes',
-      `<usecase>
-Use when the user asks about:
-- How a workout felt subjectively
-- Athlete's comments or observations about a workout
-- Coach feedback on a workout
-- RPE (Rate of Perceived Exertion) or feel rating
-
-Requires: activity_id from get_workout_history or get_todays_completed_workouts
-**ALWAYS** fetch this when analyzing a workout - subjective data is valuable context.
-
-Do NOT use for:
-- Objective workout metrics (use get_workout_intervals)
-- Weather data (use get_workout_weather)
-</usecase>
+      `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
 
 <instructions>
-Fetches notes attached to a specific workout:
-- Athlete's own comments and observations
-- Coach feedback (if using Intervals.icu coaching features)
-- Attachments (if any)
-- Creation timestamp and author
+**ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
 
-Get the activity_id first from:
+Get the activity_id from:
 - get_workout_history (for past workouts)
 - get_todays_completed_workouts (for today's workouts)
 
-Returns empty notes array if no notes exist.
+Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
 </instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
@@ -843,34 +478,16 @@ Returns empty notes array if no notes exist.
 
     server.tool(
       'get_workout_weather',
-      `<usecase>
-Use when the user asks about:
-- Weather conditions during an outdoor workout
-- How wind, temperature, or rain affected performance
-- Environmental factors during a ride or run
-
-Requires: activity_id from get_workout_history or get_todays_completed_workouts
-**ONLY** use for OUTDOOR activities - indoor/trainer workouts have no weather data.
-
-Do NOT use for:
-- Indoor/trainer workouts (no weather data available)
-- Objective workout metrics (use get_workout_intervals)
-- Subjective notes (use get_workout_notes)
-</usecase>
+      `Fetches the weather conditions during a given outdoor workout.
 
 <instructions>
-Fetches weather conditions during an outdoor workout:
-- Temperature (average, min, max)
-- Wind speed and direction
-- Precipitation and humidity
-- Cloud cover
+**ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user\'s performance.
 
-Get the activity_id first from:
+**NEVER** fetch this when analyzing an **INDOOR** workout; weather conditions are irrelevant for indoor activities.
+
+Get the activity_id from:
 - get_workout_history (for past workouts)
 - get_todays_completed_workouts (for today's workouts)
-
-Check the is_indoor field first - only fetch weather for outdoor activities.
-Returns null if weather data is not available.
 </instructions>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
@@ -880,7 +497,7 @@ Returns null if weather data is not available.
         {
           fieldDescriptions: getFieldDescriptions('weather'),
           getNextActions: () => [
-            'Use get_workout_intervals for power/HR data',
+            'Use get_workout_intervals for detailed power/HR data',
             'Use get_workout_notes for athlete comments',
           ],
         }
@@ -893,30 +510,12 @@ Returns null if weather data is not available.
 
     server.tool(
       'get_power_curve',
-      `<usecase>
-Use when the user asks about:
-- Cycling power curve or power profile
-- Best power at specific durations (5s, 1min, 5min, 20min, etc.)
-- Power improvements or changes over time
-- Comparing power between two time periods
-- W/kg analysis
-- FTP estimation from power data
-
-Do NOT use for:
-- Running or swimming (use get_pace_curve instead - pace is the primary metric)
-- Current/today's workout data (use get_todays_completed_workouts)
-</usecase>
+      `Fetches cycling power curves showing best power output at various durations for a given date range.
 
 <instructions>
-Fetches cycling power curves showing best power output at various durations:
-- Returns per-activity curves with watts and W/kg
-- Summary includes best values at key durations (5s, 30s, 1min, 5min, 20min, 60min, 120min)
-- Includes estimated FTP (95% of best 20min power)
-- Only for cycling activities (Ride, VirtualRide)
-- Custom durations can be specified (e.g., 7200 for 2-hour power)
-- Comparison mode: provide compare_to_start and compare_to_end to see changes vs a previous period
+Optionally, use compare_to_start and compare_to_end if you need to compare changes to a previous period
 
-Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month").
+All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </instructions>`,
       {
         start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
@@ -943,31 +542,12 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
 
     server.tool(
       'get_pace_curve',
-      `<usecase>
-Use when the user asks about:
-- Running pace curve or pace profile
-- Swimming pace or split times
-- Best times at specific distances (400m, 1km, 5km, etc.)
-- Pace improvements or changes over time
-- Comparing pace between two time periods
-
-Do NOT use for:
-- Cycling (use get_power_curve instead)
-
-**IMPORTANT**: Pace curves are the PRIMARY metric for analyzing running and swimming performance.
-Running power curves exist but often have incomplete data - use pace curves for running/swimming.
-</usecase>
+      `Fetches pace curves for swimming or running, showing best times at various distances for a given date range.
 
 <instructions>
-Fetches pace curves showing best times at various distances:
-- For running: analyzes 400m, 1km, mile, 5km, 10km, half-marathon, and marathon distances
-- For swimming: analyzes 100m, 200m, 400m, 800m, 1500m, half-iron, and full-iron distances
-- Returns pace in appropriate units (min/km for running, /100m for swimming)
-- GAP (gradient-adjusted pace) available for running to normalize for hills
-- Custom distances can be specified (e.g., [800, 3000])
-- Comparison mode: provide compare_to_start and compare_to_end to see changes vs a previous period
-
-Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month").
+- Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
+- Optional: Use the GAP setting to use gradient-adjusted pace, which normalizes for hills (only applicable for running)
+- All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </instructions>`,
       {
         start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
@@ -996,26 +576,10 @@ Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago
 
     server.tool(
       'get_hr_curve',
-      `<usecase>
-Use when the user asks about:
-- Heart rate curve or HR profile
-- Maximum sustainable heart rate at various durations
-- HR changes over time
-- Comparing HR between two time periods
-- Cardiac drift analysis
-
-Works for all sports (cycling, running, swimming, etc.)
-</usecase>
-
+      `Fetches HR curves showing maximum sustained heart rate at various durations for a given date range.
 <instructions>
-Fetches HR curves showing maximum sustained heart rate at various durations:
-- Returns per-activity curves with BPM at each duration
-- Summary includes max values at key durations (5s, 30s, 1min, 5min, 20min, 60min)
-- Can be filtered by sport or show all activities
-- Custom durations can be specified
-- Comparison mode: provide compare_to_start and compare_to_end to see changes vs a previous period
-
-Date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month").
+- Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
+- All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </instructions>`,
       {
         start_date: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
