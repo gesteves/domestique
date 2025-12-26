@@ -14,8 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "whoop:auth": "node dist/scripts/whoop-oauth.js",
     "whoop:auth:dev": "tsx src/scripts/whoop-oauth.ts",
-    "test:clients": "node dist/scripts/test-clients.js",
-    "stdio": "node dist/stdio.js"
+    "test:clients": "node dist/scripts/test-clients.js"
   },
   "keywords": [
     "mcp",

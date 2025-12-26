@@ -76,24 +76,12 @@ npm run build
 
 ## MCP Transport
 
-The server supports two transport methods:
-
-### Streamable HTTP Transport (Primary)
+The server uses Streamable HTTP Transport:
 
 - Single endpoint: `/mcp`
 - Authentication: `Authorization: Bearer <token>` header or `?token=<token>` query param
 - Session management via `mcp-session-id` header
 - Session termination via `DELETE /mcp` endpoint
-
-### Stdio Transport (Alternative)
-
-For local testing with Claude Desktop, use stdio transport:
-
-```bash
-npm run stdio
-```
-
-This uses `src/stdio.ts` and communicates via standard input/output.
 
 ## Environment Variables
 
