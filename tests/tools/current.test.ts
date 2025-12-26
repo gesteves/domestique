@@ -3,7 +3,7 @@ import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics } from '../../src/types/index.js';
+import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
@@ -344,6 +344,10 @@ describe('CurrentTools', () => {
       atl_load: 10.2,
     };
 
+    const mockWellness: WellnessData = {
+      weight: '74.5 kg',
+    };
+
     const mockWorkouts: NormalizedWorkout[] = [
       {
         id: '1',
@@ -374,6 +378,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(mockRecovery);
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(mockStrain);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellness);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue(mockPlannedWorkouts);
@@ -384,6 +389,7 @@ describe('CurrentTools', () => {
       expect(result.recovery).toEqual(mockRecovery);
       expect(result.strain).toEqual(mockStrain);
       expect(result.fitness).toEqual(mockFitness);
+      expect(result.wellness).toEqual(mockWellness);
       expect(result.completed_workouts).toHaveLength(1);
       expect(result.planned_workouts).toHaveLength(1);
       expect(result.workouts_completed).toBe(1);
@@ -396,6 +402,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
@@ -415,6 +422,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockRejectedValue(new Error('Failed'));
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
@@ -428,6 +436,7 @@ describe('CurrentTools', () => {
     it('should handle missing Whoop client gracefully', async () => {
       const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellness);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
@@ -437,6 +446,53 @@ describe('CurrentTools', () => {
       expect(result.recovery).toBeNull();
       expect(result.strain).toBeNull();
       expect(result.fitness).toEqual(mockFitness);
+      expect(result.wellness).toEqual(mockWellness);
+    });
+
+    it('should include wellness data with weight', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellness);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.wellness).not.toBeNull();
+      expect(result.wellness?.weight).toBe('74.5 kg');
+    });
+
+    it('should handle null wellness when no data', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.wellness).toBeNull();
+    });
+
+    it('should handle wellness fetch failure gracefully', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockRejectedValue(new Error('Failed'));
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.wellness).toBeNull();
     });
   });
 });

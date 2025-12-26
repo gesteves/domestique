@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HistoricalTools } from '../../src/tools/historical.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
-import type { NormalizedWorkout, RecoveryData, StrainActivity } from '../../src/types/index.js';
+import type { NormalizedWorkout, RecoveryData, StrainActivity, WellnessTrends } from '../../src/types/index.js';
 
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
@@ -24,6 +24,9 @@ describe('HistoricalTools', () => {
       clientId: 'test',
       clientSecret: 'test',
     });
+
+    // Default timezone mock for all tests
+    vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
 
     tools = new HistoricalTools(mockIntervalsClient, mockWhoopClient);
   });
@@ -216,6 +219,71 @@ describe('HistoricalTools', () => {
       expect(result.summary.avg_recovery).toBe(0);
       expect(result.summary.min_recovery).toBe(0);
       expect(result.summary.max_recovery).toBe(0);
+    });
+  });
+
+  describe('getWellnessTrends', () => {
+    const mockWellnessTrends: WellnessTrends = {
+      period_days: 7,
+      start_date: '2024-12-08',
+      end_date: '2024-12-15',
+      data: [
+        { date: '2024-12-08', weight: '74.5 kg' },
+        { date: '2024-12-10', weight: '74.3 kg' },
+        { date: '2024-12-12', weight: '74.8 kg' },
+        { date: '2024-12-15', weight: '74.6 kg' },
+      ],
+    };
+
+    it('should return wellness trends for date range', async () => {
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrends);
+
+      const result = await tools.getWellnessTrends({
+        start_date: '2024-12-08',
+        end_date: '2024-12-15',
+      });
+
+      expect(result).toEqual(mockWellnessTrends);
+      expect(result.period_days).toBe(7);
+      expect(result.data).toHaveLength(4);
+      expect(mockIntervalsClient.getWellnessTrends).toHaveBeenCalledWith('2024-12-08', '2024-12-15');
+    });
+
+    it('should parse natural language start date', async () => {
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrends);
+
+      await tools.getWellnessTrends({
+        start_date: '7 days ago',
+      });
+
+      expect(mockIntervalsClient.getWellnessTrends).toHaveBeenCalledWith('2024-12-08', '2024-12-15');
+    });
+
+    it('should default end_date to today', async () => {
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrends);
+
+      await tools.getWellnessTrends({
+        start_date: '2024-12-08',
+      });
+
+      expect(mockIntervalsClient.getWellnessTrends).toHaveBeenCalledWith('2024-12-08', '2024-12-15');
+    });
+
+    it('should handle empty wellness data', async () => {
+      const emptyTrends: WellnessTrends = {
+        period_days: 7,
+        start_date: '2024-12-08',
+        end_date: '2024-12-15',
+        data: [],
+      };
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(emptyTrends);
+
+      const result = await tools.getWellnessTrends({
+        start_date: '2024-12-08',
+      });
+
+      expect(result.data).toEqual([]);
+      expect(result.period_days).toBe(7);
     });
   });
 });

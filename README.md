@@ -19,13 +19,14 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_todays_planned_workouts` - Today's scheduled workouts from both TrainerRoad and Intervals.icu calendars
 - `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location.
 - `get_sports_settings` - Sport-specific settings (FTP, zones, thresholds) for cycling, running, or swimming
-- `get_daily_summary` - Complete summary of today including recovery, strain, completed workouts, and planned workouts.
+- `get_daily_summary` - Complete summary of today including recovery, strain, fitness metrics, wellness, completed workouts, and planned workouts.
 
 ### Historical/Trends
 - `get_workout_history` - Historical workouts with matched Whoop strain data.
 - `get_strain_history` - Whoop strain scores and activities for a date range.
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time.
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, etc.
+- `get_wellness_trends` - Wellness data trends over a date range.
 
 ### Performance Curves
 - `get_power_curve` - Cycling power curve analysis showing best watts at various durations. Includes W/kg, estimated FTP, and period comparison.
@@ -280,3 +281,4 @@ Once connected, you can ask Claude:
 - "Compare my cycling power from the last 3 months vs the previous 3 months"
 - "What's my FTP?" (uses get_sports_settings for cycling)
 - "What are my running zones?"
+- "How has my weight changed over the last 30 days?"

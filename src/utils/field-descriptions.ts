@@ -441,6 +441,18 @@ export const HR_CURVE_FIELD_DESCRIPTIONS = {
   change_percent: 'Percentage change from previous period',
 };
 
+export const WELLNESS_FIELD_DESCRIPTIONS = {
+  // Wellness trends response structure
+  period_days: 'Number of days in the wellness data period',
+  start_date: 'Start date of wellness data period (ISO 8601 YYYY-MM-DD)',
+  end_date: 'End date of wellness data period (ISO 8601 YYYY-MM-DD)',
+  data: 'Array of daily wellness entries, sorted oldest to newest',
+
+  // Daily wellness fields
+  date: 'Date of wellness entry (ISO 8601 YYYY-MM-DD)',
+  weight: 'Body weight with unit (e.g., "74.8 kg"). Only present if recorded for this day.',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
@@ -454,7 +466,8 @@ type FieldCategory =
   | 'weather'
   | 'power_curve'
   | 'pace_curve'
-  | 'hr_curve';
+  | 'hr_curve'
+  | 'wellness';
 
 /**
  * Get descriptions for a specific category
@@ -487,6 +500,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return PACE_CURVE_FIELD_DESCRIPTIONS;
     case 'hr_curve':
       return HR_CURVE_FIELD_DESCRIPTIONS;
+    case 'wellness':
+      return WELLNESS_FIELD_DESCRIPTIONS;
   }
 }
 

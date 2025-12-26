@@ -27,6 +27,9 @@ import type {
   ActivityPaceCurve,
   HRCurvePoint,
   ActivityHRCurve,
+  WellnessData,
+  DailyWellness,
+  WellnessTrends,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
@@ -216,6 +219,7 @@ interface IntervalsWellness {
   rampRate?: number;
   ctlLoad?: number; // Weighted contribution to CTL from this day's training
   atlLoad?: number; // Weighted contribution to ATL from this day's training
+  weight?: number; // Weight in kilograms
 }
 
 interface IntervalsEvent {
@@ -1159,6 +1163,55 @@ export class IntervalsClient {
     const today = getTodayInTimezone(timezone);
     const metrics = await this.getFitnessMetrics(today, today);
     return metrics.length > 0 ? metrics[0] : null;
+  }
+
+  /**
+   * Get today's wellness data (weight, etc.) using the athlete's timezone.
+   * Uses the single-date endpoint which returns actual weight values.
+   */
+  async getTodayWellness(): Promise<WellnessData | null> {
+    const timezone = await this.getAthleteTimezone();
+    const today = getTodayInTimezone(timezone);
+
+    try {
+      // Use single-date endpoint - returns actual weight, not null
+      const data = await this.fetch<IntervalsWellness>(`/wellness/${today}`);
+      return {
+        weight: data.weight != null ? `${data.weight} kg` : undefined,
+      };
+    } catch {
+      // No wellness data for today
+      return null;
+    }
+  }
+
+  /**
+   * Get wellness trends (weight, etc.) for a date range.
+   * Note: The range endpoint may return null for weight even when set.
+   */
+  async getWellnessTrends(startDate: string, endDate: string): Promise<WellnessTrends> {
+    const wellness = await this.fetch<IntervalsWellness[]>('/wellness', {
+      oldest: startDate,
+      newest: endDate,
+    });
+
+    const data: DailyWellness[] = wellness.map((w) => ({
+      date: w.id,
+      // Use != null to handle both null and undefined
+      weight: w.weight != null ? `${w.weight} kg` : undefined,
+    }));
+
+    // Calculate period days
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const periodDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    return {
+      period_days: periodDays,
+      start_date: startDate,
+      end_date: endDate,
+      data,
+    };
   }
 
   private async normalizeActivity(activity: IntervalsActivity): Promise<NormalizedWorkout> {

@@ -467,6 +467,119 @@ describe('IntervalsClient', () => {
     });
   });
 
+  describe('getTodayWellness', () => {
+    it('should return today\'s wellness data with weight', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = { id: '2024-12-15', weight: 74.5 };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.weight).toBe('74.5 kg');
+    });
+
+    it('should return null when no wellness data for today', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      const result = await client.getTodayWellness();
+
+      expect(result).toBeNull();
+    });
+
+    it('should return wellness without weight when weight is null', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = { id: '2024-12-15', weight: null }; // Null weight
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getTodayWellness();
+
+      expect(result).not.toBeNull();
+      expect(result?.weight).toBeUndefined();
+    });
+  });
+
+  describe('getWellnessTrends', () => {
+    it('should return wellness trends for date range', async () => {
+      const mockWellness = [
+        { id: '2024-12-13', weight: 74.5 },
+        { id: '2024-12-14', weight: 74.3 },
+        { id: '2024-12-15', weight: 74.8 },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
+
+      expect(result.period_days).toBe(3);
+      expect(result.start_date).toBe('2024-12-13');
+      expect(result.end_date).toBe('2024-12-15');
+      expect(result.data).toHaveLength(3);
+      expect(result.data[0].date).toBe('2024-12-13');
+      expect(result.data[0].weight).toBe('74.5 kg');
+    });
+
+    it('should handle empty wellness data', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
+
+      expect(result.data).toHaveLength(0);
+      expect(result.period_days).toBe(3);
+    });
+
+    it('should handle entries with null weight', async () => {
+      const mockWellness = [
+        { id: '2024-12-13', weight: 74.5 },
+        { id: '2024-12-14', weight: null }, // Null weight (API returns null, not undefined)
+        { id: '2024-12-15', weight: 74.8 },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
+
+      expect(result.data).toHaveLength(3);
+      expect(result.data[0].weight).toBe('74.5 kg');
+      expect(result.data[1].weight).toBeUndefined();
+      expect(result.data[2].weight).toBe('74.8 kg');
+    });
+  });
+
   // ============================================
   // Performance Curves
   // ============================================

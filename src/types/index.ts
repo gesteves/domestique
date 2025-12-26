@@ -442,6 +442,36 @@ export interface TrainingLoadTrends {
 }
 
 // ============================================
+// Wellness Data
+// ============================================
+
+/**
+ * Daily wellness data from Intervals.icu.
+ * Contains metrics like weight that are tracked over time.
+ */
+export interface DailyWellness {
+  date: string;
+  weight?: string; // Weight with unit, e.g., "74.8 kg"
+}
+
+/**
+ * Current day's wellness data for daily summary.
+ */
+export interface WellnessData {
+  weight?: string; // Weight with unit, e.g., "74.8 kg"
+}
+
+/**
+ * Wellness trends over a date range.
+ */
+export interface WellnessTrends {
+  period_days: number;
+  start_date: string;
+  end_date: string;
+  data: DailyWellness[];
+}
+
+// ============================================
 // Workout Intervals
 // ============================================
 
@@ -539,6 +569,8 @@ export interface DailySummary {
   strain: StrainData | null;
   /** Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu, null if unavailable */
   fitness: FitnessMetrics | null;
+  /** Today's wellness data (weight, etc.) from Intervals.icu, null if unavailable */
+  wellness: WellnessData | null;
   /** Completed workouts from Intervals.icu with matched Whoop data */
   completed_workouts: WorkoutWithWhoop[];
   /** Planned workouts from TrainerRoad and Intervals.icu */

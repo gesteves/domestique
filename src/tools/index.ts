@@ -448,6 +448,7 @@ Fetches a complete snapshot of today in a single call:
 - Whoop recovery: score, HRV, sleep metrics with level classifications
 - Whoop strain: score, calories, activities with level classifications
 - Fitness metrics from Intervals.icu: CTL (fitness), ATL (fatigue), TSB (form), plus ctl_load/atl_load showing today's training impact
+- Wellness data from Intervals.icu: weight (in kg)
 - Completed workouts from Intervals.icu with matched Whoop data
 - Planned workouts from TrainerRoad and Intervals.icu
 - Summary stats: workouts completed/remaining, TSS completed/planned
@@ -461,7 +462,7 @@ For deeper analysis of any component, use the specific tool.
       withToolResponse(
         async () => this.currentTools.getDailySummary(),
         {
-          fieldDescriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned', 'fitness'),
+          fieldDescriptions: combineFieldDescriptions('recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
           getMessage: (data) => {
             const parts: string[] = [];
             if (data.recovery) {
@@ -606,6 +607,56 @@ Returns empty array if Whoop is not configured.
             ? [
                 'Use get_training_load_trends to correlate with training stress',
                 'Use get_workout_history for same period to see training patterns',
+              ]
+            : undefined,
+        }
+      )
+    );
+
+    server.tool(
+      'get_wellness_trends',
+      `<usecase>
+Use when the user asks about:
+- Weight trends over time
+- Body composition changes
+- How weight has changed over a training period
+
+Do NOT use for:
+- Today's weight only (use get_daily_summary)
+- Recovery/sleep data (use get_recovery_trends)
+- Training load analysis (use get_training_load_trends)
+</usecase>
+
+<instructions>
+Fetches wellness data over a date range from Intervals.icu:
+- Daily weight readings (in kg)
+- Period summary showing start and end dates
+
+Date parameters accept ISO format (YYYY-MM-DD) or natural language:
+- "today", "yesterday", "30 days ago", "last month", "2 weeks ago"
+
+Use alongside get_training_load_trends to correlate weight changes with training.
+Returns data only for days where wellness data was recorded.
+</instructions>`,
+      {
+        start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
+        end_date: z.string().optional().describe('End date (defaults to today)'),
+      },
+      withToolResponse(
+        async (args: { start_date: string; end_date?: string }) => this.historicalTools.getWellnessTrends(args),
+        {
+          fieldDescriptions: getFieldDescriptions('wellness'),
+          getMessage: (data) => {
+            if (!data || !data.data || data.data.length === 0) {
+              return 'No wellness data available for this period.';
+            }
+            const weightEntries = data.data.filter((d) => d.weight);
+            return `${data.period_days} day period. ${weightEntries.length} weight entries recorded.`;
+          },
+          getNextActions: (data) => data && data.data && data.data.length > 0
+            ? [
+                'Use get_training_load_trends to correlate with training stress',
+                'Use get_daily_summary for today\'s wellness data',
               ]
             : undefined,
         }

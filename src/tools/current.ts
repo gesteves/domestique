@@ -231,7 +231,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recovery, strain, fitness, completedWorkouts, plannedWorkouts] = await Promise.all([
+    const [recovery, strain, fitness, wellness, completedWorkouts, plannedWorkouts] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return null;
@@ -242,6 +242,10 @@ export class CurrentTools {
       }),
       this.intervals.getTodayFitness().catch((e) => {
         console.error('Error fetching fitness for daily summary:', e);
+        return null;
+      }),
+      this.intervals.getTodayWellness().catch((e) => {
+        console.error('Error fetching wellness for daily summary:', e);
         return null;
       }),
       this.getTodaysCompletedWorkouts().catch((e) => {
@@ -269,6 +273,7 @@ export class CurrentTools {
       recovery,
       strain,
       fitness,
+      wellness,
       completed_workouts: completedWorkouts,
       planned_workouts: plannedWorkouts,
       workouts_completed: completedWorkouts.length,

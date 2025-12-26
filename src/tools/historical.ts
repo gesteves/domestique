@@ -27,6 +27,7 @@ import type {
   HRCurveSummary,
   HRCurveComparison,
   ActivityHRCurve,
+  WellnessTrends,
 } from '../types/index.js';
 import type {
   GetWorkoutHistoryInput,
@@ -186,6 +187,32 @@ export class HistoricalTools {
   private average(values: number[]): number {
     if (values.length === 0) return 0;
     return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
+  }
+
+  // ============================================
+  // Wellness Trends
+  // ============================================
+
+  /**
+   * Get wellness trends (weight) over a date range
+   */
+  async getWellnessTrends(params: {
+    start_date: string;
+    end_date?: string;
+  }): Promise<WellnessTrends> {
+    // Use athlete's timezone for date parsing
+    const timezone = await this.intervals.getAthleteTimezone();
+    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const endDate = params.end_date
+      ? parseDateStringInTimezone(params.end_date, timezone)
+      : getTodayInTimezone(timezone);
+
+    try {
+      return await this.intervals.getWellnessTrends(startDate, endDate);
+    } catch (error) {
+      console.error('Error fetching wellness trends:', error);
+      throw error;
+    }
   }
 
   // ============================================
