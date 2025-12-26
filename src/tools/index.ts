@@ -100,6 +100,13 @@ export class ToolRegistry {
       'get_todays_recovery',
       `Returns today's Whoop recovery and sleep data.
 
+<use-cases>
+- Checking the user's readiness for training based on recovery score and HRV.
+- Understanding sleep quality and duration to assess recovery status.
+- Determining if the user should adjust their training intensity based on recovery metrics.
+- Providing context for why the user may be feeling tired or energized.
+</use-cases>
+
 <notes>
 - Sleep and recovery metrics are calculated by Whoop once a day, when the user wakes up,
 and will not be updated throughout the day.
@@ -121,6 +128,13 @@ and will not be updated throughout the day.
       'get_todays_strain',
       `Fetches today's Whoop strain data, including any activities logged in the Whoop app.
 
+<use-cases>
+- Checking how much physiological stress the user has accumulated today.
+- Understanding if the user has already done enough training for the day.
+- Assessing whether planned workouts should be adjusted based on current strain.
+- Correlating strain with recovery to understand training-recovery balance.
+</use-cases>
+
 <notes>
 - Returns null if Whoop is not configured.
 </notes>`,
@@ -138,7 +152,14 @@ and will not be updated throughout the day.
 
     server.tool(
       'get_todays_completed_workouts',
-      `Fetches all workouts and fitness activities the user has completed today from Intervals.icu.`,
+      `Fetches all workouts and fitness activities the user has completed today from Intervals.icu.
+
+<use-cases>
+- Reviewing what workouts the user has already completed today.
+- Checking training load (TSS) accumulated so far today.
+- Identifying workouts that may need detailed analysis via get_workout_intervals.
+- Understanding the user's training volume and intensity for the day.
+</use-cases>`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysCompletedWorkouts(),
@@ -158,6 +179,13 @@ and will not be updated throughout the day.
     server.tool(
       'get_strain_history',
       `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
+
+<use-cases>
+- Analyzing strain patterns over time to identify trends in training intensity.
+- Correlating strain with recovery trends to understand training-recovery balance.
+- Identifying periods of high or low strain to assess training consistency.
+- Comparing strain across different time periods to evaluate training progression.
+</use-cases>
 
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
@@ -185,6 +213,13 @@ and will not be updated throughout the day.
     server.tool(
       'get_todays_planned_workouts',
       `Fetches all workouts and fitness activities the user has planned for today, from both TrainerRoad and Intervals.icu calendars.
+
+<use-cases>
+- Checking what workouts the user has scheduled for today.
+- Understanding expected training load (TSS) for the day.
+- Determining if planned workouts are appropriate given recovery status.
+- Helping the user plan their day around scheduled training.
+</use-cases>
 
 <notes>
 - Planned workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
@@ -237,6 +272,13 @@ and will not be updated throughout the day.
       'get_sports_settings',
       `Fetches settings from Intervals.icu for a single sport, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
 
+<use-cases>
+- Understanding the user's current FTP, power zones, or pace zones for interpreting workout data.
+- Determining appropriate training zones when analyzing workout intensity.
+- Comparing current zones with historical workout performance to assess fitness changes.
+- Providing context for zone-based training recommendations.
+</use-cases>
+
 <notes>
 - This returns the athlete's **current** zones, which may not match the zones in historical workouts.
 </notes>`,
@@ -263,6 +305,13 @@ and will not be updated throughout the day.
 - The user\'s weight
 - All workouts and fitness activities completed today
 - All workouts and fitness activities scheduled for today
+
+<use-cases>
+- Getting a comprehensive overview of the user's current status in a single call.
+- Assessing readiness for training by combining recovery, fitness, and planned workouts.
+- Understanding the balance between completed and planned training load.
+- Providing a complete daily status report without multiple tool calls.
+</use-cases>
 
 <instructions>
 - Use this if you need a complete picture of the user\'s status today; it's more efficient than calling individual tools when you need the full picture.
@@ -308,6 +357,14 @@ and will not be updated throughout the day.
       'get_workout_history',
       `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
 
+<use-cases>
+- Analyzing training patterns and consistency over a specific time period.
+- Reviewing workout volume, intensity, and frequency for a date range.
+- Identifying specific workouts for detailed analysis via get_workout_intervals.
+- Correlating workout history with recovery trends to understand training impact.
+- Filtering workouts by sport to analyze sport-specific training patterns.
+</use-cases>
+
 <notes>
 - Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
 - You can optionally filter activities by sport, as needed.
@@ -337,6 +394,14 @@ and will not be updated throughout the day.
       'get_recovery_trends',
       `Fetches Whoop recovery and sleep data over a date range.
 
+<use-cases>
+- Analyzing recovery patterns over time to identify trends in sleep and HRV.
+- Correlating recovery with training load to understand training-recovery balance.
+- Identifying periods of poor recovery that may indicate overtraining or other issues.
+- Understanding average recovery metrics to establish baseline expectations.
+- Comparing recovery across different time periods to assess improvement or decline.
+</use-cases>
+
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
 - If you only need to get today\'s recovery and sleep data, it's more efficient to call get_todays_recovery.
@@ -363,6 +428,13 @@ and will not be updated throughout the day.
     server.tool(
       'get_wellness_trends',
       `Fetches wellness data over a date range from Intervals.icu.
+
+<use-cases>
+- Tracking weight trends over time to monitor body composition changes.
+- Correlating weight changes with training load and performance.
+- Identifying patterns in weight fluctuations that may affect performance.
+- Understanding long-term wellness trends as part of overall fitness assessment.
+</use-cases>
 
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
@@ -392,6 +464,14 @@ and will not be updated throughout the day.
       'get_upcoming_workouts',
       `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter.
 
+<use-cases>
+- Viewing the user's training schedule for the upcoming week or month.
+- Understanding expected training load over a future period.
+- Planning training adjustments based on upcoming workout schedule.
+- Filtering upcoming workouts by sport to see sport-specific training plans.
+- Assessing training volume and intensity distribution across upcoming days.
+</use-cases>
+
 <notes>
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 </notes>`,
@@ -415,6 +495,13 @@ and will not be updated throughout the day.
     server.tool(
       'get_planned_workout_details',
       `Fetches planned workouts and fitness activity for a future date, with an optional sport filter.
+
+<use-cases>
+- Checking what workouts are planned for a specific future date.
+- Understanding expected training load for a particular day.
+- Determining if a planned workout is appropriate given current recovery status.
+- Filtering by sport to see sport-specific workouts on a given date.
+</use-cases>
       
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Tomorrow", "Next monday", etc.)
@@ -444,7 +531,15 @@ and will not be updated throughout the day.
 
     server.tool(
       'get_training_load_trends',
-      `Returns training load metrics, including CTL, ATL, TSB, ramp rate, and ACWR, over a specified period of time.`,
+      `Returns training load metrics, including CTL, ATL, TSB, ramp rate, and ACWR, over a specified period of time.
+
+<use-cases>
+- Assessing fitness (CTL), fatigue (ATL), and form (TSB) trends over time.
+- Identifying injury risk through ACWR (Acute:Chronic Workload Ratio) analysis.
+- Evaluating training progression and ramp rate to ensure safe load increases.
+- Understanding how training load has evolved and its impact on performance.
+- Correlating training load with recovery trends to optimize training balance.
+</use-cases>`,
       {
         days: z
           .number()
@@ -479,6 +574,14 @@ and will not be updated throughout the day.
     server.tool(
       'get_workout_intervals',
       `Fetches a detailed interval breakdown for a specific workout.
+
+<use-cases>
+- Analyzing the structure and intensity of interval-based workouts.
+- Understanding power, pace, or heart rate distribution across workout intervals.
+- Identifying specific intervals that were particularly challenging or successful.
+- Reviewing interval targets vs. actual performance to assess workout execution.
+- Providing detailed feedback on interval training quality and pacing.
+</use-cases>
 
 <instructions>
 Get the activity_id from:
@@ -566,6 +669,14 @@ Get the activity_id from:
       'get_power_curve',
       `Fetches cycling power curves showing best power output at various durations for a given date range.
 
+<use-cases>
+- Analyzing power output capabilities across different durations (sprint, VO2 max, threshold, endurance).
+- Tracking power improvements over time at various durations.
+- Comparing current power curve to previous periods to assess fitness progression.
+- Estimating FTP from best 20-minute power (95% of 20min power).
+- Identifying strengths and weaknesses across different power durations.
+</use-cases>
+
 <instructions>
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period.
 </instructions>
@@ -599,6 +710,14 @@ Get the activity_id from:
     server.tool(
       'get_pace_curve',
       `Fetches pace curves for swimming or running, showing best times at various distances for a given date range.
+
+<use-cases>
+- Analyzing pace capabilities across different distances (sprint, middle distance, endurance).
+- Tracking pace improvements over time at various distances.
+- Comparing current pace curve to previous periods to assess fitness progression.
+- Using gradient-adjusted pace (GAP) for running to normalize for hilly terrain.
+- Identifying strengths and weaknesses across different pace distances.
+</use-cases>
 
 <instructions>
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
@@ -636,6 +755,14 @@ Get the activity_id from:
     server.tool(
       'get_hr_curve',
       `Fetches HR curves showing maximum sustained heart rate at various durations for a given date range.
+
+<use-cases>
+- Analyzing maximum heart rate capabilities across different durations.
+- Tracking HR improvements or changes over time at various effort durations.
+- Comparing current HR curve to previous periods to assess cardiovascular fitness changes.
+- Understanding heart rate response patterns across different intensity levels.
+- Filtering by sport to analyze sport-specific heart rate characteristics.
+</use-cases>
 
 <instructions>
 - Optional: Use compare_to_start and compare_to_end if you need to compare changes to a previous period
