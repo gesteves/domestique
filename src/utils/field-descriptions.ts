@@ -6,31 +6,31 @@
 export const WORKOUT_FIELD_DESCRIPTIONS = {
   // Core fields
   id: 'Unique ID of the completed activity in Intervals.icu',
-  date: 'Activity start time in local timezone (ISO 8601)',
-  start_date_utc: 'Activity start time in UTC (ISO 8601 with Z suffix)',
-  activity_type: 'Normalized type: Cycling, Running, Swimming, Skiing, Hiking, Rowing, Strength, or Other',
-  name: 'Activity name or title',
-  description: 'Activity description or notes',
+  date: 'Activity start time in the user\'s local timezone',
+  start_date_utc: 'Activity start time in UTC',
+  activity_type: 'Sport or discipline of the activity',
+  name: 'Name of the activity',
+  description: 'Description of the activity',
   duration: 'Total duration of the activity',
   distance: 'Total distance of the activity',
-  source: 'Data source: intervals.icu, whoop, or trainerroad',
+  source: 'Source of the data for this activity',
 
   // Training load
   tss: 'Training Stress Score (TSS)',
-  load: 'Training load (same as TSS for power-based activities)',
-  intensity_factor: 'Intensity Factor (IF)',
-  trimp: 'Training Impulse',
-  session_rpe: 'Session RPE = RPE × duration in minutes',
-  strain_score: 'Intervals.icu strain score (unrelated to Whoop\'s strain)',
+  load: 'Training load (equivalent to TSS for power-based activities)',
+  intensity_factor: 'Intensity Factor (IF), a measure of how hard it was compared to your FTP',
+  trimp: 'Training Impulse, a measure of training load derived from the average HR for the activity relative to resting HR and max HR and the moving time',
+  session_rpe: 'Session RPE = RPE × duration in minutes, a method of quantifying training load by considering the intensity (RPE) and duration of the training session (or competition)',
+  strain_score: 'Strain score, similar to XSS in Xert, a power based training load metric that considers time spent above the maximal metabolic steady state to estimate the level of strain for the activity. Unrelated to Whoop\'s Strain score.',
 
   // Power metrics
   normalized_power: 'Normalized Power (NP) in watts',
   average_power: 'Average power in watts',
-  ftp: 'Functional Threshold Power used for this activity, in watts',
-  eftp: 'Estimated FTP from Intervals.icu, in watts',
-  activity_eftp: 'eFTP derived from this specific activity, in watts',
-  w_prime: "W' (W prime), anaerobic work capacity in joules",
-  pmax: 'Maximum power capacity in watts',
+  ftp: 'FTP used for this activity, in watts; set by the user',
+  eftp: 'FTP estimated by Intervals.icu for the user, in watts',
+  activity_eftp: 'FTP estimated by Intervals.icu from this activity on its own, in watts',
+  w_prime: "W' (W prime), anaerobic work capacity in joules, the amount of energy in Joules you have available when riding above threshold",
+  pmax: 'Highest instant power that can be produced for a very short duration',
   work_kj: 'Total work done, in kilojoules',
   joules_above_ftp: 'Work done above FTP, in joules',
   max_wbal_depletion: "Maximum W'bal depletion during activity, in joules",
@@ -38,7 +38,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   // Heart rate
   average_heart_rate: 'Average heart rate in beats per minute',
   max_heart_rate: 'Maximum heart rate in beats per minute',
-  hrrc: 'Heart rate recovery, drop in HR in first minute after stopping',
+  hrrc: 'Heart rate recovery, the largest drop in HR over 60 seconds starting from a HR of at least threshold',
 
   // Speed
   average_speed: 'Average speed during the activity',
@@ -50,8 +50,8 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
   // Efficiency
   variability_index: 'Variability Index (VI)',
-  power_hr_ratio: 'Power:HR decoupling, positive means cardiac drift occurred',
-  efficiency_factor: 'Efficiency Factor (EF)',
+  power_hr_ratio: 'Power:HR ratio, a measure of how much output (watts) you produce for a given input (heart rate measured in beats/minute)',
+  efficiency_factor: 'Efficiency Factor (EF), normalized watts (output) divided by average heart rate (input)',
 
   // Coasting
   coasting_time: 'Total time spent coasting',
