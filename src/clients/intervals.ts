@@ -42,7 +42,7 @@ import {
 } from '../utils/format-units.js';
 import { getTodayInTimezone } from '../utils/date-parser.js';
 import {
-  calculateHeatZones,
+  calculateHeatMetrics,
   parseHeatStrainStreams,
 } from '../utils/heat-zones.js';
 
@@ -1066,6 +1066,25 @@ export class IntervalsClient {
    */
   async getActivityHeatZones(activityId: string): Promise<HeatZone[] | null> {
     try {
+      const metrics = await this.getActivityHeatMetrics(activityId);
+      return metrics?.zones ?? null;
+    } catch (error) {
+      // Heat strain data may not be available for all activities
+      return null;
+    }
+  }
+
+  /**
+   * Get comprehensive heat metrics for a specific activity.
+   * Returns null if heat strain data is not available.
+   */
+  async getActivityHeatMetrics(activityId: string): Promise<{
+    zones: HeatZone[];
+    max_heat_strain_index: number;
+    avg_heat_strain_index: number;
+    heat_training_load: number;
+  } | null> {
+    try {
       interface StreamData {
         type: string;
         data: number[];
@@ -1081,7 +1100,7 @@ export class IntervalsClient {
         return null;
       }
 
-      return calculateHeatZones(parsed.time, parsed.heat_strain_index);
+      return calculateHeatMetrics(parsed.time, parsed.heat_strain_index);
     } catch (error) {
       // Heat strain data may not be available for all activities
       return null;
@@ -1335,8 +1354,8 @@ export class IntervalsClient {
       activity.pace_zone_times
     );
 
-    // Fetch heat zones from stream data
-    const heatZones = await this.getActivityHeatZones(activity.id);
+    // Fetch heat metrics from stream data
+    const heatMetrics = await this.getActivityHeatMetrics(activity.id);
 
     return {
       id: activity.id,
@@ -1431,7 +1450,12 @@ export class IntervalsClient {
       hr_zones: hrZones,
       power_zones: powerZones,
       pace_zones: paceZones,
-      heat_zones: heatZones ?? undefined,
+      heat_zones: heatMetrics?.zones,
+
+      // Heat metrics
+      max_heat_strain_index: heatMetrics?.max_heat_strain_index,
+      avg_heat_strain_index: heatMetrics?.avg_heat_strain_index,
+      heat_training_load: heatMetrics?.heat_training_load,
 
       // Running/pace metrics
       average_stride_m: activity.average_stride,

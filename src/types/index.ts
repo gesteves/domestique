@@ -98,6 +98,11 @@ export interface NormalizedWorkout {
   pace_zones?: PaceZone[];
   heat_zones?: HeatZone[];
 
+  // Heat metrics
+  max_heat_strain_index?: number; // Maximum heat strain index during the activity
+  avg_heat_strain_index?: number; // Average heat strain index during the activity
+  heat_training_load?: number; // Heat training load (0-10 scale), measures contribution to heat adaptation
+
   // Running/pace metrics
   average_stride_m?: number; // meters per stride
   gap?: string; // Gradient adjusted pace, e.g., "4:30/km"

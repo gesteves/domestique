@@ -154,6 +154,55 @@ describe('response-builder', () => {
       expect(text).toContain('- Consider reducing training load');
       expect(text).toContain('FIELD DESCRIPTIONS:');
     });
+
+    it('should include heat zones summary only when heat data is present', () => {
+      // Data WITH heat zones
+      const dataWithHeat = {
+        workouts: [
+          {
+            id: 'w1',
+            heat_zones: [
+              { name: 'Zone 1', time_in_zone: '0:10:00' },
+            ],
+          },
+        ],
+      };
+      const fieldDescriptions = {
+        workouts: 'Array of workouts',
+        heat_zones: 'Heat zone data',
+      };
+
+      const resultWithHeat = buildToolResponse({
+        data: dataWithHeat,
+        fieldDescriptions,
+      });
+
+      const textWithHeat = resultWithHeat.content[0].text;
+      expect(textWithHeat).toContain('Heat Zones Summary');
+      expect(textWithHeat).toContain('Zone 1: No Heat Strain');
+      expect(textWithHeat).toContain('Zone 3: High Heat Strain');
+
+      // Data WITHOUT heat zones
+      const dataWithoutHeat = {
+        workouts: [
+          {
+            id: 'w1',
+            tss: 50,
+          },
+        ],
+      };
+
+      const resultWithoutHeat = buildToolResponse({
+        data: dataWithoutHeat,
+        fieldDescriptions,
+      });
+
+      const textWithoutHeat = resultWithoutHeat.content[0].text;
+      expect(textWithoutHeat).not.toContain('Heat Zones Summary');
+      expect(textWithoutHeat).not.toContain('Zone 1: No Heat Strain');
+      // Should still have the short description
+      expect(textWithoutHeat).toContain('"heat_zones": "Heat zone data"');
+    });
   });
 
   describe('buildEmptyResponse', () => {

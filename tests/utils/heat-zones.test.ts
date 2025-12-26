@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateHeatZones, parseHeatStrainStreams } from '../../src/utils/heat-zones.js';
+import { calculateHeatZones, calculateHeatMetrics, parseHeatStrainStreams } from '../../src/utils/heat-zones.js';
 
 describe('heat-zones', () => {
   describe('calculateHeatZones', () => {
@@ -204,6 +204,98 @@ describe('heat-zones', () => {
       expect(result).not.toBeNull();
       expect(result?.time).toEqual([0, 1]);
       expect(result?.heat_strain_index).toEqual([0.5, 1.5]);
+    });
+  });
+
+  describe('calculateHeatMetrics', () => {
+    it('should calculate all heat metrics correctly', () => {
+      const timeData = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+      const heatStrainData = [0.5, 0.8, 1.5, 2.0, 3.5, 5.0, 6.0, 7.5, 8.0, 9.0];
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      // Check zones
+      expect(metrics.zones).toHaveLength(4);
+      expect(metrics.zones[0].time_in_zone).toBe('0:00:02'); // Zone 1
+      expect(metrics.zones[1].time_in_zone).toBe('0:00:02'); // Zone 2
+      expect(metrics.zones[2].time_in_zone).toBe('0:00:03'); // Zone 3
+      expect(metrics.zones[3].time_in_zone).toBe('0:00:03'); // Zone 4
+
+      // Check max HSI
+      expect(metrics.max_heat_strain_index).toBe(9.0);
+
+      // Check avg HSI
+      const expectedAvg = (0.5 + 0.8 + 1.5 + 2.0 + 3.5 + 5.0 + 6.0 + 7.5 + 8.0 + 9.0) / 10;
+      expect(metrics.avg_heat_strain_index).toBeCloseTo(expectedAvg, 1);
+
+      // Check HTL (should be > 0 since we have time in multiple zones)
+      expect(metrics.heat_training_load).toBeGreaterThan(0);
+      expect(metrics.heat_training_load).toBeLessThanOrEqual(10);
+    });
+
+    it('should calculate HTL as 0 for no heat strain', () => {
+      const timeData = [0, 1, 2, 3, 4];
+      const heatStrainData = [0.5, 0.6, 0.7, 0.8, 0.9]; // All in Zone 1
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      expect(metrics.heat_training_load).toBe(0); // Zone 1 contributes nothing
+    });
+
+    it('should give high HTL for optimal zone training', () => {
+      const timeData = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+      const heatStrainData = [5.0, 5.5, 6.0, 6.5, 5.5, 5.0, 6.0, 5.5, 5.0, 6.0]; // All in Zone 3
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      // Zone 3 is optimal, should give high HTL (close to max)
+      expect(metrics.heat_training_load).toBeGreaterThan(8);
+      expect(metrics.heat_training_load).toBeLessThanOrEqual(10);
+    });
+
+    it('should penalize dangerous zone 4 training', () => {
+      const timeData = [0, 1, 2, 3, 4];
+      const heatStrainData = [8.0, 8.5, 9.0, 9.5, 10.0]; // All in Zone 4
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      // Zone 4 is penalized (50% contribution), should give moderate HTL
+      expect(metrics.heat_training_load).toBe(5.0); // 50% * 10 = 5
+    });
+
+    it('should give moderate HTL for zone 2 training', () => {
+      const timeData = [0, 1, 2, 3, 4];
+      const heatStrainData = [1.5, 2.0, 2.5, 2.0, 1.5]; // All in Zone 2
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      // Zone 2 gives partial contribution (30-50%)
+      expect(metrics.heat_training_load).toBeGreaterThan(3);
+      expect(metrics.heat_training_load).toBeLessThan(6);
+    });
+
+    it('should handle empty data', () => {
+      const timeData: number[] = [];
+      const heatStrainData: number[] = [];
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      expect(metrics.max_heat_strain_index).toBe(0);
+      expect(metrics.avg_heat_strain_index).toBe(0);
+      expect(metrics.heat_training_load).toBe(0);
+      expect(metrics.zones).toHaveLength(4);
+    });
+
+    it('should round values to 1 decimal place', () => {
+      const timeData = [0, 1, 2];
+      const heatStrainData = [3.456, 5.789, 6.123];
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      // Check that values are rounded to 1 decimal
+      expect(metrics.max_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
+      expect(metrics.avg_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
+      expect(metrics.heat_training_load.toString()).toMatch(/^\d+\.\d$/);
     });
   });
 });

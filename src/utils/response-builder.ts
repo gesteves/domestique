@@ -3,6 +3,8 @@
  * Constructs responses with contextual guidance for the LLM.
  */
 
+import { enhanceWithHeatZonesSummary } from './field-descriptions.js';
+
 export interface ResponseBuilderOptions {
   /** The main data payload */
   data: unknown;
@@ -26,7 +28,10 @@ export interface ResponseBuilderOptions {
 export function buildToolResponse(options: ResponseBuilderOptions): {
   content: Array<{ type: 'text'; text: string }>;
 } {
-  const { data, fieldDescriptions, nextActions, warnings } = options;
+  const { data, nextActions, warnings } = options;
+
+  // Enhance field descriptions with heat zones summary if heat data is present
+  const fieldDescriptions = enhanceWithHeatZonesSummary(options.fieldDescriptions, data);
 
   const parts: string[] = [];
 

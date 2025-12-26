@@ -93,33 +93,13 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   hr_zones: 'Array of heart rate zone objects. Each object contains: name (e.g., "Z1", "Z2"), low_bpm, high_bpm (null for highest zone), and time_in_zone (human-readable duration like "1:49:44"). These zones are from the time of the activity and may differ from current athlete profile zones.',
   power_zones: 'Array of power zone objects. Each object contains: name (e.g., "Active Recovery", "Endurance"), low_percent, high_percent (null for highest zone), low_watts, high_watts (null for highest zone), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
   pace_zones: 'Array of pace zone objects. Each object contains: name (e.g., "Easy", "Tempo"), low_percent, high_percent (null for highest zone), slow_pace (slower pace at low %), fast_pace (faster pace at high %), and time_in_zone (human-readable duration). Zones are from the time of the activity and may differ from current athlete profile zones.',
-  heat_zones: `Array of heat zone objects. Each object contains: name (e.g., "Zone 1: No Heat Strain", "Zone 2: Moderate Heat Strain"), low_heat_strain_index, high_heat_strain_index (null for highest zone), and time_in_zone (human-readable duration). Heat zones are based on the Heat Strain Index (HSI) and are only present if heat strain data is available for the activity.
 
-Heat Zones Summary
+  // Heat training data
+  heat_zones: 'Array of heat zone objects. Each object contains: name (e.g., "Zone 1: No Heat Strain", "Zone 2: Moderate Heat Strain"), low_heat_strain_index, high_heat_strain_index (null for highest zone), and time_in_zone (human-readable duration). Heat zones are based on the Heat Strain Index (HSI) and are only present if heat strain data from a CORE body temperature sensor is available for the activity.',
 
-Zone 1: No Heat Strain (0-0.9 HSI)
-Impact on the Body: You are not experiencing heat strain. While core temperature may be elevated, skin temperature is neutral, allowing you to cool down and perform.
-Impact on Performance: Optimal power/pace during training and racing.
-Guidelines for Pacing: Pacing Not Affected - Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
-Guidelines for Heat Training: No Heat Training - Training in this zone does not result in heat adaptations.
-
-Zone 2: Moderate Heat Strain (1-2.9 HSI)
-Impact on the Body: Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
-Impact on Performance: Potential Performance Decline - Performance may be lower than usual.
-Guidelines for Pacing: Use Discretion - Adjust pacing if needed, hydrate, and cool.
-Guidelines for Heat Training: Partial Heat Training - Training in this zone may result in partial heat adaptations.
-
-Zone 3: High Heat Strain (3-6.9 HSI)
-Impact on the Body: You have high core and skin temperatures. You are sweating heavily, and more blood is transported to the skin to cool down. To maintain the same power/pace, your heart will have to pump faster to maintain oxygen supply to the muscles. This means you will have a higher heart rate than usual. You are feeling hot, and perhaps less motivated to exercise.
-Impact on Performance: Performance Decline - Your exercise capacity is substantially reduced. A higher effort is required to maintain a given power/pace. Exhaustion will occur earlier.
-Guidelines for Pacing: Adjust Pacing, Hydrate, and Cool - Take into account that for a given power/pace, your heart rate will be higher. Adjust pacing according to your heart rate and subjective feeling. Good hydration and cooling can help you finish faster.
-Guidelines for Heat Training: Optimal Heat Training - Training in this zone results in optimal heat adaptations. To gain adaptations, you need to feel hot and sweat heavily.
-
-Zone 4: Extremely High Heat Strain (>7 HSI)
-Impact on the Body: Exercising in this zone for too long may have severe consequences for your health and may place you at risk for heat-related illness. Warning signals are muscle cramps, dizziness, nausea, headache and/or collapse.
-Impact on Performance: Dangerous - Exercising in this zone for too long can cause serious health problems. Performance will be drastically reduced, and you may even need to stop exercising.
-Guidelines for Pacing: Reduce HSI Rapidly - Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.
-Guidelines for Heat Training: Harmful - Training in this zone may cause harm. Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.`,
+  max_heat_strain_index: 'Maximum Heat Strain Index (HSI) reached during the activity. Only present if heat strain data is available from a CORE body temperature sensor.',
+  avg_heat_strain_index: 'Average Heat Strain Index (HSI) throughout the activity. Only present if heat strain data is available from a CORE body temperature sensor.',
+  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Higher scores indicate greater adaptation stimulus. Based on time spent at elevated HSI levels. Only present if heat strain data is available from a CORE body temperature sensor. HTL is calculated using a weighted approach where Zone 3 (HSI 3-6.9) provides optimal training stimulus, Zone 2 (HSI 1-2.9) provides partial benefit, Zone 1 (HSI 0-0.9) provides no benefit, and Zone 4 (HSI 7+) is penalized as it\'s dangerous. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
@@ -571,6 +551,37 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
 }
 
 /**
+ * Detailed heat zones summary - only shown when heat data is present
+ */
+const HEAT_ZONES_SUMMARY = `
+
+Heat Zones Summary
+
+Zone 1: No Heat Strain (0-0.9 HSI)
+Impact on the Body: You are not experiencing heat strain. While core temperature may be elevated, skin temperature is neutral, allowing you to cool down and perform.
+Impact on Performance: Optimal power/pace during training and racing.
+Guidelines for Pacing: Pacing Not Affected - Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
+Guidelines for Heat Training: No Heat Training - Training in this zone does not result in heat adaptations.
+
+Zone 2: Moderate Heat Strain (1-2.9 HSI)
+Impact on the Body: Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
+Impact on Performance: Potential Performance Decline - Performance may be lower than usual.
+Guidelines for Pacing: Use Discretion - Adjust pacing if needed, hydrate, and cool.
+Guidelines for Heat Training: Partial Heat Training - Training in this zone may result in partial heat adaptations.
+
+Zone 3: High Heat Strain (3-6.9 HSI)
+Impact on the Body: You have high core and skin temperatures. You are sweating heavily, and more blood is transported to the skin to cool down. To maintain the same power/pace, your heart will have to pump faster to maintain oxygen supply to the muscles. This means you will have a higher heart rate than usual. You are feeling hot, and perhaps less motivated to exercise.
+Impact on Performance: Performance Decline - Your exercise capacity is substantially reduced. A higher effort is required to maintain a given power/pace. Exhaustion will occur earlier.
+Guidelines for Pacing: Adjust Pacing, Hydrate, and Cool - Take into account that for a given power/pace, your heart rate will be higher. Adjust pacing according to your heart rate and subjective feeling. Good hydration and cooling can help you finish faster.
+Guidelines for Heat Training: Optimal Heat Training - Training in this zone results in optimal heat adaptations. To gain adaptations, you need to feel hot and sweat heavily.
+
+Zone 4: Extremely High Heat Strain (>7 HSI)
+Impact on the Body: Exercising in this zone for too long may have severe consequences for your health and may place you at risk for heat-related illness. Warning signals are muscle cramps, dizziness, nausea, headache and/or collapse.
+Impact on Performance: Dangerous - Exercising in this zone for too long can cause serious health problems. Performance will be drastically reduced, and you may even need to stop exercising.
+Guidelines for Pacing: Reduce HSI Rapidly - Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.
+Guidelines for Heat Training: Harmful - Training in this zone may cause harm. Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.`;
+
+/**
  * Combine field descriptions for a response that includes multiple types
  */
 export function combineFieldDescriptions(
@@ -580,5 +591,34 @@ export function combineFieldDescriptions(
     (acc, category) => ({ ...acc, ...getFieldDescriptions(category) }),
     {}
   );
+}
+
+/**
+ * Enhance field descriptions with heat zones summary if heat data is present.
+ * This adds the detailed heat zones explanation only when the data contains heat information.
+ *
+ * @param descriptions - Base field descriptions
+ * @param data - The response data to check for heat zones
+ * @returns Enhanced descriptions with heat zones summary if applicable
+ */
+export function enhanceWithHeatZonesSummary(
+  descriptions: Record<string, string>,
+  data: any
+): Record<string, string> {
+  // Check if data contains heat zones
+  const hasHeatZones =
+    data?.heat_zones ||
+    data?.workouts?.some((w: any) => w.heat_zones) ||
+    data?.completed_workouts?.some((w: any) => w.heat_zones) ||
+    (Array.isArray(data) && data.some((item: any) => item.heat_zones));
+
+  if (hasHeatZones && descriptions.heat_zones) {
+    return {
+      ...descriptions,
+      heat_zones: descriptions.heat_zones + HEAT_ZONES_SUMMARY,
+    };
+  }
+
+  return descriptions;
 }
 
