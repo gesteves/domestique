@@ -287,8 +287,8 @@ Once connected, you can ask Claude:
 - "What was my training load in the last 42 days?"
 - "What's my power curve for the last 90 days?"
 - "How has my 5-minute power improved compared to last quarter?"
-- "Show me my running pace curve - what's my best 5km time?"
+- "Show me my running pace curve—what's my best 5km time?"
 - "Compare my cycling power from the last 3 months vs the previous 3 months"
-- "What's my FTP?" (uses get_sports_settings for cycling)
+- "What's my FTP?"
 - "What are my running zones?"
 - "How has my weight changed over the last 30 days?"
