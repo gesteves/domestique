@@ -118,6 +118,7 @@ export class ToolRegistry {
 
 <notes>
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals, get_workout_notes, or any of the other tools.
 </notes>`,
       {},
       withToolResponse(
@@ -217,7 +218,11 @@ and will not be updated throughout the day.
 - Identifying workouts that may need detailed analysis via get_workout_intervals.
 - Understanding the user's training volume and intensity for the day.
 - Understanding total time in zones for the day (power, pace, heart race, and/or heat zones).
-</use-cases>`,
+</use-cases>
+
+<notes>
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals, get_workout_notes, or any of the other tools.
+</notes>`,
       {},
       withToolResponse(
         async () => this.currentTools.getTodaysCompletedWorkouts(),
@@ -374,6 +379,7 @@ and will not be updated throughout the day.
 <notes>
 - Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
 - You can optionally filter activities by sport, as needed.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals, get_workout_notes, or any of the other tools.
 </notes>`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),

@@ -429,6 +429,50 @@ describe('IntervalsClient', () => {
 
       expect(result).toHaveLength(0);
     });
+
+    it('should handle Strava-only workouts with minimal data', async () => {
+      const stravaOnlyActivity = [{
+        id: '8195815503',
+        icu_athlete_id: 'i26807',
+        start_date_local: '2022-12-01T16:23:47',
+        start_date: '2022-12-01T23:23:47Z',
+        type: 'Run',
+        name: 'Morning Run',
+        source: 'STRAVA',
+        _note: 'STRAVA activities are not available via the API',
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(stravaOnlyActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2022-12-01', '2022-12-01');
+
+      expect(result).toHaveLength(1);
+
+      // Only minimal fields should be present
+      expect(result[0].id).toBe('8195815503');
+      expect(result[0].date).toBe('2022-12-01T16:23:47');
+      expect(result[0].source).toBe('strava');
+      expect(result[0].unavailable).toBe(true);
+      expect(result[0].unavailable_reason).toBe('STRAVA activities are not available via the API');
+
+      // All other fields should be undefined
+      expect(result[0].start_date_utc).toBeUndefined();
+      expect(result[0].activity_type).toBeUndefined();
+      expect(result[0].name).toBeUndefined();
+      expect(result[0].duration).toBeUndefined();
+      expect(result[0].tss).toBeUndefined();
+      expect(result[0].distance).toBeUndefined();
+      expect(result[0].average_power).toBeUndefined();
+      expect(result[0].average_heart_rate).toBeUndefined();
+    });
   });
 
   describe('getActivity', () => {

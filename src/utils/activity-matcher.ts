@@ -85,6 +85,14 @@ export function matchActivities(
   const usedWhoopIds = new Set<string>();
 
   for (const workout of intervalsWorkouts) {
+    // Skip matching for unavailable workouts (e.g., Strava-only)
+    if (workout.unavailable || !workout.activity_type) {
+      matched.push({
+        intervals_workout: workout,
+      });
+      continue;
+    }
+
     const workoutTimestamp = getMatchingTimestamp(workout);
     const workoutStart = parseISO(workoutTimestamp);
 
@@ -142,6 +150,11 @@ export function findMatchingWhoopActivity(
   workout: NormalizedWorkout,
   whoopActivities: StrainActivity[]
 ): StrainActivity | null {
+  // Skip matching for unavailable workouts (e.g., Strava-only)
+  if (workout.unavailable || !workout.activity_type) {
+    return null;
+  }
+
   const workoutTimestamp = getMatchingTimestamp(workout);
   const workoutStart = parseISO(workoutTimestamp);
 

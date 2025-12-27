@@ -9,7 +9,11 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - View planned workouts from TrainerRoad and Intervals.icu calendars, matches with Whoop strain data
 - Analyze fitness trends (CTL/ATL/TSB)
 - Comprehensive workout analysis with intervals, notes, and weather data
-- Incorporates Heat Strain Index data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensors for analysis
+- Incorporates Heat Strain Index data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
+
+### Known Limitations
+
+Due to Strava API agreement limitations, workouts imported from Strava to Intervals.icu cannot be analyzed.
 
 ## Available Tools
 

@@ -17,10 +17,10 @@ export interface NormalizedWorkout {
   id: string;
   date: string; // ISO 8601 local time
   start_date_utc?: string; // ISO 8601 UTC (with Z suffix) for cross-platform matching
-  activity_type: ActivityType;
+  activity_type?: ActivityType; // Optional for unavailable workouts (e.g., Strava-only)
   name?: string;
   description?: string;
-  duration: string; // Human-readable duration, e.g., "1:30:00"
+  duration?: string; // Human-readable duration, e.g., "1:30:00"
   distance?: string; // Human-readable distance, e.g., "45.2 km" or "2500 m" for swimming
   tss?: number;
   normalized_power?: number;
@@ -30,7 +30,18 @@ export interface NormalizedWorkout {
   intensity_factor?: number;
   elevation_gain?: string; // Human-readable, e.g., "500 m"
   calories?: number;
-  source: 'intervals.icu' | 'whoop' | 'trainerroad';
+  source: 'intervals.icu' | 'whoop' | 'trainerroad' | 'strava';
+
+  /**
+   * Indicates this workout's full data is unavailable via the API.
+   * When true, only basic metadata (id, date, activity_type, name) is available.
+   * Most other fields will be undefined or contain placeholder values.
+   *
+   * Common reasons:
+   * - Strava-only workouts: Data exclusively from Strava cannot be accessed via Intervals.icu API
+   */
+  unavailable?: boolean;
+  unavailable_reason?: string; // Human-readable reason why the workout is unavailable
 
   // Speed metrics
   average_speed?: string; // Human-readable speed, e.g., "32.5 km/h"

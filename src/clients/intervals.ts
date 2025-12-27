@@ -227,6 +227,9 @@ interface IntervalsActivity {
 
   // Source information
   source?: string; // e.g., "Zwift", "Garmin", etc.
+
+  // API availability note (present when activity data is not available)
+  _note?: string; // e.g., "STRAVA activities are not available via the API"
 }
 
 interface IntervalsWellness {
@@ -1352,6 +1355,21 @@ export class IntervalsClient {
   }
 
   private async normalizeActivity(activity: IntervalsActivity): Promise<NormalizedWorkout> {
+    // Check if this is a Strava-only workout that's not available via the API
+    const isStravaOnly = activity.source === 'STRAVA' && activity._note !== undefined;
+
+    if (isStravaOnly) {
+      // Return minimal workout data for Strava-only activities
+      // We only have basic metadata - no workout details are available
+      return {
+        id: activity.id,
+        date: activity.start_date_local,
+        source: 'strava',
+        unavailable: true,
+        unavailable_reason: activity._note || 'This workout data is not available via the API',
+      } as NormalizedWorkout;
+    }
+
     // Fetch sport settings for zone normalization
     const sportSettings = await this.getSportSettings();
     const matchingSport = this.findMatchingSportSettings(activity.type, sportSettings);
