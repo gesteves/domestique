@@ -11,6 +11,7 @@ import {
   parseISO,
 } from 'date-fns';
 import type { DateRange } from '../types/index.js';
+import { DateParseError } from '../errors/index.js';
 
 /**
  * Parse a natural language date string into an ISO date string.
@@ -22,8 +23,11 @@ import type { DateRange } from '../types/index.js';
  * - Day names: "next wednesday", "last friday"
  * - Offsets: "3 days ago", "in 2 weeks"
  * - Natural: "December 25th", "Jan 15 2025"
+ *
+ * @param input - The date string to parse
+ * @param parameterName - Optional name of the parameter for error messages
  */
-export function parseDateString(input: string): string {
+export function parseDateString(input: string, parameterName: string = 'date'): string {
   const normalized = input.trim();
 
   // Try ISO date first (faster path for common case)
@@ -37,7 +41,7 @@ export function parseDateString(input: string): string {
     return format(result, 'yyyy-MM-dd');
   }
 
-  throw new Error(`Unable to parse date: "${input}"`);
+  throw new DateParseError(input, parameterName);
 }
 
 /**
@@ -48,8 +52,11 @@ export function parseDateString(input: string): string {
  * - "today", "this week", "this month"
  * - "last week", "last month"
  * - "last X days/weeks/months"
+ *
+ * @param input - The date range string to parse
+ * @param parameterName - Optional name of the parameter for error messages
  */
-export function parseDateRange(input: string): DateRange {
+export function parseDateRange(input: string, parameterName: string = 'date_range'): DateRange {
   const normalized = input.toLowerCase().trim();
   const now = new Date();
 
@@ -124,7 +131,7 @@ export function parseDateRange(input: string): DateRange {
     };
   }
 
-  throw new Error(`Unable to parse date range: "${input}"`);
+  throw new DateParseError(input, parameterName);
 }
 
 /**
@@ -201,8 +208,16 @@ export function getCurrentDateTimeInTimezone(timezone: string): string {
  * using the specified timezone for relative dates.
  *
  * Uses chrono-node with timezone context for accurate parsing.
+ *
+ * @param input - The date string to parse
+ * @param timezone - The timezone to use for relative date calculations
+ * @param parameterName - Optional name of the parameter for error messages
  */
-export function parseDateStringInTimezone(input: string, timezone: string): string {
+export function parseDateStringInTimezone(
+  input: string,
+  timezone: string,
+  parameterName: string = 'date'
+): string {
   const normalized = input.trim();
 
   // Try ISO date first - these are absolute, no timezone needed
@@ -221,7 +236,7 @@ export function parseDateStringInTimezone(input: string, timezone: string): stri
     return format(result, 'yyyy-MM-dd');
   }
 
-  throw new Error(`Unable to parse date: "${input}"`);
+  throw new DateParseError(input, parameterName);
 }
 
 /**

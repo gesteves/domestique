@@ -596,7 +596,7 @@ describe('IntervalsClient', () => {
       });
 
       await expect(client.getActivities('2024-12-14', '2024-12-15'))
-        .rejects.toThrow('Intervals.icu API error: 401 Unauthorized');
+        .rejects.toThrow('Authentication failed with Intervals.icu');
     });
 
     it('should handle empty response', async () => {

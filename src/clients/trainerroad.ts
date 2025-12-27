@@ -2,6 +2,7 @@ import ical from 'node-ical';
 import { parseISO, isWithinInterval, format } from 'date-fns';
 import type { PlannedWorkout, TrainerRoadConfig, Discipline } from '../types/index.js';
 import { formatDuration } from '../utils/format-units.js';
+import { TrainerRoadApiError } from '../errors/index.js';
 
 interface CalendarEvent {
   uid: string;
@@ -24,15 +25,44 @@ export class TrainerRoadClient {
    * Fetch and parse the iCalendar feed (always fresh, no caching)
    */
   private async fetchCalendar(): Promise<CalendarEvent[]> {
-    const response = await fetch(this.config.calendarUrl);
-    if (!response.ok) {
-      throw new Error(
-        `TrainerRoad calendar fetch failed: ${response.status} ${response.statusText}`
+    const errorContext = {
+      operation: 'fetch planned workouts',
+      resource: 'TrainerRoad calendar',
+    };
+
+    let response: Response;
+    try {
+      response = await fetch(this.config.calendarUrl);
+    } catch (error) {
+      throw TrainerRoadApiError.networkError(
+        errorContext,
+        error instanceof Error ? error : undefined
       );
     }
 
-    const icsData = await response.text();
-    const parsed = ical.parseICS(icsData);
+    if (!response.ok) {
+      throw TrainerRoadApiError.fromHttpStatus(response.status, errorContext);
+    }
+
+    let icsData: string;
+    try {
+      icsData = await response.text();
+    } catch (error) {
+      throw TrainerRoadApiError.networkError(
+        errorContext,
+        error instanceof Error ? error : undefined
+      );
+    }
+
+    let parsed: ical.CalendarResponse;
+    try {
+      parsed = ical.parseICS(icsData);
+    } catch (error) {
+      throw TrainerRoadApiError.parseError(
+        errorContext,
+        error instanceof Error ? error : undefined
+      );
+    }
 
     const events: CalendarEvent[] = [];
 

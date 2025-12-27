@@ -10,6 +10,7 @@ import {
   getStartOfDay,
   getEndOfDay,
 } from '../../src/utils/date-parser.js';
+import { DateParseError } from '../../src/errors/index.js';
 
 describe('date-parser', () => {
   // Mock the current date for consistent testing
@@ -103,9 +104,34 @@ describe('date-parser', () => {
       expect(parseDateString('January 1, 2025')).toBe('2025-01-01');
     });
 
-    it('should throw for invalid date strings', () => {
-      expect(() => parseDateString('invalid')).toThrow('Unable to parse date');
-      expect(() => parseDateString('not a date')).toThrow('Unable to parse date');
+    it('should throw DateParseError for invalid date strings', () => {
+      expect(() => parseDateString('invalid')).toThrow(DateParseError);
+      expect(() => parseDateString('not a date')).toThrow(DateParseError);
+    });
+
+    it('should include parameter name in DateParseError', () => {
+      try {
+        parseDateString('invalid', 'start_date');
+        expect.fail('Should have thrown DateParseError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(DateParseError);
+        const dateError = error as DateParseError;
+        expect(dateError.parameterName).toBe('start_date');
+        expect(dateError.input).toBe('invalid');
+        expect(dateError.message).toContain('start_date');
+      }
+    });
+
+    it('should include helpful format examples in error message', () => {
+      try {
+        parseDateString('not a valid date', 'date');
+        expect.fail('Should have thrown DateParseError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(DateParseError);
+        const dateError = error as DateParseError;
+        expect(dateError.message).toContain('2024-12-25');
+        expect(dateError.message).toContain('yesterday');
+      }
     });
   });
 
@@ -159,8 +185,20 @@ describe('date-parser', () => {
       expect(range.end).toBe('2024-12-15');
     });
 
-    it('should throw for invalid range strings', () => {
-      expect(() => parseDateRange('invalid')).toThrow('Unable to parse date range');
+    it('should throw DateParseError for invalid range strings', () => {
+      expect(() => parseDateRange('invalid')).toThrow(DateParseError);
+    });
+
+    it('should include parameter name in DateParseError for range', () => {
+      try {
+        parseDateRange('invalid range', 'date_range');
+        expect.fail('Should have thrown DateParseError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(DateParseError);
+        const dateError = error as DateParseError;
+        expect(dateError.parameterName).toBe('date_range');
+        expect(dateError.input).toBe('invalid range');
+      }
     });
   });
 

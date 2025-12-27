@@ -614,7 +614,7 @@ describe('WhoopClient', () => {
       });
 
       await expect(client.getRecoveries('2024-12-15', '2024-12-15'))
-        .rejects.toThrow('Whoop API is temporarily unavailable');
+        .rejects.toThrow('Whoop is temporarily unavailable');
     });
   });
 
@@ -627,7 +627,7 @@ describe('WhoopClient', () => {
       });
 
       await expect(client.getWorkouts('2024-12-15', '2024-12-15'))
-        .rejects.toThrow('500 Internal Server Error');
+        .rejects.toThrow('Whoop is temporarily unavailable');
     });
   });
 });

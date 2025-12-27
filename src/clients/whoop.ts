@@ -20,6 +20,7 @@ import {
   getWhoopRefreshToken,
   storeWhoopTokens,
 } from '../utils/redis.js';
+import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
 
 const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v2';
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
@@ -35,16 +36,127 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Error thrown when Whoop API calls fail in a potentially recoverable way.
- * The message is designed to be helpful to LLMs that may retry the operation.
+ * Error thrown when Whoop API calls fail.
+ * Extends ApiError to provide consistent error handling across all API clients.
  */
-export class WhoopApiError extends Error {
+export class WhoopApiError extends ApiError {
+  public override readonly name = 'WhoopApiError';
+
   constructor(
     message: string,
-    public readonly isRetryable: boolean = false
+    category: ErrorCategory,
+    isRetryable: boolean,
+    context: ErrorContext,
+    statusCode?: number
   ) {
-    super(message);
-    this.name = 'WhoopApiError';
+    super(message, category, isRetryable, context, 'whoop', statusCode);
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, WhoopApiError);
+    }
+  }
+
+  /**
+   * Create an error from an HTTP response status code.
+   */
+  static fromHttpStatus(
+    statusCode: number,
+    context: ErrorContext
+  ): WhoopApiError {
+    const { category, isRetryable, message } = WhoopApiError.categorizeStatus(statusCode, context);
+    return new WhoopApiError(message, category, isRetryable, context, statusCode);
+  }
+
+  /**
+   * Categorize an HTTP status code into an error category with appropriate message.
+   */
+  private static categorizeStatus(
+    statusCode: number,
+    context: ErrorContext
+  ): { category: ErrorCategory; isRetryable: boolean; message: string } {
+    const resourceInfo = context.resource ? ` for ${context.resource}` : '';
+
+    switch (statusCode) {
+      case 400:
+        return {
+          category: 'validation',
+          isRetryable: false,
+          message: `The request to Whoop${resourceInfo} was invalid. Please check the parameters.`,
+        };
+      case 401:
+        return {
+          category: 'authentication',
+          isRetryable: false,
+          message: `Authentication failed with Whoop. The access token may be invalid or expired.`,
+        };
+      case 403:
+        return {
+          category: 'authorization',
+          isRetryable: false,
+          message: `Access denied for Whoop${resourceInfo}. The token may not have permission for this operation.`,
+        };
+      case 404:
+        return {
+          category: 'not_found',
+          isRetryable: false,
+          message: `I couldn't find the Whoop data${resourceInfo}. It may not exist or may not be available yet.`,
+        };
+      case 429:
+        return {
+          category: 'rate_limit',
+          isRetryable: true,
+          message: `Whoop is temporarily limiting requests. Please try again in a few seconds.`,
+        };
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        return {
+          category: 'service_unavailable',
+          isRetryable: true,
+          message: `Whoop is temporarily unavailable. This is usually a brief issue. Please try again shortly.`,
+        };
+      default:
+        if (statusCode >= 500) {
+          return {
+            category: 'service_unavailable',
+            isRetryable: true,
+            message: `Whoop returned an error (${statusCode}). Please try again shortly.`,
+          };
+        }
+        return {
+          category: 'internal',
+          isRetryable: false,
+          message: `An unexpected error occurred with Whoop (${statusCode}).`,
+        };
+    }
+  }
+
+  /**
+   * Create an error for network/connection issues.
+   */
+  static networkError(context: ErrorContext, originalError?: Error): WhoopApiError {
+    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
+    return new WhoopApiError(
+      `I'm having trouble connecting to Whoop${errorDetail}. This is usually temporary. Please try again in a moment.`,
+      'network',
+      true,
+      context
+    );
+  }
+
+  /**
+   * Create an error for token refresh failures.
+   */
+  static tokenRefreshError(attemptsMade: number, originalError?: Error): WhoopApiError {
+    const errorDetail = originalError?.message ? ` Original error: ${originalError.message}` : '';
+    return new WhoopApiError(
+      `Whoop is temporarily unavailable. The token refresh failed after ${attemptsMade} attempt(s). ` +
+        `This is typically a transient issue with the Whoop API. Please try this request again in a few moments.${errorDetail}`,
+      'service_unavailable',
+      true,
+      { operation: 'refresh authentication token' }
+    );
   }
 }
 
@@ -359,17 +471,13 @@ export class WhoopClient {
     }
 
     // All retries exhausted - throw a helpful error
-    throw new WhoopApiError(
-      `Whoop API is temporarily unavailable. The token refresh failed after ${attemptsMade} attempt(s). ` +
-        `This is typically a transient issue with the Whoop API. Please try this request again in a few moments. ` +
-        `Original error: ${lastError?.message ?? 'Unknown error'}`,
-      true
-    );
+    throw WhoopApiError.tokenRefreshError(attemptsMade, lastError ?? undefined);
   }
 
   private async fetch<T>(
     endpoint: string,
-    params?: Record<string, string>
+    params?: Record<string, string>,
+    context?: { operation: string; resource?: string }
   ): Promise<T> {
     await this.ensureValidToken();
 
@@ -380,20 +488,35 @@ export class WhoopClient {
       });
     }
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        Accept: 'application/json',
-      },
-    });
+    const errorContext = context ?? {
+      operation: `fetch ${endpoint}`,
+      resource: undefined,
+    };
 
-    if (!response.ok) {
-      throw new Error(
-        `Whoop API error: ${response.status} ${response.statusText}`
-      );
+    try {
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw WhoopApiError.fromHttpStatus(response.status, {
+          ...errorContext,
+          parameters: params,
+        });
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      // Re-throw if it's already our error type
+      if (error instanceof WhoopApiError) {
+        throw error;
+      }
+      // Network or other errors
+      throw WhoopApiError.networkError(errorContext, error instanceof Error ? error : undefined);
     }
-
-    return response.json() as Promise<T>;
   }
 
   /**

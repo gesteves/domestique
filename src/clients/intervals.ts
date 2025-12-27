@@ -49,6 +49,7 @@ import {
   calculateTemperatureMetrics,
   parseTemperatureStreams,
 } from '../utils/temperature-metrics.js';
+import { IntervalsApiError } from '../errors/index.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
@@ -908,7 +909,11 @@ export class IntervalsClient {
     return zones;
   }
 
-  private async fetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
+  private async fetch<T>(
+    endpoint: string,
+    params?: Record<string, string>,
+    context?: { operation: string; resource?: string }
+  ): Promise<T> {
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -916,42 +921,73 @@ export class IntervalsClient {
       });
     }
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        Authorization: this.authHeader,
-        Accept: 'application/json',
-      },
-    });
+    const errorContext = context ?? {
+      operation: `fetch ${endpoint}`,
+      resource: undefined,
+    };
 
-    if (!response.ok) {
-      throw new Error(
-        `Intervals.icu API error: ${response.status} ${response.statusText}`
-      );
+    try {
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: this.authHeader,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw IntervalsApiError.fromHttpStatus(response.status, {
+          ...errorContext,
+          parameters: params,
+        });
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      // Re-throw if it's already our error type
+      if (error instanceof IntervalsApiError) {
+        throw error;
+      }
+      // Network or other errors
+      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
     }
-
-    return response.json() as Promise<T>;
   }
 
   /**
    * Fetch from activity-specific endpoints (uses /activity/{id} instead of /athlete/{id})
    */
-  private async fetchActivity<T>(activityId: string, endpoint: string): Promise<T> {
+  private async fetchActivity<T>(
+    activityId: string,
+    endpoint: string,
+    context?: { operation: string }
+  ): Promise<T> {
     const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        Authorization: this.authHeader,
-        Accept: 'application/json',
-      },
-    });
+    const errorContext = {
+      operation: context?.operation ?? `fetch activity ${endpoint}`,
+      resource: `activity ${activityId}`,
+    };
 
-    if (!response.ok) {
-      throw new Error(
-        `Intervals.icu API error: ${response.status} ${response.statusText}`
-      );
+    try {
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: this.authHeader,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      // Re-throw if it's already our error type
+      if (error instanceof IntervalsApiError) {
+        throw error;
+      }
+      // Network or other errors
+      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
     }
-
-    return response.json() as Promise<T>;
   }
 
   /**

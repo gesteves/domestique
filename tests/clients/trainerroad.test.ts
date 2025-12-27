@@ -127,7 +127,7 @@ END:VCALENDAR`;
       });
 
       await expect(client.getPlannedWorkouts('2024-12-16', '2024-12-20'))
-        .rejects.toThrow('TrainerRoad calendar fetch failed: 404 Not Found');
+        .rejects.toThrow("I couldn't find the TrainerRoad calendar");
     });
 
     it('should handle empty calendar', async () => {

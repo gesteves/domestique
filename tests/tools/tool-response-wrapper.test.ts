@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ToolRegistry } from '../../src/tools/index.js';
-import { WhoopApiError } from '../../src/clients/whoop.js';
+import { ApiError, DateParseError, IntervalsApiError } from '../../src/errors/index.js';
 
 // Mock all clients
 vi.mock('../../src/clients/intervals.js', () => ({
@@ -32,16 +32,7 @@ vi.mock('../../src/clients/whoop.js', () => ({
       setTimezoneGetter: vi.fn(),
     };
   }),
-  WhoopApiError: class WhoopApiError extends Error {
-    constructor(
-      message: string,
-      public statusCode?: number,
-      public isRetryable: boolean = false
-    ) {
-      super(message);
-      this.name = 'WhoopApiError';
-    }
-  },
+  // Note: We don't mock WhoopApiError here because the tests use the real error classes
 }));
 
 vi.mock('../../src/clients/trainerroad.js', () => ({
@@ -145,35 +136,72 @@ describe('Tool Response Wrapper', () => {
   });
 
   describe('error handling', () => {
-    it('should handle retryable WhoopApiError specially', async () => {
-      // Create a registry with a Whoop client that throws a retryable error
-      const { WhoopClient: MockWhoopClient } = await import('../../src/clients/whoop.js');
+    it('should handle retryable ApiError and return structured response', () => {
+      const retryableError = new ApiError(
+        'Rate limited',
+        'rate_limit',
+        true,
+        { operation: 'fetch recovery' },
+        'whoop',
+        429
+      );
 
-      // Create a new instance and mock it to throw
-      const mockInstance = new MockWhoopClient({
-        accessToken: 'test',
-        refreshToken: 'test',
-        clientId: 'test',
-        clientSecret: 'test',
-      });
-
-      const retryableError = new WhoopApiError('Rate limited', 429, true);
-      vi.mocked(mockInstance.getTodayRecovery).mockRejectedValue(retryableError);
-
-      // The handler should catch the retryable error and return a special response
-      // We need to test this by creating the actual tool handler
-      // This is complex because the withToolResponse is internal
-
-      // Instead, let's verify the structure of the error response
       expect(retryableError.isRetryable).toBe(true);
+      expect(retryableError.category).toBe('rate_limit');
       expect(retryableError.message).toBe('Rate limited');
     });
 
-    it('should propagate non-retryable errors', async () => {
-      const nonRetryableError = new WhoopApiError('Invalid token', 401, false);
+    it('should handle non-retryable ApiError', () => {
+      const nonRetryableError = new ApiError(
+        'Invalid token',
+        'authentication',
+        false,
+        { operation: 'authenticate' },
+        'whoop',
+        401
+      );
 
       expect(nonRetryableError.isRetryable).toBe(false);
       expect(nonRetryableError.statusCode).toBe(401);
+      expect(nonRetryableError.category).toBe('authentication');
+    });
+
+    it('should handle DateParseError with helpful message', () => {
+      const dateError = new DateParseError('invalid date input', 'start_date');
+
+      expect(dateError.isRetryable).toBe(false);
+      expect(dateError.category).toBe('date_parse');
+      expect(dateError.parameterName).toBe('start_date');
+      expect(dateError.input).toBe('invalid date input');
+      expect(dateError.message).toContain('start_date');
+      expect(dateError.message).toContain('invalid date input');
+    });
+
+    it('should handle IntervalsApiError with context', () => {
+      const intervalsError = IntervalsApiError.fromHttpStatus(404, {
+        operation: 'fetch workout',
+        resource: 'activity i123456',
+      });
+
+      expect(intervalsError.isRetryable).toBe(false);
+      expect(intervalsError.category).toBe('not_found');
+      expect(intervalsError.statusCode).toBe(404);
+      expect(intervalsError.message).toContain('i123456');
+    });
+
+    it('should include what_happened and how_to_fix in error responses', () => {
+      const error = new ApiError(
+        'Test error',
+        'not_found',
+        false,
+        { operation: 'fetch data', resource: 'activity 123' },
+        'intervals',
+        404
+      );
+
+      expect(error.getWhatHappened()).toContain('fetch data');
+      expect(error.getWhatHappened()).toContain('activity 123');
+      expect(error.getHowToFix()).toContain('Double-check');
     });
   });
 

@@ -59,7 +59,7 @@ export class PlanningTools {
 
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
-    const dateStr = parseDateStringInTimezone(date, timezone);
+    const dateStr = parseDateStringInTimezone(date, timezone, 'date');
 
     // Fetch from both sources for the specified date
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([

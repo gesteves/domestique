@@ -49,9 +49,9 @@ export class HistoricalTools {
   ): Promise<WorkoutWithWhoop[]> {
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
-    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const startDate = parseDateStringInTimezone(params.start_date, timezone, 'start_date');
     const endDate = params.end_date
-      ? parseDateStringInTimezone(params.end_date, timezone)
+      ? parseDateStringInTimezone(params.end_date, timezone, 'end_date')
       : getTodayInTimezone(timezone);
 
     try {
@@ -137,9 +137,9 @@ export class HistoricalTools {
 
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
-    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const startDate = parseDateStringInTimezone(params.start_date, timezone, 'start_date');
     const endDate = params.end_date
-      ? parseDateStringInTimezone(params.end_date, timezone)
+      ? parseDateStringInTimezone(params.end_date, timezone, 'end_date')
       : getTodayInTimezone(timezone);
 
     try {
@@ -203,9 +203,9 @@ export class HistoricalTools {
   }): Promise<WellnessTrends> {
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
-    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const startDate = parseDateStringInTimezone(params.start_date, timezone, 'start_date');
     const endDate = params.end_date
-      ? parseDateStringInTimezone(params.end_date, timezone)
+      ? parseDateStringInTimezone(params.end_date, timezone, 'end_date')
       : getTodayInTimezone(timezone);
 
     try {
@@ -359,9 +359,9 @@ export class HistoricalTools {
     compare_to_end?: string;
   }): Promise<PowerCurvesResponse> {
     const timezone = await this.intervals.getAthleteTimezone();
-    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const startDate = parseDateStringInTimezone(params.start_date, timezone, 'start_date');
     const endDate = params.end_date
-      ? parseDateStringInTimezone(params.end_date, timezone)
+      ? parseDateStringInTimezone(params.end_date, timezone, 'end_date')
       : getTodayInTimezone(timezone);
 
     const durations = params.durations || this.DEFAULT_POWER_DURATIONS;
@@ -389,8 +389,8 @@ export class HistoricalTools {
 
       // If comparison period provided, calculate comparison
       if (params.compare_to_start && params.compare_to_end) {
-        const compareStart = parseDateStringInTimezone(params.compare_to_start, timezone);
-        const compareEnd = parseDateStringInTimezone(params.compare_to_end, timezone);
+        const compareStart = parseDateStringInTimezone(params.compare_to_start, timezone, 'compare_to_start');
+        const compareEnd = parseDateStringInTimezone(params.compare_to_end, timezone, 'compare_to_end');
 
         const { durations: compareDurations, activities: compareActivities } =
           await this.intervals.getPowerCurves(
@@ -534,9 +534,9 @@ export class HistoricalTools {
     compare_to_end?: string;
   }): Promise<PaceCurvesResponse> {
     const timezone = await this.intervals.getAthleteTimezone();
-    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const startDate = parseDateStringInTimezone(params.start_date, timezone, 'start_date');
     const endDate = params.end_date
-      ? parseDateStringInTimezone(params.end_date, timezone)
+      ? parseDateStringInTimezone(params.end_date, timezone, 'end_date')
       : getTodayInTimezone(timezone);
 
     const isSwimming = params.sport === 'swimming';
@@ -572,8 +572,8 @@ export class HistoricalTools {
 
       // If comparison period provided, calculate comparison
       if (params.compare_to_start && params.compare_to_end) {
-        const compareStart = parseDateStringInTimezone(params.compare_to_start, timezone);
-        const compareEnd = parseDateStringInTimezone(params.compare_to_end, timezone);
+        const compareStart = parseDateStringInTimezone(params.compare_to_start, timezone, 'compare_to_start');
+        const compareEnd = parseDateStringInTimezone(params.compare_to_end, timezone, 'compare_to_end');
 
         const { distances: compareDistances, activities: compareActivities } =
           await this.intervals.getPaceCurves(
@@ -717,9 +717,9 @@ export class HistoricalTools {
     compare_to_end?: string;
   }): Promise<HRCurvesResponse> {
     const timezone = await this.intervals.getAthleteTimezone();
-    const startDate = parseDateStringInTimezone(params.start_date, timezone);
+    const startDate = parseDateStringInTimezone(params.start_date, timezone, 'start_date');
     const endDate = params.end_date
-      ? parseDateStringInTimezone(params.end_date, timezone)
+      ? parseDateStringInTimezone(params.end_date, timezone, 'end_date')
       : getTodayInTimezone(timezone);
 
     const durations = params.durations || this.DEFAULT_HR_DURATIONS;
@@ -753,8 +753,8 @@ export class HistoricalTools {
 
       // If comparison period provided, calculate comparison
       if (params.compare_to_start && params.compare_to_end) {
-        const compareStart = parseDateStringInTimezone(params.compare_to_start, timezone);
-        const compareEnd = parseDateStringInTimezone(params.compare_to_end, timezone);
+        const compareStart = parseDateStringInTimezone(params.compare_to_start, timezone, 'compare_to_start');
+        const compareEnd = parseDateStringInTimezone(params.compare_to_end, timezone, 'compare_to_end');
 
         const { durations: compareDurations, activities: compareActivities } =
           await this.intervals.getHRCurves(compareStart, compareEnd, type, durations);

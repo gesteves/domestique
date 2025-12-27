@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { IntervalsClient } from '../clients/intervals.js';
-import { WhoopClient, WhoopApiError } from '../clients/whoop.js';
+import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { CurrentTools } from './current.js';
 import { HistoricalTools } from './historical.js';
@@ -11,6 +11,7 @@ import {
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
 import { buildToolResponse } from '../utils/response-builder.js';
+import { ApiError, DateParseError, type ErrorCategory } from '../errors/index.js';
 
 interface ResponseOptions<TResult> {
   fieldDescriptions: Record<string, string>;
@@ -19,8 +20,85 @@ interface ResponseOptions<TResult> {
 }
 
 /**
- * Wraps a tool handler with response building and Whoop error handling.
- * Combines error handling with contextual response formatting.
+ * Get human-friendly recovery guidance based on error category.
+ */
+function getRecoveryGuidance(category: ErrorCategory): string {
+  const guidance: Record<ErrorCategory, string> = {
+    date_parse: "Try using a format like '2024-12-25', 'yesterday', '7 days ago', 'last week', or 'next Monday'.",
+    not_found: 'The requested resource does not exist. Verify the activity ID or date range is correct.',
+    authentication: 'Authentication failed. The API credentials may need to be refreshed.',
+    authorization: 'Access denied. The configured API key may not have permission for this operation.',
+    validation: 'Invalid parameters. Please check that all inputs are valid and in the expected format.',
+    rate_limit: 'Too many requests. Wait a moment before trying again.',
+    network: 'Network connectivity issue. Check internet connection and retry.',
+    service_unavailable: 'The external service is temporarily unavailable. Try again shortly.',
+    internal: 'An unexpected error occurred.',
+  };
+  return guidance[category];
+}
+
+/**
+ * Build a structured error response for LLM consumption.
+ * All errors are caught and formatted consistently.
+ */
+function buildErrorResponse(error: unknown): { content: Array<{ type: 'text'; text: string }> } {
+  // Handle DateParseError specifically for better date guidance
+  if (error instanceof DateParseError) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          error: true,
+          message: error.message,
+          what_happened: error.getWhatHappened(),
+          how_to_fix: error.getHowToFix(),
+          can_retry: false,
+          category: 'date_parse',
+          parameter: error.parameterName,
+          input_received: error.input,
+        }, null, 2),
+      }],
+    };
+  }
+
+  // Handle our unified ApiError and its subclasses
+  if (error instanceof ApiError) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          error: true,
+          message: error.message,
+          what_happened: error.getWhatHappened(),
+          how_to_fix: error.getHowToFix(),
+          can_retry: error.isRetryable,
+          category: error.category,
+          source: error.source,
+        }, null, 2),
+      }],
+    };
+  }
+
+  // Handle unknown errors
+  const message = error instanceof Error ? error.message : 'An unknown error occurred';
+  return {
+    content: [{
+      type: 'text' as const,
+      text: JSON.stringify({
+        error: true,
+        message,
+        what_happened: 'An unexpected error occurred while processing the request.',
+        how_to_fix: 'Please try again. If the issue persists, there may be a problem with the service.',
+        can_retry: true,
+        category: 'internal',
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Wraps a tool handler with response building and comprehensive error handling.
+ * Catches all errors and formats them consistently for LLM consumption.
  */
 function withToolResponse<TArgs, TResult>(
   handler: (args: TArgs) => Promise<TResult>,
@@ -36,20 +114,7 @@ function withToolResponse<TArgs, TResult>(
         warnings: options.getWarnings?.(data),
       });
     } catch (error) {
-      if (error instanceof WhoopApiError && error.isRetryable) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              error: true,
-              retryable: true,
-              message: error.message,
-              suggestion: 'This is a temporary issue. Please retry this tool call.',
-            }, null, 2),
-          }],
-        };
-      }
-      throw error;
+      return buildErrorResponse(error);
     }
   };
 }
