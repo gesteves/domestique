@@ -101,7 +101,6 @@ export interface NormalizedWorkout {
 
   // Threshold pace for this activity
   threshold_pace?: string; // Human-readable, e.g., "4:00/km"
-  pace_units?: string; // "MINS_KM", "SECS_100M", etc.
 
   // Zone thresholds used for this activity (normalized with names and time in zone)
   hr_zones?: HRZone[];
@@ -381,7 +380,6 @@ export interface SportSettings {
 
   // Pace thresholds
   threshold_pace?: string; // e.g., "4:00/km" or "1:30/100m"
-  pace_units?: string;
 
   // Power zones (merged with names and values)
   power_zones?: PowerZone[];
@@ -419,11 +417,6 @@ export interface SportSettingsResponse {
   types: string[];
   /** The sport-specific settings */
   settings: SportSettings;
-  /**
-   * User's preferred unit system for displaying data.
-   * CRITICAL: The LLM MUST use these units when responding to the user.
-   */
-  unit_preferences: UnitPreferences;
 }
 
 // ============================================

@@ -519,7 +519,7 @@ export class IntervalsClient {
   /**
    * Get sport settings for a specific sport.
    * @param sport - "cycling", "running", or "swimming"
-   * @returns Sport settings with unit preferences, or null if not found
+   * @returns Sport settings, or null if not found
    */
   async getSportSettingsForSport(sport: 'cycling' | 'running' | 'swimming'): Promise<SportSettingsResponse | null> {
     // Map sport names to Intervals.icu activity types
@@ -540,13 +540,11 @@ export class IntervalsClient {
     for (const settings of sportSettings) {
       if (settings.types.some(t => activityTypes.includes(t))) {
         const normalized = this.normalizeSportSettings(settings);
-        const unitPreferences = await this.getUnitPreferences();
 
         return {
           sport,
           types: settings.types,
           settings: normalized,
-          unit_preferences: unitPreferences,
         };
       }
     }
@@ -623,7 +621,6 @@ export class IntervalsClient {
       // Convert to actual pace (time per distance) for display
       const paceValue = this.convertToPaceValue(settings.threshold_pace, settings.pace_units);
       result.threshold_pace = this.formatPaceValue(paceValue, settings.pace_units);
-      result.pace_units = settings.pace_units;
     }
 
     // Power zones
@@ -1641,7 +1638,6 @@ export class IntervalsClient {
 
       // Threshold pace
       threshold_pace: thresholdPaceHuman,
-      pace_units: paceUnits,
 
       // Zone thresholds (normalized with names and time in zone)
       hr_zones: hrZones,

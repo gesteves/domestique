@@ -218,12 +218,6 @@ export const SPORT_SETTINGS_FIELD_DESCRIPTIONS = {
   types: 'Activity types this sport setting applies to (e.g., ["Ride", "VirtualRide", "GravelRide"])',
   settings: 'The sport-specific settings object containing thresholds and zones',
 
-  // Unit preferences - included in response for LLM guidance
-  unit_preferences: 'User\'s preferred unit system. You MUST use these units in all responses to the user.',
-  system: 'Base unit system: "metric" or "imperial".',
-  weight: 'Weight unit: "kg" or "lb".',
-  temperature: 'Temperature unit: "celsius" or "fahrenheit".',
-
   // Power thresholds
   ftp: 'Functional Threshold Power in watts',
   indoor_ftp: 'Indoor-specific FTP in watts (only shown if different from outdoor FTP)',
@@ -237,7 +231,6 @@ export const SPORT_SETTINGS_FIELD_DESCRIPTIONS = {
 
   // Pace thresholds
   threshold_pace: 'Threshold pace in human-readable format (e.g., "4:10/km" or "2:00/100m")',
-  pace_units: 'Units for all pace values: MINS_KM (minutes per kilometer, running) or SECS_100M (seconds per 100 meters, swimming)',
 
   // Power zones
   power_zones: 'Array of current power zone objects for the athlete. Each object contains: name (e.g., "Active Recovery", "Endurance"), low_percent, high_percent (null for highest zone), low_watts, and high_watts (null for highest zone).',

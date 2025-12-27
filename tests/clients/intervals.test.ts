@@ -1243,18 +1243,10 @@ describe('IntervalsClient', () => {
 
   describe('getSportSettingsForSport', () => {
     it('should return cycling settings', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockSportSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            id: 'i12345',
-            measurement_preference: 'meters',
-          }),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
 
       const result = await client.getSportSettingsForSport('cycling');
 
@@ -1262,22 +1254,13 @@ describe('IntervalsClient', () => {
       expect(result?.sport).toBe('cycling');
       expect(result?.types).toContain('Ride');
       expect(result?.settings).toBeDefined();
-      expect(result?.unit_preferences).toBeDefined();
     });
 
     it('should return running settings', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockSportSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            id: 'i12345',
-            measurement_preference: 'meters',
-          }),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
 
       const result = await client.getSportSettingsForSport('running');
 
@@ -1312,18 +1295,10 @@ describe('IntervalsClient', () => {
         power_zones: [55, 75, 90, 105, 120],
       }];
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(cyclingSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            id: 'i12345',
-            measurement_preference: 'meters',
-          }),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(cyclingSettings),
+      });
 
       const result = await client.getSportSettingsForSport('cycling');
 
