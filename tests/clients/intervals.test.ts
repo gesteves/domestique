@@ -1739,6 +1739,271 @@ describe('IntervalsClient', () => {
     });
   });
 
+  describe('stream_types optimization', () => {
+    it('should fetch heat metrics when heat_strain_index is in stream_types', async () => {
+      const mockActivity = {
+        id: 'i113367711',
+        start_date_local: '2025-12-22T16:54:12',
+        start_date: '2025-12-22T23:54:12Z',
+        type: 'VirtualRide',
+        name: 'Test Ride',
+        moving_time: 3600,
+        distance: 30000,
+        stream_types: ['time', 'watts', 'heartrate', 'heat_strain_index'],
+      };
+
+      const mockHeatStreams = [
+        { type: 'time', data: [0, 1, 2, 3, 4] },
+        { type: 'heat_strain_index', data: [1.0, 2.0, 3.0, 4.0, 5.0] },
+      ];
+
+      // First call: get activity
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivity),
+      });
+
+      // Second call: sport settings
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
+
+      // Third call: heat metrics streams (should be called)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockHeatStreams),
+      });
+
+      const result = await client.getActivity('i113367711');
+
+      // Heat metrics should be present
+      expect(result.max_heat_strain_index).toBeDefined();
+      expect(result.median_heat_strain_index).toBeDefined();
+      expect(result.heat_training_load).toBeDefined();
+
+      // Should have made 3 fetch calls (activity + sport-settings + heat streams)
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      const heatStreamUrl = mockFetch.mock.calls[2][0] as string;
+      expect(heatStreamUrl).toContain('/streams');
+      expect(heatStreamUrl).toContain('heat_strain_index');
+    });
+
+    it('should skip heat metrics fetch when heat_strain_index is not in stream_types', async () => {
+      const mockActivity = {
+        id: 'i113367711',
+        start_date_local: '2025-12-22T16:54:12',
+        start_date: '2025-12-22T23:54:12Z',
+        type: 'VirtualRide',
+        name: 'Test Ride',
+        moving_time: 3600,
+        distance: 30000,
+        stream_types: ['time', 'watts', 'heartrate'], // No heat_strain_index
+      };
+
+      // First call: get activity
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivity),
+      });
+
+      // Second call: sport settings
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
+
+      const result = await client.getActivity('i113367711');
+
+      // Heat metrics should be undefined
+      expect(result.max_heat_strain_index).toBeUndefined();
+      expect(result.median_heat_strain_index).toBeUndefined();
+      expect(result.heat_training_load).toBeUndefined();
+
+      // Should only have made 2 fetch calls (activity + sport-settings, no heat streams)
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should fetch temperature metrics when temp is in stream_types', async () => {
+      const mockActivity = {
+        id: 'i113367711',
+        start_date_local: '2025-12-22T16:54:12',
+        start_date: '2025-12-22T23:54:12Z',
+        type: 'Run',
+        name: 'Test Run',
+        moving_time: 3600,
+        distance: 10000,
+        stream_types: ['time', 'heartrate', 'temp'],
+      };
+
+      const mockTempStreams = [
+        { type: 'time', data: [0, 1, 2, 3, 4] },
+        { type: 'temp', data: [18.0, 19.0, 20.0, 21.0, 22.0] },
+      ];
+
+      // First call: get activity
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivity),
+      });
+
+      // Second call: sport settings
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
+
+      // Third call: temperature metrics streams (should be called)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockTempStreams),
+      });
+
+      const result = await client.getActivity('i113367711');
+
+      // Temperature metrics should be present
+      expect(result.min_ambient_temperature).toBeDefined();
+      expect(result.max_ambient_temperature).toBeDefined();
+      expect(result.median_ambient_temperature).toBeDefined();
+      expect(result.start_ambient_temperature).toBeDefined();
+      expect(result.end_ambient_temperature).toBeDefined();
+
+      // Should have made 3 fetch calls (activity + sport-settings + temp streams)
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      const tempStreamUrl = mockFetch.mock.calls[2][0] as string;
+      expect(tempStreamUrl).toContain('/streams');
+      expect(tempStreamUrl).toContain('temp');
+    });
+
+    it('should skip temperature metrics fetch when temp is not in stream_types', async () => {
+      const mockActivity = {
+        id: 'i113367711',
+        start_date_local: '2025-12-22T16:54:12',
+        start_date: '2025-12-22T23:54:12Z',
+        type: 'VirtualRide',
+        name: 'Test Ride',
+        moving_time: 3600,
+        distance: 30000,
+        trainer: true, // Indoor activity
+        stream_types: ['time', 'watts', 'heartrate'], // No temp
+      };
+
+      // First call: get activity
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivity),
+      });
+
+      // Second call: sport settings
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
+
+      const result = await client.getActivity('i113367711');
+
+      // Temperature metrics should be undefined
+      expect(result.min_ambient_temperature).toBeUndefined();
+      expect(result.max_ambient_temperature).toBeUndefined();
+      expect(result.median_ambient_temperature).toBeUndefined();
+      expect(result.start_ambient_temperature).toBeUndefined();
+      expect(result.end_ambient_temperature).toBeUndefined();
+
+      // Should only have made 2 fetch calls (activity + sport-settings, no temp streams)
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should fetch both heat and temp when both are in stream_types', async () => {
+      const mockActivity = {
+        id: 'i113367711',
+        start_date_local: '2025-12-22T16:54:12',
+        start_date: '2025-12-22T23:54:12Z',
+        type: 'Run',
+        name: 'Test Run',
+        moving_time: 3600,
+        distance: 10000,
+        stream_types: ['time', 'heartrate', 'temp', 'heat_strain_index'],
+      };
+
+      const mockHeatStreams = [
+        { type: 'time', data: [0, 1, 2] },
+        { type: 'heat_strain_index', data: [1.0, 2.0, 3.0] },
+      ];
+
+      const mockTempStreams = [
+        { type: 'time', data: [0, 1, 2] },
+        { type: 'temp', data: [20.0, 21.0, 22.0] },
+      ];
+
+      // First call: get activity
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivity),
+      });
+
+      // Second call: sport settings
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
+
+      // Third call: heat metrics streams
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockHeatStreams),
+      });
+
+      // Fourth call: temperature metrics streams
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockTempStreams),
+      });
+
+      const result = await client.getActivity('i113367711');
+
+      // Both heat and temperature metrics should be present
+      expect(result.max_heat_strain_index).toBeDefined();
+      expect(result.min_ambient_temperature).toBeDefined();
+
+      // Should have made 4 fetch calls (activity + sport-settings + heat streams + temp streams)
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    it('should handle missing stream_types field gracefully', async () => {
+      const mockActivity = {
+        id: 'i113367711',
+        start_date_local: '2025-12-22T16:54:12',
+        start_date: '2025-12-22T23:54:12Z',
+        type: 'VirtualRide',
+        name: 'Test Ride',
+        moving_time: 3600,
+        distance: 30000,
+        // stream_types field is missing
+      };
+
+      // First call: get activity
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockActivity),
+      });
+
+      // Second call: sport settings
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockSportSettings),
+      });
+
+      const result = await client.getActivity('i113367711');
+
+      // Metrics should be undefined when stream_types is missing
+      expect(result.max_heat_strain_index).toBeUndefined();
+      expect(result.min_ambient_temperature).toBeUndefined();
+
+      // Should only have made 2 fetch calls (activity + sport-settings, no streams)
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('getActivityIntervals with temperature metrics', () => {
     it('should include temperature metrics in intervals when temperature data is available', async () => {
       const mockIntervalsResponse = {

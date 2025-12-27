@@ -234,6 +234,9 @@ interface IntervalsActivity {
 
   // API availability note (present when activity data is not available)
   _note?: string; // e.g., "STRAVA activities are not available via the API"
+
+  // Stream types available for this activity
+  stream_types?: string[]; // e.g., ["time", "watts", "heartrate", "temp", "heat_strain_index"]
 }
 
 interface IntervalsWellness {
@@ -1545,11 +1548,17 @@ export class IntervalsClient {
       activity.pace_zone_times
     );
 
-    // Fetch heat metrics from stream data
-    const heatMetrics = await this.getActivityHeatMetrics(activity.id);
+    // Fetch heat metrics from stream data only if heat_strain_index stream is available
+    let heatMetrics = null;
+    if (activity.stream_types?.includes('heat_strain_index')) {
+      heatMetrics = await this.getActivityHeatMetrics(activity.id);
+    }
 
-    // Fetch temperature metrics from stream data
-    const tempMetrics = await this.getActivityTemperatureMetrics(activity.id);
+    // Fetch temperature metrics from stream data only if temp stream is available
+    let tempMetrics = null;
+    if (activity.stream_types?.includes('temp')) {
+      tempMetrics = await this.getActivityTemperatureMetrics(activity.id);
+    }
 
     return {
       id: activity.id,
