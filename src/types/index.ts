@@ -125,6 +125,10 @@ export interface NormalizedWorkout {
   average_stride_m?: number; // meters per stride
   gap?: string; // Gradient adjusted pace, e.g., "4:30/km"
 
+  // Swimming metrics
+  pool_length?: number; // Pool length in meters
+  lengths?: number; // Number of lengths swam
+
   // Altitude
   average_altitude_m?: number;
   min_altitude_m?: number;

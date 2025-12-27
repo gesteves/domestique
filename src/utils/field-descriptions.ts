@@ -84,6 +84,10 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   average_stride_m: 'Average stride length in meters',
   gap: 'Gradient Adjusted Pace',
 
+  // Swimming specific
+  pool_length: 'Length of the pool in meters',
+  lengths: 'Number of pool lengths swum',
+
   // Activity context
   is_indoor: 'Whether activity was indoor',
   is_commute: 'Whether activity was marked as a commute',
