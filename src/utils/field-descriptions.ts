@@ -97,9 +97,9 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   // Heat training data
   heat_zones: 'Array of heat zone objects. Each object contains: name (e.g., "Zone 1: No Heat Strain", "Zone 2: Moderate Heat Strain"), low_heat_strain_index, high_heat_strain_index (null for highest zone), and time_in_zone (human-readable duration). Heat zones are based on the Heat Strain Index (HSI) and are only present if heat strain data from a CORE body temperature sensor is available for the activity.',
 
-  max_heat_strain_index: 'Maximum Heat Strain Index (HSI) reached during the activity. Only present if heat strain data is available from a CORE body temperature sensor.',
-  median_heat_strain_index: 'Median Heat Strain Index (HSI) throughout the activity. Only present if heat strain data is available from a CORE body temperature sensor.',
-  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Higher scores indicate greater adaptation stimulus. Based on time spent at elevated HSI levels. Only present if heat strain data is available from a CORE body temperature sensor. HTL is calculated using a weighted approach where Zone 3 (HSI 3-6.9) provides optimal training stimulus, Zone 2 (HSI 1-2.9) provides partial benefit, Zone 1 (HSI 0-0.9) provides no benefit, and Zone 4 (HSI 7+) is penalized as it\'s dangerous. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
+  max_heat_strain_index: 'Maximum Heat Strain Index (HSI) reached during the activity, recorded by a CORE body temperature sensor.',
+  median_heat_strain_index: 'Median Heat Strain Index (HSI) throughout the activity, recorded by a CORE body temperature sensor.',
+  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Higher scores indicate greater adaptation stimulus. HTL is calculated using a weighted approach where Zone 3 (HSI 3-6.9) provides optimal training stimulus, Zone 2 (HSI 1-2.9) provides partial benefit, Zone 1 (HSI 0-0.9) provides no benefit, and Zone 4 (HSI 7+) is penalized as it\'s dangerous. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
 
   // Ambient temperature data
   min_ambient_temperature: 'Minimum ambient temperature (water temperature for swimming, air temperature for other activities) during the activity in Celsius, recorded by the user\'s watch or bike computer.',
