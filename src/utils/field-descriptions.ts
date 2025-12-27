@@ -57,7 +57,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   coasting_percentage: 'Percentage of ride time spent coasting',
 
   // Subjective
-  rpe: 'Rate of Perceived Exertion (1-10 scale)',
+  rpe: 'Rate of Perceived Exertion (1-10 scale, 1 = Nothing at all, 2 = Very easy, 3 = Easy, 4 = Comfortable, 5 = Slightly challenging, 6 = Difficult, 7 = Hard, 8 = Very hard, 9 = Extremely hard, 10 = Max effort)',
   feel: 'How the athlete felt (1-5 scale, 1 = strong, 2 = good, 3 = normal, 4 = poor, 5 = weak)',
 
   // Fitness snapshot
