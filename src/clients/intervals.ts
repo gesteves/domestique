@@ -1106,7 +1106,7 @@ export class IntervalsClient {
   async getActivityHeatMetrics(activityId: string): Promise<{
     zones: HeatZone[];
     max_heat_strain_index: number;
-    avg_heat_strain_index: number;
+    median_heat_strain_index: number;
     heat_training_load: number;
   } | null> {
     try {
@@ -1139,7 +1139,7 @@ export class IntervalsClient {
   async getActivityTemperatureMetrics(activityId: string): Promise<{
     min_ambient_temperature: number;
     max_ambient_temperature: number;
-    avg_ambient_temperature: number;
+    median_ambient_temperature: number;
     start_ambient_temperature: number;
     end_ambient_temperature: number;
   } | null> {
@@ -1183,7 +1183,7 @@ export class IntervalsClient {
       | {
           min_heat_strain_index: number;
           max_heat_strain_index: number;
-          avg_heat_strain_index: number;
+          median_heat_strain_index: number;
           start_heat_strain_index: number;
           end_heat_strain_index: number;
         }
@@ -1215,12 +1215,18 @@ export class IntervalsClient {
       if (intervalHSI.length > 0) {
         const minHSI = Math.min(...intervalHSI);
         const maxHSI = Math.max(...intervalHSI);
-        const avgHSI = intervalHSI.reduce((sum, hsi) => sum + hsi, 0) / intervalHSI.length;
+
+        // Calculate median HSI
+        const sorted = [...intervalHSI].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const medianHSI = sorted.length % 2 === 0
+          ? (sorted[mid - 1] + sorted[mid]) / 2
+          : sorted[mid];
 
         heatMetrics = {
           min_heat_strain_index: Math.round(minHSI * 10) / 10,
           max_heat_strain_index: Math.round(maxHSI * 10) / 10,
-          avg_heat_strain_index: Math.round(avgHSI * 10) / 10,
+          median_heat_strain_index: Math.round(medianHSI * 10) / 10,
           start_heat_strain_index: startHSI !== undefined ? Math.round(startHSI * 10) / 10 : 0,
           end_heat_strain_index: endHSI !== undefined ? Math.round(endHSI * 10) / 10 : 0,
         };
@@ -1232,7 +1238,7 @@ export class IntervalsClient {
       | {
           min_ambient_temperature: number;
           max_ambient_temperature: number;
-          avg_ambient_temperature: number;
+          median_ambient_temperature: number;
           start_ambient_temperature: number;
           end_ambient_temperature: number;
         }
@@ -1264,12 +1270,18 @@ export class IntervalsClient {
       if (intervalTemp.length > 0) {
         const minTemp = Math.min(...intervalTemp);
         const maxTemp = Math.max(...intervalTemp);
-        const avgTemp = intervalTemp.reduce((sum, temp) => sum + temp, 0) / intervalTemp.length;
+
+        // Calculate median (more robust to outliers)
+        const sorted = [...intervalTemp].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const medianTemp = sorted.length % 2 === 0
+          ? (sorted[mid - 1] + sorted[mid]) / 2
+          : sorted[mid];
 
         tempMetrics = {
           min_ambient_temperature: Math.round(minTemp * 10) / 10,
           max_ambient_temperature: Math.round(maxTemp * 10) / 10,
-          avg_ambient_temperature: Math.round(avgTemp * 10) / 10,
+          median_ambient_temperature: Math.round(medianTemp * 10) / 10,
           start_ambient_temperature: startTemp !== undefined ? Math.round(startTemp * 10) / 10 : 0,
           end_ambient_temperature: endTemp !== undefined ? Math.round(endTemp * 10) / 10 : 0,
         };
@@ -1639,13 +1651,13 @@ export class IntervalsClient {
 
       // Heat metrics
       max_heat_strain_index: heatMetrics?.max_heat_strain_index,
-      avg_heat_strain_index: heatMetrics?.avg_heat_strain_index,
+      median_heat_strain_index: heatMetrics?.median_heat_strain_index,
       heat_training_load: heatMetrics?.heat_training_load,
 
       // Temperature metrics
       min_ambient_temperature: tempMetrics?.min_ambient_temperature,
       max_ambient_temperature: tempMetrics?.max_ambient_temperature,
-      avg_ambient_temperature: tempMetrics?.avg_ambient_temperature,
+      median_ambient_temperature: tempMetrics?.median_ambient_temperature,
       start_ambient_temperature: tempMetrics?.start_ambient_temperature,
       end_ambient_temperature: tempMetrics?.end_ambient_temperature,
 

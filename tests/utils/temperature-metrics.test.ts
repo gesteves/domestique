@@ -105,10 +105,10 @@ describe('temperature-metrics', () => {
       expect(metrics.start_ambient_temperature).toBe(18.5);
       expect(metrics.end_ambient_temperature).toBe(23.0);
 
-      // Average should be sum / count, then rounded to 1 decimal
-      // (18.5 + 19.0 + 19.5 + 20.0 + 20.5 + 21.0 + 21.5 + 22.0 + 22.5 + 23.0) / 10 = 207.5 / 10 = 20.75
+      // Median of [18.5, 19.0, 19.5, 20.0, 20.5, 21.0, 21.5, 22.0, 22.5, 23.0] (sorted)
+      // Even number of elements (10), so median = (20.5 + 21.0) / 2 = 20.75
       // Rounded to 1 decimal: Math.round(20.75 * 10) / 10 = 20.8
-      expect(metrics.avg_ambient_temperature).toBe(20.8);
+      expect(metrics.median_ambient_temperature).toBe(20.8);
     });
 
     it('should handle single value correctly', () => {
@@ -119,7 +119,7 @@ describe('temperature-metrics', () => {
 
       expect(metrics.min_ambient_temperature).toBe(20.5);
       expect(metrics.max_ambient_temperature).toBe(20.5);
-      expect(metrics.avg_ambient_temperature).toBe(20.5);
+      expect(metrics.median_ambient_temperature).toBe(20.5);
       expect(metrics.start_ambient_temperature).toBe(20.5);
       expect(metrics.end_ambient_temperature).toBe(20.5);
     });
@@ -133,7 +133,7 @@ describe('temperature-metrics', () => {
       // Check that values are rounded to 1 decimal
       expect(metrics.min_ambient_temperature.toString()).toMatch(/^\d+\.\d$/);
       expect(metrics.max_ambient_temperature.toString()).toMatch(/^\d+\.\d$/);
-      expect(metrics.avg_ambient_temperature.toString()).toMatch(/^\d+\.\d$/);
+      expect(metrics.median_ambient_temperature.toString()).toMatch(/^\d+\.\d$/);
       expect(metrics.start_ambient_temperature.toString()).toMatch(/^\d+\.\d$/);
       expect(metrics.end_ambient_temperature.toString()).toMatch(/^\d+\.\d$/);
     });
@@ -146,7 +146,7 @@ describe('temperature-metrics', () => {
 
       expect(metrics.min_ambient_temperature).toBe(0);
       expect(metrics.max_ambient_temperature).toBe(0);
-      expect(metrics.avg_ambient_temperature).toBe(0);
+      expect(metrics.median_ambient_temperature).toBe(0);
       expect(metrics.start_ambient_temperature).toBe(0);
       expect(metrics.end_ambient_temperature).toBe(0);
     });
@@ -162,8 +162,8 @@ describe('temperature-metrics', () => {
       expect(metrics.start_ambient_temperature).toBe(-2.5);
       expect(metrics.end_ambient_temperature).toBe(3.0);
 
-      const expectedAvg = (-2.5 + -1.0 + 0.0 + 1.5 + 3.0) / 5;
-      expect(metrics.avg_ambient_temperature).toBeCloseTo(expectedAvg, 1);
+      // Median of [-2.5, -1.0, 0.0, 1.5, 3.0] = 0.0
+      expect(metrics.median_ambient_temperature).toBe(0.0);
     });
 
     it('should handle mixed positive and negative temperatures', () => {
@@ -177,8 +177,8 @@ describe('temperature-metrics', () => {
       expect(metrics.start_ambient_temperature).toBe(5.0);
       expect(metrics.end_ambient_temperature).toBe(2.0);
 
-      const expectedAvg = (5.0 + -3.0 + 2.0) / 3;
-      expect(metrics.avg_ambient_temperature).toBeCloseTo(expectedAvg, 1);
+      // Median of [5.0, -3.0, 2.0] sorted = [-3.0, 2.0, 5.0] = 2.0
+      expect(metrics.median_ambient_temperature).toBe(2.0);
     });
 
     it('should throw error when arrays have different lengths', () => {

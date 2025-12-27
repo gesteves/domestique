@@ -12,7 +12,7 @@ interface StreamDataPoint {
 export interface TemperatureMetrics {
   min_ambient_temperature: number;
   max_ambient_temperature: number;
-  avg_ambient_temperature: number;
+  median_ambient_temperature: number;
   start_ambient_temperature: number;
   end_ambient_temperature: number;
 }
@@ -44,7 +44,7 @@ export function parseTemperatureStreams(
  *
  * @param timeData - Array of time values in seconds
  * @param tempData - Array of temperature values in Celsius (aligned with timeData)
- * @returns Temperature metrics including min, max, avg, start, and end
+ * @returns Temperature metrics including min, max, median, start, and end
  */
 export function calculateTemperatureMetrics(
   timeData: number[],
@@ -58,10 +58,16 @@ export function calculateTemperatureMetrics(
   const minTemp = tempData.length > 0 ? Math.min(...tempData) : 0;
   const maxTemp = tempData.length > 0 ? Math.max(...tempData) : 0;
 
-  // Calculate average temperature
-  const avgTemp = tempData.length > 0
-    ? tempData.reduce((sum, temp) => sum + temp, 0) / tempData.length
-    : 0;
+  // Calculate median temperature
+  // Median is more robust to outliers and brief temperature changes (e.g., air temp during transitions)
+  let medianTemp = 0;
+  if (tempData.length > 0) {
+    const sorted = [...tempData].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    medianTemp = sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  }
 
   // Start is first value, end is last value
   const startTemp = tempData.length > 0 ? tempData[0] : 0;
@@ -70,7 +76,7 @@ export function calculateTemperatureMetrics(
   return {
     min_ambient_temperature: Math.round(minTemp * 10) / 10, // Round to 1 decimal
     max_ambient_temperature: Math.round(maxTemp * 10) / 10, // Round to 1 decimal
-    avg_ambient_temperature: Math.round(avgTemp * 10) / 10, // Round to 1 decimal
+    median_ambient_temperature: Math.round(medianTemp * 10) / 10, // Round to 1 decimal
     start_ambient_temperature: Math.round(startTemp * 10) / 10, // Round to 1 decimal
     end_ambient_temperature: Math.round(endTemp * 10) / 10, // Round to 1 decimal
   };

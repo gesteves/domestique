@@ -224,9 +224,11 @@ describe('heat-zones', () => {
       // Check max HSI
       expect(metrics.max_heat_strain_index).toBe(9.0);
 
-      // Check avg HSI
-      const expectedAvg = (0.5 + 0.8 + 1.5 + 2.0 + 3.5 + 5.0 + 6.0 + 7.5 + 8.0 + 9.0) / 10;
-      expect(metrics.avg_heat_strain_index).toBeCloseTo(expectedAvg, 1);
+      // Check median HSI
+      // Data: [0.5, 0.8, 1.5, 2.0, 3.5, 5.0, 6.0, 7.5, 8.0, 9.0] (sorted)
+      // Even number (10), so median = (3.5 + 5.0) / 2 = 4.25
+      // Rounded to 1 decimal: Math.round(4.25 * 10) / 10 = 4.3
+      expect(metrics.median_heat_strain_index).toBe(4.3);
 
       // Check HTL (should be > 0 since we have time in multiple zones)
       expect(metrics.heat_training_load).toBeGreaterThan(0);
@@ -281,7 +283,7 @@ describe('heat-zones', () => {
       const metrics = calculateHeatMetrics(timeData, heatStrainData);
 
       expect(metrics.max_heat_strain_index).toBe(0);
-      expect(metrics.avg_heat_strain_index).toBe(0);
+      expect(metrics.median_heat_strain_index).toBe(0);
       expect(metrics.heat_training_load).toBe(0);
       expect(metrics.zones).toHaveLength(4);
     });
@@ -294,7 +296,7 @@ describe('heat-zones', () => {
 
       // Check that values are rounded to 1 decimal
       expect(metrics.max_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
-      expect(metrics.avg_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
+      expect(metrics.median_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
       expect(metrics.heat_training_load.toString()).toMatch(/^\d+\.\d$/);
     });
   });

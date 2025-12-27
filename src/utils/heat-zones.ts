@@ -42,7 +42,7 @@ interface StreamDataPoint {
 export interface HeatMetrics {
   zones: HeatZone[];
   max_heat_strain_index: number;
-  avg_heat_strain_index: number;
+  median_heat_strain_index: number;
   heat_training_load: number;
 }
 
@@ -111,10 +111,15 @@ export function calculateHeatMetrics(
   // Calculate max HSI
   const maxHSI = heatStrainData.length > 0 ? Math.max(...heatStrainData) : 0;
 
-  // Calculate average HSI
-  const avgHSI = heatStrainData.length > 0
-    ? heatStrainData.reduce((sum, hsi) => sum + hsi, 0) / heatStrainData.length
-    : 0;
+  // Calculate median HSI
+  let medianHSI = 0;
+  if (heatStrainData.length > 0) {
+    const sorted = [...heatStrainData].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    medianHSI = sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  }
 
   // Calculate heat training load (HTL)
   // Based on CORE documentation: HTL ranges from 0-10 and is based on time at elevated HSI
@@ -127,7 +132,7 @@ export function calculateHeatMetrics(
   return {
     zones,
     max_heat_strain_index: Math.round(maxHSI * 10) / 10, // Round to 1 decimal
-    avg_heat_strain_index: Math.round(avgHSI * 10) / 10, // Round to 1 decimal
+    median_heat_strain_index: Math.round(medianHSI * 10) / 10, // Round to 1 decimal
     heat_training_load: Math.round(htl * 10) / 10, // Round to 1 decimal
   };
 }

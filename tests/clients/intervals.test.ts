@@ -1360,7 +1360,7 @@ describe('IntervalsClient', () => {
       expect(result?.zones).toHaveLength(4);
       expect(result?.zones[0].name).toBe('Zone 1: No Heat Strain');
       expect(result?.max_heat_strain_index).toBe(9.0);
-      expect(result?.avg_heat_strain_index).toBeGreaterThan(0);
+      expect(result?.median_heat_strain_index).toBeGreaterThan(0);
       expect(result?.heat_training_load).toBeGreaterThan(0);
       expect(result?.heat_training_load).toBeLessThanOrEqual(10);
     });
@@ -1425,8 +1425,8 @@ describe('IntervalsClient', () => {
       expect(result?.max_ambient_temperature).toBe(23.0);
       expect(result?.start_ambient_temperature).toBe(18.5);
       expect(result?.end_ambient_temperature).toBe(23.0);
-      expect(result?.avg_ambient_temperature).toBeGreaterThan(18);
-      expect(result?.avg_ambient_temperature).toBeLessThan(24);
+      expect(result?.median_ambient_temperature).toBeGreaterThan(18);
+      expect(result?.median_ambient_temperature).toBeLessThan(24);
     });
 
     it('should return null when temperature data is not available', async () => {
@@ -1619,7 +1619,8 @@ describe('IntervalsClient', () => {
       const interval1 = result.intervals[0];
       expect(interval1.min_heat_strain_index).toBe(2.0);
       expect(interval1.max_heat_strain_index).toBe(5.0);
-      expect(interval1.avg_heat_strain_index).toBe(3.3); // (2+3+4+5+2.5)/5 = 16.5/5 = 3.3
+      // Median of [2.0, 3.0, 4.0, 5.0, 2.5] sorted = [2.0, 2.5, 3.0, 4.0, 5.0] = 3.0
+      expect(interval1.median_heat_strain_index).toBe(3.0);
       expect(interval1.start_heat_strain_index).toBe(2.0);
       expect(interval1.end_heat_strain_index).toBe(2.5);
 
@@ -1628,7 +1629,8 @@ describe('IntervalsClient', () => {
       const interval2 = result.intervals[1];
       expect(interval2.min_heat_strain_index).toBe(0.5);
       expect(interval2.max_heat_strain_index).toBe(2.5);
-      expect(interval2.avg_heat_strain_index).toBe(1.5); // (2.5+1.5+0.5)/3
+      // Median of [2.5, 1.5, 0.5] sorted = [0.5, 1.5, 2.5] = 1.5
+      expect(interval2.median_heat_strain_index).toBe(1.5);
       expect(interval2.start_heat_strain_index).toBe(2.5);
       expect(interval2.end_heat_strain_index).toBe(0.5);
     });
@@ -1679,7 +1681,7 @@ describe('IntervalsClient', () => {
       const interval = result.intervals[0];
       expect(interval.min_heat_strain_index).toBeUndefined();
       expect(interval.max_heat_strain_index).toBeUndefined();
-      expect(interval.avg_heat_strain_index).toBeUndefined();
+      expect(interval.median_heat_strain_index).toBeUndefined();
       expect(interval.start_heat_strain_index).toBeUndefined();
       expect(interval.end_heat_strain_index).toBeUndefined();
     });
@@ -1725,7 +1727,7 @@ describe('IntervalsClient', () => {
       const interval = result.intervals[0];
       expect(interval.min_heat_strain_index).toBeUndefined();
       expect(interval.max_heat_strain_index).toBeUndefined();
-      expect(interval.avg_heat_strain_index).toBeUndefined();
+      expect(interval.median_heat_strain_index).toBeUndefined();
     });
 
     it('should handle heat stream fetch failure gracefully', async () => {
@@ -1824,7 +1826,7 @@ describe('IntervalsClient', () => {
       const interval1 = result.intervals[0];
       expect(interval1.min_ambient_temperature).toBe(19.0);
       expect(interval1.max_ambient_temperature).toBe(23.0);
-      expect(interval1.avg_ambient_temperature).toBe(21.0); // (19+20+21+22+23)/5 = 105/5 = 21.0
+      expect(interval1.median_ambient_temperature).toBe(21.0); // Median of [19, 20, 21, 22, 23] = 21.0
       expect(interval1.start_ambient_temperature).toBe(19.0);
       expect(interval1.end_ambient_temperature).toBe(23.0);
 
@@ -1833,7 +1835,7 @@ describe('IntervalsClient', () => {
       const interval2 = result.intervals[1];
       expect(interval2.min_ambient_temperature).toBe(22.0);
       expect(interval2.max_ambient_temperature).toBe(23.0);
-      expect(interval2.avg_ambient_temperature).toBe(22.5); // (23.0+22.5+22.0)/3 = 67.5/3 = 22.5
+      expect(interval2.median_ambient_temperature).toBe(22.5); // Median of [23.0, 22.5, 22.0] sorted = [22.0, 22.5, 23.0] = 22.5
       expect(interval2.start_ambient_temperature).toBe(23.0);
       expect(interval2.end_ambient_temperature).toBe(22.0);
     });
@@ -1884,7 +1886,7 @@ describe('IntervalsClient', () => {
       const interval = result.intervals[0];
       expect(interval.min_ambient_temperature).toBeUndefined();
       expect(interval.max_ambient_temperature).toBeUndefined();
-      expect(interval.avg_ambient_temperature).toBeUndefined();
+      expect(interval.median_ambient_temperature).toBeUndefined();
       expect(interval.start_ambient_temperature).toBeUndefined();
       expect(interval.end_ambient_temperature).toBeUndefined();
     });
@@ -1930,7 +1932,7 @@ describe('IntervalsClient', () => {
       const interval = result.intervals[0];
       expect(interval.min_ambient_temperature).toBeUndefined();
       expect(interval.max_ambient_temperature).toBeUndefined();
-      expect(interval.avg_ambient_temperature).toBeUndefined();
+      expect(interval.median_ambient_temperature).toBeUndefined();
     });
 
     it('should handle temperature stream with negative values (cold water)', async () => {

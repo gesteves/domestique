@@ -111,13 +111,13 @@ export interface NormalizedWorkout {
 
   // Heat metrics
   max_heat_strain_index?: number; // Maximum heat strain index during the activity
-  avg_heat_strain_index?: number; // Average heat strain index during the activity
+  median_heat_strain_index?: number; // Median heat strain index during the activity
   heat_training_load?: number; // Heat training load (0-10 scale), measures contribution to heat adaptation
 
   // Ambient temperature metrics (Celsius)
   min_ambient_temperature?: number;
   max_ambient_temperature?: number;
-  avg_ambient_temperature?: number;
+  median_ambient_temperature?: number;
   start_ambient_temperature?: number;
   end_ambient_temperature?: number;
 
@@ -534,14 +534,14 @@ export interface WorkoutInterval {
   // Heat metrics (only present if heat strain data available)
   min_heat_strain_index?: number;
   max_heat_strain_index?: number;
-  avg_heat_strain_index?: number;
+  median_heat_strain_index?: number;
   start_heat_strain_index?: number;
   end_heat_strain_index?: number;
 
   // Ambient temperature metrics (Celsius)
   min_ambient_temperature?: number;
   max_ambient_temperature?: number;
-  avg_ambient_temperature?: number;
+  median_ambient_temperature?: number;
   start_ambient_temperature?: number;
   end_ambient_temperature?: number;
 }
