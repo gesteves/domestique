@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { validateToken, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
+import { z } from 'zod';
 
 export interface ServerOptions {
   port: number;
@@ -160,10 +161,78 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     const mcpServer = new McpServer({
       name: 'domestique',
       version: '1.0.0',
+    }, {
+      capabilities: {
+        prompts: {},
+      },
     });
 
     // Register tools for this connection
     toolRegistry.registerTools(mcpServer);
+
+    // Register prompts
+    mcpServer.registerPrompt(
+      'check_upcoming_workouts',
+      {
+        title: 'Upcoming Workouts Checker',
+        description: 'Analyzes training load, fatigue, and upcoming workouts to recommend adaptations',
+        argsSchema: {
+          days_ahead: z.coerce.number()
+            .min(1)
+            .max(14)
+            .default(7)
+            .describe('Number of days ahead to analyze (1-14)'),
+          training_load_days: z.coerce.number()
+            .min(7)
+            .max(90)
+            .default(42)
+            .describe('Number of days of training load history to consider (7-90)'),
+        },
+      },
+      async ({ days_ahead, training_load_days }) => ({
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: `Analyze my training status and recommend workout adaptations for the next ${days_ahead} days.
+
+Please:
+
+1. **Check Training Load** - Use get_training_load_trends to review the last ${training_load_days} days:
+   - Current CTL (fitness), ATL (fatigue), TSB (form)
+   - Ramp rate and ACWR (training load progression)
+   - Identify if I'm building fitness appropriately or risking overtraining
+
+2. **Assess Recovery** - Use get_recovery_trends for the past 14 days:
+   - HRV trends (declining, stable, improving?)
+   - Sleep quality and duration
+   - Recent recovery scores
+   - Any signs of accumulated fatigue
+
+3. **Review Upcoming Plan** - Use get_upcoming_workouts for the next ${days_ahead} days:
+   - What workouts are scheduled
+   - Expected TSS and intensity
+   - Distribution of hard vs easy days
+
+4. **Recommend Adaptations** - For each upcoming workout, advise:
+   - ✅ Keep as planned - if recovery is good and load is appropriate
+   - ⚠️ Reduce intensity - if showing fatigue signs but can still train
+   - 🛑 Consider rest/easy day - if recovery is poor or risk of overtraining
+   - 📈 Could push harder - if fresh and underloaded
+
+Provide specific, actionable recommendations for each workout based on the data. Consider:
+- TSB trends (very negative TSB = risk of overtraining)
+- HRV relative to baseline (low HRV = need recovery)
+- Recent workout intensity distribution
+- Upcoming workout difficulty
+
+Be conservative - recommend rest when uncertain, as overtraining is harder to recover from than being slightly undertrained.`,
+            },
+          },
+        ],
+      })
+    );
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
