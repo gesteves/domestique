@@ -17,6 +17,7 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   'virtualrun': 'Running',
   'swim': 'Swimming',
   'swimming': 'Swimming',
+  'openwaterswim': 'Swimming',
   'alpineski': 'Skiing',
   'alpine skiing': 'Skiing',
   'backcountryski': 'Skiing',
