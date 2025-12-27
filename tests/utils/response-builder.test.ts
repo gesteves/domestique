@@ -122,7 +122,7 @@ describe('response-builder', () => {
         optional: undefined,
         present: 'yes',
       };
-      const fieldDescriptions = { value: 'Nullable value' };
+      const fieldDescriptions = { value: 'Nullable value', present: 'Present field' };
 
       const result = buildToolResponse({
         data,
@@ -130,8 +130,13 @@ describe('response-builder', () => {
       });
 
       const text = result.content[0].text;
-      expect(text).toContain('"value": null');
+      // Null and undefined fields should be removed to save tokens
+      expect(text).not.toContain('"value"');
+      expect(text).not.toContain('"optional"');
       expect(text).toContain('"present": "yes"');
+      // Field descriptions should only include fields present in data
+      expect(text).toContain('"present":');
+      expect(text).not.toContain('"value":');
     });
 
     it('should handle both warnings and next actions together', () => {
@@ -200,8 +205,8 @@ describe('response-builder', () => {
       const textWithoutHeat = resultWithoutHeat.content[0].text;
       expect(textWithoutHeat).not.toContain('Heat Zones Summary');
       expect(textWithoutHeat).not.toContain('Zone 1: No Heat Strain');
-      // Should still have the short description
-      expect(textWithoutHeat).toContain('"heat_zones": "Heat zone data"');
+      // Field description should be filtered out when field is not present
+      expect(textWithoutHeat).not.toContain('"heat_zones"');
     });
   });
 
