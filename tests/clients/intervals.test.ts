@@ -1400,6 +1400,96 @@ describe('IntervalsClient', () => {
     });
   });
 
+  describe('getActivityTemperatureMetrics', () => {
+    it('should return comprehensive temperature metrics when data is available', async () => {
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        },
+        {
+          type: 'temp',
+          data: [18.5, 19.0, 19.5, 20.0, 20.5, 21.0, 21.5, 22.0, 22.5, 23.0],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityTemperatureMetrics('i113367711');
+
+      expect(result).not.toBeNull();
+      expect(result?.min_ambient_temperature).toBe(18.5);
+      expect(result?.max_ambient_temperature).toBe(23.0);
+      expect(result?.start_ambient_temperature).toBe(18.5);
+      expect(result?.end_ambient_temperature).toBe(23.0);
+      expect(result?.avg_ambient_temperature).toBeGreaterThan(18);
+      expect(result?.avg_ambient_temperature).toBeLessThan(24);
+    });
+
+    it('should return null when temperature data is not available', async () => {
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 1, 2, 3, 4],
+        },
+        {
+          type: 'power',
+          data: [100, 200, 150, 180, 220],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityTemperatureMetrics('i113367711');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when API call fails', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      const result = await client.getActivityTemperatureMetrics('i113367711');
+
+      expect(result).toBeNull();
+    });
+
+    it('should handle negative temperatures (cold water swimming)', async () => {
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 1, 2, 3, 4],
+        },
+        {
+          type: 'temp',
+          data: [-2.5, -1.0, 0.0, 1.5, 3.0],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityTemperatureMetrics('i113367711');
+
+      expect(result).not.toBeNull();
+      expect(result?.min_ambient_temperature).toBe(-2.5);
+      expect(result?.max_ambient_temperature).toBe(3.0);
+      expect(result?.start_ambient_temperature).toBe(-2.5);
+      expect(result?.end_ambient_temperature).toBe(3.0);
+    });
+  });
+
   describe('getActivityHeatZones', () => {
     it('should return heat zones when data is available', async () => {
       const mockStreams = [
@@ -1669,6 +1759,223 @@ describe('IntervalsClient', () => {
       expect(result.intervals).toHaveLength(1);
       const interval = result.intervals[0];
       expect(interval.min_heat_strain_index).toBeUndefined();
+    });
+  });
+
+  describe('getActivityIntervals with temperature metrics', () => {
+    it('should include temperature metrics in intervals when temperature data is available', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            label: 'Interval 1',
+            start_time: 100,
+            end_time: 200,
+            moving_time: 100,
+            distance: 1000,
+            average_watts: 250,
+            max_watts: 300,
+          },
+          {
+            id: 2,
+            type: 'RECOVERY',
+            label: 'Recovery 1',
+            start_time: 200,
+            end_time: 300,
+            moving_time: 100,
+            distance: 500,
+            average_watts: 100,
+            max_watts: 150,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 50, 100, 120, 150, 180, 200, 250, 300],
+        },
+        {
+          type: 'temp',
+          data: [18.0, 18.5, 19.0, 20.0, 21.0, 22.0, 23.0, 22.5, 22.0],
+        },
+      ];
+
+      // First call: getActivityIntervals endpoint
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      // Second call: streams endpoint (includes temp data)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      expect(result.intervals).toHaveLength(2);
+
+      // First interval (100-200 seconds) should have temperature metrics
+      // Data points at times 100, 120, 150, 180, 200 with temps 19.0, 20.0, 21.0, 22.0, 23.0
+      const interval1 = result.intervals[0];
+      expect(interval1.min_ambient_temperature).toBe(19.0);
+      expect(interval1.max_ambient_temperature).toBe(23.0);
+      expect(interval1.avg_ambient_temperature).toBe(21.0); // (19+20+21+22+23)/5 = 105/5 = 21.0
+      expect(interval1.start_ambient_temperature).toBe(19.0);
+      expect(interval1.end_ambient_temperature).toBe(23.0);
+
+      // Second interval (200-300 seconds) should have temperature metrics
+      // Data points at times 200, 250, 300 with temps 23.0, 22.5, 22.0
+      const interval2 = result.intervals[1];
+      expect(interval2.min_ambient_temperature).toBe(22.0);
+      expect(interval2.max_ambient_temperature).toBe(23.0);
+      expect(interval2.avg_ambient_temperature).toBe(22.5); // (23.0+22.5+22.0)/3 = 67.5/3 = 22.5
+      expect(interval2.start_ambient_temperature).toBe(23.0);
+      expect(interval2.end_ambient_temperature).toBe(22.0);
+    });
+
+    it('should not include temperature metrics when temperature data is unavailable', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            label: 'Interval 1',
+            start_time: 100,
+            end_time: 200,
+            moving_time: 100,
+            distance: 1000,
+            average_watts: 250,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 50, 100, 150, 200],
+        },
+        {
+          type: 'power',
+          data: [100, 200, 250, 300, 200],
+        },
+      ];
+
+      // First call: getActivityIntervals endpoint
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      // Second call: streams endpoint (no temperature data)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      expect(result.intervals).toHaveLength(1);
+      const interval = result.intervals[0];
+      expect(interval.min_ambient_temperature).toBeUndefined();
+      expect(interval.max_ambient_temperature).toBeUndefined();
+      expect(interval.avg_ambient_temperature).toBeUndefined();
+      expect(interval.start_ambient_temperature).toBeUndefined();
+      expect(interval.end_ambient_temperature).toBeUndefined();
+    });
+
+    it('should handle intervals with no matching temperature data points', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            start_time: 500, // No temperature data in this time range
+            end_time: 600,
+            moving_time: 100,
+            distance: 1000,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 50, 100, 150, 200],
+        },
+        {
+          type: 'temp',
+          data: [18.0, 19.0, 20.0, 21.0, 22.0],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      const interval = result.intervals[0];
+      expect(interval.min_ambient_temperature).toBeUndefined();
+      expect(interval.max_ambient_temperature).toBeUndefined();
+      expect(interval.avg_ambient_temperature).toBeUndefined();
+    });
+
+    it('should handle temperature stream with negative values (cold water)', async () => {
+      const mockIntervalsResponse = {
+        icu_intervals: [
+          {
+            id: 1,
+            type: 'WORK',
+            start_time: 100,
+            end_time: 200,
+            moving_time: 100,
+            distance: 1000,
+          },
+        ],
+        icu_groups: [],
+      };
+
+      const mockStreams = [
+        {
+          type: 'time',
+          data: [0, 50, 100, 150, 200],
+        },
+        {
+          type: 'temp',
+          data: [0.0, -1.0, -2.0, -1.5, -1.0],
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockIntervalsResponse),
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStreams),
+      });
+
+      const result = await client.getActivityIntervals('i113367711');
+
+      const interval = result.intervals[0];
+      expect(interval.min_ambient_temperature).toBe(-2.0);
+      expect(interval.max_ambient_temperature).toBe(-1.0);
+      expect(interval.start_ambient_temperature).toBe(-2.0);
+      expect(interval.end_ambient_temperature).toBe(-1.0);
     });
   });
 });

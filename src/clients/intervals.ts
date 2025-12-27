@@ -45,6 +45,10 @@ import {
   calculateHeatMetrics,
   parseHeatStrainStreams,
 } from '../utils/heat-zones.js';
+import {
+  calculateTemperatureMetrics,
+  parseTemperatureStreams,
+} from '../utils/temperature-metrics.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
@@ -989,8 +993,9 @@ export class IntervalsClient {
       '/intervals'
     );
 
-    // Fetch heat strain stream data if available
+    // Fetch heat strain and temperature stream data if available
     let heatStreamData: { time: number[]; heat_strain_index: number[] } | null = null;
+    let tempStreamData: { time: number[]; temp: number[] } | null = null;
     try {
       interface StreamData {
         type: string;
@@ -998,15 +1003,16 @@ export class IntervalsClient {
       }
       const streams = await this.fetchActivity<StreamData[]>(
         activityId,
-        '/streams?types=heat_strain_index&types=time'
+        '/streams?types=heat_strain_index&types=time&types=temp'
       );
       heatStreamData = parseHeatStrainStreams(streams);
+      tempStreamData = parseTemperatureStreams(streams);
     } catch (error) {
-      // Heat strain data may not be available for this activity
+      // Heat strain or temperature data may not be available for this activity
     }
 
     const intervals = (response.icu_intervals || []).map((i) =>
-      this.normalizeInterval(i, heatStreamData)
+      this.normalizeInterval(i, heatStreamData, tempStreamData)
     );
     const groups = (response.icu_groups || []).map((g) =>
       this.normalizeIntervalGroup(g)
@@ -1127,11 +1133,46 @@ export class IntervalsClient {
   }
 
   /**
+   * Get ambient temperature metrics for a specific activity.
+   * Returns null if temperature data is not available (e.g., indoor activities).
+   */
+  async getActivityTemperatureMetrics(activityId: string): Promise<{
+    min_ambient_temperature: number;
+    max_ambient_temperature: number;
+    avg_ambient_temperature: number;
+    start_ambient_temperature: number;
+    end_ambient_temperature: number;
+  } | null> {
+    try {
+      interface StreamData {
+        type: string;
+        data: number[];
+      }
+
+      const streams = await this.fetchActivity<StreamData[]>(
+        activityId,
+        '/streams?types=temp&types=time'
+      );
+
+      const parsed = parseTemperatureStreams(streams);
+      if (!parsed) {
+        return null;
+      }
+
+      return calculateTemperatureMetrics(parsed.time, parsed.temp);
+    } catch (error) {
+      // Temperature data may not be available for all activities (e.g., indoor activities)
+      return null;
+    }
+  }
+
+  /**
    * Normalize a raw interval from the API
    */
   private normalizeInterval(
     raw: IntervalsRawInterval,
-    heatStreamData: { time: number[]; heat_strain_index: number[] } | null = null
+    heatStreamData: { time: number[]; heat_strain_index: number[] } | null = null,
+    tempStreamData: { time: number[]; temp: number[] } | null = null
   ): WorkoutInterval {
     const distanceKm = raw.distance ? raw.distance / 1000 : undefined;
     const speedKph = raw.average_speed ? raw.average_speed * 3.6 : undefined;
@@ -1186,6 +1227,55 @@ export class IntervalsClient {
       }
     }
 
+    // Calculate temperature metrics for this interval if temperature data is available
+    let tempMetrics:
+      | {
+          min_ambient_temperature: number;
+          max_ambient_temperature: number;
+          avg_ambient_temperature: number;
+          start_ambient_temperature: number;
+          end_ambient_temperature: number;
+        }
+      | undefined;
+
+    if (tempStreamData && tempStreamData.time.length > 0) {
+      // Find indices in the stream data that fall within this interval's time range
+      const intervalTemp: number[] = [];
+      let startTemp: number | undefined;
+      let endTemp: number | undefined;
+
+      for (let i = 0; i < tempStreamData.time.length; i++) {
+        const time = tempStreamData.time[i];
+        const temp = tempStreamData.temp[i];
+
+        if (time >= raw.start_time && time <= raw.end_time) {
+          intervalTemp.push(temp);
+
+          // Capture start temp (first data point in interval)
+          if (startTemp === undefined) {
+            startTemp = temp;
+          }
+          // Keep updating end temp (will be last data point in interval)
+          endTemp = temp;
+        }
+      }
+
+      // Only include metrics if we found data points in this interval
+      if (intervalTemp.length > 0) {
+        const minTemp = Math.min(...intervalTemp);
+        const maxTemp = Math.max(...intervalTemp);
+        const avgTemp = intervalTemp.reduce((sum, temp) => sum + temp, 0) / intervalTemp.length;
+
+        tempMetrics = {
+          min_ambient_temperature: Math.round(minTemp * 10) / 10,
+          max_ambient_temperature: Math.round(maxTemp * 10) / 10,
+          avg_ambient_temperature: Math.round(avgTemp * 10) / 10,
+          start_ambient_temperature: startTemp !== undefined ? Math.round(startTemp * 10) / 10 : 0,
+          end_ambient_temperature: endTemp !== undefined ? Math.round(endTemp * 10) / 10 : 0,
+        };
+      }
+    }
+
     return {
       type: raw.type,
       label: raw.label,
@@ -1226,6 +1316,9 @@ export class IntervalsClient {
 
       // Heat metrics (only if heat data available for this interval)
       ...heatMetrics,
+
+      // Temperature metrics (only if temperature data available for this interval)
+      ...tempMetrics,
     };
   }
 
@@ -1446,6 +1539,9 @@ export class IntervalsClient {
     // Fetch heat metrics from stream data
     const heatMetrics = await this.getActivityHeatMetrics(activity.id);
 
+    // Fetch temperature metrics from stream data
+    const tempMetrics = await this.getActivityTemperatureMetrics(activity.id);
+
     return {
       id: activity.id,
       date: activity.start_date_local,
@@ -1545,6 +1641,13 @@ export class IntervalsClient {
       max_heat_strain_index: heatMetrics?.max_heat_strain_index,
       avg_heat_strain_index: heatMetrics?.avg_heat_strain_index,
       heat_training_load: heatMetrics?.heat_training_load,
+
+      // Temperature metrics
+      min_ambient_temperature: tempMetrics?.min_ambient_temperature,
+      max_ambient_temperature: tempMetrics?.max_ambient_temperature,
+      avg_ambient_temperature: tempMetrics?.avg_ambient_temperature,
+      start_ambient_temperature: tempMetrics?.start_ambient_temperature,
+      end_ambient_temperature: tempMetrics?.end_ambient_temperature,
 
       // Running/pace metrics
       average_stride_m: activity.average_stride,

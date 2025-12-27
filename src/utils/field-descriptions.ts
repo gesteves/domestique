@@ -100,6 +100,13 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   max_heat_strain_index: 'Maximum Heat Strain Index (HSI) reached during the activity. Only present if heat strain data is available from a CORE body temperature sensor.',
   avg_heat_strain_index: 'Average Heat Strain Index (HSI) throughout the activity. Only present if heat strain data is available from a CORE body temperature sensor.',
   heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Higher scores indicate greater adaptation stimulus. Based on time spent at elevated HSI levels. Only present if heat strain data is available from a CORE body temperature sensor. HTL is calculated using a weighted approach where Zone 3 (HSI 3-6.9) provides optimal training stimulus, Zone 2 (HSI 1-2.9) provides partial benefit, Zone 1 (HSI 0-0.9) provides no benefit, and Zone 4 (HSI 7+) is penalized as it\'s dangerous. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
+
+  // Ambient temperature data
+  min_ambient_temperature: 'Minimum ambient temperature (water temperature for swimming, air temperature for other activities) during the activity in Celsius, recorded by the user\'s watch or bike computer.',
+  max_ambient_temperature: 'Maximum ambient temperature (water temperature for swimming, air temperature for other activities) during the activity in Celsius, recorded by the user\'s watch or bike computer.',
+  avg_ambient_temperature: 'Average ambient temperature (water temperature for swimming, air temperature for other activities) during the activity in Celsius, recorded by the user\'s watch or bike computer.',
+  start_ambient_temperature: 'Ambient temperature (water temperature for swimming, air temperature for other activities) at the start of the activity in Celsius, recorded by the user\'s watch or bike computer.',
+  end_ambient_temperature: 'Ambient temperature (water temperature for swimming, air temperature for other activities) at the end of the activity in Celsius, recorded by the user\'s watch or bike computer.',
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
@@ -286,6 +293,13 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
   avg_heat_strain_index: 'Average heat strain index during the interval',
   start_heat_strain_index: 'Heat strain index at the start of the interval',
   end_heat_strain_index: 'Heat strain index at the end of the interval',
+
+  // Ambient temperature metrics (only present if temperature data available)
+  min_ambient_temperature: 'Minimum ambient temperature (water temperature for swimming, air temperature for other activities) during the interval in Celsius, recorded by the user\'s watch or bike computer.',
+  max_ambient_temperature: 'Maximum ambient temperature (water temperature for swimming, air temperature for other activities) during the interval in Celsius, recorded by the user\'s watch or bike computer.',
+  avg_ambient_temperature: 'Average ambient temperature (water temperature for swimming, air temperature for other activities) during the interval in Celsius, recorded by the user\'s watch or bike computer.',
+  start_ambient_temperature: 'Ambient temperature (water temperature for swimming, air temperature for other activities) at the start of the interval in Celsius, recorded by the user\'s watch or bike computer.',
+  end_ambient_temperature: 'Ambient temperature (water temperature for swimming, air temperature for other activities) at the end of the interval in Celsius, recorded by the user\'s watch or bike computer.',
 
   // Group fields
   count: 'Number of repetitions in this interval set',

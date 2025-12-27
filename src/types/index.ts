@@ -114,6 +114,13 @@ export interface NormalizedWorkout {
   avg_heat_strain_index?: number; // Average heat strain index during the activity
   heat_training_load?: number; // Heat training load (0-10 scale), measures contribution to heat adaptation
 
+  // Ambient temperature metrics (Celsius)
+  min_ambient_temperature?: number;
+  max_ambient_temperature?: number;
+  avg_ambient_temperature?: number;
+  start_ambient_temperature?: number;
+  end_ambient_temperature?: number;
+
   // Running/pace metrics
   average_stride_m?: number; // meters per stride
   gap?: string; // Gradient adjusted pace, e.g., "4:30/km"
@@ -530,6 +537,13 @@ export interface WorkoutInterval {
   avg_heat_strain_index?: number;
   start_heat_strain_index?: number;
   end_heat_strain_index?: number;
+
+  // Ambient temperature metrics (Celsius)
+  min_ambient_temperature?: number;
+  max_ambient_temperature?: number;
+  avg_ambient_temperature?: number;
+  start_ambient_temperature?: number;
+  end_ambient_temperature?: number;
 }
 
 export interface IntervalGroup {
