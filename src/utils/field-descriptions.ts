@@ -15,6 +15,12 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   distance: 'Total distance of the activity',
   source: 'Source of the data for this activity',
 
+  // Activity URLs
+  intervals_icu_url: 'URL to view this activity on Intervals.icu',
+  garmin_connect_url: 'URL to view this activity on Garmin Connect',
+  zwift_url: 'URL to view this activity on Zwift',
+  strava_url: 'URL to view this activity on Strava',
+
   // Training load
   tss: 'Training Stress Score (TSS)',
   load: 'Training load (equivalent to TSS for power-based activities)',

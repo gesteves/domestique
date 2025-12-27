@@ -231,6 +231,8 @@ interface IntervalsActivity {
 
   // Source information
   source?: string; // e.g., "Zwift", "Garmin", etc.
+  external_id?: string; // External ID from the source platform (e.g., Garmin, Zwift)
+  strava_id?: string; // Strava activity ID if synced from Strava
 
   // API availability note (present when activity data is not available)
   _note?: string; // e.g., "STRAVA activities are not available via the API"
@@ -1581,6 +1583,20 @@ export class IntervalsClient {
         : undefined,
       calories: activity.calories,
       source: 'intervals.icu',
+
+      // Activity URLs
+      intervals_icu_url: `https://intervals.icu/activities/${activity.id}`,
+      garmin_connect_url:
+        activity.source === 'GARMIN_CONNECT' && activity.external_id
+          ? `https://connect.garmin.com/modern/activity/${activity.external_id}`
+          : undefined,
+      zwift_url:
+        activity.source === 'ZWIFT' && activity.external_id
+          ? `https://www.zwift.com/activity/${activity.external_id}`
+          : undefined,
+      strava_url: activity.strava_id
+        ? `https://www.strava.com/activities/${activity.strava_id}`
+        : undefined,
 
       // Speed metrics
       average_speed: avgSpeedKph !== undefined ? formatSpeed(avgSpeedKph) : undefined,

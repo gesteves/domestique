@@ -32,6 +32,16 @@ export interface NormalizedWorkout {
   calories?: number;
   source: 'intervals.icu' | 'whoop' | 'trainerroad' | 'strava';
 
+  // Activity URLs
+  /** Intervals.icu activity URL (always present for Intervals.icu activities) */
+  intervals_icu_url?: string;
+  /** Garmin Connect activity URL (only present if source is GARMIN_CONNECT and external_id exists) */
+  garmin_connect_url?: string;
+  /** Zwift activity URL (only present if source is ZWIFT and external_id exists) */
+  zwift_url?: string;
+  /** Strava activity URL (only present if strava_id exists) */
+  strava_url?: string;
+
   /**
    * Indicates this workout's full data is unavailable via the API.
    * When true, only basic metadata (id, date, activity_type, name) is available.

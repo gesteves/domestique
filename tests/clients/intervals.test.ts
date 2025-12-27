@@ -263,6 +263,186 @@ describe('IntervalsClient', () => {
       expect(result[0].is_indoor).toBe(true);
     });
 
+    it('should include intervals.icu URL for all activities', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].intervals_icu_url).toBe('https://intervals.icu/activities/i113367711');
+      expect(result[1].intervals_icu_url).toBe('https://intervals.icu/activities/act2');
+    });
+
+    it('should include Garmin Connect URL when source is GARMIN_CONNECT and external_id exists', async () => {
+      const garminActivity = [{
+        id: 'garmin1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride',
+        name: 'Morning Ride',
+        moving_time: 3600,
+        distance: 30000,
+        source: 'GARMIN_CONNECT',
+        external_id: '123456789',
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(garminActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].garmin_connect_url).toBe('https://connect.garmin.com/modern/activity/123456789');
+    });
+
+    it('should not include Garmin Connect URL when source is not GARMIN_CONNECT', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].garmin_connect_url).toBeUndefined();
+    });
+
+    it('should include Zwift URL when source is ZWIFT and external_id exists', async () => {
+      const zwiftActivity = [{
+        id: 'zwift1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride',
+        name: 'Zwift Ride',
+        moving_time: 3600,
+        distance: 30000,
+        source: 'ZWIFT',
+        external_id: 'abc123def456',
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(zwiftActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].zwift_url).toBe('https://www.zwift.com/activity/abc123def456');
+    });
+
+    it('should not include Zwift URL when source is not ZWIFT', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].zwift_url).toBeUndefined();
+    });
+
+    it('should include Strava URL when strava_id exists', async () => {
+      const stravaActivity = [{
+        id: 'activity1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride',
+        name: 'Morning Ride',
+        moving_time: 3600,
+        distance: 30000,
+        strava_id: '987654321',
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(stravaActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].strava_url).toBe('https://www.strava.com/activities/987654321');
+    });
+
+    it('should not include Strava URL when strava_id does not exist', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivities),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].strava_url).toBeUndefined();
+    });
+
+    it('should include multiple URLs when activity has multiple external IDs', async () => {
+      const multiUrlActivity = [{
+        id: 'multi1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride',
+        name: 'Synced Ride',
+        moving_time: 3600,
+        distance: 30000,
+        source: 'GARMIN_CONNECT',
+        external_id: '111222333',
+        strava_id: '444555666',
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(multiUrlActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].intervals_icu_url).toBe('https://intervals.icu/activities/multi1');
+      expect(result[0].garmin_connect_url).toBe('https://connect.garmin.com/modern/activity/111222333');
+      expect(result[0].strava_url).toBe('https://www.strava.com/activities/444555666');
+      expect(result[0].zwift_url).toBeUndefined();
+    });
+
     it('should include zone thresholds and time in zones', async () => {
       mockFetch
         .mockResolvedValueOnce({
