@@ -163,11 +163,11 @@ export class ToolRegistry {
     // Daily Summary (most likely to be called first)
     server.tool(
       'get_daily_summary',
-      `Fetches a complete snapshot of the user\'s status today, including:
+      `Fetches a complete snapshot of the user\'s current status today, including:
 - Whoop recovery, sleep performance, and strain
 - Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
-- The user\'s weight
-- All workouts and fitness activities completed today
+- Wellness metrics, such as vitals and subjective status
+- All workouts and fitness activities completed so far today
 - All workouts and fitness activities scheduled for today
 
 <use-cases>
@@ -179,6 +179,7 @@ export class ToolRegistry {
 
 <instructions>
 - Use this if you need a complete picture of the user\'s status today; it's more efficient than calling individual tools when you need the full picture.
+- Metrics and activities (completed and schedule) can change over the course of the day; agents are encourage to call this tool as the day progresses to get up-to-the-minute data rather than rely on the results of previous call
 </instructions>
 
 <notes>
