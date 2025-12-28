@@ -122,7 +122,7 @@ async function testTrainerRoad() {
     for (const workout of workouts.slice(0, 3)) {
       const date = new Date(workout.date).toLocaleDateString();
       console.log(`      ${date}: ${workout.name}`);
-      if (workout.discipline) console.log(`         Discipline: ${workout.discipline}`);
+      if (workout.sport) console.log(`         Sport: ${workout.sport}`);
       if (workout.expected_duration) console.log(`         Duration: ${workout.expected_duration}`);
       if (workout.expected_tss) console.log(`         TSS: ${workout.expected_tss}`);
     }

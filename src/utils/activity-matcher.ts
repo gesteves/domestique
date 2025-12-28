@@ -31,6 +31,7 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   'strength': 'Strength',
   'workout': 'Strength',
   // Additional Whoop-specific names
+  'spin': 'Cycling',
   'functional fitness': 'Strength',
   'hiit': 'Strength',
   'cross country skiing': 'Skiing',

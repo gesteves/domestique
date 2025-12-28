@@ -1,7 +1,8 @@
 import ical from 'node-ical';
 import { parseISO, isWithinInterval, format } from 'date-fns';
-import type { PlannedWorkout, TrainerRoadConfig, Discipline } from '../types/index.js';
+import type { PlannedWorkout, TrainerRoadConfig, ActivityType } from '../types/index.js';
 import { formatDuration } from '../utils/format-units.js';
+import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
 
 interface CalendarEvent {
@@ -146,7 +147,7 @@ export class TrainerRoadClient {
       }
     }
 
-    const discipline = this.detectDiscipline(event.summary);
+    const sport = this.detectSport(event.summary, event.description);
 
     // Clean up the name by stripping the duration prefix (e.g., "2:00 - Gibbs" → "Gibbs")
     const cleanName = this.stripDurationFromName(event.summary);
@@ -171,9 +172,7 @@ export class TrainerRoadClient {
       expected_duration: durationMinutes
         ? formatDuration(durationMinutes * 60) // Convert minutes to seconds
         : undefined,
-      discipline,
-      workout_type: parsed.workoutType,
-      intervals: parsed.intervals,
+      sport,
       source,
     };
   }
@@ -205,18 +204,50 @@ export class TrainerRoadClient {
   }
 
   /**
-   * Detect discipline from workout name
-   * Checks for Run/Swim keywords, defaults to Bike
+   * Detect sport from workout name and description
+   * Uses normalizeActivityType for consistent mapping, defaults to Cycling
    */
-  private detectDiscipline(name: string): Discipline {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes('run') || lowerName.includes('running')) {
-      return 'Run';
+  private detectSport(name: string, description?: string): ActivityType {
+    // Try normalizing the full workout name first (in case it's an exact match)
+    const normalized = normalizeActivityType(name);
+    if (normalized !== 'Other') {
+      return normalized;
     }
-    if (lowerName.includes('swim') || lowerName.includes('swimming')) {
-      return 'Swim';
+
+    // Extract keywords from name and try normalizing them
+    // Look for common activity type keywords in the name
+    const nameLower = name.toLowerCase();
+    const keywords = ['run', 'running', 'swim', 'swimming', 'ride', 'cycling', 'bike', 'hike', 'hiking', 'ski', 'skiing', 'row', 'rowing'];
+    for (const keyword of keywords) {
+      if (nameLower.includes(keyword)) {
+        const keywordNormalized = normalizeActivityType(keyword);
+        if (keywordNormalized !== 'Other') {
+          return keywordNormalized;
+        }
+      }
     }
-    return 'Bike';
+
+    // If name doesn't match, try description
+    if (description) {
+      const descNormalized = normalizeActivityType(description);
+      if (descNormalized !== 'Other') {
+        return descNormalized;
+      }
+
+      // Also check for keywords in description
+      const descLower = description.toLowerCase();
+      for (const keyword of keywords) {
+        if (descLower.includes(keyword)) {
+          const keywordNormalized = normalizeActivityType(keyword);
+          if (keywordNormalized !== 'Other') {
+            return keywordNormalized;
+          }
+        }
+      }
+    }
+
+    // Default to Cycling for TrainerRoad (most workouts are cycling)
+    return 'Cycling';
   }
 
   /**
@@ -239,8 +270,6 @@ export class TrainerRoadClient {
     tss?: number;
     if?: number;
     duration?: number;
-    workoutType?: string;
-    intervals?: string;
   } {
     if (!description) {
       return {};
@@ -290,21 +319,6 @@ export class TrainerRoadClient {
           result.duration = value;
         }
       }
-    }
-
-    // Try to extract workout type from first line
-    const lines = description.split('\n');
-    if (lines.length > 0) {
-      const firstLine = lines[0].trim();
-      if (firstLine && !firstLine.match(/^(TSS|IF|Duration)/i)) {
-        result.workoutType = firstLine;
-      }
-    }
-
-    // Extract intervals section if present
-    const intervalsMatch = description.match(/(?:Intervals?|Workout Structure)[:\s]+([\s\S]+?)(?:\n\n|$)/i);
-    if (intervalsMatch) {
-      result.intervals = intervalsMatch[1].trim();
     }
 
     return result;

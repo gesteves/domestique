@@ -9,9 +9,6 @@ export type ActivityType =
   | 'Strength'
   | 'Other';
 
-// Training discipline for planned workouts
-export type Discipline = 'Swim' | 'Bike' | 'Run';
-
 // Normalized workout from any source
 export interface NormalizedWorkout {
   id: string;
@@ -338,9 +335,7 @@ export interface PlannedWorkout {
   expected_tss?: number;
   expected_if?: number;
   expected_duration?: string; // Human-readable, e.g., "1:30:00"
-  discipline?: Discipline;
-  workout_type?: string;
-  intervals?: string;
+  sport?: ActivityType;
   source: 'intervals.icu' | 'trainerroad' | 'zwift';
 }
 

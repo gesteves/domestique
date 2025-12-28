@@ -211,8 +211,8 @@ export const PLANNED_WORKOUT_FIELD_DESCRIPTIONS = {
   expected_tss: 'Expected Training Stress Score',
   expected_if: 'Expected Intensity Factor (as percentage)',
   expected_duration: 'Expected duration of the workout',
-  workout_type: 'Type of workout (Ride, Run, Swim, etc.)',
-  source: 'Calendar source: intervals.icu or trainerroad',
+  sport: 'Sport/activity type of the workout: Cycling, Running, or Swimming',
+  source: 'Calendar source: intervals.icu, trainerroad, or zwift',
 };
 
 export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {

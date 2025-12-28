@@ -193,8 +193,8 @@ END:VCALENDAR`;
     });
   });
 
-  describe('discipline detection', () => {
-    it('should detect Bike discipline by default', async () => {
+  describe('sport detection', () => {
+    it('should detect Bike sport by default', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(mockIcsData),
@@ -202,10 +202,10 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].discipline).toBe('Bike');
+      expect(result[0].sport).toBe('Cycling');
     });
 
-    it('should detect Run discipline from workout name', async () => {
+    it('should detect Run sport from workout name', async () => {
       const runIcs = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
@@ -224,10 +224,10 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].discipline).toBe('Run');
+      expect(result[0].sport).toBe('Running');
     });
 
-    it('should detect Swim discipline from workout name', async () => {
+    it('should detect Swim sport from workout name', async () => {
       const swimIcs = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
@@ -246,7 +246,7 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].discipline).toBe('Swim');
+      expect(result[0].sport).toBe('Swimming');
     });
   });
 
@@ -316,7 +316,7 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      expect(result[0].discipline).toBe('Run');
+      expect(result[0].sport).toBe('Running');
       expect(result[0].expected_duration).toBe('1:00:00');
       expect(result[0].name).toBe('Easy Run');
     });

@@ -140,7 +140,7 @@ describe('PlanningTools', () => {
       description: 'Hard intervals',
       expected_tss: 88,
       expected_if: 0.88,
-      discipline: 'Bike',
+      sport: 'Cycling',
       source: 'trainerroad',
     };
 
@@ -149,7 +149,7 @@ describe('PlanningTools', () => {
       date: '2024-12-16T17:00:00Z',
       name: 'Easy Run',
       expected_tss: 35,
-      discipline: 'Run',
+      sport: 'Running',
       source: 'intervals.icu',
     };
 
@@ -160,8 +160,8 @@ describe('PlanningTools', () => {
       const result = await tools.getPlannedWorkoutDetails({ date: '2024-12-16' });
 
       expect(result).toHaveLength(2);
-      expect(result.find((w) => w.discipline === 'Bike')).toBeDefined();
-      expect(result.find((w) => w.discipline === 'Run')).toBeDefined();
+      expect(result.find((w) => w.sport === 'Cycling')).toBeDefined();
+      expect(result.find((w) => w.sport === 'Running')).toBeDefined();
     });
 
     it('should filter by sport when specified', async () => {
@@ -170,11 +170,11 @@ describe('PlanningTools', () => {
 
       const bikeResult = await tools.getPlannedWorkoutDetails({ date: '2024-12-16', sport: 'cycling' });
       expect(bikeResult).toHaveLength(1);
-      expect(bikeResult[0].discipline).toBe('Bike');
+      expect(bikeResult[0].sport).toBe('Cycling');
 
       const runResult = await tools.getPlannedWorkoutDetails({ date: '2024-12-16', sport: 'running' });
       expect(runResult).toHaveLength(1);
-      expect(runResult[0].discipline).toBe('Run');
+      expect(runResult[0].sport).toBe('Running');
     });
 
     it('should return empty array when no workouts match', async () => {
@@ -212,7 +212,7 @@ describe('PlanningTools', () => {
       const result = await tools.getPlannedWorkoutDetails({ date: '2024-12-16' });
 
       expect(result).toHaveLength(1);
-      expect(result[0].discipline).toBe('Run');
+      expect(result[0].sport).toBe('Running');
     });
   });
 });

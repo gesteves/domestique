@@ -2,7 +2,7 @@ import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday, parseDateStringInTimezone, getTodayInTimezone } from '../utils/date-parser.js';
-import type { PlannedWorkout } from '../types/index.js';
+import type { PlannedWorkout, ActivityType } from '../types/index.js';
 import type {
   GetUpcomingWorkoutsInput,
   GetPlannedWorkoutDetailsInput,
@@ -78,13 +78,13 @@ export class PlanningTools {
 
     // Filter by sport if specified
     if (sport) {
-      const disciplineMap: Record<string, string> = {
-        cycling: 'Bike',
-        running: 'Run',
-        swimming: 'Swim',
+      const sportMap: Record<string, ActivityType> = {
+        cycling: 'Cycling',
+        running: 'Running',
+        swimming: 'Swimming',
       };
-      const discipline = disciplineMap[sport];
-      workouts = workouts.filter((w) => w.discipline === discipline);
+      const activityType = sportMap[sport];
+      workouts = workouts.filter((w) => w.sport === activityType);
     }
 
     return workouts;

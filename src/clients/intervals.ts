@@ -31,6 +31,7 @@ import type {
   WellnessData,
   DailyWellness,
   WellnessTrends,
+  ActivityType,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
@@ -1940,6 +1941,18 @@ export class IntervalsClient {
     return icuRpe ?? rpe;
   }
 
+  /**
+   * Convert activity type to sport (ActivityType)
+   * Uses normalizeActivityType for consistent mapping across platforms
+   */
+  private activityTypeToSport(type: string | undefined): ActivityType | undefined {
+    if (!type) return undefined;
+    const normalized = normalizeActivityType(type);
+    // Return the normalized type (could be Cycling, Running, Swimming, Skiing, etc.)
+    // Only return undefined if we truly can't determine the type
+    return normalized === 'Other' ? undefined : normalized;
+  }
+
   private normalizePlannedEvent(event: IntervalsEvent): PlannedWorkout {
     // Calculate duration in seconds
     const durationSeconds = event.moving_time ?? (event.duration ? event.duration * 60 : undefined);
@@ -1954,7 +1967,7 @@ export class IntervalsClient {
       expected_duration: durationSeconds !== undefined
         ? formatDuration(durationSeconds)
         : undefined,
-      workout_type: event.type,
+      sport: this.activityTypeToSport(event.type),
       source: 'intervals.icu',
     };
   }
