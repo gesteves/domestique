@@ -801,7 +801,7 @@ describe('IntervalsClient', () => {
         id: 2,
         start_date_local: '2024-12-17T10:00:00',
         name: 'Race Day',
-        category: 'RACE',
+        category: 'RACE_A',
         type: 'Ride',
       },
     ];
@@ -813,6 +813,14 @@ describe('IntervalsClient', () => {
       });
 
       const result = await client.getPlannedEvents('2024-12-16', '2024-12-17');
+
+      // Verify the API call includes the category parameter
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('/athlete/i12345/events');
+      expect(callUrl).toContain('oldest=2024-12-16');
+      expect(callUrl).toContain('newest=2024-12-17');
+      // URL encodes comma as %2C
+      expect(callUrl).toContain('category=WORKOUT%2CRACE_A%2CRACE_B%2CRACE_C');
 
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('event-1');

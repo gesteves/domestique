@@ -1481,14 +1481,10 @@ export class IntervalsClient {
     const events = await this.fetch<IntervalsEvent[]>('/events', {
       oldest: startDate,
       newest: endDate,
+      category: 'WORKOUT,RACE_A,RACE_B,RACE_C',
     });
 
-    // Filter to only planned workouts (not completed activities)
-    const plannedEvents = events.filter(
-      (e) => e.category === 'WORKOUT' || e.category === 'RACE' || e.category === 'NOTE'
-    );
-
-    return plannedEvents.map((e) => this.normalizePlannedEvent(e));
+    return events.map((e) => this.normalizePlannedEvent(e));
   }
 
   /**
