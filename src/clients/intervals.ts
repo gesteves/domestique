@@ -961,7 +961,11 @@ export class IntervalsClient {
     params?: Record<string, string>,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
-    console.log(`[Intervals] Making API call to ${endpoint}`);
+    if (endpoint) {
+      console.log(`[Intervals] Making API call to ${endpoint}`);
+    } else {
+      console.log(`[Intervals] Making API call`);
+    }
 
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
     if (params) {
