@@ -688,6 +688,8 @@ export class WhoopClient {
   ): Promise<T> {
     await this.ensureValidToken();
 
+    console.log(`[Whoop] Making API call to ${endpoint}`);
+
     const url = new URL(`${WHOOP_API_BASE}${endpoint}`);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {

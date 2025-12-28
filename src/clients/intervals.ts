@@ -961,6 +961,8 @@ export class IntervalsClient {
     params?: Record<string, string>,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
+    console.log(`[Intervals] Making API call to ${endpoint}`);
+
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -1007,6 +1009,8 @@ export class IntervalsClient {
     endpoint: string,
     context?: { operation: string }
   ): Promise<T> {
+    console.log(`[Intervals] Making API call to /activity/${activityId}${endpoint}`);
+
     const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
 
     const errorContext = {

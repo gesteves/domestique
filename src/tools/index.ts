@@ -101,10 +101,12 @@ function buildErrorResponse(error: unknown): { content: Array<{ type: 'text'; te
  * Catches all errors and formats them consistently for LLM consumption.
  */
 function withToolResponse<TArgs, TResult>(
+  toolName: string,
   handler: (args: TArgs) => Promise<TResult>,
   options: ResponseOptions<TResult>
 ): (args: TArgs) => Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   return async (args: TArgs) => {
+    console.log(`[Tool] Calling tool: ${toolName}`);
     try {
       const data = await handler(args);
       return buildToolResponse({
@@ -188,6 +190,7 @@ export class ToolRegistry {
 </notes>`,
       {},
       withToolResponse(
+        'get_daily_summary',
         async () => this.currentTools.getDailySummary(),
         {
           fieldDescriptions: combineFieldDescriptions('daily_summary', 'recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
@@ -238,6 +241,7 @@ and will not be updated throughout the day.
 </notes>`,
       {},
       withToolResponse(
+        'get_todays_recovery',
         async () => this.currentTools.getTodaysRecovery(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_recovery', 'sleep', 'recovery'),
@@ -264,6 +268,7 @@ and will not be updated throughout the day.
 </notes>`,
       {},
       withToolResponse(
+        'get_todays_strain',
         async () => this.currentTools.getTodaysStrain(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_strain', 'whoop'),
@@ -291,6 +296,7 @@ and will not be updated throughout the day.
 </notes>`,
       {},
       withToolResponse(
+        'get_todays_completed_workouts',
         async () => this.currentTools.getTodaysCompletedWorkouts(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_completed_workouts', 'workout', 'whoop'),
@@ -322,6 +328,7 @@ and will not be updated throughout the day.
 </notes>`,
       {},
       withToolResponse(
+        'get_todays_planned_workouts',
         async () => this.currentTools.getTodaysPlannedWorkouts(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_planned_workouts', 'planned'),
@@ -354,6 +361,7 @@ and will not be updated throughout the day.
 </instructions>`,
       {},
       withToolResponse(
+        'get_athlete_profile',
         async () => this.currentTools.getAthleteProfile(),
         {
           fieldDescriptions: getFieldDescriptions('athlete_profile'),
@@ -383,6 +391,7 @@ and will not be updated throughout the day.
         sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
       },
       withToolResponse(
+        'get_sports_settings',
         async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
         {
           fieldDescriptions: getFieldDescriptions('sport_settings'),
@@ -416,6 +425,7 @@ and will not be updated throughout the day.
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
       withToolResponse(
+        'get_strain_history',
         async (args: { start_date: string; end_date?: string }) => this.currentTools.getStrainHistory(args),
         {
           fieldDescriptions: getFieldDescriptions('whoop'),
@@ -453,6 +463,7 @@ and will not be updated throughout the day.
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
       withToolResponse(
+        'get_workout_history',
         async (args: { start_date: string; end_date?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
         {
           fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
@@ -490,6 +501,7 @@ and will not be updated throughout the day.
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
       withToolResponse(
+        'get_recovery_trends',
         async (args: { start_date: string; end_date?: string }) => this.historicalTools.getRecoveryTrends(args),
         {
           fieldDescriptions: getFieldDescriptions('recovery'),
@@ -524,6 +536,7 @@ and will not be updated throughout the day.
         end_date: z.string().optional().describe('End date (defaults to today)'),
       },
       withToolResponse(
+        'get_wellness_trends',
         async (args: { start_date: string; end_date?: string }) => this.historicalTools.getWellnessTrends(args),
         {
           fieldDescriptions: getFieldDescriptions('wellness'),
@@ -558,6 +571,7 @@ and will not be updated throughout the day.
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
       withToolResponse(
+        'get_upcoming_workouts',
         async (args: { days?: number; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts({ days: args.days ?? 7, sport: args.sport }),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
@@ -590,6 +604,7 @@ and will not be updated throughout the day.
         sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport type'),
       },
       withToolResponse(
+        'get_planned_workout_details',
         async (args: { date: string; sport?: 'cycling' | 'running' | 'swimming' }) => this.planningTools.getPlannedWorkoutDetails(args),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
@@ -626,6 +641,7 @@ and will not be updated throughout the day.
           .describe('Number of days of history to analyze (default: 42, max: 365)'),
       },
       withToolResponse(
+        'get_training_load_trends',
         async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
         {
           fieldDescriptions: getFieldDescriptions('fitness'),
@@ -671,6 +687,7 @@ Get the activity_id from:
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
       withToolResponse(
+        'get_workout_intervals',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('intervals'),
@@ -702,6 +719,7 @@ Get the activity_id from:
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
       withToolResponse(
+        'get_workout_notes',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('notes'),
@@ -730,6 +748,7 @@ Get the activity_id from:
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
       withToolResponse(
+        'get_workout_weather',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('weather'),
@@ -765,6 +784,7 @@ Get the activity_id from:
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
       withToolResponse(
+        'get_workout_heat_zones',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('heat_zones'),
@@ -808,6 +828,7 @@ Get the activity_id from:
         compare_to_end: z.string().optional().describe('End of comparison period'),
       },
       withToolResponse(
+        'get_power_curve',
         async (args: { start_date: string; end_date?: string; durations?: number[]; compare_to_start?: string; compare_to_end?: string }) =>
           this.historicalTools.getPowerCurve(args),
         {
@@ -857,6 +878,7 @@ Get the activity_id from:
         compare_to_end: z.string().optional().describe('End of comparison period'),
       },
       withToolResponse(
+        'get_pace_curve',
         async (args: { start_date: string; end_date?: string; sport: 'running' | 'swimming'; distances?: number[]; gap?: boolean; compare_to_start?: string; compare_to_end?: string }) =>
           this.historicalTools.getPaceCurve(args),
         {
@@ -901,6 +923,7 @@ Get the activity_id from:
         compare_to_end: z.string().optional().describe('End of comparison period'),
       },
       withToolResponse(
+        'get_hr_curve',
         async (args: { start_date: string; end_date?: string; sport?: 'cycling' | 'running' | 'swimming'; durations?: number[]; compare_to_start?: string; compare_to_end?: string }) =>
           this.historicalTools.getHRCurve(args),
         {

@@ -25,6 +25,8 @@ export class TrainerRoadClient {
    * Fetch and parse the iCalendar feed (always fresh, no caching)
    */
   private async fetchCalendar(): Promise<CalendarEvent[]> {
+    console.log(`[TrainerRoad] Fetching calendar from ${this.config.calendarUrl}`);
+
     const errorContext = {
       operation: 'fetch planned workouts',
       resource: 'TrainerRoad calendar',
