@@ -121,63 +121,63 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
   // Strain activity
-  strain_score: 'Whoop strain score (0-21 scale, logarithmic). Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21',
-  average_heart_rate: 'Average heart rate in BPM',
-  max_heart_rate: 'Maximum heart rate in BPM',
-  calories: 'Estimated calories burned',
+  strain_score: 'Whoop metric of the cardiovascular load, the level of strain the workout had on the user\'s cardiovascular system based on the user\'s heart rate. Strain is scored on a logarithmic scale from 0 to 21. Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21',
+  average_heart_rate: 'The user\'s average heart rate (beats per minute) during the workout.',
+  max_heart_rate: 'The user\'s max heart rate (beats per minute) during the workout.',
+  calories: 'Estimated calories burned by the user during the workout',
   duration: 'Duration of the activity',
-  distance: 'Distance of the activity',
-  elevation_gain: 'Elevation gain of the activity',
-  zone_durations: 'Time spent in each Whoop HR zone. Note: Whoop uses the Heart Rate Reserve (HRR) method to calculate; they may not match Intervals.icu HR zones.',
-  strain_level: 'Whoop strain level: Light, Moderate, High, All out',
+  distance: 'The distance the user traveled during the workout; only present if distance data sent to Whoop',
+  elevation_gain: 'The altitude gained during the workout; this measurement does not account for downward travel - it is strictly a measure of altitude climbed',
+  zone_durations: 'Time spent in each Whoop HR zone. Note: Whoop uses the Heart Rate Reserve (HRR) method to calculate these zones; they may not match Intervals.icu HR zones.',
+  strain_level: 'Whoop\'s label for the Strain score: Light, Moderate, High, All out',
   strain_level_description: 'Whoop\'s official description for the strain level',
 };
 
 export const BODY_MEASUREMENTS_FIELD_DESCRIPTIONS = {
-  height_meter: 'The user\'s height, in meters, from Whoop',
-  weight_kilogram: 'The user\'s weight, in kilograms, from Whoop',
-  max_heart_rate: 'The user\'s maximum heart rate in BPM, from Whoop',
+  height_meter: 'The user\'s height in meters',
+  weight_kilogram: 'The user\'s weight in kilograms',
+  max_heart_rate: 'The user\'s maximum heart rate in BPM calculated by Whoop',
 };
 
 export const SLEEP_FIELD_DESCRIPTIONS = {
   // Sleep summary (nested object)
   sleep_summary: 'Summary of the user\'s sleep stages',
-  total_in_bed_time: 'Total time in bed',
-  total_awake_time: 'Total time awake during the sleep period',
-  total_no_data_time: 'Total time with no data recorded',
-  total_light_sleep_time: 'Total time in light sleep',
-  total_slow_wave_sleep_time: 'Total time in deep/slow wave sleep',
-  total_rem_sleep_time: 'Total time in REM sleep',
-  total_restorative_sleep: 'Total restorative sleep (slow wave + REM)',
-  sleep_cycle_count: 'Number of complete sleep cycles',
-  disturbance_count: 'Number of sleep disturbances',
+  total_in_bed_time: 'Total time the user spent in bed',
+  total_awake_time: 'Total time the user spent awake during the sleep period',
+  total_no_data_time: 'Total time Whoop didn\'t receive data from the user',
+  total_light_sleep_time: 'Total time the user spent in light sleep',
+  total_slow_wave_sleep_time: 'Total time the user spent in deep/slow wave sleep',
+  total_rem_sleep_time: 'Total time the user spent in REM sleep',
+  total_restorative_sleep: 'Total time the user spent in restorative sleep (slow wave + REM)',
+  sleep_cycle_count: 'Number of sleep cycles during the user\'s sleep',
+  disturbance_count: 'Number of the user was disturbed during sleep',
 
   // Sleep needed (nested object)
-  sleep_needed: 'Breakdown of the user\'s sleep need',
-  total_sleep_needed: 'Total sleep needed',
-  baseline: 'Baseline sleep need',
-  need_from_sleep_debt: 'Additional need from accumulated sleep debt',
-  need_from_recent_strain: 'Additional need from recent training strain',
-  need_from_recent_nap: 'Reduction in need from recent naps',
+  sleep_needed: 'Breakdown of the amount of sleep a user needed before the sleep activity',
+  total_sleep_needed: 'Total sleep needed by the user prior to this sleep activity; it\'s the sum of all individual components',
+  baseline: 'The amount of sleep a user needed based on historical trends',
+  need_from_sleep_debt: 'The difference between the amount of sleep the user\'s body required and the amount the user actually got',
+  need_from_recent_strain: 'Additional sleep need accrued based on the user\'s strain',
+  need_from_recent_nap: 'Reduction in sleep need accrued based on the user\'s recent naps (negative value or zero)',
 
   // Top-level sleep metrics
-  respiratory_rate: 'Breaths per minute during sleep',
-  sleep_performance_percentage: 'Sleep performance vs. sleep need (0-100%). Optimal: ≥85%, Sufficient: 70-85%, Poor: <70%',
-  sleep_consistency_percentage: 'Sleep consistency score (0-100%)',
-  sleep_efficiency_percentage: 'Sleep efficiency - time asleep / time in bed (0-100%)',
-  sleep_performance_level: 'Sleep performance level: OPTIMAL, SUFFICIENT, or POOR',
+  respiratory_rate: 'The user\'s respiratory rate during the sleep, in breaths per minute',
+  sleep_performance_percentage: 'A percentage of the time a user is asleep over the amount of sleep the user needed. Optimal: ≥85%, Sufficient: 70-85%, Poor: <70%',
+  sleep_consistency_percentage: 'Percentage of how similar this sleep and wake times compared to the previous day',
+  sleep_efficiency_percentage: 'A percentage of the time the user spends in bed that they are actually asleep.',
+  sleep_performance_level: 'Whoop\'s label for the sleep performance percentage: OPTIMAL, SUFFICIENT, or POOR',
   sleep_performance_level_description: 'Whoop\'s official description for this sleep performance level',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {
   date: 'Date of recovery data (ISO 8601)',
-  recovery_score: 'Whoop recovery score (0-100%). Sufficient: ≥67%, Adequate: 34-66%, Low: <34%',
-  recovery_level: 'Recovery level: SUFFICIENT, ADEQUATE, or LOW',
+  recovery_score: 'Percentage (0-100%) that reflects how well prepared the user\'s body is to take on Strain; it\s is a measure of the user body\'s "return to baseline" after a stressor. Sufficient: ≥67%, Adequate: 34-66%, Low: <34%',
+  recovery_level: 'Whoop\'s label for the user\'s recovery level: SUFFICIENT, ADEQUATE, or LOW',
   recovery_level_description: 'Whoop\'s official description for this recovery level',
-  hrv_rmssd: 'Heart Rate Variability in milliseconds (RMSSD)',
-  resting_heart_rate: 'Resting heart rate in BPM',
-  spo2_percentage: 'Blood oxygen saturation percentage',
-  skin_temp_celsius: 'Skin temperature in Celsius',
+  hrv_rmssd: 'The user\'s Heart Rate Variability measured using Root Mean Square of Successive Differences (RMSSD), in milliseconds',
+  resting_heart_rate: 'The user\'s resting heart rate in BPM, measured towards the end of their sleep cycle when their body is in Slow Wave Sleep',
+  spo2_percentage: 'The percentage of oxygen in the user\'s blood',
+  skin_temp_celsius: 'The user\'s skin temperature, in Celsius. ',
 };
 
 export const FITNESS_FIELD_DESCRIPTIONS = {
