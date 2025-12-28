@@ -124,7 +124,7 @@ export const WHOOP_FIELD_DESCRIPTIONS = {
   strain_score: 'Whoop metric of the cardiovascular load, the level of strain the workout had on the user\'s cardiovascular system based on the user\'s heart rate. Strain is scored on a logarithmic scale from 0 to 21. Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21',
   average_heart_rate: 'The user\'s average heart rate (beats per minute) during the workout.',
   max_heart_rate: 'The user\'s max heart rate (beats per minute) during the workout.',
-  calories: 'Estimated calories burned by the user during the workout',
+  calories: 'Estimated calories burned by the user',
   duration: 'Duration of the activity',
   distance: 'The distance the user traveled during the workout; only present if distance data sent to Whoop',
   elevation_gain: 'The altitude gained during the workout; this measurement does not account for downward travel - it is strictly a measure of altitude climbed',
