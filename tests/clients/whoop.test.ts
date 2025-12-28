@@ -1,6 +1,41 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WhoopClient } from '../../src/clients/whoop.js';
 
+/**
+ * Create a mock Headers object for fetch responses
+ */
+function createMockHeaders(headers: Record<string, string> = {}): Headers {
+  return {
+    get: (name: string) => headers[name] ?? null,
+    has: (name: string) => name in headers,
+    entries: () => Object.entries(headers)[Symbol.iterator](),
+    keys: () => Object.keys(headers)[Symbol.iterator](),
+    values: () => Object.values(headers)[Symbol.iterator](),
+    forEach: (callback: (value: string, key: string) => void) => {
+      Object.entries(headers).forEach(([key, value]) => callback(value, key));
+    },
+    append: () => {},
+    delete: () => {},
+    set: () => {},
+    getSetCookie: () => [],
+  } as unknown as Headers;
+}
+
+/**
+ * Create a mock OK response with optional rate limit headers
+ */
+function createMockOkResponse<T>(data: T, rateLimitRemaining = 99, rateLimitReset = 60): Partial<Response> {
+  return {
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(data),
+    headers: createMockHeaders({
+      'X-RateLimit-Remaining': String(rateLimitRemaining),
+      'X-RateLimit-Reset': String(rateLimitReset),
+    }),
+  };
+}
+
 // Mock the redis module
 vi.mock('../../src/utils/redis.js', () => ({
   getWhoopAccessToken: vi.fn().mockResolvedValue(null),
@@ -641,8 +676,20 @@ describe('WhoopClient', () => {
         text: () => Promise.resolve('{"error": "invalid_token"}'),
       });
 
-      await expect(client.getRecoveries('2024-12-15', '2024-12-15'))
-        .rejects.toThrow('Whoop is temporarily unavailable');
+      // Use fake timers to speed up retries and avoid interference
+      vi.useFakeTimers();
+
+      const resultPromise = client.getRecoveries('2024-12-15', '2024-12-15');
+
+      // Start catching the expected rejection before advancing timers
+      const expectation = expect(resultPromise).rejects.toThrow('Whoop is temporarily unavailable');
+
+      // Advance timers to complete all retry attempts
+      await vi.advanceTimersByTimeAsync(10000);
+
+      await expectation;
+
+      vi.useRealTimers();
     });
   });
 
@@ -777,6 +824,188 @@ describe('WhoopClient', () => {
       expect(auth).toBe('Bearer appeared-while-waiting');
       // Should not have called the OAuth endpoint
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('rate limiting', () => {
+    beforeEach(() => {
+      // Ensure clean state for rate limiting tests
+      vi.useRealTimers();
+      vi.clearAllMocks();
+      mockFetch.mockReset();
+    });
+
+    afterEach(() => {
+      // Ensure timers are restored after each test
+      vi.useRealTimers();
+    });
+
+    it('should retry on 429 using X-RateLimit-Reset header', async () => {
+      // Create a fresh client for this test to avoid interference
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+
+      // Set up mocks before using fake timers
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': '1', // 1 second
+          }),
+        })
+        // Retry succeeds
+        .mockResolvedValueOnce(createMockOkResponse({ records: [] }));
+
+      vi.useFakeTimers();
+
+      const resultPromise = freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      // Advance timers past the rate limit wait
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const result = await resultPromise;
+
+      expect(result).toEqual([]);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw error after max rate limit retries', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+
+      // All requests return 429
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': '1',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': '1',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': '5',
+          }),
+        });
+
+      vi.useFakeTimers();
+
+      const resultPromise = freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      // Start advancing timers and catching the expected rejection
+      const expectation = expect(resultPromise).rejects.toThrow('Whoop is temporarily limiting requests');
+
+      // Advance timers for all retries
+      await vi.advanceTimersByTimeAsync(10000);
+
+      await expectation;
+    });
+
+    it('should include reset time in error message when available', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+
+      // Request returns 429 with reset header
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': '1',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': '1',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': '30',
+          }),
+        });
+
+      vi.useFakeTimers();
+
+      const resultPromise = freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      // Start catching the expected rejection
+      const expectation = expect(resultPromise).rejects.toThrow('Rate limit resets in 30 seconds');
+
+      // Advance timers for all retries
+      await vi.advanceTimersByTimeAsync(10000);
+
+      await expectation;
+    });
+
+    it('should log warning when approaching rate limit', async () => {
+      const warnSpy = vi.spyOn(console, 'warn');
+
+      // Response with low remaining count
+      mockFetch.mockResolvedValueOnce(createMockOkResponse({ records: [] }, 5, 45));
+
+      await client.getWorkouts('2024-12-15', '2024-12-15');
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Rate limit warning: 5 requests remaining')
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it('should handle 429 without rate limit headers', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+
+      // 429 without headers - should use exponential backoff
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: createMockHeaders({}),
+        })
+        .mockResolvedValueOnce(createMockOkResponse({ records: [] }));
+
+      vi.useFakeTimers();
+
+      const resultPromise = freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      // Advance timers for retry
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const result = await resultPromise;
+
+      expect(result).toEqual([]);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 });

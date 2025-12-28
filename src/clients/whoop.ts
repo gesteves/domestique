@@ -38,6 +38,9 @@ const MAX_RETRY_ATTEMPTS = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const LOCK_WAIT_INTERVAL_MS = 500;
 const MAX_LOCK_WAIT_ATTEMPTS = 6; // 3 seconds total wait time
+const MAX_RATE_LIMIT_RETRIES = 2;
+const RATE_LIMIT_BUFFER_MS = 500; // Extra buffer when waiting for rate limit reset
+const RATE_LIMIT_WARNING_THRESHOLD = 10; // Warn when fewer than this many requests remain
 
 /**
  * Sleep for a given number of milliseconds
@@ -51,6 +54,43 @@ function sleep(ms: number): Promise<void> {
  */
 function generateLockId(): string {
   return `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Rate limit information from Whoop API response headers
+ */
+interface RateLimitInfo {
+  remaining: number;
+  resetInSeconds: number;
+}
+
+/**
+ * Parse rate limit headers from a Whoop API response.
+ * Headers follow the IETF RateLimit header specification.
+ * @see https://developer.whoop.com/docs/developing/rate-limiting
+ */
+function parseRateLimitHeaders(response: Response): RateLimitInfo | null {
+  // Handle responses without headers (e.g., in tests)
+  if (!response.headers || typeof response.headers.get !== 'function') {
+    return null;
+  }
+
+  const remaining = response.headers.get('X-RateLimit-Remaining');
+  const reset = response.headers.get('X-RateLimit-Reset');
+
+  if (remaining !== null && reset !== null) {
+    const remainingNum = parseInt(remaining, 10);
+    const resetNum = parseInt(reset, 10);
+
+    if (!isNaN(remainingNum) && !isNaN(resetNum)) {
+      return {
+        remaining: remainingNum,
+        resetInSeconds: resetNum,
+      };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -174,6 +214,22 @@ export class WhoopApiError extends ApiError {
       'service_unavailable',
       true,
       { operation: 'refresh authentication token' }
+    );
+  }
+
+  /**
+   * Create an error for rate limit exceeded (429) with reset time info.
+   */
+  static rateLimitError(context: ErrorContext, resetInSeconds?: number): WhoopApiError {
+    const resetInfo = resetInSeconds !== undefined
+      ? ` Rate limit resets in ${resetInSeconds} seconds.`
+      : '';
+    return new WhoopApiError(
+      `Whoop is temporarily limiting requests.${resetInfo} Please try again shortly.`,
+      'rate_limit',
+      true,
+      context,
+      429
     );
   }
 }
@@ -620,8 +676,10 @@ export class WhoopClient {
   }
 
   /**
-   * Fetch data from the Whoop API with automatic token refresh and 401 retry.
-   * If a 401 is received, invalidates the cached token and retries once.
+   * Fetch data from the Whoop API with automatic token refresh, 401 retry, and rate limit handling.
+   * - If a 401 is received, invalidates the cached token and retries once.
+   * - If a 429 is received, waits for the rate limit reset and retries.
+   * - Logs warnings when approaching rate limits.
    */
   private async fetch<T>(
     endpoint: string,
@@ -647,10 +705,10 @@ export class WhoopClient {
       parameters: params,
     };
 
-    // First attempt
     let response = await this.doFetch(url.toString(), fullErrorContext);
+    let rateLimitRetries = 0;
 
-    // Handle 401 with retry
+    // Handle 401 with token refresh
     if (response.status === 401) {
       console.log(`[Whoop] Got 401 on ${endpoint}, invalidating token and retrying...`);
       
@@ -673,7 +731,40 @@ export class WhoopClient {
       }
     }
 
+    // Handle 429 rate limit with retry
+    while (response.status === 429 && rateLimitRetries < MAX_RATE_LIMIT_RETRIES) {
+      rateLimitRetries++;
+      const rateLimitInfo = parseRateLimitHeaders(response);
+      const waitMs = rateLimitInfo
+        ? (rateLimitInfo.resetInSeconds * 1000) + RATE_LIMIT_BUFFER_MS
+        : INITIAL_RETRY_DELAY_MS * Math.pow(2, rateLimitRetries);
+
+      console.warn(
+        `[Whoop] Rate limited (429) on ${endpoint}. ` +
+        `Retry ${rateLimitRetries}/${MAX_RATE_LIMIT_RETRIES}, waiting ${Math.round(waitMs / 1000)}s...`
+      );
+
+      await sleep(waitMs);
+      response = await this.doFetch(url.toString(), fullErrorContext);
+    }
+
+    // Check rate limit headers on successful responses
+    if (response.ok) {
+      const rateLimitInfo = parseRateLimitHeaders(response);
+      if (rateLimitInfo && rateLimitInfo.remaining < RATE_LIMIT_WARNING_THRESHOLD) {
+        console.warn(
+          `[Whoop] Rate limit warning: ${rateLimitInfo.remaining} requests remaining, ` +
+          `resets in ${rateLimitInfo.resetInSeconds}s`
+        );
+      }
+    }
+
     if (!response.ok) {
+      // If still rate limited after retries, include reset info in error
+      if (response.status === 429) {
+        const rateLimitInfo = parseRateLimitHeaders(response);
+        throw WhoopApiError.rateLimitError(fullErrorContext, rateLimitInfo?.resetInSeconds);
+      }
       throw WhoopApiError.fromHttpStatus(response.status, fullErrorContext);
     }
 
