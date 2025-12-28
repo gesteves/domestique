@@ -6,10 +6,10 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 - Query completed workouts from Intervals.icu with matched Whoop strain data
 - Access sleep and recovery metrics (HRV, sleep, recovery score) from Whoop
-- View planned workouts from TrainerRoad and Intervals.icu calendars, matches with Whoop strain data
+- View planned workouts from TrainerRoad and Intervals.icu
 - Analyze fitness trends (CTL/ATL/TSB)
 - Comprehensive workout analysis with intervals, notes, and weather data
-- Incorporates Heat Strain data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
+- Incorporates heat strain data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
 
 ### Known Limitations
 
