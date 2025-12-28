@@ -336,6 +336,7 @@ END:VCALENDAR`;
 
     it('should ignore all-day event durations for non-workout events', async () => {
       // Real example: annotations like "Boise" or plan names like "Off-Season - Increasing FTP"
+      // These don't have duration prefixes, so they should be filtered out
       const annotationIcs = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
@@ -354,8 +355,8 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
 
-      // Should not use multi-day duration from annotation event
-      expect(result[0].expected_duration).toBeUndefined();
+      // Annotations without duration prefixes should be filtered out
+      expect(result).toHaveLength(0);
     });
   });
 
@@ -471,7 +472,7 @@ BEGIN:VEVENT
 UID:date-time@trainerroad.com
 DTSTART;VALUE=DATE-TIME:20241216T160000Z
 DTEND;VALUE=DATE-TIME:20241216T173000Z
-SUMMARY:Eric Min's Festive 500 Christmas Ride
+SUMMARY:1:30 - Eric Min's Festive 500 Christmas Ride
 DESCRIPTION:TSS 51. Description: Holiday Spirit.
 END:VEVENT
 END:VCALENDAR`;
@@ -494,7 +495,7 @@ BEGIN:VEVENT
 UID:date-time@trainerroad.com
 DTSTART;VALUE=DATE-TIME:20241216T160000Z
 DTEND;VALUE=DATE-TIME:20241216T173000Z
-SUMMARY:Zwift Group Ride
+SUMMARY:1:30 - Zwift Group Ride
 DESCRIPTION:TSS 51.
 END:VEVENT
 BEGIN:VEVENT

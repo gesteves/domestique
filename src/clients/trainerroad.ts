@@ -89,6 +89,14 @@ export class TrainerRoadClient {
   }
 
   /**
+   * Check if an event is a workout
+   * Workouts always have a duration prefix in the name (e.g., "2:00 - Workout Name")
+   */
+  private isWorkout(event: CalendarEvent): boolean {
+    return this.parseDurationFromName(event.summary) !== undefined;
+  }
+
+  /**
    * Get planned workouts within a date range
    */
   async getPlannedWorkouts(
@@ -104,7 +112,10 @@ export class TrainerRoadClient {
       isWithinInterval(event.start, { start, end })
     );
 
-    return eventsInRange.map((event) => this.normalizeEvent(event));
+    // Filter out annotations (non-workout events)
+    const workouts = eventsInRange.filter((event) => this.isWorkout(event));
+
+    return workouts.map((event) => this.normalizeEvent(event));
   }
 
   /**
@@ -147,7 +158,7 @@ export class TrainerRoadClient {
       }
     }
 
-    const sport = this.detectSport(event.summary, event.description);
+    const sport = this.detectSport(event.summary);
 
     // Clean up the name by stripping the duration prefix (e.g., "2:00 - Gibbs" → "Gibbs")
     const cleanName = this.stripDurationFromName(event.summary);
@@ -204,10 +215,10 @@ export class TrainerRoadClient {
   }
 
   /**
-   * Detect sport from workout name and description
+   * Detect sport from workout name only
    * Uses normalizeActivityType for consistent mapping, defaults to Cycling
    */
-  private detectSport(name: string, description?: string): ActivityType {
+  private detectSport(name: string): ActivityType {
     // Try normalizing the full workout name first (in case it's an exact match)
     const normalized = normalizeActivityType(name);
     if (normalized !== 'Other') {
@@ -223,25 +234,6 @@ export class TrainerRoadClient {
         const keywordNormalized = normalizeActivityType(keyword);
         if (keywordNormalized !== 'Other') {
           return keywordNormalized;
-        }
-      }
-    }
-
-    // If name doesn't match, try description
-    if (description) {
-      const descNormalized = normalizeActivityType(description);
-      if (descNormalized !== 'Other') {
-        return descNormalized;
-      }
-
-      // Also check for keywords in description
-      const descLower = description.toLowerCase();
-      for (const keyword of keywords) {
-        if (descLower.includes(keyword)) {
-          const keywordNormalized = normalizeActivityType(keyword);
-          if (keywordNormalized !== 'Other') {
-            return keywordNormalized;
-          }
         }
       }
     }
