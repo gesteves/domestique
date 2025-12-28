@@ -29,12 +29,12 @@ async function testWhoop() {
 
     // Test today's recovery
     console.log('   Fetching today\'s recovery...');
-    const recovery = await client.getTodayRecovery();
-    if (recovery) {
+    const { sleep, recovery } = await client.getTodayRecovery();
+    if (recovery && sleep) {
       console.log(`   ✅ Recovery score: ${recovery.recovery_score}%`);
       console.log(`      HRV: ${recovery.hrv_rmssd.toFixed(1)} ms`);
       console.log(`      RHR: ${recovery.resting_heart_rate} bpm`);
-      console.log(`      Sleep: ${recovery.sleep_duration}`);
+      console.log(`      Sleep: ${sleep.sleep_summary.total_in_bed_time}`);
     } else {
       console.log('   ⚠️  No recovery data for today');
     }

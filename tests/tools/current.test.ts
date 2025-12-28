@@ -3,7 +3,7 @@ import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import type { RecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData } from '../../src/types/index.js';
+import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
@@ -36,28 +36,51 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
     });
 
-    it('should return recovery data from Whoop with current_date', async () => {
+    const mockSleep: WhoopSleepData = {
+      sleep_summary: {
+        total_in_bed_time: '8:00:00',
+        total_awake_time: '0:30:00',
+        total_no_data_time: '0:00:00',
+        total_light_sleep_time: '3:30:00',
+        total_slow_wave_sleep_time: '2:00:00',
+        total_rem_sleep_time: '2:00:00',
+        total_restorative_sleep: '4:00:00',
+        sleep_cycle_count: 4,
+        disturbance_count: 3,
+      },
+      sleep_needed: {
+        total_sleep_needed: '7:30:00',
+        baseline: '7:00:00',
+        need_from_sleep_debt: '0:15:00',
+        need_from_recent_strain: '0:15:00',
+        need_from_recent_nap: '0:00:00',
+      },
+      sleep_performance_percentage: 90,
+      sleep_performance_level: 'OPTIMAL',
+      sleep_performance_level_description: 'Your sleep performance is optimal',
+    };
+
+    const mockRecovery: WhoopRecoveryData = {
+      recovery_score: 85,
+      hrv_rmssd: 65,
+      resting_heart_rate: 52,
+      recovery_level: 'SUFFICIENT',
+      recovery_level_description: 'Your recovery is sufficient',
+    };
+
+    it('should return sleep and recovery data from Whoop with current_date', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
-      const mockRecovery: RecoveryData = {
-        date: '2024-12-15',
-        recovery_score: 85,
-        hrv_rmssd: 65,
-        resting_heart_rate: 52,
-        sleep_performance_percentage: 90,
-        sleep_duration: '7:30:00',
-        recovery_level: 'SUFFICIENT',
-        recovery_level_description: 'Your recovery is sufficient',
-        sleep_performance_level: 'OPTIMAL',
-        sleep_performance_level_description: 'Your sleep performance is optimal',
-      };
-
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(mockRecovery);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: mockSleep,
+        recovery: mockRecovery,
+      });
 
       const result = await tools.getTodaysRecovery();
 
-      expect(result.recovery).toEqual(mockRecovery);
+      expect(result.whoop.sleep).toEqual(mockSleep);
+      expect(result.whoop.recovery).toEqual(mockRecovery);
       expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
       expect(mockWhoopClient.getTodayRecovery).toHaveBeenCalled();
 
@@ -69,23 +92,28 @@ describe('CurrentTools', () => {
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/New_York');
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
 
       const result = await tools.getTodaysRecovery();
 
       // 10:30:45 UTC = 05:30:45 America/New_York (UTC-5)
       expect(result.current_date).toBe('2024-12-15T05:30:45-05:00');
-      expect(result.recovery).toBeNull();
+      expect(result.whoop.sleep).toBeNull();
+      expect(result.whoop.recovery).toBeNull();
 
       vi.useRealTimers();
     });
 
-    it('should return null recovery when Whoop client is not configured', async () => {
+    it('should return null sleep and recovery when Whoop client is not configured', async () => {
       const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
 
       const result = await toolsWithoutWhoop.getTodaysRecovery();
 
-      expect(result.recovery).toBeNull();
+      expect(result.whoop.sleep).toBeNull();
+      expect(result.whoop.recovery).toBeNull();
       expect(result.current_date).toBeTruthy();
     });
 
@@ -120,7 +148,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysStrain();
 
-      expect(result.strain).toEqual(mockStrain);
+      expect(result.whoop.strain).toEqual(mockStrain);
       expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
       expect(mockWhoopClient.getTodayStrain).toHaveBeenCalled();
 
@@ -138,7 +166,7 @@ describe('CurrentTools', () => {
 
       // 10:30:45 UTC = 03:30:45 America/Denver (UTC-7)
       expect(result.current_date).toBe('2024-12-15T03:30:45-07:00');
-      expect(result.strain).toBeNull();
+      expect(result.whoop.strain).toBeNull();
 
       vi.useRealTimers();
     });
@@ -148,7 +176,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysStrain();
 
-      expect(result.strain).toBeNull();
+      expect(result.whoop.strain).toBeNull();
       expect(result.current_date).toBeTruthy();
     });
 
@@ -157,7 +185,7 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithoutWhoop.getTodaysStrain();
 
-      expect(result.strain).toBeNull();
+      expect(result.whoop.strain).toBeNull();
       expect(result.current_date).toBeTruthy();
     });
   });
@@ -428,17 +456,42 @@ describe('CurrentTools', () => {
   });
 
   describe('getDailySummary', () => {
-    const mockRecovery: RecoveryData = {
-      date: '2024-12-15',
+    const mockSleep: WhoopSleepData = {
+      sleep_summary: {
+        total_in_bed_time: '8:00:00',
+        total_awake_time: '0:30:00',
+        total_no_data_time: '0:00:00',
+        total_light_sleep_time: '3:30:00',
+        total_slow_wave_sleep_time: '2:00:00',
+        total_rem_sleep_time: '2:00:00',
+        total_restorative_sleep: '4:00:00',
+        sleep_cycle_count: 4,
+        disturbance_count: 3,
+      },
+      sleep_needed: {
+        total_sleep_needed: '7:30:00',
+        baseline: '7:00:00',
+        need_from_sleep_debt: '0:15:00',
+        need_from_recent_strain: '0:15:00',
+        need_from_recent_nap: '0:00:00',
+      },
+      sleep_performance_percentage: 90,
+      sleep_performance_level: 'OPTIMAL',
+      sleep_performance_level_description: 'Your sleep performance is optimal',
+    };
+
+    const mockRecovery: WhoopRecoveryData = {
       recovery_score: 85,
       hrv_rmssd: 65,
       resting_heart_rate: 52,
-      sleep_performance_percentage: 90,
-      sleep_duration: '7:30:00',
       recovery_level: 'SUFFICIENT',
       recovery_level_description: 'Your recovery is sufficient',
-      sleep_performance_level: 'OPTIMAL',
-      sleep_performance_level_description: 'Your sleep performance is optimal',
+    };
+
+    const mockBodyMeasurements: WhoopBodyMeasurements = {
+      height_meter: 1.83,
+      weight_kilogram: 75.5,
+      max_heart_rate: 190,
     };
 
     const mockStrain: StrainData = {
@@ -528,8 +581,12 @@ describe('CurrentTools', () => {
     });
 
     it('should return complete daily summary with all data', async () => {
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(mockRecovery);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: mockSleep,
+        recovery: mockRecovery,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(mockStrain);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(mockBodyMeasurements);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
@@ -539,8 +596,10 @@ describe('CurrentTools', () => {
 
       const result = await tools.getDailySummary();
 
+      expect(result.whoop.sleep).toEqual(mockSleep);
       expect(result.whoop.recovery).toEqual(mockRecovery);
       expect(result.whoop.strain).toEqual(mockStrain);
+      expect(result.whoop.body_measurements).toEqual(mockBodyMeasurements);
       expect(result.fitness).toEqual(mockFitness);
       // Whoop-duplicate fields are filtered when Whoop is connected
       expect(result.wellness).toEqual(mockWellnessFiltered);
@@ -557,8 +616,12 @@ describe('CurrentTools', () => {
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/New_York');
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
@@ -577,8 +640,12 @@ describe('CurrentTools', () => {
     });
 
     it('should include fitness metrics with ctl_load and atl_load', async () => {
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
@@ -597,8 +664,12 @@ describe('CurrentTools', () => {
     });
 
     it('should handle null fitness when fetch fails', async () => {
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockRejectedValue(new Error('Failed'));
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
@@ -622,8 +693,10 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithoutWhoop.getDailySummary();
 
+      expect(result.whoop.sleep).toBeNull();
       expect(result.whoop.recovery).toBeNull();
       expect(result.whoop.strain).toBeNull();
+      expect(result.whoop.body_measurements).toBeNull();
       expect(result.fitness).toEqual(mockFitness);
       // Full wellness data when Whoop is not connected
       expect(result.wellness).toEqual(mockWellnessFull);
@@ -634,8 +707,12 @@ describe('CurrentTools', () => {
 
     it('should filter Whoop-duplicate wellness fields when Whoop is connected', async () => {
       // When Whoop is connected, duplicate fields are filtered from wellness
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
@@ -676,8 +753,12 @@ describe('CurrentTools', () => {
         hrv: 40.5,
         sleep_duration: '7h 30m',
       };
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(onlyWhoopDuplicates);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
@@ -692,8 +773,12 @@ describe('CurrentTools', () => {
     });
 
     it('should handle null wellness when no data', async () => {
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
@@ -707,8 +792,12 @@ describe('CurrentTools', () => {
     });
 
     it('should handle wellness fetch failure gracefully', async () => {
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockRejectedValue(new Error('Failed'));
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);

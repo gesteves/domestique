@@ -133,35 +133,51 @@ export const WHOOP_FIELD_DESCRIPTIONS = {
   strain_level_description: 'Whoop\'s official description for the strain level',
 };
 
-export const RECOVERY_FIELD_DESCRIPTIONS = {
-  date: 'Date of recovery data (ISO 8601)',
-  recovery_score: 'Whoop recovery score (0-100%). Sufficient: ≥67%, Adequate: 34-66%, Low: <34%',
-  resting_heart_rate: 'Resting heart rate in BPM',
-  hrv_rmssd: 'Heart Rate Variability in milliseconds (RMSSD). Higher generally indicates better recovery',
-  spo2_percentage: 'Blood oxygen saturation percentage',
-  skin_temp_celsius: 'Skin temperature in Celsius',
+export const BODY_MEASUREMENTS_FIELD_DESCRIPTIONS = {
+  height_meter: 'The user\'s height, in meters, from Whoop',
+  weight_kilogram: 'The user\'s weight, in kilograms, from Whoop',
+  max_heart_rate: 'The user\'s maximum heart rate in BPM, from Whoop',
+};
 
-  // Sleep metrics
+export const SLEEP_FIELD_DESCRIPTIONS = {
+  // Sleep summary (nested object)
+  sleep_summary: 'Summary of the user\'s sleep stages',
+  total_in_bed_time: 'Total time in bed',
+  total_awake_time: 'Total time awake during the sleep period',
+  total_no_data_time: 'Total time with no data recorded',
+  total_light_sleep_time: 'Total time in light sleep',
+  total_slow_wave_sleep_time: 'Total time in deep/slow wave sleep',
+  total_rem_sleep_time: 'Total time in REM sleep',
+  total_restorative_sleep: 'Total restorative sleep (slow wave + REM)',
+  sleep_cycle_count: 'Number of complete sleep cycles',
+  disturbance_count: 'Number of sleep disturbances',
+
+  // Sleep needed (nested object)
+  sleep_needed: 'Breakdown of the user\'s sleep need',
+  total_sleep_needed: 'Total sleep needed',
+  baseline: 'Baseline sleep need',
+  need_from_sleep_debt: 'Additional need from accumulated sleep debt',
+  need_from_recent_strain: 'Additional need from recent training strain',
+  need_from_recent_nap: 'Reduction in need from recent naps',
+
+  // Top-level sleep metrics
+  respiratory_rate: 'Breaths per minute during sleep',
   sleep_performance_percentage: 'Sleep performance vs. sleep need (0-100%). Optimal: ≥85%, Sufficient: 70-85%, Poor: <70%',
   sleep_consistency_percentage: 'Sleep consistency score (0-100%)',
   sleep_efficiency_percentage: 'Sleep efficiency - time asleep / time in bed (0-100%)',
-  respiratory_rate: 'Breaths per minute during sleep',
-
-  // Sleep durations (human-readable, e.g., "7:12:40")
-  sleep_duration: 'Total sleep duration',
-  sleep_quality_duration: 'Time spent in Restorative sleep. Restorative sleep is the sum of time spent in Deep or REM sleep.',
-  sleep_needed: 'Sleep needed for full recovery',
-  light_sleep: 'Time spent in Light sleep',
-  slow_wave_sleep: 'Time spent in deep/slow wave sleep.',
-  rem_sleep: 'Time spent in REM sleep',
-  awake_time: 'Time awake during sleep period',
-  in_bed_time: 'Total time in bed',
-  sleep_cycle_count: 'Number of complete sleep cycles',
-  disturbance_count: 'Number of sleep disturbances',
-  recovery_level: 'Recovery level',
-  recovery_level_description: 'Whoop\'s official description for this recovery level',
-  sleep_performance_level: 'Sleep performance level',
+  sleep_performance_level: 'Sleep performance level: OPTIMAL, SUFFICIENT, or POOR',
   sleep_performance_level_description: 'Whoop\'s official description for this sleep performance level',
+};
+
+export const RECOVERY_FIELD_DESCRIPTIONS = {
+  date: 'Date of recovery data (ISO 8601)',
+  recovery_score: 'Whoop recovery score (0-100%). Sufficient: ≥67%, Adequate: 34-66%, Low: <34%',
+  recovery_level: 'Recovery level: SUFFICIENT, ADEQUATE, or LOW',
+  recovery_level_description: 'Whoop\'s official description for this recovery level',
+  hrv_rmssd: 'Heart Rate Variability in milliseconds (RMSSD)',
+  resting_heart_rate: 'Resting heart rate in BPM',
+  spo2_percentage: 'Blood oxygen saturation percentage',
+  skin_temp_celsius: 'Skin temperature in Celsius',
 };
 
 export const FITNESS_FIELD_DESCRIPTIONS = {
@@ -532,6 +548,7 @@ export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {
 
 export const TODAYS_RECOVERY_FIELD_DESCRIPTIONS = {
   current_date: 'Current date and time for the user, in their local timezone.',
+  sleep: 'Today\'s Whoop sleep data. Null if Whoop is not configured or data is unavailable.',
   recovery: 'Today\'s Whoop recovery data. Null if Whoop is not configured or data is unavailable.',
 };
 
@@ -553,6 +570,8 @@ export const TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS = {
 type FieldCategory =
   | 'workout'
   | 'whoop'
+  | 'body_measurements'
+  | 'sleep'
   | 'recovery'
   | 'fitness'
   | 'planned'
@@ -581,6 +600,10 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return WORKOUT_FIELD_DESCRIPTIONS;
     case 'whoop':
       return WHOOP_FIELD_DESCRIPTIONS;
+    case 'body_measurements':
+      return BODY_MEASUREMENTS_FIELD_DESCRIPTIONS;
+    case 'sleep':
+      return SLEEP_FIELD_DESCRIPTIONS;
     case 'recovery':
       return RECOVERY_FIELD_DESCRIPTIONS;
     case 'fitness':

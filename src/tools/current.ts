@@ -4,7 +4,6 @@ import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone, getCurrentDateTimeInTimezone } from '../utils/date-parser.js';
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import type {
-  RecoveryData,
   StrainData,
   FitnessMetrics,
   PlannedWorkout,
@@ -19,6 +18,8 @@ import type {
   TodaysStrainResponse,
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
+  WhoopSleepData,
+  WhoopRecoveryData,
 } from '../types/index.js';
 import { filterWhoopDuplicateFields } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
@@ -31,7 +32,8 @@ export class CurrentTools {
   ) {}
 
   /**
-   * Get today's recovery data from Whoop with current date/time in user's timezone
+   * Get today's recovery data from Whoop with current date/time in user's timezone.
+   * Returns separate sleep and recovery objects under a whoop parent.
    */
   async getTodaysRecovery(): Promise<TodaysRecoveryResponse> {
     // Use athlete's timezone to get current date/time
@@ -41,15 +43,21 @@ export class CurrentTools {
     if (!this.whoop) {
       return {
         current_date: currentDateTime,
-        recovery: null,
+        whoop: {
+          sleep: null,
+          recovery: null,
+        },
       };
     }
 
     try {
-      const recovery = await this.whoop.getTodayRecovery();
+      const { sleep, recovery } = await this.whoop.getTodayRecovery();
       return {
         current_date: currentDateTime,
-        recovery,
+        whoop: {
+          sleep,
+          recovery,
+        },
       };
     } catch (error) {
       console.error('Error fetching today\'s recovery:', error);
@@ -60,6 +68,7 @@ export class CurrentTools {
   /**
    * Get today's strain data from Whoop with current date/time in user's timezone.
    * Uses Whoop's physiological day model - returns the most recent scored cycle.
+   * Returns strain data under a whoop parent.
    */
   async getTodaysStrain(): Promise<TodaysStrainResponse> {
     // Use athlete's timezone to get current date/time
@@ -69,7 +78,9 @@ export class CurrentTools {
     if (!this.whoop) {
       return {
         current_date: currentDateTime,
-        strain: null,
+        whoop: {
+          strain: null,
+        },
       };
     }
 
@@ -77,7 +88,9 @@ export class CurrentTools {
       const strain = await this.whoop.getTodayStrain();
       return {
         current_date: currentDateTime,
-        strain,
+        whoop: {
+          strain,
+        },
       };
     } catch (error) {
       console.error('Error fetching today\'s strain:', error);
@@ -271,15 +284,19 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse] = await Promise.all([
+    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
-        return { current_date: getCurrentDateTimeInTimezone(timezone), recovery: null };
+        return { current_date: getCurrentDateTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
       }),
       this.getTodaysStrain().catch((e) => {
         console.error('Error fetching strain for daily summary:', e);
-        return { current_date: getCurrentDateTimeInTimezone(timezone), strain: null };
+        return { current_date: getCurrentDateTimeInTimezone(timezone), whoop: { strain: null } };
       }),
+      this.whoop?.getBodyMeasurements().catch((e) => {
+        console.error('Error fetching body measurements for daily summary:', e);
+        return null;
+      }) ?? Promise.resolve(null),
       this.intervals.getTodayFitness().catch((e) => {
         console.error('Error fetching fitness for daily summary:', e);
         return null;
@@ -299,8 +316,8 @@ export class CurrentTools {
     ]);
 
     // Extract data from response objects
-    const recovery = recoveryResponse.recovery;
-    const strain = strainResponse.strain;
+    const { sleep, recovery } = recoveryResponse.whoop;
+    const { strain } = strainResponse.whoop;
     const completedWorkouts = completedWorkoutsResponse.workouts;
     const plannedWorkouts = plannedWorkoutsResponse.workouts;
 
@@ -326,8 +343,10 @@ export class CurrentTools {
     return {
       current_date: currentDateTime,
       whoop: {
-        recovery,
+        body_measurements: bodyMeasurements,
         strain,
+        sleep,
+        recovery,
       },
       fitness,
       wellness: filteredWellness,

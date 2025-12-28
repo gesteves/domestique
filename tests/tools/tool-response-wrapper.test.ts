@@ -24,11 +24,12 @@ vi.mock('../../src/clients/intervals.js', () => ({
 vi.mock('../../src/clients/whoop.js', () => ({
   WhoopClient: vi.fn().mockImplementation(function () {
     return {
-      getTodayRecovery: vi.fn().mockResolvedValue(null),
+      getTodayRecovery: vi.fn().mockResolvedValue({ sleep: null, recovery: null }),
       getTodayStrain: vi.fn().mockResolvedValue(null),
       getStrainData: vi.fn().mockResolvedValue([]),
       getRecoveries: vi.fn().mockResolvedValue([]),
       getWorkouts: vi.fn().mockResolvedValue([]),
+      getBodyMeasurements: vi.fn().mockResolvedValue(null),
       setTimezoneGetter: vi.fn(),
     };
   }),
@@ -96,16 +97,36 @@ describe('Tool Response Wrapper', () => {
         clientSecret: 'test',
       });
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
-        date: '2024-12-15',
-        recovery_score: 85,
-        hrv_rmssd: 65,
-        resting_heart_rate: 52,
-        sleep_performance_percentage: 90,
-        sleep_duration: '7:30:00',
-        recovery_level: 'SUFFICIENT',
-        recovery_level_description: 'Your recovery is sufficient for hard training',
-        sleep_performance_level: 'OPTIMAL',
-        sleep_performance_level_description: 'Optimal sleep performance',
+        sleep: {
+          sleep_summary: {
+            total_in_bed_time: '8:00:00',
+            total_awake_time: '0:30:00',
+            total_no_data_time: '0:00:00',
+            total_light_sleep_time: '3:30:00',
+            total_slow_wave_sleep_time: '2:00:00',
+            total_rem_sleep_time: '2:00:00',
+            total_restorative_sleep: '4:00:00',
+            sleep_cycle_count: 4,
+            disturbance_count: 3,
+          },
+          sleep_needed: {
+            total_sleep_needed: '7:30:00',
+            baseline: '7:00:00',
+            need_from_sleep_debt: '0:15:00',
+            need_from_recent_strain: '0:15:00',
+            need_from_recent_nap: '0:00:00',
+          },
+          sleep_performance_percentage: 90,
+          sleep_performance_level: 'OPTIMAL',
+          sleep_performance_level_description: 'Optimal sleep performance',
+        },
+        recovery: {
+          recovery_score: 85,
+          hrv_rmssd: 65,
+          resting_heart_rate: 52,
+          recovery_level: 'SUFFICIENT',
+          recovery_level_description: 'Your recovery is sufficient for hard training',
+        },
       });
 
       // Re-create registry to use the mock

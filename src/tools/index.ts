@@ -239,8 +239,8 @@ and will not be updated throughout the day.
       withToolResponse(
         async () => this.currentTools.getTodaysRecovery(),
         {
-          fieldDescriptions: combineFieldDescriptions('todays_recovery', 'recovery'),
-          getNextActions: (data) => data.recovery
+          fieldDescriptions: combineFieldDescriptions('todays_recovery', 'sleep', 'recovery'),
+          getNextActions: (data) => data.whoop.recovery
             ? ['Use get_recovery_trends to see patterns over time', 'Use get_daily_summary for full today overview']
             : undefined,
         }
@@ -266,7 +266,7 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysStrain(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_strain', 'whoop'),
-          getNextActions: (data) => data.strain
+          getNextActions: (data) => data.whoop.strain
             ? ['Use get_strain_history for trends over time', 'Use get_daily_summary for full today overview']
             : undefined,
         }

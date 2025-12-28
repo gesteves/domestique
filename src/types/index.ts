@@ -179,42 +179,115 @@ export interface WorkoutWithWhoop extends NormalizedWorkout {
   whoop: WhoopMatchedData | null;
 }
 
-// Whoop recovery data
-export interface RecoveryData {
-  date: string;
-  // Recovery metrics
-  recovery_score: number;
-  hrv_rmssd: number;
-  resting_heart_rate: number;
-  spo2_percentage?: number;
-  skin_temp_celsius?: number;
-  // Recovery level interpretation (Whoop's official terminology)
-  /** Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%) */
-  recovery_level: 'SUFFICIENT' | 'ADEQUATE' | 'LOW';
-  /** Human-readable description from Whoop */
-  recovery_level_description: string;
-  // Sleep metrics
+// ============================================
+// Whoop Data Types
+// ============================================
+
+/**
+ * Body measurements from Whoop API.
+ * All values in metric units as returned by Whoop.
+ */
+export interface WhoopBodyMeasurements {
+  /** Height in meters, rounded to 2 decimals */
+  height_meter: number;
+  /** Weight in kilograms, rounded to 2 decimals */
+  weight_kilogram: number;
+  /** Maximum heart rate in BPM */
+  max_heart_rate: number;
+}
+
+/**
+ * Sleep summary data (renamed from Whoop's stage_summary).
+ * All durations are humanized (e.g., "8:24:32").
+ */
+export interface WhoopSleepSummary {
+  /** Total time in bed, humanized (e.g., "8:24:32") */
+  total_in_bed_time: string;
+  /** Total awake time during sleep, humanized */
+  total_awake_time: string;
+  /** Total time with no data, humanized */
+  total_no_data_time: string;
+  /** Total light sleep time, humanized */
+  total_light_sleep_time: string;
+  /** Total slow wave (deep) sleep time, humanized */
+  total_slow_wave_sleep_time: string;
+  /** Total REM sleep time, humanized */
+  total_rem_sleep_time: string;
+  /** Total restorative sleep (slow wave + REM), humanized */
+  total_restorative_sleep: string;
+  /** Number of sleep cycles completed */
+  sleep_cycle_count: number;
+  /** Number of disturbances during sleep */
+  disturbance_count: number;
+}
+
+/**
+ * Sleep need breakdown from Whoop.
+ * All durations are humanized (e.g., "7:36:35").
+ */
+export interface WhoopSleepNeeded {
+  /** Total sleep needed (computed sum), humanized */
+  total_sleep_needed: string;
+  /** Baseline sleep need, humanized */
+  baseline: string;
+  /** Additional need from accumulated sleep debt, humanized */
+  need_from_sleep_debt: string;
+  /** Additional need from recent strain, humanized */
+  need_from_recent_strain: string;
+  /** Reduction in need from recent naps (can be negative), humanized */
+  need_from_recent_nap: string;
+}
+
+/**
+ * Whoop sleep data (separated from recovery).
+ */
+export interface WhoopSleepData {
+  /** Sleep summary with stage breakdown */
+  sleep_summary: WhoopSleepSummary;
+  /** Sleep need breakdown */
+  sleep_needed: WhoopSleepNeeded;
+  /** Respiratory rate in breaths per minute, rounded to 2 decimals */
+  respiratory_rate?: number;
+  /** Sleep performance vs. sleep need (0-100%), rounded to 2 decimals */
   sleep_performance_percentage: number;
+  /** Sleep consistency score (0-100%), rounded to 2 decimals */
   sleep_consistency_percentage?: number;
+  /** Sleep efficiency percentage (0-100%), rounded to 2 decimals */
   sleep_efficiency_percentage?: number;
   /** Sleep performance level: OPTIMAL (≥85%), SUFFICIENT (70-85%), POOR (<70%) */
   sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR';
   /** Human-readable sleep performance description from Whoop */
   sleep_performance_level_description: string;
-  // Sleep durations (human-readable, e.g., "7:12:40")
-  sleep_duration: string;
-  sleep_quality_duration?: string; // Deep + REM sleep
-  sleep_needed?: string;
-  // Sleep stage breakdown (human-readable)
-  light_sleep?: string;
-  slow_wave_sleep?: string;
-  rem_sleep?: string;
-  awake_time?: string;
-  in_bed_time?: string;
-  // Sleep details
-  sleep_cycle_count?: number;
-  disturbance_count?: number;
-  respiratory_rate?: number;
+}
+
+/**
+ * Whoop recovery data (separated from sleep).
+ */
+export interface WhoopRecoveryData {
+  /** Recovery score (0-100%) */
+  recovery_score: number;
+  /** Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%) */
+  recovery_level: 'SUFFICIENT' | 'ADEQUATE' | 'LOW';
+  /** Human-readable description from Whoop */
+  recovery_level_description: string;
+  /** Heart Rate Variability in milliseconds (RMSSD), rounded to 2 decimals */
+  hrv_rmssd: number;
+  /** Resting heart rate in BPM */
+  resting_heart_rate: number;
+  /** Blood oxygen saturation (0-100%), rounded to 2 decimals */
+  spo2_percentage?: number;
+  /** Skin temperature in Celsius, rounded to 2 decimals */
+  skin_temp_celsius?: number;
+}
+
+/**
+ * Combined sleep and recovery entry for a single day.
+ * Used in recovery trends.
+ */
+export interface WhoopRecoveryTrendEntry {
+  date: string;
+  sleep: WhoopSleepData;
+  recovery: WhoopRecoveryData;
 }
 
 // Whoop strain data
@@ -700,12 +773,17 @@ export interface WorkoutNotesResponse {
 
 /**
  * Whoop data for the daily summary.
+ * All Whoop data is nested under this object for clarity.
  */
 export interface DailySummaryWhoop {
-  /** Today's Whoop recovery data with insight fields, null if unavailable */
-  recovery: RecoveryData | null;
+  /** Body measurements from Whoop, null if unavailable */
+  body_measurements: WhoopBodyMeasurements | null;
   /** Today's Whoop strain data with insight fields, null if unavailable */
   strain: StrainData | null;
+  /** Today's Whoop sleep data, null if unavailable */
+  sleep: WhoopSleepData | null;
+  /** Today's Whoop recovery data, null if unavailable */
+  recovery: WhoopRecoveryData | null;
 }
 
 /**
@@ -743,14 +821,32 @@ export interface DailySummary {
 // ============================================
 
 /**
+ * Whoop data for today's recovery response.
+ */
+export interface TodaysRecoveryWhoop {
+  /** Today's Whoop sleep data, null if unavailable */
+  sleep: WhoopSleepData | null;
+  /** Today's Whoop recovery data, null if unavailable */
+  recovery: WhoopRecoveryData | null;
+}
+
+/**
  * Today's recovery data with current date/time in user's timezone.
  * Returned by get_todays_recovery tool.
  */
 export interface TodaysRecoveryResponse {
   /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
   current_date: string;
-  /** Today's Whoop recovery data, null if unavailable */
-  recovery: RecoveryData | null;
+  /** Today's Whoop sleep and recovery data */
+  whoop: TodaysRecoveryWhoop;
+}
+
+/**
+ * Whoop data for today's strain response.
+ */
+export interface TodaysStrainWhoop {
+  /** Today's Whoop strain data, null if unavailable */
+  strain: StrainData | null;
 }
 
 /**
@@ -760,8 +856,8 @@ export interface TodaysRecoveryResponse {
 export interface TodaysStrainResponse {
   /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
   current_date: string;
-  /** Today's Whoop strain data, null if unavailable */
-  strain: StrainData | null;
+  /** Today's Whoop strain data */
+  whoop: TodaysStrainWhoop;
 }
 
 /**

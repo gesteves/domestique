@@ -140,28 +140,32 @@ describe('WhoopClient', () => {
       const result = await client.getRecoveries('2024-12-15', '2024-12-15');
 
       expect(result).toHaveLength(1);
-      // Recovery metrics
-      expect(result[0].recovery_score).toBe(85);
-      expect(result[0].hrv_rmssd).toBe(65);
-      expect(result[0].resting_heart_rate).toBe(55);
-      expect(result[0].spo2_percentage).toBe(96.5);
-      expect(result[0].skin_temp_celsius).toBe(33.2);
-      // Sleep performance metrics
-      expect(result[0].sleep_performance_percentage).toBe(95);
-      expect(result[0].sleep_consistency_percentage).toBe(88);
-      expect(result[0].sleep_efficiency_percentage).toBe(92.3);
-      // Sleep duration metrics (human-readable)
-      expect(result[0].sleep_duration).toBe('7:30:00'); // (10800000 + 7200000 + 9000000) ms
-      expect(result[0].in_bed_time).toBe('8:00:00'); // 28800000 ms
-      expect(result[0].awake_time).toBe('0:30:00'); // 1800000 ms
-      // Sleep stage breakdown (human-readable)
-      expect(result[0].light_sleep).toBe('3:00:00'); // 10800000 ms
-      expect(result[0].slow_wave_sleep).toBe('2:00:00'); // 7200000 ms
-      expect(result[0].rem_sleep).toBe('2:30:00'); // 9000000 ms
-      // Sleep details
-      expect(result[0].sleep_cycle_count).toBe(4);
-      expect(result[0].disturbance_count).toBe(2);
-      expect(result[0].respiratory_rate).toBe(15.5);
+      // Date
+      expect(result[0].date).toBe('2024-12-15');
+      // Recovery metrics (nested under recovery)
+      expect(result[0].recovery.recovery_score).toBe(85);
+      expect(result[0].recovery.hrv_rmssd).toBe(65);
+      expect(result[0].recovery.resting_heart_rate).toBe(55);
+      expect(result[0].recovery.spo2_percentage).toBe(96.5);
+      expect(result[0].recovery.skin_temp_celsius).toBe(33.2);
+      expect(result[0].recovery.recovery_level).toBe('SUFFICIENT');
+      // Sleep performance metrics (nested under sleep)
+      expect(result[0].sleep.sleep_performance_percentage).toBe(95);
+      expect(result[0].sleep.sleep_consistency_percentage).toBe(88);
+      expect(result[0].sleep.sleep_efficiency_percentage).toBe(92.3);
+      // Sleep summary (nested)
+      expect(result[0].sleep.sleep_summary.total_in_bed_time).toBe('8:00:00'); // 28800000 ms
+      expect(result[0].sleep.sleep_summary.total_awake_time).toBe('0:30:00'); // 1800000 ms
+      expect(result[0].sleep.sleep_summary.total_light_sleep_time).toBe('3:00:00'); // 10800000 ms
+      expect(result[0].sleep.sleep_summary.total_slow_wave_sleep_time).toBe('2:00:00'); // 7200000 ms
+      expect(result[0].sleep.sleep_summary.total_rem_sleep_time).toBe('2:30:00'); // 9000000 ms
+      expect(result[0].sleep.sleep_summary.total_restorative_sleep).toBe('4:30:00'); // 7200000 + 9000000 = 16200000 ms
+      expect(result[0].sleep.sleep_summary.sleep_cycle_count).toBe(4);
+      expect(result[0].sleep.sleep_summary.disturbance_count).toBe(2);
+      // Sleep needed (nested)
+      expect(result[0].sleep.sleep_needed.baseline).toBe('8:00:00'); // 28800000 ms
+      expect(result[0].sleep.sleep_needed.need_from_recent_strain).toBe('0:30:00'); // 1800000 ms
+      expect(result[0].sleep.respiratory_rate).toBe(15.5);
     });
 
     it('should include authorization header', async () => {
@@ -213,7 +217,7 @@ describe('WhoopClient', () => {
   });
 
   describe('getTodayRecovery', () => {
-    it('should return recovery for most recent scored cycle', async () => {
+    it('should return sleep and recovery for most recent scored cycle', async () => {
       // getTodayRecovery fetches cycles, sleeps, recoveries without date filter
       mockFetch
         .mockResolvedValueOnce({
@@ -280,10 +284,13 @@ describe('WhoopClient', () => {
 
       const result = await client.getTodayRecovery();
 
-      expect(result?.recovery_score).toBe(75);
+      // Returns { sleep, recovery } object
+      expect(result.recovery?.recovery_score).toBe(75);
+      expect(result.sleep?.sleep_performance_percentage).toBe(95);
+      expect(result.sleep?.sleep_summary.total_in_bed_time).toBe('8:00:00');
     });
 
-    it('should return null when no scored cycle', async () => {
+    it('should return null sleep and recovery when no scored cycle', async () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -300,7 +307,8 @@ describe('WhoopClient', () => {
 
       const result = await client.getTodayRecovery();
 
-      expect(result).toBeNull();
+      expect(result.sleep).toBeNull();
+      expect(result.recovery).toBeNull();
     });
   });
 

@@ -4,7 +4,6 @@ import { parseDateString, getToday, parseDateStringInTimezone, getTodayInTimezon
 import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import { parseDurationToHours } from '../utils/format-units.js';
 import type {
-  RecoveryData,
   TrainingLoadTrends,
   WorkoutWithWhoop,
   StrainActivity,
@@ -28,6 +27,7 @@ import type {
   HRCurveComparison,
   ActivityHRCurve,
   WellnessTrends,
+  WhoopRecoveryTrendEntry,
 } from '../types/index.js';
 import { filterWhoopDuplicateFieldsFromTrends } from '../types/index.js';
 import type {
@@ -109,12 +109,13 @@ export class HistoricalTools {
   }
 
   /**
-   * Get recovery trends over time
+   * Get recovery trends over time.
+   * Returns entries with nested sleep and recovery objects.
    */
   async getRecoveryTrends(
     params: GetRecoveryTrendsInput
   ): Promise<{
-    data: RecoveryData[];
+    data: WhoopRecoveryTrendEntry[];
     summary: {
       avg_recovery: number;
       avg_hrv: number;
@@ -156,7 +157,7 @@ export class HistoricalTools {
     }
   }
 
-  private calculateRecoverySummary(data: RecoveryData[]): {
+  private calculateRecoverySummary(data: WhoopRecoveryTrendEntry[]): {
     avg_recovery: number;
     avg_hrv: number;
     avg_sleep_hours: number;
@@ -173,9 +174,10 @@ export class HistoricalTools {
       };
     }
 
-    const recoveryScores = data.map((d) => d.recovery_score);
-    const hrvValues = data.map((d) => d.hrv_rmssd);
-    const sleepHours = data.map((d) => parseDurationToHours(d.sleep_duration));
+    const recoveryScores = data.map((d) => d.recovery.recovery_score);
+    const hrvValues = data.map((d) => d.recovery.hrv_rmssd);
+    // Calculate sleep hours from total_in_bed_time in sleep_summary
+    const sleepHours = data.map((d) => parseDurationToHours(d.sleep.sleep_summary.total_in_bed_time));
 
     return {
       avg_recovery: this.average(recoveryScores),

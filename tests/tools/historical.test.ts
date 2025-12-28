@@ -4,7 +4,7 @@ import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import type {
   NormalizedWorkout,
-  RecoveryData,
+  WhoopRecoveryTrendEntry,
   StrainActivity,
   WellnessTrends,
   TrainingLoadTrends,
@@ -165,30 +165,105 @@ describe('HistoricalTools', () => {
   });
 
   describe('getRecoveryTrends', () => {
-    const mockRecoveries: RecoveryData[] = [
+    const mockRecoveries: WhoopRecoveryTrendEntry[] = [
       {
         date: '2024-12-13',
-        recovery_score: 80,
-        hrv_rmssd: 60,
-        resting_heart_rate: 52,
-        sleep_performance_percentage: 85,
-        sleep_duration: '7:30:00',
+        sleep: {
+          sleep_summary: {
+            total_in_bed_time: '8:00:00',
+            total_awake_time: '0:30:00',
+            total_no_data_time: '0:00:00',
+            total_light_sleep_time: '3:30:00',
+            total_slow_wave_sleep_time: '2:00:00',
+            total_rem_sleep_time: '2:00:00',
+            total_restorative_sleep: '4:00:00',
+            sleep_cycle_count: 4,
+            disturbance_count: 2,
+          },
+          sleep_needed: {
+            total_sleep_needed: '7:30:00',
+            baseline: '7:00:00',
+            need_from_sleep_debt: '0:15:00',
+            need_from_recent_strain: '0:15:00',
+            need_from_recent_nap: '0:00:00',
+          },
+          sleep_performance_percentage: 85,
+          sleep_performance_level: 'OPTIMAL',
+          sleep_performance_level_description: 'Optimal sleep',
+        },
+        recovery: {
+          recovery_score: 80,
+          hrv_rmssd: 60,
+          resting_heart_rate: 52,
+          recovery_level: 'SUFFICIENT',
+          recovery_level_description: 'Sufficient recovery',
+        },
       },
       {
         date: '2024-12-14',
-        recovery_score: 70,
-        hrv_rmssd: 55,
-        resting_heart_rate: 54,
-        sleep_performance_percentage: 75,
-        sleep_duration: '6:30:00',
+        sleep: {
+          sleep_summary: {
+            total_in_bed_time: '7:00:00',
+            total_awake_time: '0:30:00',
+            total_no_data_time: '0:00:00',
+            total_light_sleep_time: '3:00:00',
+            total_slow_wave_sleep_time: '1:30:00',
+            total_rem_sleep_time: '2:00:00',
+            total_restorative_sleep: '3:30:00',
+            sleep_cycle_count: 3,
+            disturbance_count: 4,
+          },
+          sleep_needed: {
+            total_sleep_needed: '7:30:00',
+            baseline: '7:00:00',
+            need_from_sleep_debt: '0:20:00',
+            need_from_recent_strain: '0:10:00',
+            need_from_recent_nap: '0:00:00',
+          },
+          sleep_performance_percentage: 75,
+          sleep_performance_level: 'SUFFICIENT',
+          sleep_performance_level_description: 'Sufficient sleep',
+        },
+        recovery: {
+          recovery_score: 70,
+          hrv_rmssd: 55,
+          resting_heart_rate: 54,
+          recovery_level: 'ADEQUATE',
+          recovery_level_description: 'Adequate recovery',
+        },
       },
       {
         date: '2024-12-15',
-        recovery_score: 90,
-        hrv_rmssd: 70,
-        resting_heart_rate: 50,
-        sleep_performance_percentage: 95,
-        sleep_duration: '8:00:00',
+        sleep: {
+          sleep_summary: {
+            total_in_bed_time: '8:30:00',
+            total_awake_time: '0:30:00',
+            total_no_data_time: '0:00:00',
+            total_light_sleep_time: '4:00:00',
+            total_slow_wave_sleep_time: '2:00:00',
+            total_rem_sleep_time: '2:00:00',
+            total_restorative_sleep: '4:00:00',
+            sleep_cycle_count: 4,
+            disturbance_count: 1,
+          },
+          sleep_needed: {
+            total_sleep_needed: '7:30:00',
+            baseline: '7:00:00',
+            need_from_sleep_debt: '0:15:00',
+            need_from_recent_strain: '0:15:00',
+            need_from_recent_nap: '0:00:00',
+          },
+          sleep_performance_percentage: 95,
+          sleep_performance_level: 'OPTIMAL',
+          sleep_performance_level_description: 'Optimal sleep',
+        },
+        recovery: {
+          recovery_score: 90,
+          hrv_rmssd: 70,
+          resting_heart_rate: 50,
+          recovery_level: 'SUFFICIENT',
+          recovery_level_description: 'Sufficient recovery',
+        },
       },
     ];
 
@@ -203,7 +278,7 @@ describe('HistoricalTools', () => {
       expect(result.data).toEqual(mockRecoveries);
       expect(result.summary.avg_recovery).toBe(80); // (80 + 70 + 90) / 3
       expect(result.summary.avg_hrv).toBeCloseTo(61.7, 1); // (60 + 55 + 70) / 3
-      expect(result.summary.avg_sleep_hours).toBeCloseTo(7.3, 1); // (7.5 + 6.5 + 8.0) / 3
+      expect(result.summary.avg_sleep_hours).toBeCloseTo(7.8, 1); // (8 + 7 + 8.5) / 3 based on total_in_bed_time
       expect(result.summary.min_recovery).toBe(70);
       expect(result.summary.max_recovery).toBe(90);
     });
