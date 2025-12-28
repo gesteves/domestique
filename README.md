@@ -11,9 +11,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Comprehensive workout analysis with intervals, notes, and weather data
 - Incorporates heat strain data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
 
-### Known Limitations
-
-Due to Strava API restrictions, workouts imported from Strava to Intervals.icu cannot be analyzed. To work around this, ensure that workouts are synced to Intervals.icu from other sources (Zwift, Garmin Connect, Dropbox, etc.)
+**Note:** Due to Strava API restrictions, workouts imported from Strava to Intervals.icu cannot be analyzed. To work around this, ensure that workouts are synced to Intervals.icu from other sources (Zwift, Garmin Connect, Dropbox, etc.)
 
 ## Available Tools
 
