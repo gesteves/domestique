@@ -24,6 +24,10 @@ import {
   getWhoopAccessToken,
   getWhoopRefreshToken,
   storeWhoopTokens,
+  acquireRefreshLock,
+  releaseRefreshLock,
+  invalidateWhoopAccessToken,
+  getRefreshTokenVersion,
 } from '../utils/redis.js';
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
 
@@ -32,12 +36,21 @@ const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
 
 const MAX_RETRY_ATTEMPTS = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
+const LOCK_WAIT_INTERVAL_MS = 500;
+const MAX_LOCK_WAIT_ATTEMPTS = 6; // 3 seconds total wait time
 
 /**
  * Sleep for a given number of milliseconds
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Generate a unique lock ID for this process/request
+ */
+function generateLockId(): string {
+  return `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**
@@ -342,14 +355,18 @@ export class WhoopClient {
 
   /**
    * Get a valid access token, refreshing if necessary.
-   * Tries Redis cache first, then falls back to refresh.
-   * Includes retry logic for transient failures.
-   * Uses a mutex to prevent concurrent refresh attempts.
+   * Uses Redis-based distributed locking to prevent concurrent refresh attempts.
+   * Flow:
+   * 1. Check Redis for cached access token
+   * 2. Check in-memory token validity
+   * 3. Try to acquire distributed lock
+   * 4. If lock acquired, refresh token
+   * 5. If lock not acquired, wait and check for fresh token
    */
   private async ensureValidToken(): Promise<void> {
-    // If a refresh is already in progress, wait for it
+    // If a local refresh is already in progress, wait for it
     if (this.refreshPromise) {
-      console.log('[Whoop] Token refresh already in progress, waiting...');
+      console.log('[Whoop] Local token refresh already in progress, waiting...');
       await this.refreshPromise;
       return;
     }
@@ -363,31 +380,114 @@ export class WhoopClient {
       return;
     }
 
-    // Check if current in-memory token is still valid
+    // Check if current in-memory token is still valid (5 min buffer)
     if (Date.now() < this.tokenExpiresAt - 5 * 60 * 1000) {
       console.log('[Whoop] Using valid in-memory access token');
       return;
     }
 
-    // Start the refresh process and store the promise
-    this.refreshPromise = this.performTokenRefresh();
+    // Need to refresh - try to acquire distributed lock
+    const lockId = generateLockId();
+    console.log(`[Whoop] Token expired, attempting refresh with lock ID: ${lockId}`);
 
-    try {
-      await this.refreshPromise;
-    } finally {
-      // Clear the promise when done (success or failure)
-      this.refreshPromise = null;
+    // Record the current token version before attempting refresh
+    const versionBeforeRefresh = await getRefreshTokenVersion();
+
+    // Try to acquire the lock
+    const lockAcquired = await acquireRefreshLock(lockId);
+
+    if (lockAcquired) {
+      // We got the lock - perform the refresh
+      console.log('[Whoop] Acquired refresh lock, starting token refresh');
+      this.refreshPromise = this.performTokenRefresh(lockId);
+
+      try {
+        await this.refreshPromise;
+      } finally {
+        this.refreshPromise = null;
+        await releaseRefreshLock(lockId);
+      }
+    } else {
+      // Another process is refreshing - wait and check for fresh token
+      console.log('[Whoop] Lock held by another process, waiting for refresh to complete...');
+      await this.waitForFreshToken(versionBeforeRefresh);
+    }
+  }
+
+  /**
+   * Wait for another process to complete token refresh.
+   * Polls Redis for a fresh token with the new version.
+   */
+  private async waitForFreshToken(versionBeforeRefresh: number): Promise<void> {
+    for (let attempt = 1; attempt <= MAX_LOCK_WAIT_ATTEMPTS; attempt++) {
+      await sleep(LOCK_WAIT_INTERVAL_MS);
+
+      // Check if a fresh access token is now available
+      const freshToken = await getWhoopAccessToken();
+      if (freshToken) {
+        console.log(`[Whoop] Fresh token found in Redis after ${attempt} wait(s)`);
+        this.accessToken = freshToken.token;
+        this.tokenExpiresAt = freshToken.expiresAt;
+        return;
+      }
+
+      // Check if the token version has changed (indicating successful refresh)
+      const currentVersion = await getRefreshTokenVersion();
+      if (currentVersion > versionBeforeRefresh) {
+        // Version changed - try to get the fresh access token one more time
+        const newToken = await getWhoopAccessToken();
+        if (newToken) {
+          console.log(`[Whoop] Token version updated (${versionBeforeRefresh} -> ${currentVersion}), using fresh token`);
+          this.accessToken = newToken.token;
+          this.tokenExpiresAt = newToken.expiresAt;
+          return;
+        }
+      }
+
+      console.log(`[Whoop] Wait attempt ${attempt}/${MAX_LOCK_WAIT_ATTEMPTS}, no fresh token yet...`);
+    }
+
+    // Exhausted wait attempts - try to refresh ourselves
+    console.log('[Whoop] Wait timeout, attempting our own refresh...');
+    const lockId = generateLockId();
+    const lockAcquired = await acquireRefreshLock(lockId);
+
+    if (lockAcquired) {
+      try {
+        await this.performTokenRefresh(lockId);
+      } finally {
+        await releaseRefreshLock(lockId);
+      }
+    } else {
+      // Still can't get lock - one more check for fresh token
+      const finalToken = await getWhoopAccessToken();
+      if (finalToken) {
+        console.log('[Whoop] Found fresh token on final check');
+        this.accessToken = finalToken.token;
+        this.tokenExpiresAt = finalToken.expiresAt;
+        return;
+      }
+      throw WhoopApiError.tokenRefreshError(0, new Error('Timeout waiting for token refresh'));
     }
   }
 
   /**
    * Perform the actual token refresh with retry logic.
-   * This is separated from ensureValidToken to allow mutex-based concurrency control.
+   * Must be called while holding the distributed lock.
    */
-  private async performTokenRefresh(): Promise<void> {
-    // Try to get refresh token from Redis, fall back to config
+  private async performTokenRefresh(lockId: string): Promise<void> {
+    // Double-check: maybe someone else refreshed while we were waiting for the lock
+    const freshToken = await getWhoopAccessToken();
+    if (freshToken) {
+      console.log('[Whoop] Fresh token found after acquiring lock, skipping refresh');
+      this.accessToken = freshToken.token;
+      this.tokenExpiresAt = freshToken.expiresAt;
+      return;
+    }
+
+    // Get refresh token from Redis, fall back to config
     const storedRefreshToken = await getWhoopRefreshToken();
-    const refreshToken = storedRefreshToken ?? this.refreshToken;
+    const refreshToken = storedRefreshToken?.token ?? this.refreshToken;
     const tokenSource = storedRefreshToken ? 'Redis' : 'config';
     console.log(`[Whoop] Starting token refresh using ${tokenSource} refresh token: ${this.maskToken(refreshToken)}`);
 
@@ -397,7 +497,7 @@ export class WhoopClient {
     for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
       attemptsMade = attempt;
       try {
-        console.log(`[Whoop] Token refresh attempt ${attempt}/${MAX_RETRY_ATTEMPTS}`);
+        console.log(`[Whoop] Token refresh attempt ${attempt}/${MAX_RETRY_ATTEMPTS} (lock: ${lockId.slice(-8)})`);
         const response = await fetch(WHOOP_AUTH_URL, {
           method: 'POST',
           headers: {
@@ -424,12 +524,13 @@ export class WhoopClient {
           this.tokenExpiresAt = Date.now() + data.expires_in * 1000;
           this.refreshToken = data.refresh_token;
 
-          // Store tokens in Redis for future use
-          await storeWhoopTokens({
+          // Store tokens in Redis for other processes to use
+          const storeResult = await storeWhoopTokens({
             accessToken: this.accessToken,
             refreshToken: this.refreshToken,
             expiresAt: this.tokenExpiresAt,
           });
+          console.log(`[Whoop] Tokens stored in Redis, version: ${storeResult.version}`);
           return;
         }
 
@@ -439,34 +540,46 @@ export class WhoopClient {
 
         // Determine if this is a retryable error
         const isServerError = response.status >= 500 && response.status < 600;
-        const isClientError = response.status >= 400 && response.status < 500;
         lastError = new Error(
           `Whoop token refresh failed: ${response.status} ${response.statusText}`
         );
 
-        // For 400 errors, check if another request already refreshed the token
+        // For 400 errors, the refresh token might have been used by another process
+        // that completed between our lock check and actual refresh
         if (response.status === 400) {
-          console.log('[Whoop] Got 400 error, checking if another request already refreshed the token...');
-          const freshToken = await getWhoopAccessToken();
-          if (freshToken) {
-            console.log('[Whoop] Found fresh access token in Redis (likely refreshed by concurrent request), using it');
-            this.accessToken = freshToken.token;
-            this.tokenExpiresAt = freshToken.expiresAt;
+          console.log('[Whoop] Got 400 error, checking if token was refreshed by another process...');
+          const freshTokenCheck = await getWhoopAccessToken();
+          if (freshTokenCheck) {
+            console.log('[Whoop] Found fresh access token (refreshed by another process), using it');
+            this.accessToken = freshTokenCheck.token;
+            this.tokenExpiresAt = freshTokenCheck.expiresAt;
             return;
           }
-          console.log('[Whoop] No fresh token found in Redis, will retry if attempts remain');
+          // No fresh token - the refresh token might be genuinely invalid
+          console.log('[Whoop] No fresh token found, refresh token may be invalid');
         }
 
-        // Retry on server errors (5xx) or client errors (4xx) with backoff
-        if ((isServerError || isClientError) && attempt < MAX_RETRY_ATTEMPTS) {
-          // Exponential backoff: 1s, 2s, 4s...
+        // Retry on server errors (5xx) with backoff
+        if (isServerError && attempt < MAX_RETRY_ATTEMPTS) {
           const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-          console.log(`[Whoop] ${isServerError ? 'Server' : 'Client'} error, retrying in ${delayMs}ms...`);
+          console.log(`[Whoop] Server error, retrying in ${delayMs}ms...`);
           await sleep(delayMs);
           continue;
         }
 
-        // Exhausted retries
+        // For 400 errors, don't retry - the refresh token is likely invalid
+        if (response.status === 400) {
+          break;
+        }
+
+        // For other client errors, retry with backoff
+        if (attempt < MAX_RETRY_ATTEMPTS) {
+          const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+          console.log(`[Whoop] Client error, retrying in ${delayMs}ms...`);
+          await sleep(delayMs);
+          continue;
+        }
+
         break;
       } catch (error) {
         // Network errors are retryable
@@ -486,6 +599,30 @@ export class WhoopClient {
     throw WhoopApiError.tokenRefreshError(attemptsMade, lastError ?? undefined);
   }
 
+  /**
+   * Perform the actual HTTP fetch to the Whoop API.
+   * Separated from fetch() to allow retry logic.
+   */
+  private async doFetch(
+    url: string,
+    errorContext: { operation: string; resource?: string; parameters?: Record<string, string> }
+  ): Promise<Response> {
+    try {
+      return await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+    } catch (error) {
+      throw WhoopApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+    }
+  }
+
+  /**
+   * Fetch data from the Whoop API with automatic token refresh and 401 retry.
+   * If a 401 is received, invalidates the cached token and retries once.
+   */
   private async fetch<T>(
     endpoint: string,
     params?: Record<string, string>,
@@ -505,30 +642,42 @@ export class WhoopClient {
       resource: undefined,
     };
 
-    try {
-      const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          Accept: 'application/json',
-        },
-      });
+    const fullErrorContext = {
+      ...errorContext,
+      parameters: params,
+    };
 
-      if (!response.ok) {
-        throw WhoopApiError.fromHttpStatus(response.status, {
-          ...errorContext,
-          parameters: params,
-        });
-      }
+    // First attempt
+    let response = await this.doFetch(url.toString(), fullErrorContext);
 
-      return response.json() as Promise<T>;
-    } catch (error) {
-      // Re-throw if it's already our error type
-      if (error instanceof WhoopApiError) {
-        throw error;
+    // Handle 401 with retry
+    if (response.status === 401) {
+      console.log(`[Whoop] Got 401 on ${endpoint}, invalidating token and retrying...`);
+      
+      // Invalidate the cached access token to force refresh
+      await invalidateWhoopAccessToken();
+      
+      // Reset in-memory token expiry to force refresh
+      this.tokenExpiresAt = 0;
+      
+      // Get a fresh token
+      await this.ensureValidToken();
+      
+      // Retry the request once
+      response = await this.doFetch(url.toString(), fullErrorContext);
+      
+      if (response.status === 401) {
+        // Still 401 after refresh - something is wrong
+        console.error(`[Whoop] Still got 401 after token refresh on ${endpoint}`);
+        throw WhoopApiError.fromHttpStatus(response.status, fullErrorContext);
       }
-      // Network or other errors
-      throw WhoopApiError.networkError(errorContext, error instanceof Error ? error : undefined);
     }
+
+    if (!response.ok) {
+      throw WhoopApiError.fromHttpStatus(response.status, fullErrorContext);
+    }
+
+    return response.json() as Promise<T>;
   }
 
   /**

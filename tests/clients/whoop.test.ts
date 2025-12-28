@@ -5,10 +5,22 @@ import { WhoopClient } from '../../src/clients/whoop.js';
 vi.mock('../../src/utils/redis.js', () => ({
   getWhoopAccessToken: vi.fn().mockResolvedValue(null),
   getWhoopRefreshToken: vi.fn().mockResolvedValue(null),
-  storeWhoopTokens: vi.fn().mockResolvedValue(true),
+  storeWhoopTokens: vi.fn().mockResolvedValue({ success: true, version: 1 }),
+  acquireRefreshLock: vi.fn().mockResolvedValue(true),
+  releaseRefreshLock: vi.fn().mockResolvedValue(undefined),
+  invalidateWhoopAccessToken: vi.fn().mockResolvedValue(true),
+  getRefreshTokenVersion: vi.fn().mockResolvedValue(0),
 }));
 
-import { getWhoopAccessToken, getWhoopRefreshToken, storeWhoopTokens } from '../../src/utils/redis.js';
+import {
+  getWhoopAccessToken,
+  getWhoopRefreshToken,
+  storeWhoopTokens,
+  acquireRefreshLock,
+  releaseRefreshLock,
+  invalidateWhoopAccessToken,
+  getRefreshTokenVersion,
+} from '../../src/utils/redis.js';
 
 describe('WhoopClient', () => {
   let client: WhoopClient;
@@ -30,7 +42,11 @@ describe('WhoopClient', () => {
     // Reset redis mocks
     vi.mocked(getWhoopAccessToken).mockResolvedValue(null);
     vi.mocked(getWhoopRefreshToken).mockResolvedValue(null);
-    vi.mocked(storeWhoopTokens).mockResolvedValue(true);
+    vi.mocked(storeWhoopTokens).mockResolvedValue({ success: true, version: 1 });
+    vi.mocked(acquireRefreshLock).mockResolvedValue(true);
+    vi.mocked(releaseRefreshLock).mockResolvedValue(undefined);
+    vi.mocked(invalidateWhoopAccessToken).mockResolvedValue(true);
+    vi.mocked(getRefreshTokenVersion).mockResolvedValue(0);
   });
 
   afterEach(() => {
@@ -585,7 +601,11 @@ describe('WhoopClient', () => {
       // Force token expiry
       (client as any).tokenExpiresAt = 0;
       vi.mocked(getWhoopAccessToken).mockResolvedValue(null);
-      vi.mocked(getWhoopRefreshToken).mockResolvedValue('stored-refresh-token');
+      vi.mocked(getWhoopRefreshToken).mockResolvedValue({
+        token: 'stored-refresh-token',
+        version: 1,
+        updatedAt: Date.now(),
+      });
 
       mockFetch
         .mockResolvedValueOnce({
@@ -636,6 +656,127 @@ describe('WhoopClient', () => {
 
       await expect(client.getWorkouts('2024-12-15', '2024-12-15'))
         .rejects.toThrow('Whoop is temporarily unavailable');
+    });
+  });
+
+  describe('401 retry behavior', () => {
+    it('should retry once on 401 and succeed with fresh token', async () => {
+      // First call returns 401
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+        })
+        // Token refresh succeeds
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'new-access-token',
+            refresh_token: 'new-refresh-token',
+            expires_in: 3600,
+          }),
+        })
+        // Retry succeeds
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [] }),
+        });
+
+      const result = await client.getWorkouts('2024-12-15', '2024-12-15');
+
+      expect(result).toEqual([]);
+      expect(invalidateWhoopAccessToken).toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledTimes(3); // Original call + refresh + retry
+    });
+
+    it('should throw error if still 401 after retry', async () => {
+      // Both calls return 401
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+        })
+        // Token refresh succeeds
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'new-access-token',
+            refresh_token: 'new-refresh-token',
+            expires_in: 3600,
+          }),
+        })
+        // Retry still fails with 401
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+        });
+
+      await expect(client.getWorkouts('2024-12-15', '2024-12-15'))
+        .rejects.toThrow('Authentication failed with Whoop');
+    });
+  });
+
+  describe('distributed locking', () => {
+    it('should acquire and release lock during token refresh', async () => {
+      // Create a fresh client to avoid interference from other tests
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokenExpiresAt = 0;
+      
+      // Reset mocks
+      mockFetch.mockReset();
+      vi.mocked(getWhoopAccessToken).mockResolvedValue(null);
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'new-access-token',
+            refresh_token: 'new-refresh-token',
+            expires_in: 3600,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [] }),
+        });
+
+      await freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      expect(acquireRefreshLock).toHaveBeenCalled();
+      expect(releaseRefreshLock).toHaveBeenCalled();
+    });
+
+    it('should skip refresh if fresh token appears after acquiring lock', async () => {
+      // Create a fresh client to avoid interference from other tests
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokenExpiresAt = 0;
+      
+      // Reset mocks
+      mockFetch.mockReset();
+
+      // Lock is acquired, but fresh token appears between lock and refresh
+      vi.mocked(getWhoopAccessToken)
+        .mockResolvedValueOnce(null) // First check
+        .mockResolvedValueOnce({ // After acquiring lock (inside performTokenRefresh)
+          token: 'appeared-while-waiting',
+          expiresAt: Date.now() + 3600000,
+        });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ records: [] }),
+      });
+
+      await freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      const callOptions = mockFetch.mock.calls[0][1] as RequestInit;
+      const auth = (callOptions.headers as Record<string, string>).Authorization;
+      expect(auth).toBe('Bearer appeared-while-waiting');
+      // Should not have called the OAuth endpoint
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 });

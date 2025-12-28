@@ -157,10 +157,11 @@ describe('Redis utilities', () => {
   });
 
   describe('Whoop token helpers', () => {
-    it('should store Whoop tokens', async () => {
+    it('should store Whoop tokens with version tracking', async () => {
       process.env.REDIS_URL = 'redis://localhost:6379';
       mockRedisClient.setEx.mockResolvedValue('OK');
       mockRedisClient.set.mockResolvedValue('OK');
+      mockRedisClient.get.mockResolvedValue(null); // No existing token
 
       const { storeWhoopTokens } = await import('../../src/utils/redis.js');
       const result = await storeWhoopTokens({
@@ -169,12 +170,36 @@ describe('Redis utilities', () => {
         expiresAt: Date.now() + 3600000, // 1 hour from now
       });
 
-      expect(result).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.version).toBe(1);
       expect(mockRedisClient.setEx).toHaveBeenCalled();
+      // Refresh token should be stored as JSON with version
       expect(mockRedisClient.set).toHaveBeenCalledWith(
         'whoop:refresh_token',
-        'refresh-token'
+        expect.stringContaining('"token":"refresh-token"')
       );
+    });
+
+    it('should increment version when storing tokens', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.setEx.mockResolvedValue('OK');
+      mockRedisClient.set.mockResolvedValue('OK');
+      // Existing token with version 5
+      mockRedisClient.get.mockResolvedValue(JSON.stringify({
+        token: 'old-token',
+        version: 5,
+        updatedAt: Date.now() - 1000,
+      }));
+
+      const { storeWhoopTokens } = await import('../../src/utils/redis.js');
+      const result = await storeWhoopTokens({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresAt: Date.now() + 3600000,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.version).toBe(6);
     });
 
     it('should return null for access token when not available', async () => {
@@ -214,14 +239,149 @@ describe('Redis utilities', () => {
       expect(result).toBeNull();
     });
 
-    it('should return refresh token when stored', async () => {
+    it('should return refresh token with version when stored as JSON', async () => {
       process.env.REDIS_URL = 'redis://localhost:6379';
-      mockRedisClient.get.mockResolvedValue('stored-refresh-token');
+      mockRedisClient.get.mockResolvedValue(JSON.stringify({
+        token: 'stored-refresh-token',
+        version: 3,
+        updatedAt: 1234567890,
+      }));
 
       const { getWhoopRefreshToken } = await import('../../src/utils/redis.js');
       const result = await getWhoopRefreshToken();
 
-      expect(result).toBe('stored-refresh-token');
+      expect(result).toEqual({
+        token: 'stored-refresh-token',
+        version: 3,
+        updatedAt: 1234567890,
+      });
+    });
+
+    it('should handle legacy plain string refresh token', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue('legacy-plain-token');
+
+      const { getWhoopRefreshToken } = await import('../../src/utils/redis.js');
+      const result = await getWhoopRefreshToken();
+
+      expect(result).toEqual({
+        token: 'legacy-plain-token',
+        version: 0,
+        updatedAt: 0,
+      });
+    });
+
+    it('should invalidate access token', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.del.mockResolvedValue(1);
+
+      const { invalidateWhoopAccessToken } = await import('../../src/utils/redis.js');
+      const result = await invalidateWhoopAccessToken();
+
+      expect(result).toBe(true);
+      expect(mockRedisClient.del).toHaveBeenCalledWith('whoop:access_token');
+    });
+
+    it('should get refresh token version', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue(JSON.stringify({
+        token: 'token',
+        version: 42,
+        updatedAt: 1234567890,
+      }));
+
+      const { getRefreshTokenVersion } = await import('../../src/utils/redis.js');
+      const result = await getRefreshTokenVersion();
+
+      expect(result).toBe(42);
+    });
+
+    it('should return 0 for version when no token exists', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue(null);
+
+      const { getRefreshTokenVersion } = await import('../../src/utils/redis.js');
+      const result = await getRefreshTokenVersion();
+
+      expect(result).toBe(0);
+    });
+  });
+
+  describe('Distributed locking', () => {
+    it('should acquire lock when not held', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.set.mockResolvedValue('OK');
+
+      const { acquireRefreshLock } = await import('../../src/utils/redis.js');
+      const result = await acquireRefreshLock('lock-id-123');
+
+      expect(result).toBe(true);
+      expect(mockRedisClient.set).toHaveBeenCalledWith(
+        'whoop:refresh_lock',
+        'lock-id-123',
+        { NX: true, EX: 10 }
+      );
+    });
+
+    it('should fail to acquire lock when already held', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.set.mockResolvedValue(null); // SET NX returns null when key exists
+
+      const { acquireRefreshLock } = await import('../../src/utils/redis.js');
+      const result = await acquireRefreshLock('lock-id-123');
+
+      expect(result).toBe(false);
+    });
+
+    it('should release lock when owner', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue('lock-id-123');
+      mockRedisClient.del.mockResolvedValue(1);
+
+      const { releaseRefreshLock } = await import('../../src/utils/redis.js');
+      await releaseRefreshLock('lock-id-123');
+
+      expect(mockRedisClient.del).toHaveBeenCalledWith('whoop:refresh_lock');
+    });
+
+    it('should not release lock when not owner', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue('different-lock-id');
+
+      const { releaseRefreshLock } = await import('../../src/utils/redis.js');
+      await releaseRefreshLock('lock-id-123');
+
+      expect(mockRedisClient.del).not.toHaveBeenCalled();
+    });
+
+    it('should check if lock is held', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue('some-lock-id');
+
+      const { isRefreshLockHeld } = await import('../../src/utils/redis.js');
+      const result = await isRefreshLockHeld();
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when lock is not held', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue(null);
+
+      const { isRefreshLockHeld } = await import('../../src/utils/redis.js');
+      const result = await isRefreshLockHeld();
+
+      expect(result).toBe(false);
+    });
+
+    it('should allow lock acquisition when Redis is not available', async () => {
+      delete process.env.REDIS_URL;
+
+      const { acquireRefreshLock } = await import('../../src/utils/redis.js');
+      const result = await acquireRefreshLock('lock-id-123');
+
+      // Without Redis, we allow the refresh (fail open)
+      expect(result).toBe(true);
     });
   });
 
