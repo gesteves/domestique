@@ -250,6 +250,53 @@ interface IntervalsWellness {
   ctlLoad?: number; // Weighted contribution to CTL from this day's training
   atlLoad?: number; // Weighted contribution to ATL from this day's training
   weight?: number; // Weight in kilograms
+
+  // Heart rate and HRV
+  restingHR?: number;
+  hrv?: number; // rMSSD in milliseconds
+  hrvSDNN?: number; // SDNN in milliseconds
+
+  // Menstrual cycle
+  menstrualPhase?: string;
+  menstrualPhasePredicted?: string;
+
+  // Nutrition
+  kcalConsumed?: number;
+
+  // Sleep
+  sleepSecs?: number;
+  sleepScore?: number;
+  sleepQuality?: number; // 1=GREAT, 2=GOOD, 3=AVG, 4=POOR
+  avgSleepingHR?: number;
+
+  // Subjective metrics (1-4 scale)
+  soreness?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  fatigue?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  stress?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  mood?: number; // 1=GREAT, 2=GOOD, 3=OK, 4=GRUMPY
+  motivation?: number; // 1=EXTREME, 2=HIGH, 3=AVG, 4=LOW
+  injury?: number; // 1=NONE, 2=NIGGLE, 3=POOR, 4=INJURED
+  hydration?: number; // 1=GOOD, 2=OK, 3=POOR, 4=BAD
+
+  // Vitals
+  spO2?: number;
+  systolic?: number;
+  diastolic?: number;
+  hydrationVolume?: number;
+  respiration?: number;
+
+  // Readiness and body composition
+  readiness?: number;
+  baevskySI?: number;
+  bloodGlucose?: number;
+  lactate?: number;
+  bodyFat?: number;
+  abdomen?: number;
+  vo2max?: number;
+
+  // Activity and notes
+  steps?: number;
+  comments?: string;
 }
 
 interface IntervalsEvent {
@@ -1447,19 +1494,164 @@ export class IntervalsClient {
   }
 
   /**
-   * Get today's wellness data (weight, etc.) using the athlete's timezone.
-   * Uses the single-date endpoint which returns actual weight values.
+   * Format sleep seconds to human-readable string like "8h 10m".
+   */
+  private formatSleepDuration(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.round((seconds % 3600) / 60);
+    if (hours === 0) {
+      return `${minutes}m`;
+    }
+    if (minutes === 0) {
+      return `${hours}h`;
+    }
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * Convert raw wellness data from API to WellnessData type.
+   * Only includes fields that have non-null values.
+   */
+  private mapWellnessData(data: IntervalsWellness): WellnessData {
+    const result: WellnessData = {};
+
+    // Weight
+    if (data.weight != null) {
+      result.weight = `${data.weight} kg`;
+    }
+
+    // Heart rate and HRV
+    if (data.restingHR != null) {
+      result.resting_hr = data.restingHR;
+    }
+    if (data.hrv != null) {
+      result.hrv = data.hrv;
+    }
+    if (data.hrvSDNN != null) {
+      result.hrv_sdnn = data.hrvSDNN;
+    }
+
+    // Menstrual cycle
+    if (data.menstrualPhase != null) {
+      result.menstrual_phase = data.menstrualPhase;
+    }
+    if (data.menstrualPhasePredicted != null) {
+      result.menstrual_phase_predicted = data.menstrualPhasePredicted;
+    }
+
+    // Nutrition
+    if (data.kcalConsumed != null) {
+      result.kcal_consumed = data.kcalConsumed;
+    }
+
+    // Sleep
+    if (data.sleepSecs != null) {
+      result.sleep_duration = this.formatSleepDuration(data.sleepSecs);
+    }
+    if (data.sleepScore != null) {
+      result.sleep_score = data.sleepScore;
+    }
+    if (data.sleepQuality != null) {
+      result.sleep_quality = data.sleepQuality;
+    }
+    if (data.avgSleepingHR != null) {
+      result.avg_sleeping_hr = data.avgSleepingHR;
+    }
+
+    // Subjective metrics (1-4 scale)
+    if (data.soreness != null) {
+      result.soreness = data.soreness;
+    }
+    if (data.fatigue != null) {
+      result.fatigue = data.fatigue;
+    }
+    if (data.stress != null) {
+      result.stress = data.stress;
+    }
+    if (data.mood != null) {
+      result.mood = data.mood;
+    }
+    if (data.motivation != null) {
+      result.motivation = data.motivation;
+    }
+    if (data.injury != null) {
+      result.injury = data.injury;
+    }
+    if (data.hydration != null) {
+      result.hydration = data.hydration;
+    }
+
+    // Vitals
+    if (data.spO2 != null) {
+      result.spo2 = data.spO2;
+    }
+    if (data.systolic != null && data.diastolic != null) {
+      result.blood_pressure = {
+        systolic: data.systolic,
+        diastolic: data.diastolic,
+      };
+    }
+    if (data.hydrationVolume != null) {
+      result.hydration_volume = data.hydrationVolume;
+    }
+    if (data.respiration != null) {
+      result.respiration = data.respiration;
+    }
+
+    // Readiness and body composition
+    if (data.readiness != null) {
+      result.readiness = data.readiness;
+    }
+    if (data.baevskySI != null) {
+      result.baevsky_si = data.baevskySI;
+    }
+    if (data.bloodGlucose != null) {
+      result.blood_glucose = data.bloodGlucose;
+    }
+    if (data.lactate != null) {
+      result.lactate = data.lactate;
+    }
+    if (data.bodyFat != null) {
+      result.body_fat = data.bodyFat;
+    }
+    if (data.abdomen != null) {
+      result.abdomen = data.abdomen;
+    }
+    if (data.vo2max != null) {
+      result.vo2max = data.vo2max;
+    }
+
+    // Activity and notes
+    if (data.steps != null) {
+      result.steps = data.steps;
+    }
+    if (data.comments != null) {
+      result.comments = data.comments;
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if wellness data has any meaningful fields set.
+   */
+  private hasWellnessData(data: WellnessData): boolean {
+    return Object.keys(data).length > 0;
+  }
+
+  /**
+   * Get today's wellness data using the athlete's timezone.
+   * Uses the single-date endpoint which returns actual values.
    */
   async getTodayWellness(): Promise<WellnessData | null> {
     const timezone = await this.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
 
     try {
-      // Use single-date endpoint - returns actual weight, not null
+      // Use single-date endpoint - returns actual values, not null
       const data = await this.fetch<IntervalsWellness>(`/wellness/${today}`);
-      return {
-        weight: data.weight != null ? `${data.weight} kg` : undefined,
-      };
+      const wellness = this.mapWellnessData(data);
+      return this.hasWellnessData(wellness) ? wellness : null;
     } catch {
       // No wellness data for today
       return null;
@@ -1467,8 +1659,8 @@ export class IntervalsClient {
   }
 
   /**
-   * Get wellness trends (weight, etc.) for a date range.
-   * Note: The range endpoint may return null for weight even when set.
+   * Get wellness trends for a date range.
+   * Includes entries that have any wellness data, not just weight.
    */
   async getWellnessTrends(startDate: string, endDate: string): Promise<WellnessTrends> {
     const wellness = await this.fetch<IntervalsWellness[]>('/wellness', {
@@ -1476,13 +1668,13 @@ export class IntervalsClient {
       newest: endDate,
     });
 
-    // Filter to only include entries with weight data
+    // Map all entries and filter to only those with wellness data
     const data: DailyWellness[] = wellness
-      .filter((w) => w.weight != null)
       .map((w) => ({
         date: w.id,
-        weight: `${w.weight} kg`,
-      }));
+        ...this.mapWellnessData(w),
+      }))
+      .filter((w) => Object.keys(w).length > 1); // More than just 'date'
 
     // Calculate period days
     const start = new Date(startDate);

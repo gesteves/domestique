@@ -29,6 +29,7 @@ import type {
   ActivityHRCurve,
   WellnessTrends,
 } from '../types/index.js';
+import { filterWhoopDuplicateFieldsFromTrends } from '../types/index.js';
 import type {
   GetWorkoutHistoryInput,
   GetRecoveryTrendsInput,
@@ -195,7 +196,7 @@ export class HistoricalTools {
   // ============================================
 
   /**
-   * Get wellness trends (weight) over a date range
+   * Get wellness trends over a date range
    */
   async getWellnessTrends(params: {
     start_date: string;
@@ -209,7 +210,13 @@ export class HistoricalTools {
       : getTodayInTimezone(timezone);
 
     try {
-      return await this.intervals.getWellnessTrends(startDate, endDate);
+      const trends = await this.intervals.getWellnessTrends(startDate, endDate);
+
+      // Filter out Whoop-duplicate fields when Whoop is connected
+      // Whoop provides more detailed sleep/HRV metrics
+      return this.whoop
+        ? filterWhoopDuplicateFieldsFromTrends(trends)
+        : trends;
     } catch (error) {
       console.error('Error fetching wellness trends:', error);
       throw error;

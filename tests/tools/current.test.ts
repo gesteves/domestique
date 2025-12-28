@@ -462,8 +462,43 @@ describe('CurrentTools', () => {
       atl_load: 10.2,
     };
 
-    const mockWellness: WellnessData = {
+    // Full wellness data (as returned from API)
+    const mockWellnessFull: WellnessData = {
       weight: '74.5 kg',
+      resting_hr: 51,
+      hrv: 35.47,
+      sleep_duration: '8h 10m',
+      sleep_score: 87,
+      sleep_quality: 1,
+      soreness: 1,
+      fatigue: 2,
+      stress: 1,
+      mood: 2,
+      motivation: 2,
+      injury: 1,
+      hydration: 2,
+      readiness: 60,
+      vo2max: 54,
+      steps: 22,
+      respiration: 16.73,
+      comments: 'Test wellness entry',
+    };
+
+    // Wellness data with Whoop-duplicate fields filtered out
+    // When Whoop is connected, these fields are removed: resting_hr, hrv, hrv_sdnn,
+    // sleep_duration, sleep_score, sleep_quality, avg_sleeping_hr, readiness, respiration, spo2
+    const mockWellnessFiltered: WellnessData = {
+      weight: '74.5 kg',
+      soreness: 1,
+      fatigue: 2,
+      stress: 1,
+      mood: 2,
+      motivation: 2,
+      injury: 1,
+      hydration: 2,
+      vo2max: 54,
+      steps: 22,
+      comments: 'Test wellness entry',
     };
 
     const mockWorkouts: NormalizedWorkout[] = [
@@ -496,7 +531,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(mockRecovery);
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(mockStrain);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
-      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellness);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue(mockPlannedWorkouts);
@@ -507,7 +542,8 @@ describe('CurrentTools', () => {
       expect(result.whoop.recovery).toEqual(mockRecovery);
       expect(result.whoop.strain).toEqual(mockStrain);
       expect(result.fitness).toEqual(mockFitness);
-      expect(result.wellness).toEqual(mockWellness);
+      // Whoop-duplicate fields are filtered when Whoop is connected
+      expect(result.wellness).toEqual(mockWellnessFiltered);
       expect(result.completed_workouts).toHaveLength(1);
       expect(result.planned_workouts).toHaveLength(1);
       expect(result.workouts_completed).toBe(1);
@@ -575,10 +611,11 @@ describe('CurrentTools', () => {
       expect(result.fitness).toBeNull();
     });
 
-    it('should handle missing Whoop client gracefully', async () => {
+    it('should handle missing Whoop client gracefully and return full wellness data', async () => {
+      // When Whoop is not connected, wellness data should NOT be filtered
       const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
-      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellness);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
@@ -588,14 +625,19 @@ describe('CurrentTools', () => {
       expect(result.whoop.recovery).toBeNull();
       expect(result.whoop.strain).toBeNull();
       expect(result.fitness).toEqual(mockFitness);
-      expect(result.wellness).toEqual(mockWellness);
+      // Full wellness data when Whoop is not connected
+      expect(result.wellness).toEqual(mockWellnessFull);
+      expect(result.wellness?.resting_hr).toBe(51);
+      expect(result.wellness?.hrv).toBe(35.47);
+      expect(result.wellness?.sleep_duration).toBe('8h 10m');
     });
 
-    it('should include wellness data with weight', async () => {
+    it('should filter Whoop-duplicate wellness fields when Whoop is connected', async () => {
+      // When Whoop is connected, duplicate fields are filtered from wellness
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
-      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellness);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
@@ -604,7 +646,49 @@ describe('CurrentTools', () => {
       const result = await tools.getDailySummary();
 
       expect(result.wellness).not.toBeNull();
+      // Non-duplicate fields are present
       expect(result.wellness?.weight).toBe('74.5 kg');
+      expect(result.wellness?.soreness).toBe(1);
+      expect(result.wellness?.fatigue).toBe(2);
+      expect(result.wellness?.stress).toBe(1);
+      expect(result.wellness?.mood).toBe(2);
+      expect(result.wellness?.motivation).toBe(2);
+      expect(result.wellness?.injury).toBe(1);
+      expect(result.wellness?.hydration).toBe(2);
+      expect(result.wellness?.vo2max).toBe(54);
+      expect(result.wellness?.steps).toBe(22);
+      expect(result.wellness?.comments).toBe('Test wellness entry');
+      // Whoop-duplicate fields are filtered out
+      expect(result.wellness?.resting_hr).toBeUndefined();
+      expect(result.wellness?.hrv).toBeUndefined();
+      expect(result.wellness?.sleep_duration).toBeUndefined();
+      expect(result.wellness?.sleep_score).toBeUndefined();
+      expect(result.wellness?.sleep_quality).toBeUndefined();
+      expect(result.wellness?.readiness).toBeUndefined();
+      expect(result.wellness?.respiration).toBeUndefined();
+      expect(result.wellness?.spo2).toBeUndefined();
+    });
+
+    it('should return null wellness when only Whoop-duplicate fields exist', async () => {
+      // If wellness only has fields that duplicate Whoop, it should be null
+      const onlyWhoopDuplicates: WellnessData = {
+        resting_hr: 50,
+        hrv: 40.5,
+        sleep_duration: '7h 30m',
+      };
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(onlyWhoopDuplicates);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      // After filtering, no fields remain, so wellness should be null
+      expect(result.wellness).toBeNull();
     });
 
     it('should handle null wellness when no data', async () => {

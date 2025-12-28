@@ -20,6 +20,7 @@ import type {
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
 } from '../types/index.js';
+import { filterWhoopDuplicateFields } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
 export class CurrentTools {
@@ -316,6 +317,12 @@ export class CurrentTools {
     // Get current datetime in user's timezone for context
     const currentDateTime = getCurrentDateTimeInTimezone(timezone);
 
+    // Filter out Whoop-duplicate fields from wellness when Whoop is connected
+    // Whoop provides more detailed sleep/HRV metrics
+    const filteredWellness = this.whoop
+      ? filterWhoopDuplicateFields(wellness)
+      : wellness;
+
     return {
       current_date: currentDateTime,
       whoop: {
@@ -323,7 +330,7 @@ export class CurrentTools {
         strain,
       },
       fitness,
-      wellness,
+      wellness: filteredWellness,
       completed_workouts: completedWorkouts,
       planned_workouts: plannedWorkouts,
       workouts_completed: completedWorkouts.length,

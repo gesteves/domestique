@@ -901,9 +901,37 @@ describe('IntervalsClient', () => {
       expect(result).toBeNull();
     });
 
-    it('should return wellness without weight when weight is null', async () => {
+    it('should return null when only weight exists but is null', async () => {
       const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
-      const mockWellness = { id: '2024-12-15', weight: null }; // Null weight
+      const mockWellness = { id: '2024-12-15', weight: null }; // Null weight, no other fields
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getTodayWellness();
+
+      // When no wellness fields have data, return null
+      expect(result).toBeNull();
+    });
+
+    it('should return wellness with other fields when weight is null', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        weight: null,
+        restingHR: 52,
+        hrv: 38.5,
+        sleepSecs: 28800,
+        sleepQuality: 1,
+        soreness: 2,
+        fatigue: 2,
+      };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -918,6 +946,79 @@ describe('IntervalsClient', () => {
 
       expect(result).not.toBeNull();
       expect(result?.weight).toBeUndefined();
+      expect(result?.resting_hr).toBe(52);
+      expect(result?.hrv).toBe(38.5);
+      expect(result?.sleep_duration).toBe('8h');
+      expect(result?.sleep_quality).toBe(1);
+      expect(result?.soreness).toBe(2);
+      expect(result?.fatigue).toBe(2);
+    });
+
+    it('should return complete wellness data with all fields', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        weight: 74.5,
+        restingHR: 51,
+        hrv: 35.47,
+        hrvSDNN: 45.2,
+        sleepSecs: 29400,
+        sleepScore: 87,
+        sleepQuality: 1,
+        avgSleepingHR: 48,
+        soreness: 1,
+        fatigue: 2,
+        stress: 1,
+        mood: 2,
+        motivation: 2,
+        injury: 1,
+        hydration: 2,
+        spO2: 98,
+        systolic: 120,
+        diastolic: 80,
+        hydrationVolume: 2500,
+        respiration: 16.73,
+        readiness: 60,
+        vo2max: 54,
+        steps: 8500,
+        comments: 'Feeling good today',
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getTodayWellness();
+
+      expect(result).not.toBeNull();
+      expect(result?.weight).toBe('74.5 kg');
+      expect(result?.resting_hr).toBe(51);
+      expect(result?.hrv).toBe(35.47);
+      expect(result?.hrv_sdnn).toBe(45.2);
+      expect(result?.sleep_duration).toBe('8h 10m');
+      expect(result?.sleep_score).toBe(87);
+      expect(result?.sleep_quality).toBe(1);
+      expect(result?.avg_sleeping_hr).toBe(48);
+      expect(result?.soreness).toBe(1);
+      expect(result?.fatigue).toBe(2);
+      expect(result?.stress).toBe(1);
+      expect(result?.mood).toBe(2);
+      expect(result?.motivation).toBe(2);
+      expect(result?.injury).toBe(1);
+      expect(result?.hydration).toBe(2);
+      expect(result?.spo2).toBe(98);
+      expect(result?.blood_pressure).toEqual({ systolic: 120, diastolic: 80 });
+      expect(result?.hydration_volume).toBe(2500);
+      expect(result?.respiration).toBe(16.73);
+      expect(result?.readiness).toBe(60);
+      expect(result?.vo2max).toBe(54);
+      expect(result?.steps).toBe(8500);
+      expect(result?.comments).toBe('Feeling good today');
     });
   });
 
@@ -944,6 +1045,54 @@ describe('IntervalsClient', () => {
       expect(result.data[0].weight).toBe('74.5 kg');
     });
 
+    it('should return wellness trends with all fields', async () => {
+      const mockWellness = [
+        {
+          id: '2024-12-13',
+          weight: 74.5,
+          restingHR: 52,
+          hrv: 38.5,
+          sleepSecs: 27000,
+          sleepScore: 85,
+          sleepQuality: 1,
+          soreness: 2,
+          fatigue: 2,
+          readiness: 70,
+        },
+        {
+          id: '2024-12-15',
+          weight: 74.8,
+          restingHR: 50,
+          hrv: 42.1,
+          sleepSecs: 29700,
+          sleepScore: 92,
+          sleepQuality: 1,
+          soreness: 1,
+          fatigue: 1,
+          readiness: 85,
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
+
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].date).toBe('2024-12-13');
+      expect(result.data[0].weight).toBe('74.5 kg');
+      expect(result.data[0].resting_hr).toBe(52);
+      expect(result.data[0].hrv).toBe(38.5);
+      expect(result.data[0].sleep_duration).toBe('7h 30m');
+      expect(result.data[0].sleep_score).toBe(85);
+      expect(result.data[0].sleep_quality).toBe(1);
+      expect(result.data[0].soreness).toBe(2);
+      expect(result.data[0].fatigue).toBe(2);
+      expect(result.data[0].readiness).toBe(70);
+    });
+
     it('should handle empty wellness data', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -956,10 +1105,10 @@ describe('IntervalsClient', () => {
       expect(result.period_days).toBe(3);
     });
 
-    it('should filter out entries with null weight', async () => {
+    it('should filter out entries with no wellness data', async () => {
       const mockWellness = [
         { id: '2024-12-13', weight: 74.5 },
-        { id: '2024-12-14', weight: null }, // Null weight should be filtered out
+        { id: '2024-12-14', weight: null }, // No wellness data, should be filtered out
         { id: '2024-12-15', weight: 74.8 },
       ];
 
@@ -970,12 +1119,35 @@ describe('IntervalsClient', () => {
 
       const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
 
-      // Only entries with weight data should be included
+      // Only entries with wellness data should be included
       expect(result.data).toHaveLength(2);
       expect(result.data[0].date).toBe('2024-12-13');
       expect(result.data[0].weight).toBe('74.5 kg');
       expect(result.data[1].date).toBe('2024-12-15');
       expect(result.data[1].weight).toBe('74.8 kg');
+    });
+
+    it('should include entries with non-weight wellness data', async () => {
+      const mockWellness = [
+        { id: '2024-12-13', weight: 74.5 },
+        { id: '2024-12-14', weight: null, restingHR: 52, hrv: 40.2 }, // No weight but has other data
+        { id: '2024-12-15', weight: null }, // No data at all
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockWellness),
+      });
+
+      const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
+
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].date).toBe('2024-12-13');
+      expect(result.data[0].weight).toBe('74.5 kg');
+      expect(result.data[1].date).toBe('2024-12-14');
+      expect(result.data[1].weight).toBeUndefined();
+      expect(result.data[1].resting_hr).toBe(52);
+      expect(result.data[1].hrv).toBe(40.2);
     });
   });
 

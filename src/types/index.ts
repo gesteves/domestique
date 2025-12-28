@@ -471,20 +471,70 @@ export interface TrainingLoadTrends {
 // ============================================
 
 /**
+ * Base wellness fields shared between daily summary and trends.
+ */
+interface WellnessFields {
+  weight?: string; // Weight with unit, e.g., "74.8 kg"
+
+  // Heart rate and HRV
+  resting_hr?: number;
+  hrv?: number; // rMSSD in milliseconds
+  hrv_sdnn?: number; // SDNN in milliseconds
+
+  // Menstrual cycle
+  menstrual_phase?: string;
+  menstrual_phase_predicted?: string;
+
+  // Nutrition
+  kcal_consumed?: number;
+
+  // Sleep
+  sleep_duration?: string; // Human-readable, e.g., "8h 10m"
+  sleep_score?: number;
+  sleep_quality?: number; // 1=GREAT, 2=GOOD, 3=AVG, 4=POOR
+  avg_sleeping_hr?: number;
+
+  // Subjective metrics (1-4 scale)
+  soreness?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  fatigue?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  stress?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  mood?: number; // 1=GREAT, 2=GOOD, 3=OK, 4=GRUMPY
+  motivation?: number; // 1=EXTREME, 2=HIGH, 3=AVG, 4=LOW
+  injury?: number; // 1=NONE, 2=NIGGLE, 3=POOR, 4=INJURED
+  hydration?: number; // 1=GOOD, 2=OK, 3=POOR, 4=BAD
+
+  // Vitals
+  spo2?: number;
+  blood_pressure?: { systolic: number; diastolic: number };
+  hydration_volume?: number;
+  respiration?: number;
+
+  // Readiness and body composition
+  readiness?: number;
+  baevsky_si?: number;
+  blood_glucose?: number;
+  lactate?: number;
+  body_fat?: number;
+  abdomen?: number;
+  vo2max?: number;
+
+  // Activity and notes
+  steps?: number;
+  comments?: string;
+}
+
+/**
  * Daily wellness data from Intervals.icu.
  * Contains metrics like weight that are tracked over time.
  */
-export interface DailyWellness {
+export interface DailyWellness extends WellnessFields {
   date: string;
-  weight?: string; // Weight with unit, e.g., "74.8 kg"
 }
 
 /**
  * Current day's wellness data for daily summary.
  */
-export interface WellnessData {
-  weight?: string; // Weight with unit, e.g., "74.8 kg"
-}
+export interface WellnessData extends WellnessFields {}
 
 /**
  * Wellness trends over a date range.
@@ -494,6 +544,62 @@ export interface WellnessTrends {
   start_date: string;
   end_date: string;
   data: DailyWellness[];
+}
+
+/**
+ * Fields that duplicate Whoop metrics and should be excluded when Whoop is connected.
+ * Whoop provides more detailed versions of these metrics.
+ */
+const WHOOP_DUPLICATE_FIELDS: (keyof WellnessFields)[] = [
+  'resting_hr',
+  'hrv',
+  'hrv_sdnn',
+  'sleep_duration',
+  'sleep_score',
+  'sleep_quality',
+  'avg_sleeping_hr',
+  'readiness',
+  'respiration',
+  'spo2',
+];
+
+/**
+ * Filter out wellness fields that duplicate Whoop metrics.
+ * Used when Whoop is connected since Whoop provides more detailed data.
+ */
+export function filterWhoopDuplicateFields<T extends WellnessFields>(
+  wellness: T | null
+): T | null {
+  if (!wellness) return null;
+
+  const filtered = { ...wellness };
+  for (const field of WHOOP_DUPLICATE_FIELDS) {
+    delete filtered[field];
+  }
+
+  // Check if any fields remain (excluding 'date' for DailyWellness)
+  const remainingKeys = Object.keys(filtered).filter((k) => k !== 'date');
+  if (remainingKeys.length === 0) {
+    return null;
+  }
+
+  return filtered;
+}
+
+/**
+ * Filter Whoop-duplicate fields from wellness trends data.
+ */
+export function filterWhoopDuplicateFieldsFromTrends(
+  trends: WellnessTrends
+): WellnessTrends {
+  const filteredData = trends.data
+    .map((entry) => filterWhoopDuplicateFields(entry))
+    .filter((entry): entry is DailyWellness => entry !== null);
+
+  return {
+    ...trends,
+    data: filteredData,
+  };
 }
 
 // ============================================

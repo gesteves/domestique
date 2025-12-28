@@ -472,7 +472,53 @@ export const WELLNESS_FIELD_DESCRIPTIONS = {
 
   // Daily wellness fields
   date: 'Date of wellness entry (ISO 8601 YYYY-MM-DD)',
-  weight: 'Body weight with unit (e.g., "74.8 kg"). Only present if recorded for this day.',
+  weight: 'Body weight with unit (e.g., "74.8 kg")',
+
+  // Heart rate and HRV
+  resting_hr: 'Resting heart rate in BPM',
+  hrv: 'Heart rate variability (rMSSD) in milliseconds',
+  hrv_sdnn: 'Heart rate variability (SDNN) in milliseconds',
+
+  // Menstrual cycle
+  menstrual_phase: 'Current menstrual cycle phase',
+  menstrual_phase_predicted: 'Predicted menstrual cycle phase',
+
+  // Nutrition
+  kcal_consumed: 'Calories consumed',
+
+  // Sleep
+  sleep_duration: 'Sleep duration (e.g., "8h 10m")',
+  sleep_score: 'Sleep score (0-100)',
+  sleep_quality: 'Subjective sleep quality: 1=GREAT, 2=GOOD, 3=AVG, 4=POOR',
+  avg_sleeping_hr: 'Average heart rate during sleep in BPM',
+
+  // Subjective metrics (1-4 scale)
+  soreness: 'Pre-training soreness level: 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME',
+  fatigue: 'Pre-training fatigue level: 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME',
+  stress: 'Stress level: 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME',
+  mood: 'Mood: 1=GREAT, 2=GOOD, 3=OK, 4=GRUMPY',
+  motivation: 'Motivation level: 1=EXTREME, 2=HIGH, 3=AVG, 4=LOW',
+  injury: 'Injury status: 1=NONE, 2=NIGGLE, 3=POOR, 4=INJURED',
+  hydration: 'Hydration level: 1=GOOD, 2=OK, 3=POOR, 4=BAD',
+
+  // Vitals
+  spo2: 'Blood oxygen saturation percentage',
+  blood_pressure: 'Blood pressure with systolic and diastolic values in mmHg',
+  hydration_volume: 'Volume of fluids consumed in milliliters',
+  respiration: 'Respiration rate in breaths per minute',
+
+  // Readiness and body composition
+  readiness: 'Overall readiness score (0-100)',
+  baevsky_si: 'Baevsky stress index',
+  blood_glucose: 'Blood glucose level in mg/dL',
+  lactate: 'Blood lactate level in mmol/L',
+  body_fat: 'Body fat percentage',
+  abdomen: 'Abdominal circumference in cm',
+  vo2max: 'Estimated VO2max in mL/kg/min',
+
+  // Activity and notes
+  steps: 'Step count for the day',
+  comments: 'User notes/comments for the day',
 };
 
 export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {

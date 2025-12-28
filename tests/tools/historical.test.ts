@@ -234,34 +234,154 @@ describe('HistoricalTools', () => {
   });
 
   describe('getWellnessTrends', () => {
-    const mockWellnessTrends: WellnessTrends = {
+    // Full wellness data (as returned from API)
+    const mockWellnessTrendsFull: WellnessTrends = {
       period_days: 7,
       start_date: '2024-12-08',
       end_date: '2024-12-15',
       data: [
-        { date: '2024-12-08', weight: '74.5 kg' },
-        { date: '2024-12-10', weight: '74.3 kg' },
-        { date: '2024-12-12', weight: '74.8 kg' },
-        { date: '2024-12-15', weight: '74.6 kg' },
+        {
+          date: '2024-12-08',
+          weight: '74.5 kg',
+          resting_hr: 52,
+          hrv: 38.5,
+          sleep_duration: '7h 30m',
+          sleep_score: 85,
+          sleep_quality: 1,
+          soreness: 2,
+          fatigue: 2,
+          readiness: 70,
+        },
+        {
+          date: '2024-12-10',
+          weight: '74.3 kg',
+          resting_hr: 50,
+          hrv: 42.1,
+          sleep_duration: '8h 15m',
+          sleep_score: 92,
+          sleep_quality: 1,
+          soreness: 1,
+          fatigue: 1,
+          readiness: 85,
+        },
+        {
+          date: '2024-12-12',
+          weight: '74.8 kg',
+          resting_hr: 55,
+          hrv: 32.8,
+          sleep_duration: '6h 45m',
+          sleep_score: 72,
+          sleep_quality: 2,
+          soreness: 3,
+          fatigue: 3,
+          readiness: 55,
+        },
+        {
+          date: '2024-12-15',
+          weight: '74.6 kg',
+          resting_hr: 51,
+          hrv: 35.5,
+          sleep_duration: '8h 0m',
+          sleep_score: 87,
+          sleep_quality: 1,
+          soreness: 1,
+          fatigue: 2,
+          readiness: 65,
+        },
       ],
     };
 
-    it('should return wellness trends for date range', async () => {
-      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrends);
+    // Expected filtered wellness (Whoop-duplicate fields removed)
+    const mockWellnessTrendsFiltered: WellnessTrends = {
+      period_days: 7,
+      start_date: '2024-12-08',
+      end_date: '2024-12-15',
+      data: [
+        {
+          date: '2024-12-08',
+          weight: '74.5 kg',
+          soreness: 2,
+          fatigue: 2,
+        },
+        {
+          date: '2024-12-10',
+          weight: '74.3 kg',
+          soreness: 1,
+          fatigue: 1,
+        },
+        {
+          date: '2024-12-12',
+          weight: '74.8 kg',
+          soreness: 3,
+          fatigue: 3,
+        },
+        {
+          date: '2024-12-15',
+          weight: '74.6 kg',
+          soreness: 1,
+          fatigue: 2,
+        },
+      ],
+    };
+
+    it('should return wellness trends with Whoop-duplicate fields filtered when Whoop is connected', async () => {
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       const result = await tools.getWellnessTrends({
         start_date: '2024-12-08',
         end_date: '2024-12-15',
       });
 
-      expect(result).toEqual(mockWellnessTrends);
+      // Whoop-duplicate fields are filtered when Whoop is connected
+      expect(result).toEqual(mockWellnessTrendsFiltered);
       expect(result.period_days).toBe(7);
       expect(result.data).toHaveLength(4);
       expect(mockIntervalsClient.getWellnessTrends).toHaveBeenCalledWith('2024-12-08', '2024-12-15');
     });
 
+    it('should filter Whoop-duplicate fields from wellness trends', async () => {
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
+
+      const result = await tools.getWellnessTrends({
+        start_date: '2024-12-08',
+        end_date: '2024-12-15',
+      });
+
+      const firstEntry = result.data[0];
+      expect(firstEntry.date).toBe('2024-12-08');
+      // Non-duplicate fields are present
+      expect(firstEntry.weight).toBe('74.5 kg');
+      expect(firstEntry.soreness).toBe(2);
+      expect(firstEntry.fatigue).toBe(2);
+      // Whoop-duplicate fields are filtered
+      expect(firstEntry.resting_hr).toBeUndefined();
+      expect(firstEntry.hrv).toBeUndefined();
+      expect(firstEntry.sleep_duration).toBeUndefined();
+      expect(firstEntry.sleep_score).toBeUndefined();
+      expect(firstEntry.sleep_quality).toBeUndefined();
+      expect(firstEntry.readiness).toBeUndefined();
+      expect(firstEntry.respiration).toBeUndefined();
+      expect(firstEntry.spo2).toBeUndefined();
+    });
+
+    it('should return full wellness trends when Whoop is not connected', async () => {
+      const toolsWithoutWhoop = new HistoricalTools(mockIntervalsClient, null);
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
+
+      const result = await toolsWithoutWhoop.getWellnessTrends({
+        start_date: '2024-12-08',
+        end_date: '2024-12-15',
+      });
+
+      // Full wellness data when Whoop is not connected
+      expect(result).toEqual(mockWellnessTrendsFull);
+      expect(result.data[0].resting_hr).toBe(52);
+      expect(result.data[0].hrv).toBe(38.5);
+      expect(result.data[0].sleep_duration).toBe('7h 30m');
+    });
+
     it('should parse natural language start date', async () => {
-      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrends);
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       await tools.getWellnessTrends({
         start_date: '7 days ago',
@@ -271,7 +391,7 @@ describe('HistoricalTools', () => {
     });
 
     it('should default end_date to today', async () => {
-      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrends);
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       await tools.getWellnessTrends({
         start_date: '2024-12-08',
@@ -295,6 +415,34 @@ describe('HistoricalTools', () => {
 
       expect(result.data).toEqual([]);
       expect(result.period_days).toBe(7);
+    });
+
+    it('should filter entries that only have Whoop-duplicate fields', async () => {
+      // When entries only have Whoop-duplicate fields, they should be filtered out entirely
+      const partialTrends: WellnessTrends = {
+        period_days: 3,
+        start_date: '2024-12-13',
+        end_date: '2024-12-15',
+        data: [
+          { date: '2024-12-13', weight: '74.2 kg' },
+          { date: '2024-12-14', resting_hr: 53, hrv: 40.2 }, // Only Whoop-duplicate fields
+          { date: '2024-12-15', weight: '74.5 kg', sleep_duration: '7h 45m', sleep_score: 88 },
+        ],
+      };
+      vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(partialTrends);
+
+      const result = await tools.getWellnessTrends({
+        start_date: '2024-12-13',
+        end_date: '2024-12-15',
+      });
+
+      // Entry with only Whoop-duplicate fields is filtered out
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].date).toBe('2024-12-13');
+      expect(result.data[0].weight).toBe('74.2 kg');
+      expect(result.data[1].date).toBe('2024-12-15');
+      expect(result.data[1].weight).toBe('74.5 kg');
+      expect(result.data[1].sleep_duration).toBeUndefined();
     });
   });
 
