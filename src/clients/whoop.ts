@@ -12,6 +12,7 @@ import type {
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { formatDuration, formatDistance, isSwimmingActivity } from '../utils/format-units.js';
+import { formatToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
   getRecoveryLevel,
   getRecoveryLevelDescription,
@@ -923,7 +924,7 @@ export class WhoopClient {
     });
 
     // Current cycle = today's date
-    return this.normalizeStrain(currentCycle, cycleWorkouts, todayStr);
+    return await this.normalizeStrain(currentCycle, cycleWorkouts, todayStr);
   }
 
   /**
@@ -970,13 +971,15 @@ export class WhoopClient {
       });
     };
 
-    return cyclesWithDates
-      .filter(({ cycle }) => cycle.score_state === 'SCORED')
-      .map(({ cycle, cycleDate }) => {
-        const cycleWorkouts = getWorkoutsForCycle(cycle);
-        return this.normalizeStrain(cycle, cycleWorkouts, cycleDate);
-      })
-      .filter((s) => s.date >= startDate && s.date <= endDate);
+    const normalized = await Promise.all(
+      cyclesWithDates
+        .filter(({ cycle }) => cycle.score_state === 'SCORED')
+        .map(async ({ cycle, cycleDate }) => {
+          const cycleWorkouts = getWorkoutsForCycle(cycle);
+          return await this.normalizeStrain(cycle, cycleWorkouts, cycleDate);
+        })
+    );
+    return normalized.filter((s) => s.date >= startDate && s.date <= endDate);
   }
 
   /**
@@ -995,9 +998,8 @@ export class WhoopClient {
       end: `${endBuffer}T23:59:59.999Z`,
     });
 
-    return workouts.records
-      .map((w) => this.normalizeWorkout(w))
-      .filter((w) => isTimestampInLocalDateRange(w.start_time, startDate, endDate, timezone));
+    const normalized = await Promise.all(workouts.records.map((w) => this.normalizeWorkout(w)));
+    return normalized.filter((w) => isTimestampInLocalDateRange(w.start_time, startDate, endDate, timezone));
   }
 
   /**
@@ -1175,7 +1177,7 @@ export class WhoopClient {
     };
   }
 
-  private normalizeStrain(cycle: WhoopCycle, workouts: WhoopWorkout[], localDate: string): StrainData {
+  private async normalizeStrain(cycle: WhoopCycle, workouts: WhoopWorkout[], localDate: string): Promise<StrainData> {
     const strainLevel = getStrainLevel(cycle.score.strain);
     return {
       date: localDate,
@@ -1185,15 +1187,18 @@ export class WhoopClient {
       average_heart_rate: cycle.score.average_heart_rate,
       max_heart_rate: cycle.score.max_heart_rate,
       calories: Math.round(cycle.score.kilojoule / 4.184),
-      activities: workouts.map((w) => this.normalizeWorkout(w)),
+      activities: await Promise.all(workouts.map((w) => this.normalizeWorkout(w))),
     };
   }
 
-  private normalizeWorkout(workout: WhoopWorkout): StrainActivity {
+  private async normalizeWorkout(workout: WhoopWorkout): Promise<StrainActivity> {
     // Use sport_name (sport_id is deprecated after 09/01/2025)
     const sportName =
       WHOOP_SPORT_NAME_MAP[workout.sport_name.toLowerCase()] ??
       workout.sport_name;
+
+    // Get timezone for formatting start/end times
+    const timezone = await this.getTimezone();
 
     const activityType = normalizeActivityType(sportName);
     const isSwim = isSwimmingActivity(activityType);
@@ -1224,8 +1229,8 @@ export class WhoopClient {
     return {
       id: String(workout.id),
       activity_type: activityType,
-      start_time: workout.start,
-      end_time: workout.end,
+      start_time: formatToISO8601WithTimezone(workout.start, timezone),
+      end_time: formatToISO8601WithTimezone(workout.end, timezone),
       duration: formatDuration(durationSeconds),
       strain_score: workout.score.strain,
       average_heart_rate: workout.score.average_heart_rate,

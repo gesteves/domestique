@@ -49,8 +49,7 @@ describe('HistoricalTools', () => {
     const mockWorkouts: NormalizedWorkout[] = [
       {
         id: '1',
-        date: '2024-12-10T10:00:00Z',
-        start_date_utc: '2024-12-10T10:00:00Z',
+        start_time: '2024-12-10T10:00:00+00:00',
         activity_type: 'Cycling',
         duration: '1:00:00',
         tss: 85,
@@ -58,8 +57,7 @@ describe('HistoricalTools', () => {
       },
       {
         id: '2',
-        date: '2024-12-12T08:00:00Z',
-        start_date_utc: '2024-12-12T08:00:00Z',
+        start_time: '2024-12-12T08:00:00+00:00',
         activity_type: 'Running',
         duration: '0:40:00',
         tss: 45,
@@ -1002,8 +1000,7 @@ describe('HistoricalTools', () => {
       const mockWorkouts: NormalizedWorkout[] = [
         {
           id: '1',
-          date: '2024-12-10T10:00:00Z',
-          start_date_utc: '2024-12-10T10:00:00Z',
+          start_time: '2024-12-10T10:00:00+00:00',
           activity_type: 'Cycling',
           duration: '1:00:00',
           source: 'intervals.icu',

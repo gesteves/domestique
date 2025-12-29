@@ -83,11 +83,11 @@ describe('activity-matcher', () => {
   describe('matchActivities', () => {
     const createWorkout = (
       id: string,
-      date: string,
+      startTime: string,
       type: string
     ): NormalizedWorkout => ({
       id,
-      date,
+      start_time: startTime,
       activity_type: normalizeActivityType(type),
       duration_seconds: 3600,
       source: 'intervals.icu',
@@ -219,7 +219,7 @@ describe('activity-matcher', () => {
   describe('findMatchingWhoopActivity', () => {
     const workout: NormalizedWorkout = {
       id: 'w1',
-      date: '2024-12-15T10:00:00Z',
+      start_time: '2024-12-15T10:00:00Z',
       activity_type: 'Cycling',
       duration_seconds: 3600,
       source: 'intervals.icu',

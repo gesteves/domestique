@@ -63,12 +63,11 @@ export function areActivityTypesCompatible(
 }
 
 /**
- * Get the best timestamp to use for matching.
- * Prefers UTC timestamp (start_date_utc) when available for accurate cross-platform matching.
+ * Get the timestamp to use for matching.
+ * Returns the workout's start_time in ISO 8601 format with timezone offset.
  */
 function getMatchingTimestamp(workout: NormalizedWorkout): string {
-  // Prefer UTC timestamp for accurate matching with Whoop (which uses UTC)
-  return workout.start_date_utc ?? workout.date;
+  return workout.start_time;
 }
 
 /**

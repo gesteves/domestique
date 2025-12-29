@@ -68,7 +68,7 @@ describe('CurrentTools', () => {
       recovery_level_description: 'Your recovery is sufficient',
     };
 
-    it('should return sleep and recovery data from Whoop with current_date', async () => {
+    it('should return sleep and recovery data from Whoop with current_time', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -81,13 +81,13 @@ describe('CurrentTools', () => {
 
       expect(result.whoop.sleep).toEqual(mockSleep);
       expect(result.whoop.recovery).toEqual(mockRecovery);
-      expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
       expect(mockWhoopClient.getTodayRecovery).toHaveBeenCalled();
 
       vi.useRealTimers();
     });
 
-    it('should include current_date in user timezone', async () => {
+    it('should include current_time in user timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -100,7 +100,7 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysRecovery();
 
       // 10:30:45 UTC = 05:30:45 America/New_York (UTC-5)
-      expect(result.current_date).toBe('2024-12-15T05:30:45-05:00');
+      expect(result.current_time).toBe('2024-12-15T05:30:45-05:00');
       expect(result.whoop.sleep).toBeNull();
       expect(result.whoop.recovery).toBeNull();
 
@@ -114,7 +114,7 @@ describe('CurrentTools', () => {
 
       expect(result.whoop.sleep).toBeNull();
       expect(result.whoop.recovery).toBeNull();
-      expect(result.current_date).toBeTruthy();
+      expect(result.current_time).toBeTruthy();
     });
 
     it('should propagate errors from Whoop client', async () => {
@@ -140,7 +140,7 @@ describe('CurrentTools', () => {
       activities: [],
     };
 
-    it('should return strain data from Whoop with current_date', async () => {
+    it('should return strain data from Whoop with current_time', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -149,13 +149,13 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysStrain();
 
       expect(result.whoop.strain).toEqual(mockStrain);
-      expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
       expect(mockWhoopClient.getTodayStrain).toHaveBeenCalled();
 
       vi.useRealTimers();
     });
 
-    it('should include current_date in user timezone', async () => {
+    it('should include current_time in user timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -165,7 +165,7 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysStrain();
 
       // 10:30:45 UTC = 03:30:45 America/Denver (UTC-7)
-      expect(result.current_date).toBe('2024-12-15T03:30:45-07:00');
+      expect(result.current_time).toBe('2024-12-15T03:30:45-07:00');
       expect(result.whoop.strain).toBeNull();
 
       vi.useRealTimers();
@@ -177,7 +177,7 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysStrain();
 
       expect(result.whoop.strain).toBeNull();
-      expect(result.current_date).toBeTruthy();
+      expect(result.current_time).toBeTruthy();
     });
 
     it('should return null strain when Whoop client is not configured', async () => {
@@ -186,7 +186,7 @@ describe('CurrentTools', () => {
       const result = await toolsWithoutWhoop.getTodaysStrain();
 
       expect(result.whoop.strain).toBeNull();
-      expect(result.current_date).toBeTruthy();
+      expect(result.current_time).toBeTruthy();
     });
   });
 
@@ -198,8 +198,7 @@ describe('CurrentTools', () => {
     const mockWorkouts: NormalizedWorkout[] = [
       {
         id: '1',
-        date: '2024-12-15T10:00:00Z',
-        start_date_utc: '2024-12-15T10:00:00Z',
+        start_time: '2024-12-15T10:00:00+00:00',
         activity_type: 'Cycling',
         duration: '1:00:00',
         tss: 85,
@@ -221,7 +220,7 @@ describe('CurrentTools', () => {
       },
     ];
 
-    it('should return completed workouts from Intervals.icu with matched Whoop data and current_date', async () => {
+    it('should return completed workouts from Intervals.icu with matched Whoop data and current_time', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -233,13 +232,13 @@ describe('CurrentTools', () => {
       expect(result.workouts).toHaveLength(1);
       expect(result.workouts[0].whoop).not.toBeNull();
       expect(result.workouts[0].whoop?.strain_score).toBe(12.5);
-      expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
       expect(mockIntervalsClient.getActivities).toHaveBeenCalled();
 
       vi.useRealTimers();
     });
 
-    it('should include current_date in user timezone', async () => {
+    it('should include current_time in user timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -250,7 +249,7 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysCompletedWorkouts();
 
       // 10:30:45 UTC = 10:30:45 Europe/London (UTC+0 in winter)
-      expect(result.current_date).toBe('2024-12-15T10:30:45+00:00');
+      expect(result.current_time).toBe('2024-12-15T10:30:45+00:00');
       expect(result.workouts).toEqual([]);
 
       vi.useRealTimers();
@@ -263,7 +262,7 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysCompletedWorkouts();
 
       expect(result.workouts).toEqual([]);
-      expect(result.current_date).toBeTruthy();
+      expect(result.current_time).toBeTruthy();
     });
 
     it('should return workouts without Whoop data when no Whoop client configured', async () => {
@@ -274,7 +273,7 @@ describe('CurrentTools', () => {
 
       expect(result.workouts).toHaveLength(1);
       expect(result.workouts[0].whoop).toBeNull();
-      expect(result.current_date).toBeTruthy();
+      expect(result.current_time).toBeTruthy();
     });
 
     it('should return workouts with null Whoop when no Whoop match found', async () => {
@@ -380,7 +379,7 @@ describe('CurrentTools', () => {
       },
     ];
 
-    it('should return workouts from both sources with current_date', async () => {
+    it('should return workouts from both sources with current_time', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -392,12 +391,12 @@ describe('CurrentTools', () => {
       expect(result.workouts).toHaveLength(2);
       expect(result.workouts).toContainEqual(trainerroadWorkouts[0]);
       expect(result.workouts).toContainEqual(intervalsWorkouts[0]);
-      expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
 
       vi.useRealTimers();
     });
 
-    it('should include current_date in user timezone', async () => {
+    it('should include current_time in user timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -408,7 +407,7 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysPlannedWorkouts();
 
       // 10:30:45 UTC = 19:30:45 Asia/Tokyo (UTC+9)
-      expect(result.current_date).toBe('2024-12-15T19:30:45+09:00');
+      expect(result.current_time).toBe('2024-12-15T19:30:45+09:00');
       expect(result.workouts).toEqual([]);
 
       vi.useRealTimers();
@@ -441,7 +440,7 @@ describe('CurrentTools', () => {
 
       expect(result.workouts).toHaveLength(1);
       expect(result.workouts[0]).toEqual(intervalsWorkouts[0]);
-      expect(result.current_date).toBeTruthy();
+      expect(result.current_time).toBeTruthy();
     });
 
     it('should handle errors gracefully', async () => {
@@ -557,8 +556,7 @@ describe('CurrentTools', () => {
     const mockWorkouts: NormalizedWorkout[] = [
       {
         id: '1',
-        date: '2024-12-15T10:00:00Z',
-        start_date_utc: '2024-12-15T10:00:00Z',
+        start_time: '2024-12-15T10:00:00+00:00',
         activity_type: 'Cycling',
         duration: '1:00:00',
         tss: 85,
@@ -611,7 +609,7 @@ describe('CurrentTools', () => {
       expect(result.tss_planned).toBe(88);
     });
 
-    it('should include current_date with full datetime in user timezone', async () => {
+    it('should include current_time with full datetime in user timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
@@ -633,8 +631,8 @@ describe('CurrentTools', () => {
 
       // Should be ISO 8601 format with timezone offset
       // 10:30:45 UTC = 05:30:45 America/New_York (UTC-5)
-      expect(result.current_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
-      expect(result.current_date).toBe('2024-12-15T05:30:45-05:00');
+      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+      expect(result.current_time).toBe('2024-12-15T05:30:45-05:00');
 
       vi.useRealTimers();
     });

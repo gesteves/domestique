@@ -6,8 +6,7 @@
 export const WORKOUT_FIELD_DESCRIPTIONS = {
   // Core fields
   id: 'Unique ID of the completed activity in Intervals.icu',
-  date: 'Activity start time in the user\'s local timezone',
-  start_date_utc: 'Activity start time in UTC',
+  start_time: 'Activity start time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user\'s local timezone',
   activity_type: 'Sport or discipline of the activity',
   name: 'Name of the activity',
   description: 'Description of the activity',
@@ -534,7 +533,7 @@ export const WELLNESS_FIELD_DESCRIPTIONS = {
 
 export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {
   // Top-level daily summary fields
-  current_date: 'Current date and time for the user, in their local timezone. Use this to understand the time of day when the summary was requested; that context may be important for the metrics shown.',
+  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone. Use this to understand the time of day when the summary was requested; that context may be important for the metrics shown.',
   workouts_completed: 'Number of workouts completed so far today',
   workouts_planned: 'Number of workouts planned for today',
   tss_completed: 'Total Training Stress Score from completed workouts',
@@ -542,23 +541,23 @@ export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {
 };
 
 export const TODAYS_RECOVERY_FIELD_DESCRIPTIONS = {
-  current_date: 'Current date and time for the user, in their local timezone.',
+  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone.',
   sleep: 'Today\'s Whoop sleep data. Null if Whoop is not configured or data is unavailable.',
   recovery: 'Today\'s Whoop recovery data. Null if Whoop is not configured or data is unavailable.',
 };
 
 export const TODAYS_STRAIN_FIELD_DESCRIPTIONS = {
-  current_date: 'Current date and time for the user, in their local timezone. Use this to understand the time of day; this context shows how much strain has been accumulated so far today.',
+  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone. Use this to understand the time of day; this context shows how much strain has been accumulated so far today.',
   strain: 'Today\'s Whoop strain data. Null if Whoop is not configured or data is unavailable.',
 };
 
 export const TODAYS_COMPLETED_WORKOUTS_FIELD_DESCRIPTIONS = {
-  current_date: 'Current date and time for the user, in their local timezone.',
+  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone.',
   workouts: 'Array of completed workouts from Intervals.icu with matched Whoop data. Empty array if no workouts completed today.',
 };
 
 export const TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS = {
-  current_date: 'Current date and time for the user, in their local timezone.',
+  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone.',
   workouts: 'Array of planned workouts from TrainerRoad and Intervals.icu for today. Empty array if no workouts planned.',
 };
 

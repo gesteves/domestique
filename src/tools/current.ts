@@ -42,7 +42,7 @@ export class CurrentTools {
 
     if (!this.whoop) {
       return {
-        current_date: currentDateTime,
+        current_time: currentDateTime,
         whoop: {
           sleep: null,
           recovery: null,
@@ -53,7 +53,7 @@ export class CurrentTools {
     try {
       const { sleep, recovery } = await this.whoop.getTodayRecovery();
       return {
-        current_date: currentDateTime,
+        current_time: currentDateTime,
         whoop: {
           sleep,
           recovery,
@@ -77,7 +77,7 @@ export class CurrentTools {
 
     if (!this.whoop) {
       return {
-        current_date: currentDateTime,
+        current_time: currentDateTime,
         whoop: {
           strain: null,
         },
@@ -87,7 +87,7 @@ export class CurrentTools {
     try {
       const strain = await this.whoop.getTodayStrain();
       return {
-        current_date: currentDateTime,
+        current_time: currentDateTime,
         whoop: {
           strain,
         },
@@ -115,7 +115,7 @@ export class CurrentTools {
       // If no Whoop client, return workouts without Whoop data
       if (!this.whoop) {
         return {
-          current_date: currentDateTime,
+          current_time: currentDateTime,
           workouts: workouts.map((workout) => ({
             ...workout,
             whoop: null,
@@ -134,7 +134,7 @@ export class CurrentTools {
 
       // Match and merge
       return {
-        current_date: currentDateTime,
+        current_time: currentDateTime,
         workouts: workouts.map((workout) => ({
           ...workout,
           whoop: this.findAndMatchWhoopActivity(workout, whoopActivities),
@@ -227,7 +227,7 @@ export class CurrentTools {
     }
 
     return {
-      current_date: currentDateTime,
+      current_time: currentDateTime,
       workouts: merged,
     };
   }
@@ -287,11 +287,11 @@ export class CurrentTools {
     const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
-        return { current_date: getCurrentDateTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
+        return { current_time: getCurrentDateTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
       }),
       this.getTodaysStrain().catch((e) => {
         console.error('Error fetching strain for daily summary:', e);
-        return { current_date: getCurrentDateTimeInTimezone(timezone), whoop: { strain: null } };
+        return { current_time: getCurrentDateTimeInTimezone(timezone), whoop: { strain: null } };
       }),
       this.whoop?.getBodyMeasurements().catch((e) => {
         console.error('Error fetching body measurements for daily summary:', e);
@@ -307,11 +307,11 @@ export class CurrentTools {
       }),
       this.getTodaysCompletedWorkouts().catch((e) => {
         console.error('Error fetching completed workouts for daily summary:', e);
-        return { current_date: getCurrentDateTimeInTimezone(timezone), workouts: [] };
+        return { current_time: getCurrentDateTimeInTimezone(timezone), workouts: [] };
       }),
       this.getTodaysPlannedWorkouts().catch((e) => {
         console.error('Error fetching planned workouts for daily summary:', e);
-        return { current_date: getCurrentDateTimeInTimezone(timezone), workouts: [] };
+        return { current_time: getCurrentDateTimeInTimezone(timezone), workouts: [] };
       }),
     ]);
 
@@ -341,7 +341,7 @@ export class CurrentTools {
       : wellness;
 
     return {
-      current_date: currentDateTime,
+      current_time: currentDateTime,
       whoop: {
         body_measurements: bodyMeasurements,
         strain,

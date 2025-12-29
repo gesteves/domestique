@@ -42,6 +42,7 @@ import {
   isSwimmingActivity,
 } from '../utils/format-units.js';
 import { getTodayInTimezone } from '../utils/date-parser.js';
+import { localStringToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
   calculateHeatMetrics,
   parseHeatStrainStreams,
@@ -1701,9 +1702,10 @@ export class IntervalsClient {
     if (isStravaOnly) {
       // Return minimal workout data for Strava-only activities
       // We only have basic metadata - no workout details are available
+      const timezone = await this.getAthleteTimezone();
       return {
         id: activity.id,
-        date: activity.start_date_local,
+        start_time: localStringToISO8601WithTimezone(activity.start_date_local, timezone),
         source: 'strava',
         unavailable: true,
         unavailable_reason: activity._note || 'This workout data is not available via the API',
@@ -1805,10 +1807,12 @@ export class IntervalsClient {
       notes = undefined;
     }
 
+    // Get athlete timezone for formatting start_time
+    const timezone = await this.getAthleteTimezone();
+
     return {
       id: activity.id,
-      date: activity.start_date_local,
-      start_date_utc: activity.start_date, // UTC for cross-platform matching
+      start_time: localStringToISO8601WithTimezone(activity.start_date_local, timezone),
       activity_type: normalizeActivityType(activity.type),
       name: activity.name,
       description: activity.description,

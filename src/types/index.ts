@@ -12,8 +12,7 @@ export type ActivityType =
 // Normalized workout from any source
 export interface NormalizedWorkout {
   id: string;
-  date: string; // ISO 8601 local time
-  start_date_utc?: string; // ISO 8601 UTC (with Z suffix) for cross-platform matching
+  start_time: string; // ISO 8601 (YYYY-MM-DDTHH:mm:ss±HH:mm) in user's local timezone
   activity_type?: ActivityType; // Optional for unavailable workouts (e.g., Strava-only)
   name?: string;
   description?: string;
@@ -321,8 +320,8 @@ export interface WhoopZoneDurations {
 export interface StrainActivity {
   id: string;
   activity_type: ActivityType;
-  start_time: string;
-  end_time: string;
+  start_time: string; // ISO 8601 (YYYY-MM-DDTHH:mm:ss±HH:mm) in user's local timezone
+  end_time: string; // ISO 8601 (YYYY-MM-DDTHH:mm:ss±HH:mm) in user's local timezone
   duration: string; // Human-readable, e.g., "1:30:00"
   strain_score: number;
   average_heart_rate?: number;
@@ -794,8 +793,8 @@ export interface DailySummaryWhoop {
  * are included in the recovery and strain objects within the whoop property.
  */
 export interface DailySummary {
-  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
-  current_date: string;
+  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
+  current_time: string;
   /** Today's Whoop recovery and strain data */
   whoop: DailySummaryWhoop;
   /** Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu, null if unavailable */
@@ -831,12 +830,12 @@ export interface TodaysRecoveryWhoop {
 }
 
 /**
- * Today's recovery data with current date/time in user's timezone.
+ * Today's recovery data with current time in user's timezone.
  * Returned by get_todays_recovery tool.
  */
 export interface TodaysRecoveryResponse {
-  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
-  current_date: string;
+  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
+  current_time: string;
   /** Today's Whoop sleep and recovery data */
   whoop: TodaysRecoveryWhoop;
 }
@@ -850,34 +849,34 @@ export interface TodaysStrainWhoop {
 }
 
 /**
- * Today's strain data with current date/time in user's timezone.
+ * Today's strain data with current time in user's timezone.
  * Returned by get_todays_strain tool.
  */
 export interface TodaysStrainResponse {
-  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
-  current_date: string;
+  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
+  current_time: string;
   /** Today's Whoop strain data */
   whoop: TodaysStrainWhoop;
 }
 
 /**
- * Today's completed workouts with current date/time in user's timezone.
+ * Today's completed workouts with current time in user's timezone.
  * Returned by get_todays_completed_workouts tool.
  */
 export interface TodaysCompletedWorkoutsResponse {
-  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
-  current_date: string;
+  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
+  current_time: string;
   /** Completed workouts from Intervals.icu with matched Whoop data */
   workouts: WorkoutWithWhoop[];
 }
 
 /**
- * Today's planned workouts with current date/time in user's timezone.
+ * Today's planned workouts with current time in user's timezone.
  * Returned by get_todays_planned_workouts tool.
  */
 export interface TodaysPlannedWorkoutsResponse {
-  /** Current date and time in the user's local timezone (ISO 8601 with timezone offset) */
-  current_date: string;
+  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
+  current_time: string;
   /** Planned workouts from TrainerRoad and Intervals.icu */
   workouts: PlannedWorkout[];
 }
