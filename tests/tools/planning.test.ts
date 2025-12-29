@@ -20,6 +20,9 @@ describe('PlanningTools', () => {
     mockIntervalsClient = new IntervalsClient({ apiKey: 'test', athleteId: 'test' });
     mockTrainerRoadClient = new TrainerRoadClient({ calendarUrl: 'https://test.com' });
 
+    // Mock getAthleteTimezone to return UTC
+    vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
+
     tools = new PlanningTools(mockIntervalsClient, mockTrainerRoadClient);
   });
 
@@ -31,14 +34,14 @@ describe('PlanningTools', () => {
     const trainerroadWorkouts: PlannedWorkout[] = [
       {
         id: 'tr-1',
-        date: '2024-12-16T09:00:00Z',
+        scheduled_for: '2024-12-16T09:00:00Z',
         name: 'Sweet Spot Base',
         expected_tss: 88,
         source: 'trainerroad',
       },
       {
         id: 'tr-2',
-        date: '2024-12-18T09:00:00Z',
+        scheduled_for: '2024-12-18T09:00:00Z',
         name: 'VO2max Intervals',
         expected_tss: 75,
         source: 'trainerroad',
@@ -48,14 +51,14 @@ describe('PlanningTools', () => {
     const intervalsWorkouts: PlannedWorkout[] = [
       {
         id: 'int-1',
-        date: '2024-12-17T17:00:00Z',
+        scheduled_for: '2024-12-17T17:00:00Z',
         name: 'Easy Run',
         expected_tss: 35,
         source: 'intervals.icu',
       },
       {
         id: 'int-2',
-        date: '2024-12-19T08:00:00Z',
+        scheduled_for: '2024-12-19T08:00:00Z',
         name: 'Long Ride',
         expected_tss: 120,
         source: 'intervals.icu',
@@ -77,7 +80,7 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ days: 7 });
 
-      const dates = result.map((w) => new Date(w.date).getTime());
+      const dates = result.map((w) => new Date(w.scheduled_for).getTime());
       for (let i = 1; i < dates.length; i++) {
         expect(dates[i]).toBeGreaterThanOrEqual(dates[i - 1]);
       }
@@ -86,7 +89,7 @@ describe('PlanningTools', () => {
     it('should deduplicate similar workouts', async () => {
       const duplicateWorkout: PlannedWorkout = {
         id: 'int-dup',
-        date: '2024-12-16T09:00:00Z',
+        scheduled_for: '2024-12-16T09:00:00Z',
         name: 'Sweet Spot Base',
         expected_tss: 88,
         source: 'intervals.icu',
@@ -135,7 +138,7 @@ describe('PlanningTools', () => {
   describe('getPlannedWorkoutDetails', () => {
     const trBikeWorkout: PlannedWorkout = {
       id: 'tr-1',
-      date: '2024-12-16T09:00:00Z',
+      scheduled_for: '2024-12-16T09:00:00Z',
       name: 'Sweet Spot Base',
       description: 'Hard intervals',
       expected_tss: 88,
@@ -146,7 +149,7 @@ describe('PlanningTools', () => {
 
     const intRunWorkout: PlannedWorkout = {
       id: 'int-1',
-      date: '2024-12-16T17:00:00Z',
+      scheduled_for: '2024-12-16T17:00:00Z',
       name: 'Easy Run',
       expected_tss: 35,
       sport: 'Running',
@@ -201,7 +204,8 @@ describe('PlanningTools', () => {
 
       await tools.getPlannedWorkoutDetails({ date: 'tomorrow' });
 
-      expect(mockTrainerRoadClient.getPlannedWorkouts).toHaveBeenCalledWith('2024-12-16', '2024-12-16');
+      // Third parameter is timezone (UTC from the mock)
+      expect(mockTrainerRoadClient.getPlannedWorkouts).toHaveBeenCalledWith('2024-12-16', '2024-12-16', 'UTC');
       expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith('2024-12-16', '2024-12-16');
     });
 

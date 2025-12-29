@@ -1486,7 +1486,10 @@ export class IntervalsClient {
       category: 'WORKOUT,RACE_A,RACE_B,RACE_C',
     });
 
-    return events.map((e) => this.normalizePlannedEvent(e));
+    // Get timezone for date formatting
+    const timezone = await this.getAthleteTimezone();
+
+    return events.map((e) => this.normalizePlannedEvent(e, timezone));
   }
 
   /**
@@ -1970,13 +1973,13 @@ export class IntervalsClient {
     return normalized === 'Other' ? undefined : normalized;
   }
 
-  private normalizePlannedEvent(event: IntervalsEvent): PlannedWorkout {
+  private normalizePlannedEvent(event: IntervalsEvent, timezone: string): PlannedWorkout {
     // Calculate duration in seconds
     const durationSeconds = event.moving_time ?? (event.duration ? event.duration * 60 : undefined);
 
     return {
       id: event.uid ?? String(event.id),
-      date: event.start_date_local,
+      scheduled_for: localStringToISO8601WithTimezone(event.start_date_local, timezone),
       name: event.name,
       description: event.description,
       expected_tss: event.icu_training_load,

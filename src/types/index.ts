@@ -335,7 +335,8 @@ export interface StrainActivity {
 // Planned workout from calendar
 export interface PlannedWorkout {
   id: string;
-  date: string;
+  /** Scheduled date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's timezone */
+  scheduled_for: string;
   name: string;
   description?: string;
   expected_tss?: number;

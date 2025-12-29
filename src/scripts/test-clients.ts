@@ -120,7 +120,7 @@ async function testTrainerRoad() {
     console.log(`   ✅ Found ${workouts.length} workouts in next 7 days`);
 
     for (const workout of workouts.slice(0, 3)) {
-      const date = new Date(workout.date).toLocaleDateString();
+      const date = new Date(workout.scheduled_for).toLocaleDateString();
       console.log(`      ${date}: ${workout.name}`);
       if (workout.sport) console.log(`         Sport: ${workout.sport}`);
       if (workout.expected_duration) console.log(`         Duration: ${workout.expected_duration}`);

@@ -31,7 +31,7 @@ export class PlanningTools {
 
     // Fetch from both sources in parallel
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
-      this.trainerroad?.getPlannedWorkouts(startDateStr, endDateStr).catch((e) => {
+      this.trainerroad?.getPlannedWorkouts(startDateStr, endDateStr, timezone).catch((e) => {
         console.error('Error fetching TrainerRoad workouts:', e);
         return [];
       }) ?? Promise.resolve([]),
@@ -44,7 +44,7 @@ export class PlanningTools {
     // Merge, deduplicate, and sort by date
     const merged = this.mergeWorkouts(trainerroadWorkouts, intervalsWorkouts);
     return merged.sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
     );
   }
 
@@ -63,7 +63,7 @@ export class PlanningTools {
 
     // Fetch from both sources for the specified date
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
-      this.trainerroad?.getPlannedWorkouts(dateStr, dateStr).catch((e) => {
+      this.trainerroad?.getPlannedWorkouts(dateStr, dateStr, timezone).catch((e) => {
         console.error('Error fetching TrainerRoad workouts:', e);
         return [];
       }) ?? Promise.resolve([]),
@@ -116,8 +116,8 @@ export class PlanningTools {
    */
   private areWorkoutsSimilar(a: PlannedWorkout, b: PlannedWorkout): boolean {
     // Same day check
-    const dateA = a.date.split('T')[0];
-    const dateB = b.date.split('T')[0];
+    const dateA = a.scheduled_for.split('T')[0];
+    const dateB = b.scheduled_for.split('T')[0];
     if (dateA !== dateB) return false;
 
     // Similar name check (fuzzy)

@@ -237,8 +237,8 @@ export class CurrentTools {
    */
   private areWorkoutsSimilar(a: PlannedWorkout, b: PlannedWorkout): boolean {
     // Same day check
-    const dateA = a.date.split('T')[0];
-    const dateB = b.date.split('T')[0];
+    const dateA = a.scheduled_for.split('T')[0];
+    const dateB = b.scheduled_for.split('T')[0];
     if (dateA !== dateB) return false;
 
     // Similar name check (fuzzy)

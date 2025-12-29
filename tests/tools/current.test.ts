@@ -362,7 +362,7 @@ describe('CurrentTools', () => {
     const trainerroadWorkouts: PlannedWorkout[] = [
       {
         id: 'tr-1',
-        date: '2024-12-15T09:00:00Z',
+        scheduled_for: '2024-12-15T09:00:00Z',
         name: 'Sweet Spot Base',
         expected_tss: 88,
         source: 'trainerroad',
@@ -372,7 +372,7 @@ describe('CurrentTools', () => {
     const intervalsWorkouts: PlannedWorkout[] = [
       {
         id: 'int-1',
-        date: '2024-12-15T17:00:00Z',
+        scheduled_for: '2024-12-15T17:00:00Z',
         name: 'Easy Run',
         expected_tss: 35,
         source: 'intervals.icu',
@@ -416,7 +416,7 @@ describe('CurrentTools', () => {
     it('should deduplicate similar workouts', async () => {
       const duplicateWorkout: PlannedWorkout = {
         id: 'int-1',
-        date: '2024-12-15T09:00:00Z',
+        scheduled_for: '2024-12-15T09:00:00Z',
         name: 'Sweet Spot Base', // Same name
         expected_tss: 88, // Same TSS
         source: 'intervals.icu',
@@ -567,7 +567,7 @@ describe('CurrentTools', () => {
     const mockPlannedWorkouts: PlannedWorkout[] = [
       {
         id: 'tr-1',
-        date: '2024-12-15T09:00:00Z',
+        scheduled_for: '2024-12-15T09:00:00Z',
         name: 'Sweet Spot Base',
         expected_tss: 88,
         source: 'trainerroad',

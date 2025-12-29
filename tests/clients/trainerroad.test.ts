@@ -185,7 +185,7 @@ END:VCALENDAR`;
 
       expect(result.length).toBeGreaterThan(0);
       result.forEach((workout) => {
-        const workoutDate = new Date(workout.date);
+        const workoutDate = new Date(workout.scheduled_for);
         const now = new Date('2024-12-15T12:00:00Z');
         const daysFromNow = (workoutDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
         expect(daysFromNow).toBeLessThanOrEqual(7);
@@ -440,8 +440,9 @@ END:VCALENDAR`;
   });
 
   describe('date formatting', () => {
-    it('should output date-only format for DATE events (no specific time)', async () => {
+    it('should output full datetime for DATE events (shown as midnight in user timezone)', async () => {
       // Events with VALUE=DATE represent all-day events without a specific time
+      // These are now shown as midnight in the user's timezone
       const dateOnlyIcs = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
@@ -458,10 +459,11 @@ END:VCALENDAR`;
         text: () => Promise.resolve(dateOnlyIcs),
       });
 
-      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+      // Pass a timezone to get consistent output
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
 
-      // Should output just the date, not a full ISO datetime
-      expect(result[0].date).toBe('2024-12-16');
+      // Should output full datetime in user's timezone (midnight shows as 00:00:00)
+      expect(result[0].scheduled_for).toMatch(/^2024-12-16T00:00:00[+-]\d{2}:\d{2}$/);
     });
 
     it('should output full ISO datetime for DATE-TIME events (specific time set)', async () => {
@@ -482,10 +484,11 @@ END:VCALENDAR`;
         text: () => Promise.resolve(dateTimeIcs),
       });
 
-      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+      // Pass a timezone to get consistent output (16:00 UTC = 08:00 PST)
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
 
-      // Should output full ISO datetime with time and Z suffix
-      expect(result[0].date).toBe('2024-12-16T16:00:00.000Z');
+      // Should output full ISO datetime in user's timezone
+      expect(result[0].scheduled_for).toMatch(/^2024-12-16T08:00:00[+-]\d{2}:\d{2}$/);
     });
 
     it('should handle mixed DATE and DATE-TIME events correctly', async () => {
@@ -512,7 +515,8 @@ END:VCALENDAR`;
         text: () => Promise.resolve(mixedIcs),
       });
 
-      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+      // Pass a timezone to get consistent output
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
 
       expect(result).toHaveLength(2);
 
@@ -520,11 +524,11 @@ END:VCALENDAR`;
       const zwiftRide = result.find((w) => w.name === 'Zwift Group Ride');
       const baldWorkout = result.find((w) => w.name === 'Bald');
 
-      // DATE-TIME event should have full ISO datetime
-      expect(zwiftRide?.date).toBe('2024-12-16T16:00:00.000Z');
+      // DATE-TIME event should have full ISO datetime in user's timezone (16:00 UTC = 08:00 PST)
+      expect(zwiftRide?.scheduled_for).toMatch(/^2024-12-16T08:00:00[+-]\d{2}:\d{2}$/);
 
-      // DATE event should have just the date
-      expect(baldWorkout?.date).toBe('2024-12-16');
+      // DATE event should have full datetime at midnight in user's timezone
+      expect(baldWorkout?.scheduled_for).toMatch(/^2024-12-16T00:00:00[+-]\d{2}:\d{2}$/);
     });
   });
 
@@ -600,6 +604,128 @@ END:VCALENDAR`;
 
       const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
       expect(result[0].expected_if).toBe(0.85);
+    });
+  });
+
+  describe('DATE-TIME workout detection', () => {
+    it('should detect DATE-TIME events with reasonable duration as workouts', async () => {
+      // Event with 2 hour duration (120 minutes) - should be a workout
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:datetime-workout@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T160000Z
+DTEND;VALUE=DATE-TIME:20241216T180000Z
+SUMMARY:Klammspitze
+DESCRIPTION:TSS 81, IF 0.64.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Klammspitze');
+      expect(result[0].expected_duration).toBe('2:00:00');
+    });
+
+    it('should reject DATE-TIME events with duration >= 1440 minutes as non-workouts', async () => {
+      // Event with 24 hour duration (1440 minutes) - should NOT be a workout
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:allday-datetime@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T000000Z
+DTEND;VALUE=DATE-TIME:20241217T000000Z
+SUMMARY:Rest Day Note
+DESCRIPTION:Take it easy today.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should parse duration from event start/end times for DATE-TIME events', async () => {
+      // 90 minute workout
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:duration-test@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T180000Z
+DTEND;VALUE=DATE-TIME:20241216T193000Z
+SUMMARY:Morning Ride
+DESCRIPTION:TSS 60.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].expected_duration).toBe('1:30:00');
+    });
+  });
+
+  describe('sport detection with TSS', () => {
+    it('should detect cycling when description starts with TSS', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:tss-cycling@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T180000Z
+DTEND;VALUE=DATE-TIME:20241216T200000Z
+SUMMARY:Klammspitze
+DESCRIPTION:TSS 81, IF 0.64. A great endurance workout.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].sport).toBe('Cycling');
+    });
+
+    it('should still detect running from name even with TSS in description', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:run-with-tss@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T180000Z
+DTEND;VALUE=DATE-TIME:20241216T190000Z
+SUMMARY:Morning Run
+DESCRIPTION:TSS 40. Easy pace.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].sport).toBe('Running');
     });
   });
 });

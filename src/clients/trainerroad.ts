@@ -1,5 +1,6 @@
 import ical from 'node-ical';
-import { parseISO, isWithinInterval, format } from 'date-fns';
+import { format } from 'date-fns';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import type { PlannedWorkout, TrainerRoadConfig, ActivityType } from '../types/index.js';
 import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
@@ -90,32 +91,59 @@ export class TrainerRoadClient {
 
   /**
    * Check if an event is a workout
-   * Workouts always have a duration prefix in the name (e.g., "2:00 - Workout Name")
+   * - DATE events: must have a duration prefix in the name (e.g., "2:00 - Workout Name")
+   * - DATE-TIME events: must have a duration less than 1440 minutes (one day)
    */
   private isWorkout(event: CalendarEvent): boolean {
-    return this.parseDurationFromName(event.summary) !== undefined;
+    if (event.dateType === 'date') {
+      // DATE events (all-day): check for duration prefix in name
+      return this.parseDurationFromName(event.summary) !== undefined;
+    } else {
+      // DATE-TIME events (specific time): check if duration is reasonable (< 1 day)
+      if (event.start && event.end) {
+        const durationMinutes = (event.end.getTime() - event.start.getTime()) / (1000 * 60);
+        return durationMinutes > 0 && durationMinutes < 1440;
+      }
+      return false;
+    }
   }
 
   /**
    * Get planned workouts within a date range
+   * @param startDate - Start date in YYYY-MM-DD format
+   * @param endDate - End date in YYYY-MM-DD format
+   * @param timezone - IANA timezone to use for date comparison (e.g., 'America/Los_Angeles')
    */
   async getPlannedWorkouts(
     startDate: string,
-    endDate: string
+    endDate: string,
+    timezone?: string
   ): Promise<PlannedWorkout[]> {
     const events = await this.fetchCalendar();
 
-    const start = parseISO(startDate);
-    const end = parseISO(`${endDate}T23:59:59`);
+    // Filter events by comparing the date
+    const eventsInRange = events.filter((event) => {
+      // For DATE events (all-day, no specific time), the date is "floating"
+      // and represents that calendar day regardless of timezone.
+      // node-ical parses DATE events as midnight local time, so we use format()
+      // to extract just the date part without timezone conversion.
+      if (event.dateType === 'date') {
+        const eventDate = format(event.start, 'yyyy-MM-dd');
+        return eventDate >= startDate && eventDate <= endDate;
+      }
 
-    const eventsInRange = events.filter((event) =>
-      isWithinInterval(event.start, { start, end })
-    );
+      // For DATE-TIME events (specific time), convert to user's timezone
+      // This handles timezone issues where an event at 5 PM local might be the next day in UTC
+      const eventDate = timezone
+        ? formatInTimeZone(event.start, timezone, 'yyyy-MM-dd')
+        : format(event.start, 'yyyy-MM-dd');
+      return eventDate >= startDate && eventDate <= endDate;
+    });
 
     // Filter out annotations (non-workout events)
     const workouts = eventsInRange.filter((event) => this.isWorkout(event));
 
-    return workouts.map((event) => this.normalizeEvent(event));
+    return workouts.map((event) => this.normalizeEvent(event, timezone));
   }
 
   /**
@@ -125,7 +153,7 @@ export class TrainerRoadClient {
     const today = timezone
       ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
       : new Date().toISOString().split('T')[0];
-    return this.getPlannedWorkouts(today, today);
+    return this.getPlannedWorkouts(today, today, timezone);
   }
 
   /**
@@ -142,7 +170,7 @@ export class TrainerRoadClient {
     );
   }
 
-  private normalizeEvent(event: CalendarEvent): PlannedWorkout {
+  private normalizeEvent(event: CalendarEvent, timezone?: string): PlannedWorkout {
     const parsed = this.parseDescription(event.description);
 
     // Try to get duration from: 1) workout name, 2) description, 3) event times
@@ -158,7 +186,7 @@ export class TrainerRoadClient {
       }
     }
 
-    const sport = this.detectSport(event.summary);
+    const sport = this.detectSport(event.summary, event.description);
 
     // Clean up the name by stripping the duration prefix (e.g., "2:00 - Gibbs" → "Gibbs")
     const cleanName = this.stripDurationFromName(event.summary);
@@ -166,16 +194,33 @@ export class TrainerRoadClient {
     // Detect source based on workout name/description
     const source = this.detectSource(event.summary, event.description);
 
-    // For date-only events, output just the date (yyyy-MM-dd)
-    // For date-time events, output full ISO string
-    const date =
-      event.dateType === 'date'
-        ? format(event.start, 'yyyy-MM-dd')
+    // Always output full datetime in user's timezone
+    // For date-only events, the time will be midnight (00:00:00)
+    // For date-time events, the time will be the scheduled start time
+    let date: string;
+    if (event.dateType === 'date') {
+      // DATE events: the date is "floating" - extract date and output as midnight in user's timezone
+      // node-ical parses DATE events as midnight local time, so extract the date part
+      const dateStr = format(event.start, 'yyyy-MM-dd');
+      if (timezone) {
+        // Use fromZonedTime to interpret midnight as being in the target timezone
+        // This creates a UTC Date representing midnight in that timezone
+        const midnightInTz = fromZonedTime(`${dateStr}T00:00:00`, timezone);
+        // Then format it back in that timezone
+        date = formatInTimeZone(midnightInTz, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX");
+      } else {
+        date = `${dateStr}T00:00:00.000Z`;
+      }
+    } else {
+      // DATE-TIME events: convert to user's timezone
+      date = timezone
+        ? formatInTimeZone(event.start, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX")
         : event.start.toISOString();
+    }
 
     return {
       id: event.uid,
-      date,
+      scheduled_for: date,
       name: cleanName,
       description: event.description,
       expected_tss: parsed.tss,
@@ -215,10 +260,10 @@ export class TrainerRoadClient {
   }
 
   /**
-   * Detect sport from workout name only
+   * Detect sport from workout name and description
    * Uses normalizeActivityType for consistent mapping, defaults to Cycling
    */
-  private detectSport(name: string): ActivityType {
+  private detectSport(name: string, description?: string): ActivityType {
     // Try normalizing the full workout name first (in case it's an exact match)
     const normalized = normalizeActivityType(name);
     if (normalized !== 'Other') {
@@ -236,6 +281,11 @@ export class TrainerRoadClient {
           return keywordNormalized;
         }
       }
+    }
+
+    // If description starts with "TSS", it's a cycling workout
+    if (description?.startsWith('TSS')) {
+      return 'Cycling';
     }
 
     // Default to Cycling for TrainerRoad (most workouts are cycling)
