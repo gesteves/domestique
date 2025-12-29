@@ -347,7 +347,7 @@ export class TrainerRoadClient {
         races.push({
           scheduled_for: scheduledFor,
           name: raceName,
-          description: raceEvent.description,
+          description: this.cleanDescription(raceEvent.description),
           sport: 'Triathlon', // Currently only supporting triathlons
         });
       }
@@ -411,7 +411,7 @@ export class TrainerRoadClient {
       id: event.uid,
       scheduled_for: date,
       name: cleanName,
-      description: event.description,
+      description: this.cleanDescription(event.description),
       expected_tss: parsed.tss,
       expected_if: parsed.if,
       expected_duration: durationMinutes
@@ -432,6 +432,14 @@ export class TrainerRoadClient {
       return match[3];
     }
     return name;
+  }
+
+  /**
+   * Clean description by removing "Description:" prefix
+   */
+  private cleanDescription(description: string | undefined): string | undefined {
+    if (!description) return undefined;
+    return description.replace(/\s*Description:/i, '').trim() || undefined;
   }
 
   /**
