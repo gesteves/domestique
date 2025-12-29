@@ -219,16 +219,6 @@ export class TrainerRoadClient {
       ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
       : new Date().toISOString().split('T')[0];
 
-    console.log(`[TrainerRoad] getUpcomingRaces: today=${today}, total events=${events.length}`);
-
-    // Log all events for debugging
-    for (const event of events) {
-      const eventDate = event.dateType === 'date'
-        ? format(event.start, 'yyyy-MM-dd')
-        : (timezone ? formatInTimeZone(event.start, timezone, 'yyyy-MM-dd') : format(event.start, 'yyyy-MM-dd'));
-      console.log(`[TrainerRoad] Event: dateType=${event.dateType}, date=${eventDate}, summary="${event.summary}"`);
-    }
-
     // Filter to events from today onwards
     const futureEvents = events.filter((event) => {
       if (event.dateType === 'date') {
@@ -240,8 +230,6 @@ export class TrainerRoadClient {
         : format(event.start, 'yyyy-MM-dd');
       return eventDate >= today;
     });
-
-    console.log(`[TrainerRoad] Future events: ${futureEvents.length}`);
 
     // Find race events and their legs
     return this.findRaces(futureEvents, timezone);
@@ -281,20 +269,6 @@ export class TrainerRoadClient {
       return false;
     });
 
-    console.log(`[TrainerRoad] findRaces: ${raceEvents.length} potential race events, ${legEvents.length} potential leg events`);
-    for (const re of raceEvents) {
-      console.log(`[TrainerRoad]   Race event: "${re.summary}" on ${format(re.start, 'yyyy-MM-dd')}`);
-    }
-    for (const le of legEvents) {
-      const legDate = le.dateType === 'date'
-        ? format(le.start, 'yyyy-MM-dd')
-        : (timezone ? formatInTimeZone(le.start, timezone, 'yyyy-MM-dd') : format(le.start, 'yyyy-MM-dd'));
-      const legName = le.dateType === 'date'
-        ? this.stripDurationFromName(le.summary)
-        : le.summary;
-      console.log(`[TrainerRoad]   Leg event: "${le.summary}" -> name: "${legName}" on ${legDate} (${le.dateType})`);
-    }
-
     // For each potential race event, check if there are matching legs
     for (const raceEvent of raceEvents) {
       const raceName = raceEvent.summary;
@@ -312,11 +286,7 @@ export class TrainerRoadClient {
           ? this.stripDurationFromName(leg.summary)
           : leg.summary;
 
-        const matches = legDate === raceDate && legName === raceName;
-        if (matches) {
-          console.log(`[TrainerRoad]   Match found: race="${raceName}" leg="${leg.summary}"`);
-        }
-        return matches;
+        return legDate === raceDate && legName === raceName;
       });
 
       if (matchingLegs.length > 0) {
@@ -332,7 +302,6 @@ export class TrainerRoadClient {
           scheduledFor = timezone
             ? formatInTimeZone(earliestLeg.start, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX")
             : earliestLeg.start.toISOString();
-          console.log(`[TrainerRoad]   Using earliest DATE-TIME leg start: ${scheduledFor}`);
         } else {
           // All legs are DATE events, use midnight
           if (timezone) {
