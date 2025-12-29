@@ -230,50 +230,65 @@ describe('heat-zones', () => {
       // Rounded to 1 decimal: Math.round(4.25 * 10) / 10 = 4.3
       expect(metrics.median_heat_strain_index).toBe(4.3);
 
-      // Check HTL (should be > 0 since we have time in multiple zones)
+      // Check HTL (CORE algorithm: 8 seconds = 0.13 min at HSI ≥ 1.0, peak HSI = 9.0)
+      // Very short duration below CORE's minimum table (30min), so HTL will be low
       expect(metrics.heat_training_load).toBeGreaterThan(0);
       expect(metrics.heat_training_load).toBeLessThanOrEqual(10);
     });
 
-    it('should calculate HTL as 0 for no heat strain', () => {
+    it('should calculate zero HTL for no heat strain', () => {
       const timeData = [0, 1, 2, 3, 4];
       const heatStrainData = [0.5, 0.6, 0.7, 0.8, 0.9]; // All in Zone 1
 
       const metrics = calculateHeatMetrics(timeData, heatStrainData);
 
-      expect(metrics.heat_training_load).toBe(0); // Zone 1 contributes nothing
+      expect(metrics.heat_training_load).toBe(0); // Zone 1 (HSI < 1.0) contributes nothing per CORE docs
     });
 
-    it('should give high HTL for optimal zone training', () => {
-      const timeData = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-      const heatStrainData = [5.0, 5.5, 6.0, 6.5, 5.5, 5.0, 6.0, 5.5, 5.0, 6.0]; // All in Zone 3
+    it('should match CORE table for 1 hour at peak HSI 5.5', () => {
+      // Simulate 1 hour (3600 seconds) at HSI 5.5
+      const timeData: number[] = [];
+      const heatStrainData: number[] = [];
+      for (let i = 0; i <= 3600; i++) {
+        timeData.push(i);
+        heatStrainData.push(5.5);
+      }
 
       const metrics = calculateHeatMetrics(timeData, heatStrainData);
 
-      // Zone 3 is optimal, should give high HTL (close to max)
-      expect(metrics.heat_training_load).toBeGreaterThan(8);
-      expect(metrics.heat_training_load).toBeLessThanOrEqual(10);
+      // CORE table: 1 hour at HSI 5.5 = HTL 10.0
+      expect(metrics.heat_training_load).toBe(10.0);
     });
 
-    it('should penalize dangerous zone 4 training', () => {
-      const timeData = [0, 1, 2, 3, 4];
-      const heatStrainData = [8.0, 8.5, 9.0, 9.5, 10.0]; // All in Zone 4
+    it('should match CORE table for 30 minutes at peak HSI 2.5', () => {
+      // Simulate 30 minutes (1800 seconds) at HSI 2.5
+      const timeData: number[] = [];
+      const heatStrainData: number[] = [];
+      for (let i = 0; i <= 1800; i++) {
+        timeData.push(i);
+        heatStrainData.push(2.5);
+      }
 
       const metrics = calculateHeatMetrics(timeData, heatStrainData);
 
-      // Zone 4 is penalized (50% contribution), should give moderate HTL
-      expect(metrics.heat_training_load).toBe(5.0); // 50% * 10 = 5
+      // CORE table: 30min at HSI 2.5 = HTL 2.0
+      expect(metrics.heat_training_load).toBe(2.0);
     });
 
-    it('should give moderate HTL for zone 2 training', () => {
-      const timeData = [0, 1, 2, 3, 4];
-      const heatStrainData = [1.5, 2.0, 2.5, 2.0, 1.5]; // All in Zone 2
+    it('should interpolate for 2 hours at peak HSI 5.5', () => {
+      // Simulate 2 hours (7200 seconds) with peak HSI 5.5
+      const timeData: number[] = [];
+      const heatStrainData: number[] = [];
+      for (let i = 0; i <= 7200; i++) {
+        timeData.push(i);
+        // Mix of HSI values, but peak at 5.5
+        heatStrainData.push(i % 1000 === 0 ? 5.5 : 4.0);
+      }
 
       const metrics = calculateHeatMetrics(timeData, heatStrainData);
 
-      // Zone 2 gives partial contribution (30-50%)
-      expect(metrics.heat_training_load).toBeGreaterThan(3);
-      expect(metrics.heat_training_load).toBeLessThan(6);
+      // CORE table: 2hr at HSI 5.5 = HTL 10.0
+      expect(metrics.heat_training_load).toBe(10.0);
     });
 
     it('should handle empty data', () => {
@@ -297,7 +312,8 @@ describe('heat-zones', () => {
       // Check that values are rounded to 1 decimal
       expect(metrics.max_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
       expect(metrics.median_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
-      expect(metrics.heat_training_load.toString()).toMatch(/^\d+\.\d$/);
+      // HTL can be exactly 10.0 which rounds to "10", so check <= 1 decimal
+      expect(metrics.heat_training_load.toString()).toMatch(/^\d+(\.\d)?$/);
     });
   });
 });

@@ -1099,6 +1099,7 @@ export class IntervalsClient {
         activityId,
         '/streams?types=heat_strain_index&types=time&types=temp'
       );
+
       heatStreamData = parseHeatStrainStreams(streams);
       tempStreamData = parseTemperatureStreams(streams);
     } catch (error) {

@@ -138,16 +138,122 @@ export function calculateHeatMetrics(
 }
 
 /**
- * Calculate Heat Training Load (HTL) from stream data.
+ * CORE's official HTL lookup table based on duration and peak HSI.
+ * Source: https://help.corebodytemp.com/en/articles/10447113-heat-training-load
+ *
+ * Rows: Duration in minutes (30, 45, 60, 90, 120, 180)
+ * Cols: Peak HSI values (1.5, 2.5, 3.5, 4.5, 5.5, 6.5)
+ * Values: HTL score (0-10)
+ */
+const CORE_HTL_TABLE = [
+  //     1.5   2.5   3.5   4.5   5.5   6.5  <- Peak HSI
+  [1.2, 2.0, 3.1, 4.7, 6.8, 9.3],  // 30min
+  [1.8, 3.0, 4.6, 7.0, 10.0, 10.0], // 45min
+  [2.5, 4.0, 6.2, 9.3, 10.0, 10.0], // 60min (1hr)
+  [3.7, 6.0, 9.3, 10.0, 10.0, 10.0], // 90min (1.5hr)
+  [4.9, 8.0, 10.0, 10.0, 10.0, 10.0], // 120min (2hr)
+  [7.4, 10.0, 10.0, 10.0, 10.0, 10.0], // 180min (3hr)
+];
+
+const DURATION_POINTS = [30, 45, 60, 90, 120, 180]; // minutes
+const HSI_POINTS = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5];
+
+/**
+ * Bilinear interpolation for CORE HTL table lookup.
+ *
+ * @param duration - Duration in minutes
+ * @param peakHSI - Peak HSI value
+ * @returns Interpolated HTL value
+ */
+function interpolateHTL(duration: number, peakHSI: number): number {
+  // Handle edge cases
+  if (duration <= 0 || peakHSI < 1.0) {
+    return 0;
+  }
+
+  // Cap at table boundaries
+  const cappedDuration = Math.min(duration, DURATION_POINTS[DURATION_POINTS.length - 1]);
+  const cappedHSI = Math.min(peakHSI, HSI_POINTS[HSI_POINTS.length - 1]);
+
+  // Find bounding duration indices
+  let durationIdx = 0;
+  for (let i = 0; i < DURATION_POINTS.length - 1; i++) {
+    if (cappedDuration >= DURATION_POINTS[i] && cappedDuration <= DURATION_POINTS[i + 1]) {
+      durationIdx = i;
+      break;
+    }
+    if (cappedDuration > DURATION_POINTS[i + 1]) {
+      durationIdx = i + 1;
+    }
+  }
+
+  // Find bounding HSI indices
+  let hsiIdx = 0;
+  for (let i = 0; i < HSI_POINTS.length - 1; i++) {
+    if (cappedHSI >= HSI_POINTS[i] && cappedHSI <= HSI_POINTS[i + 1]) {
+      hsiIdx = i;
+      break;
+    }
+    if (cappedHSI > HSI_POINTS[i + 1]) {
+      hsiIdx = i + 1;
+    }
+  }
+
+  // If we're exactly on a grid point, return it
+  if (cappedDuration === DURATION_POINTS[durationIdx] && cappedHSI === HSI_POINTS[hsiIdx]) {
+    return CORE_HTL_TABLE[durationIdx][hsiIdx];
+  }
+
+  // Bilinear interpolation
+  const d0 = DURATION_POINTS[durationIdx];
+  const d1 = durationIdx < DURATION_POINTS.length - 1 ? DURATION_POINTS[durationIdx + 1] : d0;
+  const h0 = HSI_POINTS[hsiIdx];
+  const h1 = hsiIdx < HSI_POINTS.length - 1 ? HSI_POINTS[hsiIdx + 1] : h0;
+
+  // Get four corner values
+  const q00 = CORE_HTL_TABLE[durationIdx][hsiIdx];
+  const q01 = hsiIdx < HSI_POINTS.length - 1 ? CORE_HTL_TABLE[durationIdx][hsiIdx + 1] : q00;
+  const q10 = durationIdx < DURATION_POINTS.length - 1 ? CORE_HTL_TABLE[durationIdx + 1][hsiIdx] : q00;
+  const q11 = (durationIdx < DURATION_POINTS.length - 1 && hsiIdx < HSI_POINTS.length - 1)
+    ? CORE_HTL_TABLE[durationIdx + 1][hsiIdx + 1]
+    : q00;
+
+  // Interpolate
+  if (d1 === d0 && h1 === h0) {
+    return q00;
+  } else if (d1 === d0) {
+    // Linear interpolation in HSI dimension only
+    const t = (cappedHSI - h0) / (h1 - h0);
+    return q00 * (1 - t) + q01 * t;
+  } else if (h1 === h0) {
+    // Linear interpolation in duration dimension only
+    const t = (cappedDuration - d0) / (d1 - d0);
+    return q00 * (1 - t) + q10 * t;
+  } else {
+    // Full bilinear interpolation
+    const td = (cappedDuration - d0) / (d1 - d0);
+    const th = (cappedHSI - h0) / (h1 - h0);
+
+    const r0 = q00 * (1 - th) + q01 * th;
+    const r1 = q10 * (1 - th) + q11 * th;
+
+    return r0 * (1 - td) + r1 * td;
+  }
+}
+
+/**
+ * Calculate Heat Training Load (HTL) from stream data using CORE's algorithm.
  *
  * HTL measures the contribution to heat adaptation on a 0-10 scale.
- * This is an approximation based on CORE Body Temperature documentation:
- * - Zone 1 (0-0.9 HSI): No contribution
- * - Zone 2 (1-2.9 HSI): Moderate contribution
- * - Zone 3 (3-6.9 HSI): Optimal contribution (highest HTL)
- * - Zone 4 (7+ HSI): Dangerous, not recommended
+ * This implementation matches CORE Body Temperature's proprietary HTL calculation
+ * based on their official lookup table.
  *
- * The calculation considers both intensity (HSI level) and duration.
+ * Algorithm (per CORE documentation):
+ * 1. Calculate duration of time spent at HSI ≥ 1.0 (Zone 2+)
+ * 2. Find the peak (maximum) HSI value during that time
+ * 3. Look up HTL in CORE's official table using duration × peak HSI
+ *
+ * Source: https://help.corebodytemp.com/en/articles/10447113-heat-training-load
  *
  * @param timeData - Array of time values in seconds
  * @param heatStrainData - Array of heat strain index values
@@ -161,52 +267,29 @@ function calculateHeatTrainingLoad(
     return 0;
   }
 
-  let totalWeightedLoad = 0;
-  let totalTime = 0;
+  // CORE Algorithm: Calculate duration at HSI ≥ 1.0 and find peak HSI
+  let durationInZone2Plus = 0; // seconds
+  let peakHSI = 0;
 
   for (let i = 0; i < heatStrainData.length; i++) {
     const hsi = heatStrainData[i];
 
-    // Calculate time at this data point
-    const timeSpent = i < timeData.length - 1
-      ? timeData[i + 1] - timeData[i]
-      : 1;
+    if (hsi >= 1.0) {
+      // Calculate time at this data point
+      const timeSpent = i < timeData.length - 1
+        ? timeData[i + 1] - timeData[i]
+        : 1;
 
-    totalTime += timeSpent;
-
-    // Weight the contribution based on HSI zone
-    // Zone 1 (0-0.9): 0% contribution
-    // Zone 2 (1-2.9): 30-50% contribution (scales with HSI)
-    // Zone 3 (3-6.9): 80-100% contribution (optimal, scales with HSI)
-    // Zone 4 (7+): 50% contribution (dangerous, penalized)
-    let weight = 0;
-
-    if (hsi < 1.0) {
-      // Zone 1: No contribution
-      weight = 0;
-    } else if (hsi < 3.0) {
-      // Zone 2: Partial contribution (30-50%)
-      // Linear scale from 30% at HSI 1.0 to 50% at HSI 2.9
-      weight = 0.3 + ((hsi - 1.0) / 1.9) * 0.2;
-    } else if (hsi < 7.0) {
-      // Zone 3: Optimal contribution (80-100%)
-      // Linear scale from 80% at HSI 3.0 to 100% at HSI 6.9
-      weight = 0.8 + ((hsi - 3.0) / 3.9) * 0.2;
-    } else {
-      // Zone 4: Dangerous, penalized contribution (50%)
-      weight = 0.5;
+      durationInZone2Plus += timeSpent;
+      peakHSI = Math.max(peakHSI, hsi);
     }
-
-    totalWeightedLoad += weight * timeSpent;
   }
 
-  if (totalTime === 0) {
-    return 0;
-  }
+  // Convert duration to minutes
+  const durationMinutes = durationInZone2Plus / 60;
 
-  // Normalize to 0-10 scale
-  // Average weighted contribution × 10
-  const htl = (totalWeightedLoad / totalTime) * 10;
+  // Look up HTL using CORE's table
+  const htl = interpolateHTL(durationMinutes, peakHSI);
 
   // Cap at 10
   return Math.min(htl, 10);

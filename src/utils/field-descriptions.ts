@@ -109,7 +109,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
   max_heat_strain_index: 'Maximum Heat Strain Index (HSI) reached during the activity, recorded by a CORE body temperature sensor.',
   median_heat_strain_index: 'Median Heat Strain Index (HSI) throughout the activity, recorded by a CORE body temperature sensor.',
-  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Higher scores indicate greater adaptation stimulus. HTL is calculated using a weighted approach where Zone 3 (HSI 3-6.9) provides optimal training stimulus, Zone 2 (HSI 1-2.9) provides partial benefit, Zone 1 (HSI 0-0.9) provides no benefit, and Zone 4 (HSI 7+) is penalized as it\'s dangerous. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
+  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
 
   // Ambient temperature data
   min_ambient_temperature: 'Minimum ambient temperature (water temperature for swimming, air temperature for other activities) during the activity in Celsius, recorded by the user\'s watch or bike computer.',
@@ -345,6 +345,9 @@ export const WEATHER_FIELD_DESCRIPTIONS = {
 export const HEAT_ZONES_FIELD_DESCRIPTIONS = {
   activity_id: 'Unique ID of the activity in Intervals.icu',
   heat_zones: WORKOUT_FIELD_DESCRIPTIONS.heat_zones,
+  max_heat_strain_index: WORKOUT_FIELD_DESCRIPTIONS.max_heat_strain_index,
+  median_heat_strain_index: WORKOUT_FIELD_DESCRIPTIONS.median_heat_strain_index,
+  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
 };
 
 export const POWER_CURVE_FIELD_DESCRIPTIONS = {
