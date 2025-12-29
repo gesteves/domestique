@@ -1041,6 +1041,37 @@ export class WhoopClient {
     return value !== undefined ? Math.round(value * 100) / 100 : undefined;
   }
 
+  /**
+   * Convert a UTC timestamp to ISO 8601 format in a specific timezone.
+   * Returns format: YYYY-MM-DDTHH:mm:ss
+   */
+  private toISOStringInTimezone(utcTimestamp: string, timezone: string): string {
+    const date = new Date(utcTimestamp);
+
+    // Get date parts in the target timezone
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(date);
+    const dateParts: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') {
+        dateParts[part.type] = part.value;
+      }
+    }
+
+    // Construct ISO 8601 string: YYYY-MM-DDTHH:mm:ss
+    return `${dateParts.year}-${dateParts.month}-${dateParts.day}T${dateParts.hour}:${dateParts.minute}:${dateParts.second}`;
+  }
+
   /** Helper to convert milliseconds to human-readable duration */
   private milliToHuman(milli: number): string {
     return formatDuration(milli / 1000);
@@ -1094,32 +1125,10 @@ export class WhoopClient {
     const sleepPerfPct = this.round2(sleepScore.sleep_performance_percentage) ?? 0;
     const sleepPerformanceLevel = getSleepPerformanceLevel(sleepPerfPct);
 
-    // Convert start/end times to user's timezone
+    // Convert start/end times to ISO 8601 format in user's timezone
     const timezone = await this.getTimezone();
-    const sleepStartDate = new Date(sleep.start);
-    const sleepEndDate = new Date(sleep.end);
-
-    const sleep_start = sleepStartDate.toLocaleString('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-
-    const sleep_end = sleepEndDate.toLocaleString('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
+    const sleep_start = this.toISOStringInTimezone(sleep.start, timezone);
+    const sleep_end = this.toISOStringInTimezone(sleep.end, timezone);
 
     return {
       sleep_summary: this.normalizeSleepSummary(sleepScore.stage_summary),
