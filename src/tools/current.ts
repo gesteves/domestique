@@ -20,6 +20,7 @@ import type {
   TodaysPlannedWorkoutsResponse,
   WhoopSleepData,
   WhoopRecoveryData,
+  Race,
 } from '../types/index.js';
 import { filterWhoopDuplicateFields } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
@@ -284,7 +285,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse] = await Promise.all([
+    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, upcomingRaces] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return { current_time: getCurrentDateTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
@@ -313,6 +314,12 @@ export class CurrentTools {
         console.error('Error fetching planned workouts for daily summary:', e);
         return { current_time: getCurrentDateTimeInTimezone(timezone), workouts: [] };
       }),
+      this.trainerroad
+        ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
+            console.error('Error fetching upcoming races for daily summary:', e);
+            return [] as Race[];
+          })
+        : Promise.resolve([] as Race[]),
     ]);
 
     // Extract data from response objects
@@ -350,12 +357,13 @@ export class CurrentTools {
       },
       fitness,
       wellness: filteredWellness,
-      completed_workouts: completedWorkouts,
       planned_workouts: plannedWorkouts,
-      workouts_completed: completedWorkouts.length,
+      completed_workouts: completedWorkouts,
+      upcoming_races: upcomingRaces,
       workouts_planned: plannedWorkouts.length,
-      tss_completed: Math.round(tssCompleted),
+      workouts_completed: completedWorkouts.length,
       tss_planned: Math.round(tssPlanned),
+      tss_completed: Math.round(tssCompleted),
     };
   }
 }

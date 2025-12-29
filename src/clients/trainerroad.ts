@@ -1,7 +1,7 @@
 import ical from 'node-ical';
 import { format } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
-import type { PlannedWorkout, TrainerRoadConfig, ActivityType } from '../types/index.js';
+import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race } from '../types/index.js';
 import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
@@ -203,6 +203,160 @@ export class TrainerRoadClient {
       format(today, 'yyyy-MM-dd'),
       format(endDate, 'yyyy-MM-dd')
     );
+  }
+
+  /**
+   * Get upcoming races from today onwards.
+   * A race is detected when an all-day event without a duration prefix exists
+   * alongside events with duration prefixes that have the same name (race legs).
+   * @param timezone - IANA timezone to use for date comparison (e.g., 'America/Los_Angeles')
+   */
+  async getUpcomingRaces(timezone?: string): Promise<Race[]> {
+    const events = await this.fetchCalendar();
+
+    // Get today's date
+    const today = timezone
+      ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+      : new Date().toISOString().split('T')[0];
+
+    console.log(`[TrainerRoad] getUpcomingRaces: today=${today}, total events=${events.length}`);
+
+    // Log all events for debugging
+    for (const event of events) {
+      const eventDate = event.dateType === 'date'
+        ? format(event.start, 'yyyy-MM-dd')
+        : (timezone ? formatInTimeZone(event.start, timezone, 'yyyy-MM-dd') : format(event.start, 'yyyy-MM-dd'));
+      console.log(`[TrainerRoad] Event: dateType=${event.dateType}, date=${eventDate}, summary="${event.summary}"`);
+    }
+
+    // Filter to events from today onwards
+    const futureEvents = events.filter((event) => {
+      if (event.dateType === 'date') {
+        const eventDate = format(event.start, 'yyyy-MM-dd');
+        return eventDate >= today;
+      }
+      const eventDate = timezone
+        ? formatInTimeZone(event.start, timezone, 'yyyy-MM-dd')
+        : format(event.start, 'yyyy-MM-dd');
+      return eventDate >= today;
+    });
+
+    console.log(`[TrainerRoad] Future events: ${futureEvents.length}`);
+
+    // Find race events and their legs
+    return this.findRaces(futureEvents, timezone);
+  }
+
+  /**
+   * Find races from a list of events.
+   * A race is detected when:
+   * 1. There's a DATE event (all-day) without a duration prefix
+   * 2. There are DATE events with duration prefixes that have the same name (after stripping duration)
+   * @param events - List of calendar events
+   * @param timezone - IANA timezone for date formatting
+   * @returns Array of detected races
+   */
+  private findRaces(events: CalendarEvent[], timezone?: string): Race[] {
+    const races: Race[] = [];
+
+    // Find potential race events (DATE events without duration prefix)
+    const raceEvents = events.filter(
+      (event) =>
+        event.dateType === 'date' &&
+        this.parseDurationFromName(event.summary) === undefined
+    );
+
+    // Find potential leg events - these are essentially workouts that could be race legs:
+    // 1. DATE events (all-day) with duration prefix in the name (e.g., "0:45 - Escape from Alcatraz")
+    // 2. DATE-TIME events with start/end times < 1440 minutes and no prefix (regular workout format)
+    const legEvents = events.filter((event) => {
+      if (event.dateType === 'date') {
+        // All-day event with duration prefix
+        return this.parseDurationFromName(event.summary) !== undefined;
+      } else if (event.dateType === 'date-time') {
+        // DATE-TIME event - check if it's a reasonable workout duration (< 12 hours)
+        const durationMinutes = (event.end.getTime() - event.start.getTime()) / (1000 * 60);
+        return durationMinutes < 720; // Less than 12 hours
+      }
+      return false;
+    });
+
+    console.log(`[TrainerRoad] findRaces: ${raceEvents.length} potential race events, ${legEvents.length} potential leg events`);
+    for (const re of raceEvents) {
+      console.log(`[TrainerRoad]   Race event: "${re.summary}" on ${format(re.start, 'yyyy-MM-dd')}`);
+    }
+    for (const le of legEvents) {
+      const legDate = le.dateType === 'date'
+        ? format(le.start, 'yyyy-MM-dd')
+        : (timezone ? formatInTimeZone(le.start, timezone, 'yyyy-MM-dd') : format(le.start, 'yyyy-MM-dd'));
+      const legName = le.dateType === 'date'
+        ? this.stripDurationFromName(le.summary)
+        : le.summary;
+      console.log(`[TrainerRoad]   Leg event: "${le.summary}" -> name: "${legName}" on ${legDate} (${le.dateType})`);
+    }
+
+    // For each potential race event, check if there are matching legs
+    for (const raceEvent of raceEvents) {
+      const raceName = raceEvent.summary;
+      const raceDate = format(raceEvent.start, 'yyyy-MM-dd');
+
+      // Find all matching leg events on the same day with matching name
+      const matchingLegs = legEvents.filter((leg) => {
+        // Get leg date - use timezone for DATE-TIME events
+        const legDate = leg.dateType === 'date'
+          ? format(leg.start, 'yyyy-MM-dd')
+          : (timezone ? formatInTimeZone(leg.start, timezone, 'yyyy-MM-dd') : format(leg.start, 'yyyy-MM-dd'));
+
+        // Get leg name - strip duration prefix for DATE events, use as-is for DATE-TIME
+        const legName = leg.dateType === 'date'
+          ? this.stripDurationFromName(leg.summary)
+          : leg.summary;
+
+        const matches = legDate === raceDate && legName === raceName;
+        if (matches) {
+          console.log(`[TrainerRoad]   Match found: race="${raceName}" leg="${leg.summary}"`);
+        }
+        return matches;
+      });
+
+      if (matchingLegs.length > 0) {
+        // Check if any legs are DATE-TIME events - if so, use earliest start time
+        const dateTimeLegs = matchingLegs.filter((leg) => leg.dateType === 'date-time');
+
+        let scheduledFor: string;
+        if (dateTimeLegs.length > 0) {
+          // Find the earliest start time among DATE-TIME legs
+          const earliestLeg = dateTimeLegs.reduce((earliest, leg) =>
+            leg.start < earliest.start ? leg : earliest
+          );
+          scheduledFor = timezone
+            ? formatInTimeZone(earliestLeg.start, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX")
+            : earliestLeg.start.toISOString();
+          console.log(`[TrainerRoad]   Using earliest DATE-TIME leg start: ${scheduledFor}`);
+        } else {
+          // All legs are DATE events, use midnight
+          if (timezone) {
+            const dateStr = format(raceEvent.start, 'yyyy-MM-dd');
+            const midnightInTz = fromZonedTime(`${dateStr}T00:00:00`, timezone);
+            scheduledFor = formatInTimeZone(midnightInTz, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX");
+          } else {
+            scheduledFor = `${format(raceEvent.start, 'yyyy-MM-dd')}T00:00:00.000Z`;
+          }
+        }
+
+        races.push({
+          scheduled_for: scheduledFor,
+          name: raceName,
+          description: raceEvent.description,
+          sport: 'Triathlon', // Currently only supporting triathlons
+        });
+      }
+    }
+
+    // Sort races by date
+    races.sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for));
+
+    return races;
   }
 
   private normalizeEvent(event: CalendarEvent, timezone?: string): PlannedWorkout {

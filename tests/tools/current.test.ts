@@ -576,6 +576,7 @@ describe('CurrentTools', () => {
 
     beforeEach(() => {
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
     });
 
     it('should return complete daily summary with all data', async () => {

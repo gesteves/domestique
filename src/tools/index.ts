@@ -615,6 +615,35 @@ and will not be updated throughout the day.
       )
     );
 
+    server.tool(
+      'get_upcoming_races',
+      `Fetches upcoming races from the TrainerRoad calendar.
+
+<use-cases>
+- Viewing the user's upcoming race schedule.
+- Understanding when the user has races planned so training can be periodized accordingly.
+- Checking what races are coming up to discuss taper strategies.
+</use-cases>
+
+<instructions>
+- The description of the race may contain important details about the race, including if it's an A, B or C race; and details about the course.
+</instructions>`,
+      {},
+      withToolResponse(
+        'get_upcoming_races',
+        async () => this.planningTools.getUpcomingRaces(),
+        {
+          fieldDescriptions: getFieldDescriptions('race'),
+          getNextActions: (data) => data && data.length > 0
+            ? [
+                'Use get_training_load_trends to assess fitness leading into race',
+                'Use get_upcoming_workouts to see training plan around race day',
+              ]
+            : undefined,
+        }
+      )
+    );
+
     // ============================================
     // Analysis Tools
     // ============================================

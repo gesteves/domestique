@@ -225,6 +225,13 @@ export const PLANNED_WORKOUT_FIELD_DESCRIPTIONS = {
   source: 'Calendar source: intervals.icu, trainerroad, or zwift',
 };
 
+export const RACE_FIELD_DESCRIPTIONS = {
+  scheduled_for: 'Scheduled date/time for the race in ISO 8601 format. A time at midnight means the start hasn\'t been set by the user.',
+  name: 'Name of the race',
+  description: 'Description of the race, if available',
+  sport: 'Sport of the race.',
+};
+
 export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   // Athlete info
   id: 'Unique ID of the athlete in Intervals.icu',
@@ -575,6 +582,7 @@ type FieldCategory =
   | 'recovery'
   | 'fitness'
   | 'planned'
+  | 'race'
   | 'athlete_profile'
   | 'sport_settings'
   | 'intervals'
@@ -609,6 +617,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return FITNESS_FIELD_DESCRIPTIONS;
     case 'planned':
       return PLANNED_WORKOUT_FIELD_DESCRIPTIONS;
+    case 'race':
+      return RACE_FIELD_DESCRIPTIONS;
     case 'athlete_profile':
       return ATHLETE_PROFILE_FIELD_DESCRIPTIONS;
     case 'sport_settings':

@@ -895,4 +895,281 @@ END:VCALENDAR`;
       expect(result[0].sport).toBe('Running');
     });
   });
+
+  describe('getUpcomingRaces', () => {
+    it('should detect a race when there is an all-day event with matching workout legs', async () => {
+      // Mock current date to 2024-12-15
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-event
+DTSTART;VALUE=DATE:20261207
+DTEND;VALUE=DATE:20261208
+SUMMARY:Escape from Alcatraz
+DESCRIPTION:Race day!
+END:VEVENT
+BEGIN:VEVENT
+UID:swim-leg
+DTSTART;VALUE=DATE:20261207
+DTEND;VALUE=DATE:20261208
+SUMMARY:0:30 - Escape from Alcatraz
+DESCRIPTION:Swim leg
+END:VEVENT
+BEGIN:VEVENT
+UID:bike-leg
+DTSTART;VALUE=DATE:20261207
+DTEND;VALUE=DATE:20261208
+SUMMARY:1:10 - Escape from Alcatraz
+DESCRIPTION:Bike leg
+END:VEVENT
+BEGIN:VEVENT
+UID:run-leg
+DTSTART;VALUE=DATE:20261207
+DTEND;VALUE=DATE:20261208
+SUMMARY:0:50 - Escape from Alcatraz
+DESCRIPTION:Run leg
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces('America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Escape from Alcatraz');
+      expect(result[0].description).toBe('Race day!');
+      expect(result[0].sport).toBe('Triathlon');
+      expect(result[0].scheduled_for).toBe('2026-12-07T00:00:00-08:00');
+
+      vi.useRealTimers();
+    });
+
+    it('should return empty array when there are no races', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:workout1
+DTSTART;VALUE=DATE-TIME:20241216T090000Z
+DTEND;VALUE=DATE-TIME:20241216T100000Z
+SUMMARY:Sweet Spot Intervals
+DESCRIPTION:TSS 75. Power workout.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces('America/Los_Angeles');
+
+      expect(result).toHaveLength(0);
+
+      vi.useRealTimers();
+    });
+
+    it('should not detect a race when all-day event has no matching workout legs', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      // All-day event without matching workout legs (different name)
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:event1
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:Race Day Off
+DESCRIPTION:Day off for race prep
+END:VEVENT
+BEGIN:VEVENT
+UID:workout1
+DTSTART;VALUE=DATE-TIME:20241216T090000Z
+DTEND;VALUE=DATE-TIME:20241216T100000Z
+SUMMARY:0:30 - Different Workout
+DESCRIPTION:Not related
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces('America/Los_Angeles');
+
+      expect(result).toHaveLength(0);
+
+      vi.useRealTimers();
+    });
+
+    it('should not include past races', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      // Race in the past (December 10)
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:past-race
+DTSTART;VALUE=DATE:20241210
+DTEND;VALUE=DATE:20241211
+SUMMARY:Past Triathlon
+DESCRIPTION:Already happened
+END:VEVENT
+BEGIN:VEVENT
+UID:past-swim
+DTSTART;VALUE=DATE-TIME:20241210T080000Z
+DTEND;VALUE=DATE-TIME:20241210T083000Z
+SUMMARY:0:30 - Past Triathlon
+DESCRIPTION:Swim
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces('America/Los_Angeles');
+
+      expect(result).toHaveLength(0);
+
+      vi.useRealTimers();
+    });
+
+    it('should include races happening today', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      // Race today (December 15) - legs are DATE events with duration prefix
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:today-race
+DTSTART;VALUE=DATE:20241215
+DTEND;VALUE=DATE:20241216
+SUMMARY:Today Triathlon
+DESCRIPTION:Race day today!
+END:VEVENT
+BEGIN:VEVENT
+UID:today-swim
+DTSTART;VALUE=DATE:20241215
+DTEND;VALUE=DATE:20241216
+SUMMARY:0:30 - Today Triathlon
+DESCRIPTION:Swim leg
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces('America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Today Triathlon');
+
+      vi.useRealTimers();
+    });
+
+    it('should handle race without description', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      // Legs are DATE events with duration prefix
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-no-desc
+DTSTART;VALUE=DATE:20241220
+DTEND;VALUE=DATE:20241221
+SUMMARY:Triathlon XYZ
+END:VEVENT
+BEGIN:VEVENT
+UID:swim-leg
+DTSTART;VALUE=DATE:20241220
+DTEND;VALUE=DATE:20241221
+SUMMARY:0:30 - Triathlon XYZ
+DESCRIPTION:Swim
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces('America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Triathlon XYZ');
+      expect(result[0].description).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+
+    it('should also detect race legs as DATE-TIME events and use earliest start time', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      // Race legs as DATE-TIME events (no duration prefix in name)
+      // Swim at 8am, Bike at 9am, Run at 11am - should use 8am (earliest)
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-event
+DTSTART;VALUE=DATE:20241220
+DTEND;VALUE=DATE:20241221
+SUMMARY:Date Time Race
+DESCRIPTION:A race with DATE-TIME legs
+END:VEVENT
+BEGIN:VEVENT
+UID:bike-leg
+DTSTART;VALUE=DATE-TIME:20241220T170000Z
+DTEND;VALUE=DATE-TIME:20241220T180000Z
+SUMMARY:Date Time Race
+DESCRIPTION:Bike leg
+END:VEVENT
+BEGIN:VEVENT
+UID:swim-leg
+DTSTART;VALUE=DATE-TIME:20241220T160000Z
+DTEND;VALUE=DATE-TIME:20241220T163000Z
+SUMMARY:Date Time Race
+DESCRIPTION:Swim leg
+END:VEVENT
+BEGIN:VEVENT
+UID:run-leg
+DTSTART;VALUE=DATE-TIME:20241220T190000Z
+DTEND;VALUE=DATE-TIME:20241220T200000Z
+SUMMARY:Date Time Race
+DESCRIPTION:Run leg
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces('America/Los_Angeles');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Date Time Race');
+      // 16:00 UTC = 08:00 PST (earliest leg start)
+      expect(result[0].scheduled_for).toBe('2024-12-20T08:00:00-08:00');
+
+      vi.useRealTimers();
+    });
+  });
 });

@@ -364,6 +364,21 @@ export interface PlannedWorkout {
   source: 'intervals.icu' | 'trainerroad' | 'zwift';
 }
 
+/**
+ * Upcoming race from the TrainerRoad calendar.
+ * A race is detected when an all-day event exists alongside workout legs with the same name.
+ */
+export interface Race {
+  /** Scheduled date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's timezone */
+  scheduled_for: string;
+  /** Name of the race */
+  name: string;
+  /** Description of the race, if available */
+  description?: string;
+  /** Sport type - currently only Triathlon is supported */
+  sport: 'Triathlon';
+}
+
 // Fitness metrics from Intervals.icu
 export interface FitnessMetrics {
   date: string;
@@ -820,18 +835,20 @@ export interface DailySummary {
   fitness: FitnessMetrics | null;
   /** Today's wellness data (weight, etc.) from Intervals.icu, null if unavailable */
   wellness: WellnessData | null;
-  /** Completed workouts from Intervals.icu with matched Whoop data */
-  completed_workouts: WorkoutWithWhoop[];
   /** Planned workouts from TrainerRoad and Intervals.icu */
   planned_workouts: PlannedWorkout[];
-  /** Number of workouts completed today */
-  workouts_completed: number;
+  /** Completed workouts from Intervals.icu with matched Whoop data */
+  completed_workouts: WorkoutWithWhoop[];
+  /** Upcoming races from TrainerRoad calendar */
+  upcoming_races: Race[];
   /** Number of workouts planned for today */
   workouts_planned: number;
-  /** Total TSS from completed workouts */
-  tss_completed: number;
+  /** Number of workouts completed today */
+  workouts_completed: number;
   /** Total TSS from planned workouts */
   tss_planned: number;
+  /** Total TSS from completed workouts */
+  tss_completed: number;
 }
 
 // ============================================

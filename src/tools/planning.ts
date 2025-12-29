@@ -2,7 +2,7 @@ import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday, parseDateStringInTimezone, getTodayInTimezone } from '../utils/date-parser.js';
-import type { PlannedWorkout, ActivityType } from '../types/index.js';
+import type { PlannedWorkout, ActivityType, Race } from '../types/index.js';
 import type {
   GetUpcomingWorkoutsInput,
   GetPlannedWorkoutDetailsInput,
@@ -132,5 +132,24 @@ export class PlanningTools {
     }
 
     return false;
+  }
+
+  /**
+   * Get upcoming races from the TrainerRoad calendar.
+   * A race is detected when an all-day event exists alongside workout legs with the same name.
+   */
+  async getUpcomingRaces(): Promise<Race[]> {
+    if (!this.trainerroad) {
+      return [];
+    }
+
+    try {
+      // Use athlete's timezone for date calculations
+      const timezone = await this.intervals.getAthleteTimezone();
+      return await this.trainerroad.getUpcomingRaces(timezone);
+    } catch (error) {
+      console.error('Error fetching upcoming races:', error);
+      return [];
+    }
   }
 }

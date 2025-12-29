@@ -16,7 +16,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ## Available Tools
 
 ### Daily Overview
-- `get_daily_summary` - Complete snapshot of today including recovery, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts, and planned workouts
+- `get_daily_summary` - Complete snapshot of today including recovery, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts, planned workouts, and upcoming races
 
 ### Today's Data
 - `get_todays_recovery` - Today's Whoop recovery, sleep, and HRV data
@@ -37,6 +37,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ### Planning
 - `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
 - `get_planned_workout_details` - Detailed information about a specific planned workout for a future date
+- `get_upcoming_races` - Upcoming races from the TrainerRoad calendar (only triathlons for now)
 
 ### Analysis
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR
