@@ -193,7 +193,7 @@ export class ToolRegistry {
         'get_daily_summary',
         async () => this.currentTools.getDailySummary(),
         {
-          fieldDescriptions: combineFieldDescriptions('daily_summary', 'recovery', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
+          fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
           getNextActions: (data) => {
             const actions: string[] = [];
             if (data.completed_workouts && data.completed_workouts.length > 0) {
