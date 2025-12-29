@@ -258,6 +258,10 @@ export interface WhoopSleepData {
   sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR';
   /** Human-readable sleep performance description from Whoop */
   sleep_performance_level_description: string;
+  /** The approximate time the user fell asleep, in the user's local timezone */
+  sleep_start?: string;
+  /** The approximate time the user woke up, in the user's local timezone */
+  sleep_end?: string;
 }
 
 /**

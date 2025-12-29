@@ -217,6 +217,15 @@ describe('WhoopClient', () => {
       expect(result[0].sleep.sleep_needed.baseline).toBe('8:00:00'); // 28800000 ms
       expect(result[0].sleep.sleep_needed.need_from_recent_strain).toBe('0:30:00'); // 1800000 ms
       expect(result[0].sleep.respiratory_rate).toBe(15.5);
+      // Sleep start/end times (converted to user's timezone, which defaults to UTC in tests)
+      expect(result[0].sleep.sleep_start).toBeDefined();
+      expect(result[0].sleep.sleep_end).toBeDefined();
+      // The mock data has start: '2024-12-14T22:00:00Z' and end: '2024-12-15T06:00:00Z'
+      // In UTC timezone, these should be formatted as MM/DD/YYYY, HH:MM:SS
+      expect(result[0].sleep.sleep_start).toContain('12/14/2024');
+      expect(result[0].sleep.sleep_start).toContain('22:00:00');
+      expect(result[0].sleep.sleep_end).toContain('12/15/2024');
+      expect(result[0].sleep.sleep_end).toContain('06:00:00');
     });
 
     it('should include authorization header', async () => {
@@ -339,6 +348,9 @@ describe('WhoopClient', () => {
       expect(result.recovery?.recovery_score).toBe(75);
       expect(result.sleep?.sleep_performance_percentage).toBe(95);
       expect(result.sleep?.sleep_summary.total_in_bed_time).toBe('8:00:00');
+      // Verify sleep start/end times are populated
+      expect(result.sleep?.sleep_start).toBeDefined();
+      expect(result.sleep?.sleep_end).toBeDefined();
     });
 
     it('should return null sleep and recovery when no scored cycle', async () => {

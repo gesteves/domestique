@@ -830,7 +830,7 @@ export class WhoopClient {
       const recovery = recoveryBySleepId.get(sleep.id);
       if (!recovery) continue;
 
-      const normalized = this.normalizeRecoveryTrendEntry(recovery, sleep);
+      const normalized = await this.normalizeRecoveryTrendEntry(recovery, sleep);
       // Filter by local date in user's timezone
       if (isTimestampInLocalDateRange(recovery.created_at, startDate, endDate, timezone)) {
         results.push(normalized);
@@ -891,7 +891,7 @@ export class WhoopClient {
     if (!recovery) return { sleep: null, recovery: null };
 
     return {
-      sleep: this.normalizeSleep(sleep),
+      sleep: await this.normalizeSleep(sleep),
       recovery: this.normalizeRecoveryOnly(recovery),
     };
   }
@@ -1089,10 +1089,37 @@ export class WhoopClient {
   /**
    * Normalize sleep data (separated from recovery).
    */
-  private normalizeSleep(sleep: WhoopSleep): WhoopSleepData {
+  private async normalizeSleep(sleep: WhoopSleep): Promise<WhoopSleepData> {
     const sleepScore = sleep.score;
     const sleepPerfPct = this.round2(sleepScore.sleep_performance_percentage) ?? 0;
     const sleepPerformanceLevel = getSleepPerformanceLevel(sleepPerfPct);
+
+    // Convert start/end times to user's timezone
+    const timezone = await this.getTimezone();
+    const sleepStartDate = new Date(sleep.start);
+    const sleepEndDate = new Date(sleep.end);
+
+    const sleep_start = sleepStartDate.toLocaleString('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    const sleep_end = sleepEndDate.toLocaleString('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
 
     return {
       sleep_summary: this.normalizeSleepSummary(sleepScore.stage_summary),
@@ -1103,6 +1130,8 @@ export class WhoopClient {
       sleep_efficiency_percentage: this.round2(sleepScore.sleep_efficiency_percentage),
       sleep_performance_level: sleepPerformanceLevel,
       sleep_performance_level_description: getSleepPerformanceLevelDescription(sleepPerformanceLevel),
+      sleep_start,
+      sleep_end,
     };
   }
 
@@ -1126,13 +1155,13 @@ export class WhoopClient {
   /**
    * Normalize a complete recovery trend entry with both sleep and recovery.
    */
-  private normalizeRecoveryTrendEntry(
+  private async normalizeRecoveryTrendEntry(
     recovery: WhoopRecovery,
     sleep: WhoopSleep
-  ): WhoopRecoveryTrendEntry {
+  ): Promise<WhoopRecoveryTrendEntry> {
     return {
       date: recovery.created_at.split('T')[0],
-      sleep: this.normalizeSleep(sleep),
+      sleep: await this.normalizeSleep(sleep),
       recovery: this.normalizeRecoveryOnly(recovery),
     };
   }

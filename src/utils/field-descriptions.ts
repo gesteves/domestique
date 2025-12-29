@@ -170,6 +170,8 @@ export const SLEEP_FIELD_DESCRIPTIONS = {
   sleep_efficiency_percentage: 'A percentage of the time the user spends in bed that they are actually asleep.',
   sleep_performance_level: 'Whoop\'s label for the sleep performance percentage: OPTIMAL, SUFFICIENT, or POOR',
   sleep_performance_level_description: 'Whoop\'s official description for this sleep performance level',
+  sleep_start: 'The approximate time the user fell asleep, in the user\'s local timezone',
+  sleep_end: 'The approximate time the user woke up, in the user\'s local timezone',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {
