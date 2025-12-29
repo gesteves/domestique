@@ -2,7 +2,7 @@
  * Date formatting utilities using date-fns-tz for timezone-aware formatting
  */
 
-import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 
 /**
  * Format a date to ISO 8601 with timezone offset.
@@ -44,7 +44,9 @@ export function getCurrentTimeInTimezone(timezone: string): string {
  * // Returns: '2024-12-29T14:30:00-05:00'
  */
 export function localStringToISO8601WithTimezone(localDateTimeString: string, timezone: string): string {
-  // Parse the local string as if it's in the specified timezone
-  const zonedDate = toZonedTime(localDateTimeString, timezone);
-  return formatToISO8601WithTimezone(zonedDate, timezone);
+  // fromZonedTime interprets the input as local time in the specified timezone
+  // and returns the equivalent UTC Date object
+  const utcDate = fromZonedTime(localDateTimeString, timezone);
+  // Then format that UTC time back in the target timezone with offset
+  return formatToISO8601WithTimezone(utcDate, timezone);
 }

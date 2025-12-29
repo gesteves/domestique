@@ -1045,33 +1045,10 @@ export class WhoopClient {
 
   /**
    * Convert a UTC timestamp to ISO 8601 format in a specific timezone.
-   * Returns format: YYYY-MM-DDTHH:mm:ss
+   * Returns format: YYYY-MM-DDTHH:mm:ss±HH:mm
    */
   private toISOStringInTimezone(utcTimestamp: string, timezone: string): string {
-    const date = new Date(utcTimestamp);
-
-    // Get date parts in the target timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-
-    const parts = formatter.formatToParts(date);
-    const dateParts: Record<string, string> = {};
-    for (const part of parts) {
-      if (part.type !== 'literal') {
-        dateParts[part.type] = part.value;
-      }
-    }
-
-    // Construct ISO 8601 string: YYYY-MM-DDTHH:mm:ss
-    return `${dateParts.year}-${dateParts.month}-${dateParts.day}T${dateParts.hour}:${dateParts.minute}:${dateParts.second}`;
+    return formatToISO8601WithTimezone(utcTimestamp, timezone);
   }
 
   /** Helper to convert milliseconds to human-readable duration */

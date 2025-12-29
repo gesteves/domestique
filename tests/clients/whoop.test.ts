@@ -217,13 +217,13 @@ describe('WhoopClient', () => {
       expect(result[0].sleep.sleep_needed.baseline).toBe('8:00:00'); // 28800000 ms
       expect(result[0].sleep.sleep_needed.need_from_recent_strain).toBe('0:30:00'); // 1800000 ms
       expect(result[0].sleep.respiratory_rate).toBe(15.5);
-      // Sleep start/end times (converted to ISO 8601 in user's timezone, which defaults to UTC in tests)
+      // Sleep start/end times (converted to ISO 8601 in user's timezone with offset, which defaults to UTC in tests)
       expect(result[0].sleep.sleep_start).toBeDefined();
       expect(result[0].sleep.sleep_end).toBeDefined();
       // The mock data has start: '2024-12-14T22:00:00Z' and end: '2024-12-15T06:00:00Z'
-      // In UTC timezone, these should be formatted as ISO 8601: YYYY-MM-DDTHH:mm:ss
-      expect(result[0].sleep.sleep_start).toBe('2024-12-14T22:00:00');
-      expect(result[0].sleep.sleep_end).toBe('2024-12-15T06:00:00');
+      // In UTC timezone, these should be formatted as ISO 8601 with Z suffix: YYYY-MM-DDTHH:mm:ssZ
+      expect(result[0].sleep.sleep_start).toBe('2024-12-14T22:00:00Z');
+      expect(result[0].sleep.sleep_end).toBe('2024-12-15T06:00:00Z');
     });
 
     it('should include authorization header', async () => {
