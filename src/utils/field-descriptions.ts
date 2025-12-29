@@ -6,7 +6,7 @@
 export const WORKOUT_FIELD_DESCRIPTIONS = {
   // Core fields
   id: 'Unique ID of the completed activity in Intervals.icu',
-  start_time: 'Activity start time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user\'s local timezone',
+  start_time: 'Activity start time in the user\'s local timezone',
   activity_type: 'Sport or discipline of the activity',
   name: 'Name of the activity',
   description: 'Description of the activity',
@@ -169,8 +169,8 @@ export const SLEEP_FIELD_DESCRIPTIONS = {
   sleep_efficiency_percentage: 'A percentage of the time the user spends in bed that they are actually asleep.',
   sleep_performance_level: 'Whoop\'s label for the sleep performance percentage: OPTIMAL, SUFFICIENT, or POOR',
   sleep_performance_level_description: 'Whoop\'s official description for this sleep performance level',
-  sleep_start: 'The approximate time the user fell asleep, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss) in the user\'s local timezone',
-  sleep_end: 'The approximate time the user woke up, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss) in the user\'s local timezone',
+  sleep_start: 'The approximate time the user fell asleep, in the user\'s local timezone',
+  sleep_end: 'The approximate time the user woke up, in the user\'s local timezone',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {
@@ -187,7 +187,7 @@ export const RECOVERY_FIELD_DESCRIPTIONS = {
 export const FITNESS_FIELD_DESCRIPTIONS = {
   // Data array (sorted oldest to newest)
   data: 'Array of daily training load metrics, sorted oldest to newest (first item = oldest day)',
-  date: 'Date of fitness metrics (ISO 8601 YYYY-MM-DD)',
+  date: 'Date of fitness metrics (ISO 8601)',
   ctl: 'Chronic Training Load (fitness) - 42-day exponentially weighted average of daily TSS',
   atl: 'Acute Training Load (fatigue) - 7-day exponentially weighted average of daily TSS',
   tsb: 'Training Stress Balance (form) = CTL - ATL. Positive = fresh, negative = fatigued. -10 to +25 typical for optimal performance',
@@ -228,7 +228,7 @@ export const ATHLETE_PROFILE_FIELD_DESCRIPTIONS = {
   country: 'Country of residence',
   timezone: 'Athlete\'s timezone',
   sex: 'Athlete\'s gender',
-  date_of_birth: 'Date of birth in ISO format (YYYY-MM-DD). Only present if set in Intervals.icu.',
+  date_of_birth: 'Date of birth in ISO 8601 format. Only present if set in Intervals.icu.',
   age: 'Current age in years. Only present if date_of_birth is set.',
 
   // Unit preferences - CRITICAL for LLM responses
@@ -343,8 +343,8 @@ export const HEAT_ZONES_FIELD_DESCRIPTIONS = {
 
 export const POWER_CURVE_FIELD_DESCRIPTIONS = {
   // Response structure
-  period_start: 'Start date of analysis period (ISO 8601 YYYY-MM-DD)',
-  period_end: 'End date of analysis period (ISO 8601 YYYY-MM-DD)',
+  period_start: 'Start date of analysis period (ISO 8601)',
+  period_end: 'End date of analysis period (ISO 8601)',
   sport: 'Sport type analyzed (cycling)',
   activity_count: 'Number of activities analyzed in this period',
   durations_analyzed: 'Human-readable list of durations analyzed (e.g., ["5s", "1min", "5min", "20min"])',
@@ -386,8 +386,8 @@ export const POWER_CURVE_FIELD_DESCRIPTIONS = {
 
 export const PACE_CURVE_FIELD_DESCRIPTIONS = {
   // Response structure
-  period_start: 'Start date of analysis period (ISO 8601 YYYY-MM-DD)',
-  period_end: 'End date of analysis period (ISO 8601 YYYY-MM-DD)',
+  period_start: 'Start date of analysis period (ISO 8601)',
+  period_end: 'End date of analysis period (ISO 8601)',
   sport: 'Sport type analyzed (running or swimming)',
   gap_adjusted: 'Whether pace is gradient-adjusted (accounts for elevation changes). Only applicable for running.',
   activity_count: 'Number of activities analyzed in this period',
@@ -437,8 +437,8 @@ export const PACE_CURVE_FIELD_DESCRIPTIONS = {
 
 export const HR_CURVE_FIELD_DESCRIPTIONS = {
   // Response structure
-  period_start: 'Start date of analysis period (ISO 8601 YYYY-MM-DD)',
-  period_end: 'End date of analysis period (ISO 8601 YYYY-MM-DD)',
+  period_start: 'Start date of analysis period (ISO 8601)',
+  period_end: 'End date of analysis period (ISO 8601)',
   sport: 'Sport type analyzed (cycling, running, swimming, or null for all sports)',
   activity_count: 'Number of activities analyzed in this period',
   durations_analyzed: 'Human-readable list of durations analyzed (e.g., ["5s", "1min", "5min", "20min"])',
@@ -476,12 +476,12 @@ export const HR_CURVE_FIELD_DESCRIPTIONS = {
 export const WELLNESS_FIELD_DESCRIPTIONS = {
   // Wellness trends response structure
   period_days: 'Number of days in the wellness data period',
-  start_date: 'Start date of wellness data period (ISO 8601 YYYY-MM-DD)',
-  end_date: 'End date of wellness data period (ISO 8601 YYYY-MM-DD)',
+  start_date: 'Start date of wellness data period (ISO 8601)',
+  end_date: 'End date of wellness data period (ISO 8601)',
   data: 'Array of daily wellness entries, sorted oldest to newest',
 
   // Daily wellness fields
-  date: 'Date of wellness entry (ISO 8601 YYYY-MM-DD)',
+  date: 'Date of wellness entry (ISO 8601)',
   weight: 'Body weight with unit (e.g., "74.8 kg")',
 
   // Heart rate and HRV
@@ -533,7 +533,7 @@ export const WELLNESS_FIELD_DESCRIPTIONS = {
 
 export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {
   // Top-level daily summary fields
-  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone. Use this to understand the time of day when the summary was requested; that context may be important for the metrics shown.',
+  current_time: 'Current date and time for the user, in their local timezone. Use this to understand the time of day when the summary was requested; that context may be important for the metrics shown.',
   workouts_completed: 'Number of workouts completed so far today',
   workouts_planned: 'Number of workouts planned for today',
   tss_completed: 'Total Training Stress Score from completed workouts',
@@ -541,23 +541,23 @@ export const DAILY_SUMMARY_FIELD_DESCRIPTIONS = {
 };
 
 export const TODAYS_RECOVERY_FIELD_DESCRIPTIONS = {
-  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone.',
+  current_time: 'Current date and time for the user, in their local timezone.',
   sleep: 'Today\'s Whoop sleep data. Null if Whoop is not configured or data is unavailable.',
   recovery: 'Today\'s Whoop recovery data. Null if Whoop is not configured or data is unavailable.',
 };
 
 export const TODAYS_STRAIN_FIELD_DESCRIPTIONS = {
-  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone. Use this to understand the time of day; this context shows how much strain has been accumulated so far today.',
+  current_time: 'Current date and time for the user, in their local timezone. Use this to understand the time of day; this context shows how much strain has been accumulated so far today.',
   strain: 'Today\'s Whoop strain data. Null if Whoop is not configured or data is unavailable.',
 };
 
 export const TODAYS_COMPLETED_WORKOUTS_FIELD_DESCRIPTIONS = {
-  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone.',
+  current_time: 'Current date and time for the user, in their local timezone.',
   workouts: 'Array of completed workouts from Intervals.icu with matched Whoop data. Empty array if no workouts completed today.',
 };
 
 export const TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS = {
-  current_time: 'Current date and time for the user, in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in their local timezone.',
+  current_time: 'Current date and time for the user, in their local timezone.',
   workouts: 'Array of planned workouts from TrainerRoad and Intervals.icu for today. Empty array if no workouts planned.',
 };
 
