@@ -5,6 +5,7 @@ import type {
   WhoopZoneDurations,
   WhoopBodyMeasurements,
   WhoopSleepData,
+  WhoopNapData,
   WhoopRecoveryData,
   WhoopSleepSummary,
   WhoopSleepNeeded,
@@ -806,9 +807,17 @@ export class WhoopClient {
     // Build lookup maps
     // Sleep by cycle_id (non-nap, scored)
     const sleepByCycleId = new Map<number, WhoopSleep>();
+    // Naps by cycle_id (scored naps only)
+    const napsByCycleId = new Map<number, WhoopSleep[]>();
     for (const sleep of sleeps.records) {
-      if (!sleep.nap && sleep.score_state === 'SCORED') {
-        sleepByCycleId.set(sleep.cycle_id, sleep);
+      if (sleep.score_state === 'SCORED') {
+        if (sleep.nap) {
+          const cycleNaps = napsByCycleId.get(sleep.cycle_id) ?? [];
+          cycleNaps.push(sleep);
+          napsByCycleId.set(sleep.cycle_id, cycleNaps);
+        } else {
+          sleepByCycleId.set(sleep.cycle_id, sleep);
+        }
       }
     }
 
@@ -831,7 +840,10 @@ export class WhoopClient {
       const recovery = recoveryBySleepId.get(sleep.id);
       if (!recovery) continue;
 
-      const normalized = await this.normalizeRecoveryTrendEntry(recovery, sleep);
+      // Get naps for this cycle
+      const cycleNaps = napsByCycleId.get(cycle.id) ?? [];
+
+      const normalized = await this.normalizeRecoveryTrendEntry(recovery, sleep, cycleNaps);
       // Filter by local date in user's timezone
       if (isTimestampInLocalDateRange(recovery.created_at, startDate, endDate, timezone)) {
         results.push(normalized);
@@ -891,8 +903,19 @@ export class WhoopClient {
     );
     if (!recovery) return { sleep: null, recovery: null };
 
+    // Get scored naps for this cycle
+    const cycleNaps = sleeps.records.filter(
+      (s) => s.cycle_id === scoredCycle.id && s.score_state === 'SCORED' && s.nap
+    );
+
+    // Normalize sleep and add naps if any
+    const normalizedSleep = await this.normalizeSleep(sleep);
+    if (cycleNaps.length > 0) {
+      normalizedSleep.naps = await Promise.all(cycleNaps.map((nap) => this.normalizeNap(nap)));
+    }
+
     return {
-      sleep: await this.normalizeSleep(sleep),
+      sleep: normalizedSleep,
       recovery: this.normalizeRecoveryOnly(recovery),
     };
   }
@@ -1124,6 +1147,26 @@ export class WhoopClient {
   }
 
   /**
+   * Normalize nap data.
+   * Similar to sleep but without sleep need/performance metrics.
+   */
+  private async normalizeNap(nap: WhoopSleep): Promise<WhoopNapData> {
+    const napScore = nap.score;
+
+    // Convert start/end times to ISO 8601 format in user's timezone
+    const timezone = await this.getTimezone();
+    const nap_start = this.toISOStringInTimezone(nap.start, timezone);
+    const nap_end = this.toISOStringInTimezone(nap.end, timezone);
+
+    return {
+      nap_summary: this.normalizeSleepSummary(napScore.stage_summary),
+      respiratory_rate: this.round2(napScore.respiratory_rate),
+      nap_start,
+      nap_end,
+    };
+  }
+
+  /**
    * Normalize recovery data only (separated from sleep).
    */
   private normalizeRecoveryOnly(recovery: WhoopRecovery): WhoopRecoveryData {
@@ -1145,11 +1188,19 @@ export class WhoopClient {
    */
   private async normalizeRecoveryTrendEntry(
     recovery: WhoopRecovery,
-    sleep: WhoopSleep
+    sleep: WhoopSleep,
+    naps: WhoopSleep[] = []
   ): Promise<WhoopRecoveryTrendEntry> {
+    const normalizedSleep = await this.normalizeSleep(sleep);
+
+    // Add naps if any exist
+    if (naps.length > 0) {
+      normalizedSleep.naps = await Promise.all(naps.map((nap) => this.normalizeNap(nap)));
+    }
+
     return {
       date: recovery.created_at.split('T')[0],
-      sleep: await this.normalizeSleep(sleep),
+      sleep: normalizedSleep,
       recovery: this.normalizeRecoveryOnly(recovery),
     };
   }

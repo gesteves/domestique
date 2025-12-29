@@ -171,6 +171,12 @@ export const SLEEP_FIELD_DESCRIPTIONS = {
   sleep_performance_level_description: 'Whoop\'s official description for this sleep performance level',
   sleep_start: 'The approximate time the user fell asleep, in the user\'s local timezone',
   sleep_end: 'The approximate time the user woke up, in the user\'s local timezone',
+
+  // Naps (nested array)
+  naps: 'Array of naps taken during this cycle',
+  nap_summary: 'Summary of the nap\'s sleep stages (same structure as sleep_summary)',
+  nap_start: 'The approximate time the nap started, in the user\'s local timezone',
+  nap_end: 'The approximate time the nap ended, in the user\'s local timezone',
 };
 
 export const RECOVERY_FIELD_DESCRIPTIONS = {

@@ -238,6 +238,22 @@ export interface WhoopSleepNeeded {
 }
 
 /**
+ * Whoop nap data.
+ * Similar to sleep data but without sleep need/performance metrics
+ * since naps contribute to sleep need reduction rather than being measured against it.
+ */
+export interface WhoopNapData {
+  /** Nap summary with stage breakdown */
+  nap_summary: WhoopSleepSummary;
+  /** Respiratory rate in breaths per minute, rounded to 2 decimals */
+  respiratory_rate?: number;
+  /** The approximate time the nap started, in the user's local timezone */
+  nap_start: string;
+  /** The approximate time the nap ended, in the user's local timezone */
+  nap_end: string;
+}
+
+/**
  * Whoop sleep data (separated from recovery).
  */
 export interface WhoopSleepData {
@@ -261,6 +277,8 @@ export interface WhoopSleepData {
   sleep_start?: string;
   /** The approximate time the user woke up, in the user's local timezone */
   sleep_end?: string;
+  /** Naps taken during this cycle */
+  naps?: WhoopNapData[];
 }
 
 /**

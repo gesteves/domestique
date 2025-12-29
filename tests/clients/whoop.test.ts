@@ -272,6 +272,134 @@ describe('WhoopClient', () => {
 
       expect(result).toHaveLength(1);
     });
+
+    it('should include scored naps in sleep data', async () => {
+      const mockSleepsWithNaps = {
+        records: [
+          ...mockSleeps.records,
+          {
+            id: 102,
+            cycle_id: 1, // Same cycle as main sleep
+            user_id: 1,
+            created_at: '2024-12-15T18:00:00Z',
+            updated_at: '2024-12-15T18:30:00Z',
+            start: '2024-12-15T14:00:00Z',
+            end: '2024-12-15T14:30:00Z',
+            timezone_offset: '-05:00',
+            nap: true,
+            score_state: 'SCORED',
+            score: {
+              stage_summary: {
+                total_in_bed_time_milli: 1800000, // 30 minutes
+                total_awake_time_milli: 300000,
+                total_no_data_time_milli: 0,
+                total_light_sleep_time_milli: 600000,
+                total_slow_wave_sleep_time_milli: 900000,
+                total_rem_sleep_time_milli: 0,
+                sleep_cycle_count: 0,
+                disturbance_count: 0,
+              },
+              sleep_needed: {
+                baseline_milli: 28800000,
+                need_from_sleep_debt_milli: 0,
+                need_from_recent_strain_milli: 0,
+                need_from_recent_nap_milli: 0,
+              },
+              respiratory_rate: 16.5,
+              sleep_performance_percentage: 10,
+              sleep_consistency_percentage: 50,
+              sleep_efficiency_percentage: 83,
+            },
+          },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockCycles),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSleepsWithNaps),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockRecoveries),
+        });
+
+      const result = await client.getRecoveries('2024-12-15', '2024-12-15');
+
+      expect(result).toHaveLength(1);
+      // Naps should be included in the sleep data
+      expect(result[0].sleep.naps).toBeDefined();
+      expect(result[0].sleep.naps).toHaveLength(1);
+      // Verify nap data
+      const nap = result[0].sleep.naps![0];
+      expect(nap.nap_summary.total_in_bed_time).toBe('0:30:00'); // 30 minutes
+      expect(nap.nap_summary.total_slow_wave_sleep_time).toBe('0:15:00'); // 15 minutes
+      expect(nap.respiratory_rate).toBe(16.5);
+      expect(nap.nap_start).toBeDefined();
+      expect(nap.nap_end).toBeDefined();
+    });
+
+    it('should not include unscored naps', async () => {
+      const mockSleepsWithUnscoredNap = {
+        records: [
+          ...mockSleeps.records,
+          {
+            id: 103,
+            cycle_id: 1,
+            user_id: 1,
+            created_at: '2024-12-15T18:00:00Z',
+            updated_at: '2024-12-15T18:30:00Z',
+            start: '2024-12-15T14:00:00Z',
+            end: '2024-12-15T14:30:00Z',
+            timezone_offset: '-05:00',
+            nap: true,
+            score_state: 'PENDING_SCORE', // Not scored
+            score: {
+              stage_summary: {
+                total_in_bed_time_milli: 1800000,
+                total_awake_time_milli: 0,
+                total_no_data_time_milli: 0,
+                total_light_sleep_time_milli: 0,
+                total_slow_wave_sleep_time_milli: 0,
+                total_rem_sleep_time_milli: 0,
+                sleep_cycle_count: 0,
+                disturbance_count: 0,
+              },
+              sleep_needed: {
+                baseline_milli: 0,
+                need_from_sleep_debt_milli: 0,
+                need_from_recent_strain_milli: 0,
+                need_from_recent_nap_milli: 0,
+              },
+            },
+          },
+        ],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockCycles),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSleepsWithUnscoredNap),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockRecoveries),
+        });
+
+      const result = await client.getRecoveries('2024-12-15', '2024-12-15');
+
+      expect(result).toHaveLength(1);
+      // No naps should be included since the only nap is unscored
+      expect(result[0].sleep.naps).toBeUndefined();
+    });
   });
 
   describe('getTodayRecovery', () => {
@@ -375,6 +503,122 @@ describe('WhoopClient', () => {
 
       expect(result.sleep).toBeNull();
       expect(result.recovery).toBeNull();
+    });
+
+    it('should include scored naps in sleep data', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            records: [{
+              id: 1,
+              user_id: 1,
+              created_at: new Date().toISOString(),
+              start: new Date().toISOString(),
+              score_state: 'SCORED',
+              score: { strain: 10, kilojoule: 8000, average_heart_rate: 65, max_heart_rate: 120 },
+            }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            records: [
+              {
+                id: 101,
+                cycle_id: 1,
+                user_id: 1,
+                created_at: '2024-12-15T08:00:00Z',
+                updated_at: '2024-12-15T08:00:00Z',
+                start: '2024-12-14T22:00:00Z',
+                end: '2024-12-15T06:00:00Z',
+                timezone_offset: '-05:00',
+                nap: false,
+                score_state: 'SCORED',
+                score: {
+                  stage_summary: {
+                    total_in_bed_time_milli: 28800000,
+                    total_awake_time_milli: 0,
+                    total_no_data_time_milli: 0,
+                    total_light_sleep_time_milli: 10800000,
+                    total_slow_wave_sleep_time_milli: 7200000,
+                    total_rem_sleep_time_milli: 9000000,
+                    sleep_cycle_count: 4,
+                    disturbance_count: 2,
+                  },
+                  sleep_needed: {
+                    baseline_milli: 28800000,
+                    need_from_sleep_debt_milli: 0,
+                    need_from_recent_strain_milli: 0,
+                    need_from_recent_nap_milli: 0,
+                  },
+                  sleep_performance_percentage: 95,
+                },
+              },
+              {
+                id: 102,
+                cycle_id: 1,
+                user_id: 1,
+                created_at: '2024-12-15T16:00:00Z',
+                updated_at: '2024-12-15T16:30:00Z',
+                start: '2024-12-15T15:00:00Z',
+                end: '2024-12-15T15:25:00Z',
+                timezone_offset: '-05:00',
+                nap: true,
+                score_state: 'SCORED',
+                score: {
+                  stage_summary: {
+                    total_in_bed_time_milli: 1500000, // 25 minutes
+                    total_awake_time_milli: 180000,
+                    total_no_data_time_milli: 0,
+                    total_light_sleep_time_milli: 720000,
+                    total_slow_wave_sleep_time_milli: 600000,
+                    total_rem_sleep_time_milli: 0,
+                    sleep_cycle_count: 0,
+                    disturbance_count: 0,
+                  },
+                  sleep_needed: {
+                    baseline_milli: 28800000,
+                    need_from_sleep_debt_milli: 0,
+                    need_from_recent_strain_milli: 0,
+                    need_from_recent_nap_milli: 0,
+                  },
+                  respiratory_rate: 15.2,
+                  sleep_performance_percentage: 5,
+                },
+              },
+            ],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            records: [{
+              cycle_id: 1,
+              sleep_id: 101,
+              user_id: 1,
+              created_at: new Date().toISOString(),
+              score_state: 'SCORED',
+              score: {
+                recovery_score: 75,
+                resting_heart_rate: 52,
+                hrv_rmssd_milli: 70,
+              },
+            }],
+          }),
+        });
+
+      const result = await client.getTodayRecovery();
+
+      expect(result.sleep).not.toBeNull();
+      expect(result.sleep?.naps).toBeDefined();
+      expect(result.sleep?.naps).toHaveLength(1);
+      // Verify nap data
+      const nap = result.sleep!.naps![0];
+      expect(nap.nap_summary.total_in_bed_time).toBe('0:25:00'); // 25 minutes
+      expect(nap.respiratory_rate).toBe(15.2);
+      expect(nap.nap_start).toBeDefined();
+      expect(nap.nap_end).toBeDefined();
     });
   });
 
