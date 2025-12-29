@@ -1129,19 +1129,18 @@ export class IntervalsClient {
       '/messages'
     );
 
-    // Filter out deleted messages and normalize
+    // Filter out deleted messages, normalize, and sort chronologically (oldest first)
     const notes: WorkoutNote[] = (messages || [])
       .filter((m) => m.deleted === null)
       .map((m) => ({
-        id: m.id,
-        athlete_id: m.athlete_id,
-        name: m.name,
+        author: m.name,
         created: m.created,
         type: m.type,
         content: m.content,
         attachment_url: m.attachment_url ?? undefined,
         attachment_mime_type: m.attachment_mime_type ?? undefined,
-      }));
+      }))
+      .sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime());
 
     return {
       activity_id: activityId,

@@ -119,7 +119,7 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   end_ambient_temperature: 'Ambient temperature (water temperature for swimming, air temperature for other activities) at the end of the activity in Celsius, recorded by the user\'s watch or bike computer.',
 
   // Notes
-  notes: 'Array of notes/messages left by the athlete or others (like a coach) for this activity. Each note contains: id, athlete_id, name (author name), created (timestamp), type, content (the note text), and optional attachment_url and attachment_mime_type.',
+  notes: 'Array of notes/messages left by the athlete or other Intervals.icu users (like a coach) for this activity. Each note contains: the author, created date, type, content (the note text), and optional attachment_url and attachment_mime_type.',
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {

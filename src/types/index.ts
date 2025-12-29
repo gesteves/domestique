@@ -750,9 +750,7 @@ export interface WorkoutIntervalsResponse {
 
 // Workout note/message from the athlete
 export interface WorkoutNote {
-  id: number;
-  athlete_id: string;
-  name: string;
+  author: string;
   created: string;
   type: string;
   content: string;
