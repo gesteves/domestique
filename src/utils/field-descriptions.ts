@@ -117,6 +117,9 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   median_ambient_temperature: 'Median ambient temperature (water temperature for swimming, air temperature for other activities) during the activity in Celsius, recorded by the user\'s watch or bike computer. Use this when reporting water temperature for swimming activities.',
   start_ambient_temperature: 'Ambient temperature (water temperature for swimming, air temperature for other activities) at the start of the activity in Celsius, recorded by the user\'s watch or bike computer.',
   end_ambient_temperature: 'Ambient temperature (water temperature for swimming, air temperature for other activities) at the end of the activity in Celsius, recorded by the user\'s watch or bike computer.',
+
+  // Notes
+  notes: 'Array of notes/messages left by the athlete or others (like a coach) for this activity. Each note contains: id, athlete_id, name (author name), created (timestamp), type, content (the note text), and optional attachment_url and attachment_mime_type.',
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
@@ -322,19 +325,6 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
 
   // Group fields
   count: 'Number of repetitions in this interval set',
-};
-
-export const NOTES_FIELD_DESCRIPTIONS = {
-  activity_id: 'Unique ID of the activity in Intervals.icu',
-  notes: 'Array of notes/messages left by the athlete for this activity',
-  id: 'Unique identifier of the note',
-  athlete_id: 'Intervals.icu athlete ID who wrote the note',
-  name: 'Name of the athlete who wrote the note',
-  created: 'Timestamp when the note was created (ISO 8601)',
-  type: 'Note type (typically TEXT)',
-  content: 'The actual note content written by the athlete',
-  attachment_url: 'URL to an attached file (if any)',
-  attachment_mime_type: 'MIME type of the attachment (e.g., image/jpeg)',
 };
 
 export const WEATHER_FIELD_DESCRIPTIONS = {
@@ -581,7 +571,6 @@ type FieldCategory =
   | 'athlete_profile'
   | 'sport_settings'
   | 'intervals'
-  | 'notes'
   | 'weather'
   | 'heat_zones'
   | 'power_curve'
@@ -619,8 +608,6 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return SPORT_SETTINGS_FIELD_DESCRIPTIONS;
     case 'intervals':
       return INTERVALS_FIELD_DESCRIPTIONS;
-    case 'notes':
-      return NOTES_FIELD_DESCRIPTIONS;
     case 'weather':
       return WEATHER_FIELD_DESCRIPTIONS;
     case 'heat_zones':

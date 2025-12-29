@@ -143,6 +143,9 @@ export interface NormalizedWorkout {
   // Session metrics
   session_rpe?: number; // RPE × duration
   icu_strain_score?: number; // Intervals.icu strain score (XSS-like)
+
+  // Notes
+  notes?: WorkoutNote[]; // Notes/messages left by the athlete for this activity
 }
 
 // Zone time entry for power zones

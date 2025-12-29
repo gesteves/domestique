@@ -41,7 +41,6 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ### Analysis
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR
 - `get_workout_intervals` - Detailed interval breakdown for a specific workout including power, HR, cadence, and timing data
-- `get_workout_notes` - Notes and comments written by the athlete about a specific workout in Intervals.icu
 - `get_workout_weather` - Weather conditions during a specific outdoor workout
 - `get_workout_heat_zones` - Heat zone analysis for a specific workout showing time spent in each heat strain zone
 

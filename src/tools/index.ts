@@ -186,7 +186,7 @@ export class ToolRegistry {
 
 <notes>
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals, get_workout_notes, or any of the other tools.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
       {},
       withToolResponse(
@@ -198,7 +198,6 @@ export class ToolRegistry {
             const actions: string[] = [];
             if (data.completed_workouts && data.completed_workouts.length > 0) {
               actions.push('Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals');
-              actions.push('Use get_workout_notes(activity_id) to get the user\'s comments about a workout');
               actions.push('Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors');
               actions.push('Use get_workout_heat_zones(activity_id) to get the heat zone data for a workout');
             }
@@ -292,7 +291,7 @@ and will not be updated throughout the day.
 </use-cases>
 
 <notes>
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals, get_workout_notes, or any of the other tools.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
       {},
       withToolResponse(
@@ -303,7 +302,6 @@ and will not be updated throughout the day.
           getNextActions: (data) => data.workouts && data.workouts.length > 0
             ? [
                 'Use get_workout_intervals(activity_id) for interval breakdown',
-                'Use get_workout_notes(activity_id) for athlete comments',
                 'Use get_workout_weather(activity_id) for outdoor workout conditions',
                 'Use get_workout_heat_zones(activity_id) to get the heat zone data for a workout',
               ]
@@ -351,7 +349,7 @@ and will not be updated throughout the day.
 
 <use-cases>
 - Fetching the user\'s preferred unit system, which **MUST** be used in all responses.
-- Fetching the user\'s name, which may be useful to identify the user\'s notes from a workout in get_workout_notes.
+- Fetching the user\'s name, which may be useful to identify the user\'s notes from a workout.
 - Fetching the user\'s age, which may be important to interpret their fitness and performance trends over time.
 </use-cases>
 
@@ -455,7 +453,7 @@ and will not be updated throughout the day.
 <notes>
 - Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
 - You can optionally filter activities by sport, as needed.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals, get_workout_notes, or any of the other tools.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
       {
         start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
@@ -470,7 +468,6 @@ and will not be updated throughout the day.
           getNextActions: (data) => data && data.length > 0
             ? [
                 'Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals',
-                'Use get_workout_notes(activity_id) to get the user\'s comments about a workout',
                 'Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors',
                 'Use get_recovery_trends for the same period to correlate with training',
               ]
@@ -692,40 +689,8 @@ Get the activity_id from:
         {
           fieldDescriptions: getFieldDescriptions('intervals'),
           getNextActions: () => [
-            'Use get_workout_notes for athlete comments on this workout',
             'Use get_workout_weather for outdoor workout conditions',
             'Use get_workout_heat_zones for heat zone data for this activity',
-          ],
-        }
-      )
-    );
-
-    server.tool(
-      'get_workout_notes',
-      `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
-
-<use-cases>
-- Understanding how the user may have subjectively felt during a workout, and anything else not captured by objective fitness metrics.
-- Reading feedback left by other Intervals.icu users, which could be a coach or a follower.
-</use-cases>
-
-<instructions>
-- **ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
-- Make sure to fetch attachments and follow links left in the notes.
-- Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
-</instructions>`,
-      {
-        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-      },
-      withToolResponse(
-        'get_workout_notes',
-        async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
-        {
-          fieldDescriptions: getFieldDescriptions('notes'),
-          getNextActions: () => [
-            'Use get_workout_intervals for objective interval data',
-            'Use get_workout_weather for outdoor workout conditions',
           ],
         }
       )
@@ -754,7 +719,6 @@ Get the activity_id from:
           fieldDescriptions: getFieldDescriptions('weather'),
           getNextActions: () => [
             'Use get_workout_intervals for detailed power/HR data',
-            'Use get_workout_notes for athlete comments',
             'Use get_workout_heat_zones for heat zone data for this activity',
           ],
         }

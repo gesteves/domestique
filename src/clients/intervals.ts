@@ -1796,6 +1796,16 @@ export class IntervalsClient {
       tempMetrics = await this.getActivityTemperatureMetrics(activity.id);
     }
 
+    // Fetch notes for this activity
+    let notes: WorkoutNote[] | undefined;
+    try {
+      const notesResponse = await this.getActivityNotes(activity.id);
+      notes = notesResponse.notes.length > 0 ? notesResponse.notes : undefined;
+    } catch (error) {
+      // Notes may not be available for this activity
+      notes = undefined;
+    }
+
     return {
       id: activity.id,
       date: activity.start_date_local,
@@ -1928,6 +1938,9 @@ export class IntervalsClient {
       // Session metrics
       session_rpe: activity.session_rpe,
       icu_strain_score: activity.strain_score,
+
+      // Notes
+      notes,
     };
   }
 
