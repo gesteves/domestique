@@ -681,6 +681,173 @@ END:VCALENDAR`;
     });
   });
 
+  describe('race event exclusion', () => {
+    it('should exclude race legs when a race event exists with same name', async () => {
+      // Simulates triathlon race: main event "Escape from Alcatraz" + legs with duration prefixes
+      const raceIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-event@trainerroad.com
+DTSTART;VALUE=DATE:20260607
+DTEND;VALUE=DATE:20260608
+SUMMARY:Escape from Alcatraz
+DESCRIPTION:Escape from Alcatraz Triathlon
+END:VEVENT
+BEGIN:VEVENT
+UID:swim-leg@trainerroad.com
+DTSTART;VALUE=DATE:20260607
+DTEND;VALUE=DATE:20260608
+SUMMARY:0:45 - Escape from Alcatraz
+DESCRIPTION:Swim leg
+END:VEVENT
+BEGIN:VEVENT
+UID:bike-leg@trainerroad.com
+DTSTART;VALUE=DATE:20260607
+DTEND;VALUE=DATE:20260608
+SUMMARY:1:00 - Escape from Alcatraz
+DESCRIPTION:Bike leg
+END:VEVENT
+BEGIN:VEVENT
+UID:run-leg@trainerroad.com
+DTSTART;VALUE=DATE:20260607
+DTEND;VALUE=DATE:20260608
+SUMMARY:1:10 - Escape from Alcatraz
+DESCRIPTION:Run leg
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(raceIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2026-06-07', '2026-06-07');
+
+      // All legs should be excluded because the race event exists
+      expect(result).toHaveLength(0);
+    });
+
+    it('should include workouts with duration when no matching race event exists', async () => {
+      // Normal workouts should still work
+      const workoutIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:workout@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:2:00 - Gibbs
+DESCRIPTION:TSS 81, IF 0.64.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(workoutIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Gibbs');
+    });
+
+    it('should handle partial name matches correctly (only exact matches excluded)', async () => {
+      // "Escape from Alcatraz 2026" is NOT the same as "Escape from Alcatraz"
+      const partialMatchIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-event@trainerroad.com
+DTSTART;VALUE=DATE:20260607
+DTEND;VALUE=DATE:20260608
+SUMMARY:Escape from Alcatraz 2026
+DESCRIPTION:Race annotation
+END:VEVENT
+BEGIN:VEVENT
+UID:swim-leg@trainerroad.com
+DTSTART;VALUE=DATE:20260607
+DTEND;VALUE=DATE:20260608
+SUMMARY:0:45 - Escape from Alcatraz
+DESCRIPTION:Swim leg
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(partialMatchIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2026-06-07', '2026-06-07');
+
+      // Swim leg should be included because the race event name doesn't exactly match
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Escape from Alcatraz');
+    });
+
+    it('should not affect DATE-TIME workout detection', async () => {
+      // DATE-TIME events use different detection logic (duration-based)
+      const mixedIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-event@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:Morning Workout
+DESCRIPTION:Race annotation
+END:VEVENT
+BEGIN:VEVENT
+UID:datetime-workout@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241216T160000Z
+DTEND;VALUE=DATE-TIME:20241216T180000Z
+SUMMARY:Morning Workout
+DESCRIPTION:TSS 81.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(mixedIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16', 'America/Los_Angeles');
+
+      // DATE-TIME event should still be included (uses different detection logic)
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Morning Workout');
+    });
+
+    it('should handle race on different day than workouts', async () => {
+      // Race on day 2, workout on day 1 - workout should still be included
+      const differentDayIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-event@trainerroad.com
+DTSTART;VALUE=DATE:20260608
+DTEND;VALUE=DATE:20260609
+SUMMARY:Escape from Alcatraz
+DESCRIPTION:Race day
+END:VEVENT
+BEGIN:VEVENT
+UID:workout@trainerroad.com
+DTSTART;VALUE=DATE:20260607
+DTEND;VALUE=DATE:20260608
+SUMMARY:0:45 - Escape from Alcatraz
+DESCRIPTION:Warmup workout
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(differentDayIcs),
+      });
+
+      // Query only June 7 - should include the workout
+      const result = await client.getPlannedWorkouts('2026-06-07', '2026-06-07');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Escape from Alcatraz');
+    });
+  });
+
   describe('sport detection with TSS', () => {
     it('should detect cycling when description starts with TSS', async () => {
       const ics = `BEGIN:VCALENDAR

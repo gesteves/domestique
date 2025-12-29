@@ -92,12 +92,27 @@ export class TrainerRoadClient {
   /**
    * Check if an event is a workout
    * - DATE events: must have a duration prefix in the name (e.g., "2:00 - Workout Name")
+   *   AND must not be a race leg (name matches a race event on the same day)
    * - DATE-TIME events: must have a duration less than 1440 minutes (one day)
+   * @param event - The calendar event to check
+   * @param raceEventNames - Optional set of race event names on the same day (for DATE events)
    */
-  private isWorkout(event: CalendarEvent): boolean {
+  private isWorkout(event: CalendarEvent, raceEventNames?: Set<string>): boolean {
     if (event.dateType === 'date') {
       // DATE events (all-day): check for duration prefix in name
-      return this.parseDurationFromName(event.summary) !== undefined;
+      const hasDuration = this.parseDurationFromName(event.summary) !== undefined;
+      if (!hasDuration) {
+        return false;
+      }
+      // If there are race events, check if this is a race leg
+      if (raceEventNames) {
+        const strippedName = this.stripDurationFromName(event.summary);
+        if (raceEventNames.has(strippedName)) {
+          // This is a race leg (e.g., "0:45 - Escape from Alcatraz" when "Escape from Alcatraz" exists)
+          return false;
+        }
+      }
+      return true;
     } else {
       // DATE-TIME events (specific time): check if duration is reasonable (< 1 day)
       if (event.start && event.end) {
@@ -106,6 +121,22 @@ export class TrainerRoadClient {
       }
       return false;
     }
+  }
+
+  /**
+   * Find race event names from a list of events.
+   * Race events are DATE events (all-day) without a duration prefix in the name.
+   * @param events - List of calendar events
+   * @returns Set of race event names (for matching against potential race legs)
+   */
+  private findRaceEventNames(events: CalendarEvent[]): Set<string> {
+    const raceNames = new Set<string>();
+    for (const event of events) {
+      if (event.dateType === 'date' && this.parseDurationFromName(event.summary) === undefined) {
+        raceNames.add(event.summary);
+      }
+    }
+    return raceNames;
   }
 
   /**
@@ -140,8 +171,12 @@ export class TrainerRoadClient {
       return eventDate >= startDate && eventDate <= endDate;
     });
 
-    // Filter out annotations (non-workout events)
-    const workouts = eventsInRange.filter((event) => this.isWorkout(event));
+    // Find race events (all-day events without duration prefix)
+    // These are used to exclude race legs from being treated as workouts
+    const raceEventNames = this.findRaceEventNames(eventsInRange);
+
+    // Filter out annotations (non-workout events) and race legs
+    const workouts = eventsInRange.filter((event) => this.isWorkout(event, raceEventNames));
 
     return workouts.map((event) => this.normalizeEvent(event, timezone));
   }
