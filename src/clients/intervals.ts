@@ -1483,7 +1483,7 @@ export class IntervalsClient {
     const events = await this.fetch<IntervalsEvent[]>('/events', {
       oldest: startDate,
       newest: endDate,
-      category: 'WORKOUT,RACE_A,RACE_B,RACE_C',
+      category: 'WORKOUT',
     });
 
     // Get timezone for date formatting
