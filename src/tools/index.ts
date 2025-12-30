@@ -165,12 +165,13 @@ export class ToolRegistry {
     // Daily Summary (most likely to be called first)
     server.tool(
       'get_daily_summary',
-      `Fetches a complete snapshot of the user\'s current status today, including:
+      `Fetches a complete snapshot of the user's current status today, including:
 - Whoop recovery, sleep performance, and strain
 - Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
 - Wellness metrics, such as vitals and subjective status
 - All workouts and fitness activities completed so far today
 - All workouts and fitness activities scheduled for today
+- All upcoming races on the user's calendar
 
 <use-cases>
 - Getting a comprehensive overview of the user's current status in a single call.
@@ -180,7 +181,7 @@ export class ToolRegistry {
 </use-cases>
 
 <instructions>
-- Use this if you need a complete picture of the user\'s status today; it's more efficient than calling individual tools when you need the full picture.
+- Use this if you need a complete picture of the user's status today; it's more efficient than calling individual tools when you need the full picture.
 - Metrics and activities (completed and schedule) can change over the course of the day; agents are encourage to call this tool as the day progresses to get up-to-the-minute data rather than rely on the results of previous call
 </instructions>
 
@@ -348,13 +349,13 @@ and will not be updated throughout the day.
   - The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
 
 <use-cases>
-- Fetching the user\'s preferred unit system, which **MUST** be used in all responses.
-- Fetching the user\'s name, which may be useful to identify the user\'s notes from a workout.
-- Fetching the user\'s age, which may be important to interpret their fitness and performance trends over time.
+- Fetching the user's preferred unit system, which **MUST** be used in all responses.
+- Fetching the user's name, which may be useful to identify the user's notes from a workout.
+- Fetching the user's age, which may be important to interpret their fitness and performance trends over time.
 </use-cases>
 
 <instructions>
-- You **MUST** use the user\'s preferred units in all responses.
+- You **MUST** use the user's preferred units in all responses.
 - If you don't know the user's preferred units, you **MUST** call this tool before responding to the user, so you can get their preferences.
 </instructions>`,
       {},
@@ -525,7 +526,6 @@ and will not be updated throughout the day.
 
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
-- Wellness data currently only includes the user\'s weight.
 - Only returns days on which wellness data was recorded.
 </notes>`,
       {
@@ -730,11 +730,11 @@ Get the activity_id from:
       `Fetches the weather conditions during a given outdoor workout.
 
 <use-cases>
-- Understanding how weather conditions may or may not have impacted the user\'s performance during outdoor workouts or fitness activities.
+- Understanding how weather conditions may or may not have impacted the user's performance during outdoor workouts or fitness activities.
 </use-cases>
 
 <instructions>
-- **ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user\'s performance.
+- **ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user's performance.
 - **NEVER** fetch this when analyzing an **INDOOR** workout; weather conditions are irrelevant for indoor activities.
 - Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
 </instructions>`,
