@@ -137,6 +137,30 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     res.type('html').send(html);
   });
 
+  // Notify all connected clients that tools have changed
+  // Useful after deployments that add/modify/remove tools
+  app.post('/admin/notify-tools-changed', validateToken, async (_req: Request, res: Response) => {
+    const sessionIds = Object.keys(sessions);
+    let notified = 0;
+
+    for (const sessionId of sessionIds) {
+      const { server } = sessions[sessionId];
+      try {
+        await server.sendToolListChanged();
+        notified++;
+      } catch (error) {
+        console.error(`Failed to notify session ${sessionId}:`, error);
+      }
+    }
+
+    console.log(`Notified ${notified}/${sessionIds.length} sessions of tool list change`);
+    res.json({
+      success: true,
+      sessions_notified: notified,
+      total_sessions: sessionIds.length,
+    });
+  });
+
   // MCP endpoint - handles all Streamable HTTP requests
   app.all('/mcp', validateToken, async (req: Request, res: Response) => {
     // Check for existing session
@@ -157,10 +181,10 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     }
 
     // For new sessions (initialization), create a new server and transport
-    const mcpServer = new McpServer({
-      name: 'domestique',
-      version: '1.0.0',
-    });
+    const mcpServer = new McpServer(
+      { name: 'domestique', version: '1.0.0' },
+      { capabilities: { tools: { listChanged: true } } }
+    );
 
     // Register tools for this connection
     toolRegistry.registerTools(mcpServer);

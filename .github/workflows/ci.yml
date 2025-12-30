@@ -123,6 +123,14 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Notify clients of tool changes
+        if: success()
+        continue-on-error: true
+        run: |
+          curl -s -X POST "${{ env.PRODUCTION_URL }}/admin/notify-tools-changed" \
+            -H "Authorization: Bearer ${{ secrets.MCP_AUTH_TOKEN }}" \
+            -H "Content-Type: application/json"
+
       - name: Notify Slack (deploy successful)
         if: success()
         continue-on-error: true
