@@ -3,7 +3,7 @@ import { buildToolResponse, buildEmptyResponse } from '../../src/utils/response-
 
 describe('response-builder', () => {
   describe('buildToolResponse', () => {
-    it('should build response with data and field descriptions', () => {
+    it('should build response with structuredContent containing data and field descriptions', () => {
       const data = { metric: 42, name: 'test' };
       const fieldDescriptions = {
         metric: 'A numeric value',
@@ -15,78 +15,24 @@ describe('response-builder', () => {
         fieldDescriptions,
       });
 
+      // Should have content array for backwards compatibility
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
+
+      // Text content should be serialized JSON
       const text = result.content[0].text;
-      expect(text).toContain('"metric": 42');
-      expect(text).toContain('"name": "test"');
-      expect(text).toContain('FIELD DESCRIPTIONS:');
-      expect(text).toContain('"metric": "A numeric value"');
-    });
+      const parsed = JSON.parse(text);
+      expect(parsed.response.metric).toBe(42);
+      expect(parsed.response.name).toBe('test');
+      expect(parsed.field_descriptions.metric).toBe('A numeric value');
 
-    it('should include warnings when provided', () => {
-      const data = { value: 100 };
-      const fieldDescriptions = { value: 'A value' };
-      const warnings = ['Data may be incomplete', 'Timezone not configured'];
-
-      const result = buildToolResponse({
-        data,
-        fieldDescriptions,
-        warnings,
+      // Should have structuredContent
+      expect(result.structuredContent).toBeDefined();
+      expect(result.structuredContent.response).toEqual({ metric: 42, name: 'test' });
+      expect(result.structuredContent.field_descriptions).toEqual({
+        metric: 'A numeric value',
+        name: 'A string identifier',
       });
-
-      const text = result.content[0].text;
-      expect(text).toContain('NOTES:');
-      expect(text).toContain('- Data may be incomplete');
-      expect(text).toContain('- Timezone not configured');
-    });
-
-    it('should include next actions when provided', () => {
-      const data = { id: 'workout-123' };
-      const fieldDescriptions = { id: 'Workout identifier' };
-      const nextActions = [
-        'Use get_workout_intervals(id) for detailed breakdown',
-        'Use get_workout_notes(id) for athlete comments',
-      ];
-
-      const result = buildToolResponse({
-        data,
-        fieldDescriptions,
-        nextActions,
-      });
-
-      const text = result.content[0].text;
-      expect(text).toContain('SUGGESTED NEXT ACTIONS:');
-      expect(text).toContain('- Use get_workout_intervals(id) for detailed breakdown');
-      expect(text).toContain('- Use get_workout_notes(id) for athlete comments');
-    });
-
-    it('should handle empty warnings array', () => {
-      const data = { test: true };
-      const fieldDescriptions = { test: 'A boolean' };
-
-      const result = buildToolResponse({
-        data,
-        fieldDescriptions,
-        warnings: [],
-      });
-
-      const text = result.content[0].text;
-      expect(text).not.toContain('NOTES:');
-    });
-
-    it('should handle empty next actions array', () => {
-      const data = { test: true };
-      const fieldDescriptions = { test: 'A boolean' };
-
-      const result = buildToolResponse({
-        data,
-        fieldDescriptions,
-        nextActions: [],
-      });
-
-      const text = result.content[0].text;
-      expect(text).not.toContain('SUGGESTED NEXT ACTIONS:');
     });
 
     it('should format complex nested data', () => {
@@ -103,6 +49,10 @@ describe('response-builder', () => {
       const fieldDescriptions = {
         workouts: 'Array of workout objects',
         summary: 'Summary statistics',
+        id: 'Workout ID',
+        tss: 'Training stress score',
+        total_tss: 'Total TSS',
+        count: 'Count of workouts',
       };
 
       const result = buildToolResponse({
@@ -110,13 +60,15 @@ describe('response-builder', () => {
         fieldDescriptions,
       });
 
-      const text = result.content[0].text;
-      // JSON should be pretty-printed
-      expect(text).toContain('"workouts": [');
-      expect(text).toContain('"total_tss": 125');
+      // Verify structuredContent has the nested data
+      expect(result.structuredContent.response).toEqual(data);
+
+      // Field descriptions should include nested fields
+      expect(result.structuredContent.field_descriptions.workouts).toBe('Array of workout objects');
+      expect(result.structuredContent.field_descriptions.tss).toBe('Training stress score');
     });
 
-    it('should handle null and undefined in data', () => {
+    it('should remove null and undefined from data', () => {
       const data = {
         value: null,
         optional: undefined,
@@ -129,35 +81,11 @@ describe('response-builder', () => {
         fieldDescriptions,
       });
 
-      const text = result.content[0].text;
       // Null and undefined fields should be removed to save tokens
-      expect(text).not.toContain('"value"');
-      expect(text).not.toContain('"optional"');
-      expect(text).toContain('"present": "yes"');
+      expect(result.structuredContent.response).toEqual({ present: 'yes' });
+
       // Field descriptions should only include fields present in data
-      expect(text).toContain('"present":');
-      expect(text).not.toContain('"value":');
-    });
-
-    it('should handle both warnings and next actions together', () => {
-      const data = { recovery_score: 45 };
-      const fieldDescriptions = { recovery_score: 'Recovery percentage (0-100)' };
-      const warnings = ['Low recovery detected'];
-      const nextActions = ['Consider reducing training load'];
-
-      const result = buildToolResponse({
-        data,
-        fieldDescriptions,
-        warnings,
-        nextActions,
-      });
-
-      const text = result.content[0].text;
-      expect(text).toContain('NOTES:');
-      expect(text).toContain('- Low recovery detected');
-      expect(text).toContain('SUGGESTED NEXT ACTIONS:');
-      expect(text).toContain('- Consider reducing training load');
-      expect(text).toContain('FIELD DESCRIPTIONS:');
+      expect(result.structuredContent.field_descriptions).toEqual({ present: 'Present field' });
     });
 
     it('should include heat zones summary only when heat data is present', () => {
@@ -175,6 +103,9 @@ describe('response-builder', () => {
       const fieldDescriptions = {
         workouts: 'Array of workouts',
         heat_zones: 'Heat zone data',
+        id: 'Workout ID',
+        name: 'Zone name',
+        time_in_zone: 'Time in zone',
       };
 
       const resultWithHeat = buildToolResponse({
@@ -182,10 +113,9 @@ describe('response-builder', () => {
         fieldDescriptions,
       });
 
-      const textWithHeat = resultWithHeat.content[0].text;
-      expect(textWithHeat).toContain('Heat Zones Summary');
-      expect(textWithHeat).toContain('Zone 1: No Heat Strain');
-      expect(textWithHeat).toContain('Zone 3: High Heat Strain');
+      // Heat zones summary should be added to field descriptions
+      expect(resultWithHeat.structuredContent.field_descriptions.heat_zones).toContain('Heat Zones Summary');
+      expect(resultWithHeat.structuredContent.field_descriptions.heat_zones).toContain('Zone 1: No Heat Strain');
 
       // Data WITHOUT heat zones
       const dataWithoutHeat = {
@@ -202,39 +132,54 @@ describe('response-builder', () => {
         fieldDescriptions,
       });
 
-      const textWithoutHeat = resultWithoutHeat.content[0].text;
-      expect(textWithoutHeat).not.toContain('Heat Zones Summary');
-      expect(textWithoutHeat).not.toContain('Zone 1: No Heat Strain');
       // Field description should be filtered out when field is not present
-      expect(textWithoutHeat).not.toContain('"heat_zones"');
+      expect(resultWithoutHeat.structuredContent.field_descriptions.heat_zones).toBeUndefined();
+    });
+
+    it('should return text content as formatted JSON for backwards compatibility', () => {
+      const data = { value: 123 };
+      const fieldDescriptions = { value: 'A value' };
+
+      const result = buildToolResponse({
+        data,
+        fieldDescriptions,
+      });
+
+      // Text should be valid JSON with 2-space indentation
+      const text = result.content[0].text;
+      expect(text).toContain('{\n  "response"');
+
+      // Should be parseable
+      const parsed = JSON.parse(text);
+      expect(parsed.response.value).toBe(123);
     });
   });
 
   describe('buildEmptyResponse', () => {
-    it('should build empty response with resource type', () => {
+    it('should build empty response with structuredContent', () => {
       const result = buildEmptyResponse('workouts');
 
+      // Should have content array
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe('No workouts found.');
-    });
 
-    it('should include suggestion when provided', () => {
-      const result = buildEmptyResponse(
-        'activities',
-        'Try expanding the date range or removing sport filters.'
-      );
-
-      const text = result.content[0].text;
-      expect(text).toContain('No activities found.');
-      expect(text).toContain('Suggestion: Try expanding the date range or removing sport filters.');
+      // Should have structuredContent with message
+      expect(result.structuredContent.response).toEqual({ message: 'No workouts found.' });
+      expect(result.structuredContent.field_descriptions).toEqual({});
     });
 
     it('should handle various resource types', () => {
-      expect(buildEmptyResponse('recovery data').content[0].text).toBe('No recovery data found.');
-      expect(buildEmptyResponse('planned workouts').content[0].text).toBe('No planned workouts found.');
-      expect(buildEmptyResponse('intervals').content[0].text).toBe('No intervals found.');
+      expect(buildEmptyResponse('recovery data').structuredContent.response.message).toBe('No recovery data found.');
+      expect(buildEmptyResponse('planned workouts').structuredContent.response.message).toBe('No planned workouts found.');
+      expect(buildEmptyResponse('intervals').structuredContent.response.message).toBe('No intervals found.');
+    });
+
+    it('should return text content as formatted JSON', () => {
+      const result = buildEmptyResponse('activities');
+
+      const text = result.content[0].text;
+      const parsed = JSON.parse(text);
+      expect(parsed.response.message).toBe('No activities found.');
     });
   });
 });
-

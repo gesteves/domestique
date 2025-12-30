@@ -10,89 +10,84 @@ import {
   combineFieldDescriptions,
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
-import { buildToolResponse } from '../utils/response-builder.js';
-import { ApiError, DateParseError, type ErrorCategory } from '../errors/index.js';
+import { buildToolResponse, type ToolResponse } from '../utils/response-builder.js';
+import { ApiError, DateParseError } from '../errors/index.js';
 
-interface ResponseOptions<TResult> {
+interface ResponseOptions {
   fieldDescriptions: Record<string, string>;
-  getNextActions?: (data: TResult) => string[] | undefined;
-  getWarnings?: (data: TResult) => string[] | undefined;
 }
 
-/**
- * Get human-friendly recovery guidance based on error category.
- */
-function getRecoveryGuidance(category: ErrorCategory): string {
-  const guidance: Record<ErrorCategory, string> = {
-    date_parse: "Try using a format like '2024-12-25', 'yesterday', '7 days ago', 'last week', or 'next Monday'.",
-    not_found: 'The requested resource does not exist. Verify the activity ID or date range is correct.',
-    authentication: 'Authentication failed. The API credentials may need to be refreshed.',
-    authorization: 'Access denied. The configured API key may not have permission for this operation.',
-    validation: 'Invalid parameters. Please check that all inputs are valid and in the expected format.',
-    rate_limit: 'Too many requests. Wait a moment before trying again.',
-    network: 'Network connectivity issue. Check internet connection and retry.',
-    service_unavailable: 'The external service is temporarily unavailable. Try again shortly.',
-    internal: 'An unexpected error occurred.',
-  };
-  return guidance[category];
+interface ErrorDetails {
+  error: true;
+  message: string;
+  what_happened: string;
+  how_to_fix: string;
+  can_retry: boolean;
+  category: string;
+  [key: string]: unknown;
+}
+
+interface StructuredErrorContent {
+  error: ErrorDetails;
+  [key: string]: unknown;
+}
+
+interface ErrorResponse {
+  content: Array<{ type: 'text'; text: string }>;
+  structuredContent: StructuredErrorContent;
+  isError: true;
+  [key: string]: unknown;
 }
 
 /**
  * Build a structured error response for LLM consumption.
  * All errors are caught and formatted consistently.
  */
-function buildErrorResponse(error: unknown): { content: Array<{ type: 'text'; text: string }> } {
+function buildErrorResponse(error: unknown): ErrorResponse {
+  let errorDetails: ErrorDetails;
+
   // Handle DateParseError specifically for better date guidance
   if (error instanceof DateParseError) {
-    return {
-      content: [{
-        type: 'text' as const,
-        text: JSON.stringify({
-          error: true,
-          message: error.message,
-          what_happened: error.getWhatHappened(),
-          how_to_fix: error.getHowToFix(),
-          can_retry: false,
-          category: 'date_parse',
-          parameter: error.parameterName,
-          input_received: error.input,
-        }, null, 2),
-      }],
+    errorDetails = {
+      error: true,
+      message: error.message,
+      what_happened: error.getWhatHappened(),
+      how_to_fix: error.getHowToFix(),
+      can_retry: false,
+      category: 'date_parse',
+      parameter: error.parameterName,
+      input_received: error.input,
+    };
+  } else if (error instanceof ApiError) {
+    // Handle our unified ApiError and its subclasses
+    errorDetails = {
+      error: true,
+      message: error.message,
+      what_happened: error.getWhatHappened(),
+      how_to_fix: error.getHowToFix(),
+      can_retry: error.isRetryable,
+      category: error.category,
+      source: error.source,
+    };
+  } else {
+    // Handle unknown errors
+    const message = error instanceof Error ? error.message : 'An unknown error occurred';
+    errorDetails = {
+      error: true,
+      message,
+      what_happened: 'An unexpected error occurred while processing the request.',
+      how_to_fix: 'Please try again. If the issue persists, there may be a problem with the service.',
+      can_retry: true,
+      category: 'internal',
     };
   }
 
-  // Handle our unified ApiError and its subclasses
-  if (error instanceof ApiError) {
-    return {
-      content: [{
-        type: 'text' as const,
-        text: JSON.stringify({
-          error: true,
-          message: error.message,
-          what_happened: error.getWhatHappened(),
-          how_to_fix: error.getHowToFix(),
-          can_retry: error.isRetryable,
-          category: error.category,
-          source: error.source,
-        }, null, 2),
-      }],
-    };
-  }
+  const structuredContent = { error: errorDetails };
 
-  // Handle unknown errors
-  const message = error instanceof Error ? error.message : 'An unknown error occurred';
   return {
-    content: [{
-      type: 'text' as const,
-      text: JSON.stringify({
-        error: true,
-        message,
-        what_happened: 'An unexpected error occurred while processing the request.',
-        how_to_fix: 'Please try again. If the issue persists, there may be a problem with the service.',
-        can_retry: true,
-        category: 'internal',
-      }, null, 2),
-    }],
+    content: [{ type: 'text' as const, text: JSON.stringify(structuredContent, null, 2) }],
+    structuredContent,
+    isError: true,
   };
 }
 
@@ -103,8 +98,8 @@ function buildErrorResponse(error: unknown): { content: Array<{ type: 'text'; te
 function withToolResponse<TArgs, TResult>(
   toolName: string,
   handler: (args: TArgs) => Promise<TResult>,
-  options: ResponseOptions<TResult>
-): (args: TArgs) => Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  options: ResponseOptions
+): (args: TArgs) => Promise<ToolResponse | ErrorResponse> {
   return async (args: TArgs) => {
     console.log(`[Tool] Calling tool: ${toolName}`);
     try {
@@ -112,8 +107,6 @@ function withToolResponse<TArgs, TResult>(
       return buildToolResponse({
         data,
         fieldDescriptions: options.fieldDescriptions,
-        nextActions: options.getNextActions?.(data),
-        warnings: options.getWarnings?.(data),
       });
     } catch (error) {
       return buildErrorResponse(error);
@@ -195,29 +188,6 @@ export class ToolRegistry {
         async () => this.currentTools.getDailySummary(),
         {
           fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
-          getNextActions: (data) => {
-            const actions: string[] = [];
-            if (data.completed_workouts && data.completed_workouts.length > 0) {
-              actions.push('Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals');
-              actions.push('Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors');
-              actions.push('Use get_workout_heat_zones(activity_id) to get the heat zone data for a workout');
-            }
-            if (data.whoop.recovery) {
-              actions.push('Use get_recovery_trends to see patterns over time');
-            }
-            actions.push('Use get_training_load_trends for fitness/fatigue analysis');
-            return actions;
-          },
-          getWarnings: (data) => {
-            const warnings: string[] = [];
-            if (!data.whoop.recovery) {
-              warnings.push('Whoop recovery data unavailable');
-            }
-            if (!data.whoop.strain) {
-              warnings.push('Whoop strain data unavailable');
-            }
-            return warnings.length > 0 ? warnings : undefined;
-          },
         }
       )
     );
@@ -245,9 +215,6 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysRecovery(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_recovery', 'sleep', 'recovery'),
-          getNextActions: (data) => data.whoop.recovery
-            ? ['Use get_recovery_trends to see patterns over time', 'Use get_daily_summary for full today overview']
-            : undefined,
         }
       )
     );
@@ -272,9 +239,6 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysStrain(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_strain', 'whoop'),
-          getNextActions: (data) => data.whoop.strain
-            ? ['Use get_strain_history for trends over time', 'Use get_daily_summary for full today overview']
-            : undefined,
         }
       )
     );
@@ -300,13 +264,6 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysCompletedWorkouts(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_completed_workouts', 'workout', 'whoop'),
-          getNextActions: (data) => data.workouts && data.workouts.length > 0
-            ? [
-                'Use get_workout_intervals(activity_id) for interval breakdown',
-                'Use get_workout_weather(activity_id) for outdoor workout conditions',
-                'Use get_workout_heat_zones(activity_id) to get the heat zone data for a workout',
-              ]
-            : undefined,
         }
       )
     );
@@ -331,12 +288,6 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysPlannedWorkouts(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_planned_workouts', 'planned'),
-          getNextActions: (data) => data.workouts && data.workouts.length > 0
-            ? [
-                'Use get_todays_recovery to check readiness for planned workouts',
-                'Use get_upcoming_workouts to see the full week ahead',
-              ]
-            : undefined,
         }
       )
     );
@@ -364,10 +315,6 @@ and will not be updated throughout the day.
         async () => this.currentTools.getAthleteProfile(),
         {
           fieldDescriptions: getFieldDescriptions('athlete_profile'),
-          getNextActions: () => [
-            'Use get_sports_settings(sport) for FTP, zones, and thresholds',
-            'Use get_training_load_trends to see how fitness has evolved',
-          ],
         }
       )
     );
@@ -394,10 +341,6 @@ and will not be updated throughout the day.
         async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
         {
           fieldDescriptions: getFieldDescriptions('sport_settings'),
-          getNextActions: () => [
-            'Use this tool to understand the user\'s current zones for a given sport',
-            'Use get_workout_history to see workouts for this sport',
-          ],
         }
       )
     );
@@ -428,12 +371,6 @@ and will not be updated throughout the day.
         async (args: { start_date: string; end_date?: string }) => this.currentTools.getStrainHistory(args),
         {
           fieldDescriptions: getFieldDescriptions('whoop'),
-          getNextActions: (data) => data && data.length > 0
-            ? [
-                'Use get_recovery_trends for same period to correlate strain with recovery',
-                'Use get_workout_history for detailed workout data from Intervals.icu',
-              ]
-            : undefined,
         }
       )
     );
@@ -466,13 +403,6 @@ and will not be updated throughout the day.
         async (args: { start_date: string; end_date?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
         {
           fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
-          getNextActions: (data) => data && data.length > 0
-            ? [
-                'Use get_workout_intervals(activity_id) for detailed analysis of a workout\'s intervals',
-                'Use get_workout_weather(activity_id) to get the weather conditions during a workout, if it was done outdoors',
-                'Use get_recovery_trends for the same period to correlate with training',
-              ]
-            : undefined,
         }
       )
     );
@@ -503,12 +433,6 @@ and will not be updated throughout the day.
         async (args: { start_date: string; end_date?: string }) => this.historicalTools.getRecoveryTrends(args),
         {
           fieldDescriptions: getFieldDescriptions('recovery'),
-          getNextActions: (data) => data && data.data && data.data.length > 0
-            ? [
-                'Use get_training_load_trends to correlate with training stress',
-                'Use get_workout_history for same period to see training patterns',
-              ]
-            : undefined,
         }
       )
     );
@@ -537,12 +461,6 @@ and will not be updated throughout the day.
         async (args: { start_date: string; end_date?: string }) => this.historicalTools.getWellnessTrends(args),
         {
           fieldDescriptions: getFieldDescriptions('wellness'),
-          getNextActions: (data) => data && data.data && data.data.length > 0
-            ? [
-                'Use get_training_load_trends to correlate with training stress',
-                'Use get_workout_history to correlate with workout history',
-              ]
-            : undefined,
         }
       )
     );
@@ -572,11 +490,6 @@ and will not be updated throughout the day.
         async (args: { days?: number; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts({ days: args.days ?? 7, sport: args.sport }),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
-          getNextActions: (data) => data && data.length > 0
-            ? [
-                'Use get_training_load_trends to see current fitness/fatigue',
-              ]
-            : undefined,
         }
       )
     );
@@ -605,12 +518,6 @@ and will not be updated throughout the day.
         async (args: { date: string; sport?: 'cycling' | 'running' | 'swimming' }) => this.planningTools.getPlannedWorkoutDetails(args),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
-          getNextActions: (data) => data && data.length > 0
-            ? [
-                'Use get_upcoming_workouts to see the full schedule',
-                'Use get_todays_recovery to check readiness if workout is today',
-              ]
-            : ['Use get_upcoming_workouts to find workouts on other dates'],
         }
       )
     );
@@ -634,12 +541,6 @@ and will not be updated throughout the day.
         async () => this.planningTools.getUpcomingRaces(),
         {
           fieldDescriptions: getFieldDescriptions('race'),
-          getNextActions: (data) => data && data.length > 0
-            ? [
-                'Use get_training_load_trends to assess fitness leading into race',
-                'Use get_upcoming_workouts to see training plan around race day',
-              ]
-            : undefined,
         }
       )
     );
@@ -671,22 +572,6 @@ and will not be updated throughout the day.
         async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
         {
           fieldDescriptions: getFieldDescriptions('fitness'),
-          getNextActions: () => [
-            'Use get_recovery_trends to correlate with sleep/HRV',
-            'Use get_workout_history to see what drove these trends',
-          ],
-          getWarnings: (data) => {
-            const warnings: string[] = [];
-            if (data?.summary?.acwr !== undefined && data.summary.acwr > 1.5) {
-              warnings.push(`ACWR is ${data.summary.acwr.toFixed(2)} - high injury risk. Consider reducing load.`);
-            } else if (data?.summary?.acwr !== undefined && data.summary.acwr > 1.3) {
-              warnings.push(`ACWR is ${data.summary.acwr.toFixed(2)} - approaching injury risk zone.`);
-            }
-            if (data?.summary?.avg_ramp_rate !== undefined && data.summary.avg_ramp_rate > 10) {
-              warnings.push(`Ramp rate is ${data.summary.avg_ramp_rate.toFixed(1)} pts/week - exceeds safe limit.`);
-            }
-            return warnings.length > 0 ? warnings : undefined;
-          },
         }
       )
     );
@@ -717,10 +602,6 @@ Get the activity_id from:
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('intervals'),
-          getNextActions: () => [
-            'Use get_workout_weather for outdoor workout conditions',
-            'Use get_workout_heat_zones for heat zone data for this activity',
-          ],
         }
       )
     );
@@ -746,10 +627,6 @@ Get the activity_id from:
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('weather'),
-          getNextActions: () => [
-            'Use get_workout_intervals for detailed power/HR data',
-            'Use get_workout_heat_zones for heat zone data for this activity',
-          ],
         }
       )
     );
@@ -781,10 +658,6 @@ Get the activity_id from:
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('heat_zones'),
-          getNextActions: () => [
-            'Use get_workout_intervals for detailed power/HR data',
-            'Use get_workout_weather to correlate heat zones with weather conditions',
-          ],
         }
       )
     );
@@ -826,13 +699,6 @@ Get the activity_id from:
           this.historicalTools.getPowerCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('power_curve'),
-          getNextActions: (data) => {
-            const actions = ['Use get_training_load_trends to correlate power with fitness'];
-            if (data && data.activity_count > 0) {
-              actions.push('Use get_workout_history to see the workouts that produced these bests');
-            }
-            return actions;
-          },
         }
       )
     );
@@ -876,13 +742,6 @@ Get the activity_id from:
           this.historicalTools.getPaceCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('pace_curve'),
-          getNextActions: (data) => {
-            const actions = ['Use get_training_load_trends to correlate pace with fitness'];
-            if (data && data.activity_count > 0) {
-              actions.push('Use get_workout_history to see the workouts that produced these bests');
-            }
-            return actions;
-          },
         }
       )
     );
@@ -921,10 +780,6 @@ Get the activity_id from:
           this.historicalTools.getHRCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('hr_curve'),
-          getNextActions: () => [
-            'Use get_training_load_trends to correlate HR with fitness',
-            'Use get_recovery_trends to see how HR relates to recovery',
-          ],
         }
       )
     );

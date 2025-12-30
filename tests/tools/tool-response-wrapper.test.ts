@@ -76,15 +76,23 @@ describe('Tool Response Wrapper', () => {
   });
 
   describe('response format', () => {
-    it('should wrap response with field descriptions', async () => {
+    it('should wrap response with structuredContent including field descriptions', async () => {
       const handler = registeredHandlers.get('get_todays_recovery');
       expect(handler).toBeDefined();
 
-      const result = (await handler!({})) as { content: Array<{ type: string; text: string }> };
+      const result = (await handler!({})) as {
+        content: Array<{ type: string; text: string }>;
+        structuredContent: { response: unknown; field_descriptions: Record<string, string> };
+      };
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('FIELD DESCRIPTIONS:');
+      // Text content contains serialized JSON for backwards compatibility
+      expect(result.content[0].text).toContain('"field_descriptions"');
+      // structuredContent has the parsed response
+      expect(result.structuredContent).toBeDefined();
+      expect(result.structuredContent.response).toBeDefined();
+      expect(result.structuredContent.field_descriptions).toBeDefined();
     });
 
     it('should include data in the response', async () => {
@@ -226,15 +234,20 @@ describe('Tool Response Wrapper', () => {
     });
   });
 
-  describe('next actions', () => {
-    it('should include suggested next actions in tool responses', async () => {
+  describe('structuredContent format', () => {
+    it('should return structuredContent with response and field_descriptions', async () => {
       const handler = registeredHandlers.get('get_athlete_profile');
       expect(handler).toBeDefined();
 
-      const result = (await handler!({})) as { content: Array<{ type: string; text: string }> };
+      const result = (await handler!({})) as {
+        content: Array<{ type: string; text: string }>;
+        structuredContent: { response: unknown; field_descriptions: Record<string, string> };
+      };
 
-      expect(result.content[0].text).toContain('SUGGESTED NEXT ACTIONS:');
-      expect(result.content[0].text).toContain('get_sports_settings');
+      // Verify structuredContent format
+      expect(result.structuredContent).toBeDefined();
+      expect(result.structuredContent.response).toBeDefined();
+      expect(typeof result.structuredContent.field_descriptions).toBe('object');
     });
   });
 

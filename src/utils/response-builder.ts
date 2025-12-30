@@ -99,25 +99,29 @@ export interface ResponseBuilderOptions {
   data: unknown;
   /** Field descriptions to help LLM understand the data */
   fieldDescriptions: Record<string, string>;
-  /** Suggested follow-up tools or actions */
-  nextActions?: string[];
-  /** Warnings or notes about the data (e.g., "Whoop data unavailable") */
-  warnings?: string[];
+}
+
+export interface StructuredToolResponse {
+  response: unknown;
+  field_descriptions: Record<string, string>;
+  [key: string]: unknown;
+}
+
+export interface ToolResponse {
+  content: Array<{ type: 'text'; text: string }>;
+  structuredContent: StructuredToolResponse;
+  [key: string]: unknown;
 }
 
 /**
- * Builds a tool response with contextual guidance.
+ * Builds a tool response with structuredContent for MCP.
  *
- * Response format:
- * - Warnings: Any issues or limitations
- * - Data: The actual JSON data
- * - Next Actions: Suggested follow-up tools
- * - Field Descriptions: Help for interpreting fields
+ * Returns both:
+ * - content: Serialized JSON text for backwards compatibility
+ * - structuredContent: Parsed JSON for modern MCP clients
  */
-export function buildToolResponse(options: ResponseBuilderOptions): {
-  content: Array<{ type: 'text'; text: string }>;
-} {
-  const { data, nextActions, warnings } = options;
+export function buildToolResponse(options: ResponseBuilderOptions): ToolResponse {
+  const { data } = options;
 
   // Remove null/undefined fields to reduce token usage
   const cleanedData = removeNullFields(data);
@@ -128,54 +132,40 @@ export function buildToolResponse(options: ResponseBuilderOptions): {
   // Enhance field descriptions with heat zones summary if heat data is present
   const fieldDescriptions = enhanceWithHeatZonesSummary(filteredDescriptions, cleanedData);
 
-  const parts: string[] = [];
-
-  // Add warnings if any
-  if (warnings && warnings.length > 0) {
-    parts.push('NOTES:');
-    for (const warning of warnings) {
-      parts.push(`  - ${warning}`);
-    }
-    parts.push('');
-  }
-
-  // Add the actual data
-  parts.push(JSON.stringify(cleanedData, null, 2));
-
-  // Add next action suggestions
-  if (nextActions && nextActions.length > 0) {
-    parts.push('');
-    parts.push('SUGGESTED NEXT ACTIONS:');
-    for (const action of nextActions) {
-      parts.push(`  - ${action}`);
-    }
-  }
-
-  // Add field descriptions at the end
-  parts.push('');
-  parts.push('FIELD DESCRIPTIONS:');
-  parts.push(JSON.stringify(fieldDescriptions, null, 2));
+  const structuredContent: StructuredToolResponse = {
+    response: cleanedData,
+    field_descriptions: fieldDescriptions,
+  };
 
   return {
-    content: [{ type: 'text' as const, text: parts.join('\n') }],
+    content: [{ type: 'text' as const, text: JSON.stringify(structuredContent, null, 2) }],
+    structuredContent,
   };
 }
 
-/**
- * Builds an empty result response with guidance.
- */
-export function buildEmptyResponse(
-  resourceType: string,
-  suggestion?: string
-): { content: Array<{ type: 'text'; text: string }> } {
-  const parts = [`No ${resourceType} found.`];
+export interface EmptyResponse {
+  response: { message: string };
+  field_descriptions: Record<string, string>;
+  [key: string]: unknown;
+}
 
-  if (suggestion) {
-    parts.push('');
-    parts.push(`Suggestion: ${suggestion}`);
-  }
+export interface EmptyToolResponse {
+  content: Array<{ type: 'text'; text: string }>;
+  structuredContent: EmptyResponse;
+  [key: string]: unknown;
+}
+
+/**
+ * Builds an empty result response with structuredContent.
+ */
+export function buildEmptyResponse(resourceType: string): EmptyToolResponse {
+  const structuredContent: EmptyResponse = {
+    response: { message: `No ${resourceType} found.` },
+    field_descriptions: {},
+  };
 
   return {
-    content: [{ type: 'text' as const, text: parts.join('\n') }],
+    content: [{ type: 'text' as const, text: JSON.stringify(structuredContent, null, 2) }],
+    structuredContent,
   };
 }
