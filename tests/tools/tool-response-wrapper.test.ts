@@ -196,13 +196,13 @@ describe('Tool Response Wrapper', () => {
     });
 
     it('should handle DateParseError with helpful message', () => {
-      const dateError = new DateParseError('invalid date input', 'start_date');
+      const dateError = new DateParseError('invalid date input', 'oldest');
 
       expect(dateError.isRetryable).toBe(false);
       expect(dateError.category).toBe('date_parse');
-      expect(dateError.parameterName).toBe('start_date');
+      expect(dateError.parameterName).toBe('oldest');
       expect(dateError.input).toBe('invalid date input');
-      expect(dateError.message).toContain('start_date');
+      expect(dateError.message).toContain('oldest');
       expect(dateError.message).toContain('invalid date input');
     });
 

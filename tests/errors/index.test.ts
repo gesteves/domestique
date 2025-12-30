@@ -74,35 +74,35 @@ describe('Error Classes', () => {
 
   describe('DateParseError', () => {
     it('should create a date parse error with input and parameter name', () => {
-      const error = new DateParseError('invalid date', 'start_date');
+      const error = new DateParseError('invalid date', 'oldest');
 
       expect(error).toBeInstanceOf(Error);
       expect(error).toBeInstanceOf(ApiError);
       expect(error).toBeInstanceOf(DateParseError);
       expect(error.input).toBe('invalid date');
-      expect(error.parameterName).toBe('start_date');
+      expect(error.parameterName).toBe('oldest');
       expect(error.category).toBe('date_parse');
       expect(error.isRetryable).toBe(false);
       expect(error.source).toBe('date_parser');
     });
 
     it('should include input and parameter name in message', () => {
-      const error = new DateParseError('invalid input', 'end_date');
+      const error = new DateParseError('invalid input', 'newest');
 
       expect(error.message).toContain('invalid input');
-      expect(error.message).toContain('end_date');
+      expect(error.message).toContain('newest');
     });
 
     it('should include helpful format examples in message', () => {
-      const error = new DateParseError('bad date', 'start_date');
+      const error = new DateParseError('bad date', 'oldest');
       expect(error.message).toContain('2024-12-25');
       expect(error.message).toContain('yesterday');
       expect(error.message).toContain('7 days ago');
     });
 
     it('should generate what happened description', () => {
-      const error = new DateParseError('invalid', 'start_date');
-      expect(error.getWhatHappened()).toContain('start_date');
+      const error = new DateParseError('invalid', 'oldest');
+      expect(error.getWhatHappened()).toContain('oldest');
       expect(error.getWhatHappened()).toContain("couldn't be parsed");
     });
 

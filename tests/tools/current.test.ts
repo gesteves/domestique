@@ -304,22 +304,22 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue(mockStrain);
 
       const result = await tools.getStrainHistory({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       expect(result).toEqual(mockStrain);
       expect(mockWhoopClient.getStrainData).toHaveBeenCalledWith('2024-12-01', '2024-12-15');
     });
 
-    it('should default end_date to today using athlete timezone', async () => {
+    it('should default newest to today using athlete timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
 
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
       vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue(mockStrain);
 
-      await tools.getStrainHistory({ start_date: '2024-12-01' });
+      await tools.getStrainHistory({ oldest: '2024-12-01' });
 
       expect(mockWhoopClient.getStrainData).toHaveBeenCalledWith('2024-12-01', '2024-12-15');
 
@@ -333,7 +333,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Denver');
       vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue(mockStrain);
 
-      await tools.getStrainHistory({ start_date: 'yesterday' });
+      await tools.getStrainHistory({ oldest: 'yesterday' });
 
       // Yesterday in America/Denver when it's 12:00 UTC on Dec 15
       // Denver is UTC-7, so local time is 05:00 on Dec 15, yesterday is Dec 14
@@ -346,8 +346,8 @@ describe('CurrentTools', () => {
       const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
 
       const result = await toolsWithoutWhoop.getStrainHistory({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       expect(result).toEqual([]);

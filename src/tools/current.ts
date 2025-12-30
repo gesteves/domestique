@@ -178,9 +178,9 @@ export class CurrentTools {
 
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
-    const startDate = parseDateStringInTimezone(params.start_date, timezone, 'start_date');
-    const endDate = params.end_date
-      ? parseDateStringInTimezone(params.end_date, timezone, 'end_date')
+    const startDate = parseDateStringInTimezone(params.oldest, timezone, 'oldest');
+    const endDate = params.newest
+      ? parseDateStringInTimezone(params.newest, timezone, 'newest')
       : getTodayInTimezone(timezone);
 
     try {

@@ -13,19 +13,19 @@ export const SportFilterSchema = z
 
 // Tool parameter schemas
 export const GetStrainHistoryParams = z.object({
-  start_date: DateParamSchema.describe('Start date for the query'),
-  end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
+  oldest: DateParamSchema.describe('Start date for the query'),
+  newest: DateParamSchema.optional().describe('End date (defaults to today)'),
 });
 
 export const GetWorkoutHistoryParams = z.object({
-  start_date: DateParamSchema.describe('Start date for the query'),
-  end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
+  oldest: DateParamSchema.describe('Start date for the query'),
+  newest: DateParamSchema.optional().describe('End date (defaults to today)'),
   sport: SportFilterSchema,
 });
 
 export const GetRecoveryTrendsParams = z.object({
-  start_date: DateParamSchema.describe('Start date for the query'),
-  end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
+  oldest: DateParamSchema.describe('Start date for the query'),
+  newest: DateParamSchema.optional().describe('End date (defaults to today)'),
 });
 
 export const GetUpcomingWorkoutsParams = z.object({
@@ -43,8 +43,8 @@ export const GetPlannedWorkoutDetailsParams = z.object({
 });
 
 export const GetActivityTotalsParams = z.object({
-  start_date: DateParamSchema.describe('Start date for the query (e.g., "365 days ago", "2024-01-01")'),
-  end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
+  oldest: DateParamSchema.describe('Start date for the query (e.g., "365 days ago", "2024-01-01")'),
+  newest: DateParamSchema.optional().describe('End date (defaults to today)'),
   sports: z
     .array(z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']))
     .optional()

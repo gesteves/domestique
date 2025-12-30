@@ -84,8 +84,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue(mockWhoopActivities);
 
       const result = await tools.getWorkoutHistory({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       expect(result).toHaveLength(2);
@@ -106,7 +106,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       await tools.getWorkoutHistory({
-        start_date: '30 days ago',
+        oldest: '30 days ago',
       });
 
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
@@ -116,12 +116,12 @@ describe('HistoricalTools', () => {
       );
     });
 
-    it('should default end_date to today', async () => {
+    it('should default newest to today', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       await tools.getWorkoutHistory({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
       });
 
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
@@ -136,7 +136,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       await tools.getWorkoutHistory({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
         sport: 'cycling',
       });
 
@@ -152,7 +152,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
 
       const result = await toolsWithoutWhoop.getWorkoutHistory({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
       });
 
       expect(result).toHaveLength(2);
@@ -268,8 +268,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockWhoopClient.getRecoveries).mockResolvedValue(mockRecoveries);
 
       const result = await tools.getRecoveryTrends({
-        start_date: '2024-12-13',
-        end_date: '2024-12-15',
+        oldest: '2024-12-13',
+        newest: '2024-12-15',
       });
 
       expect(result.data).toEqual(mockRecoveries);
@@ -284,7 +284,7 @@ describe('HistoricalTools', () => {
       const toolsWithoutWhoop = new HistoricalTools(mockIntervalsClient, null);
 
       const result = await toolsWithoutWhoop.getRecoveryTrends({
-        start_date: '2024-12-13',
+        oldest: '2024-12-13',
       });
 
       expect(result.data).toEqual([]);
@@ -295,7 +295,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockWhoopClient.getRecoveries).mockResolvedValue([]);
 
       const result = await tools.getRecoveryTrends({
-        start_date: '2024-12-13',
+        oldest: '2024-12-13',
       });
 
       expect(result.data).toEqual([]);
@@ -309,8 +309,8 @@ describe('HistoricalTools', () => {
     // Full wellness data (as returned from API)
     const mockWellnessTrendsFull: WellnessTrends = {
       period_days: 7,
-      start_date: '2024-12-08',
-      end_date: '2024-12-15',
+      oldest: '2024-12-08',
+      newest: '2024-12-15',
       data: [
         {
           date: '2024-12-08',
@@ -366,8 +366,8 @@ describe('HistoricalTools', () => {
     // Expected filtered wellness (Whoop-duplicate fields removed)
     const mockWellnessTrendsFiltered: WellnessTrends = {
       period_days: 7,
-      start_date: '2024-12-08',
-      end_date: '2024-12-15',
+      oldest: '2024-12-08',
+      newest: '2024-12-15',
       data: [
         {
           date: '2024-12-08',
@@ -400,8 +400,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       const result = await tools.getWellnessTrends({
-        start_date: '2024-12-08',
-        end_date: '2024-12-15',
+        oldest: '2024-12-08',
+        newest: '2024-12-15',
       });
 
       // Whoop-duplicate fields are filtered when Whoop is connected
@@ -415,8 +415,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       const result = await tools.getWellnessTrends({
-        start_date: '2024-12-08',
-        end_date: '2024-12-15',
+        oldest: '2024-12-08',
+        newest: '2024-12-15',
       });
 
       const firstEntry = result.data[0];
@@ -441,8 +441,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       const result = await toolsWithoutWhoop.getWellnessTrends({
-        start_date: '2024-12-08',
-        end_date: '2024-12-15',
+        oldest: '2024-12-08',
+        newest: '2024-12-15',
       });
 
       // Full wellness data when Whoop is not connected
@@ -456,17 +456,17 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       await tools.getWellnessTrends({
-        start_date: '7 days ago',
+        oldest: '7 days ago',
       });
 
       expect(mockIntervalsClient.getWellnessTrends).toHaveBeenCalledWith('2024-12-08', '2024-12-15');
     });
 
-    it('should default end_date to today', async () => {
+    it('should default newest to today', async () => {
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(mockWellnessTrendsFull);
 
       await tools.getWellnessTrends({
-        start_date: '2024-12-08',
+        oldest: '2024-12-08',
       });
 
       expect(mockIntervalsClient.getWellnessTrends).toHaveBeenCalledWith('2024-12-08', '2024-12-15');
@@ -475,14 +475,14 @@ describe('HistoricalTools', () => {
     it('should handle empty wellness data', async () => {
       const emptyTrends: WellnessTrends = {
         period_days: 7,
-        start_date: '2024-12-08',
-        end_date: '2024-12-15',
+        oldest: '2024-12-08',
+        newest: '2024-12-15',
         data: [],
       };
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(emptyTrends);
 
       const result = await tools.getWellnessTrends({
-        start_date: '2024-12-08',
+        oldest: '2024-12-08',
       });
 
       expect(result.data).toEqual([]);
@@ -493,8 +493,8 @@ describe('HistoricalTools', () => {
       // When entries only have Whoop-duplicate fields, they should be filtered out entirely
       const partialTrends: WellnessTrends = {
         period_days: 3,
-        start_date: '2024-12-13',
-        end_date: '2024-12-15',
+        oldest: '2024-12-13',
+        newest: '2024-12-15',
         data: [
           { date: '2024-12-13', weight: '74.2 kg' },
           { date: '2024-12-14', resting_hr: 53, hrv: 40.2 }, // Only Whoop-duplicate fields
@@ -504,8 +504,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(partialTrends);
 
       const result = await tools.getWellnessTrends({
-        start_date: '2024-12-13',
-        end_date: '2024-12-15',
+        oldest: '2024-12-13',
+        newest: '2024-12-15',
       });
 
       // Entry with only Whoop-duplicate fields is filtered out
@@ -675,8 +675,8 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getPowerCurve({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       expect(result.period_start).toBe('2024-12-01');
@@ -696,7 +696,7 @@ describe('HistoricalTools', () => {
       });
 
       await tools.getPowerCurve({
-        start_date: '90 days ago',
+        oldest: '90 days ago',
       });
 
       expect(mockIntervalsClient.getPowerCurves).toHaveBeenCalledWith(
@@ -714,7 +714,7 @@ describe('HistoricalTools', () => {
       });
 
       await tools.getPowerCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
         durations: [10, 120],
       });
 
@@ -747,10 +747,10 @@ describe('HistoricalTools', () => {
         });
 
       const result = await tools.getPowerCurve({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
-        compare_to_start: '2024-11-01',
-        compare_to_end: '2024-11-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
+        compare_to_oldest: '2024-11-01',
+        compare_to_newest: '2024-11-15',
       });
 
       expect(result.comparison).toBeDefined();
@@ -767,7 +767,7 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getPowerCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
       });
 
       expect(result.activity_count).toBe(0);
@@ -799,7 +799,7 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getPaceCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
         sport: 'running',
       });
 
@@ -831,7 +831,7 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getPaceCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
         sport: 'swimming',
       });
 
@@ -850,7 +850,7 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getPaceCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
         sport: 'running',
         gap: true,
       });
@@ -887,10 +887,10 @@ describe('HistoricalTools', () => {
         });
 
       const result = await tools.getPaceCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
         sport: 'running',
-        compare_to_start: '2024-11-01',
-        compare_to_end: '2024-11-15',
+        compare_to_oldest: '2024-11-01',
+        compare_to_newest: '2024-11-15',
       });
 
       expect(result.comparison).toBeDefined();
@@ -922,7 +922,7 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getHRCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
       });
 
       expect(result.period_start).toBe('2024-12-01');
@@ -938,7 +938,7 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getHRCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
         sport: 'cycling',
       });
 
@@ -971,9 +971,9 @@ describe('HistoricalTools', () => {
         });
 
       const result = await tools.getHRCurve({
-        start_date: '2024-12-01',
-        compare_to_start: '2024-11-01',
-        compare_to_end: '2024-11-15',
+        oldest: '2024-12-01',
+        compare_to_oldest: '2024-11-01',
+        compare_to_newest: '2024-11-15',
       });
 
       expect(result.comparison).toBeDefined();
@@ -987,7 +987,7 @@ describe('HistoricalTools', () => {
       });
 
       const result = await tools.getHRCurve({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
       });
 
       expect(result.activity_count).toBe(0);
@@ -1012,7 +1012,7 @@ describe('HistoricalTools', () => {
 
       // Should not throw, just return workouts without Whoop data
       const result = await tools.getWorkoutHistory({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
       });
 
       expect(result).toHaveLength(1);
@@ -1094,8 +1094,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
 
       const result = await tools.getActivityTotals({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       expect(result.period.start_date).toBe('2024-12-01');
@@ -1137,8 +1137,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
 
       const result = await tools.getActivityTotals({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
         sports: ['cycling'],
       });
 
@@ -1151,7 +1151,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
 
       await tools.getActivityTotals({
-        start_date: '30 days ago',
+        oldest: '30 days ago',
       });
 
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
@@ -1162,11 +1162,11 @@ describe('HistoricalTools', () => {
       );
     });
 
-    it('should default end_date to today', async () => {
+    it('should default newest to today', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
 
       await tools.getActivityTotals({
-        start_date: '2024-12-01',
+        oldest: '2024-12-01',
       });
 
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
@@ -1181,8 +1181,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
 
       const result = await tools.getActivityTotals({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       expect(result.totals.activities).toBe(0);
@@ -1197,8 +1197,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
 
       const result = await tools.getActivityTotals({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       // Check cycling power zones
@@ -1225,8 +1225,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
 
       const result = await tools.getActivityTotals({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       // Cycling should have coasting
@@ -1254,8 +1254,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(swimmingActivities);
 
       const result = await tools.getActivityTotals({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
       });
 
       // Swimming distance should be in meters
@@ -1266,8 +1266,8 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
 
       const result = await tools.getActivityTotals({
-        start_date: '2024-12-01',
-        end_date: '2024-12-15',
+        oldest: '2024-12-01',
+        newest: '2024-12-15',
         sports: ['cycling', 'running'],
       });
 

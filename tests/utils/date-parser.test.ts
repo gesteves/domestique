@@ -111,14 +111,14 @@ describe('date-parser', () => {
 
     it('should include parameter name in DateParseError', () => {
       try {
-        parseDateString('invalid', 'start_date');
+        parseDateString('invalid', 'oldest');
         expect.fail('Should have thrown DateParseError');
       } catch (error) {
         expect(error).toBeInstanceOf(DateParseError);
         const dateError = error as DateParseError;
-        expect(dateError.parameterName).toBe('start_date');
+        expect(dateError.parameterName).toBe('oldest');
         expect(dateError.input).toBe('invalid');
-        expect(dateError.message).toContain('start_date');
+        expect(dateError.message).toContain('oldest');
       }
     });
 
