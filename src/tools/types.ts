@@ -47,9 +47,19 @@ export const GetPlannedWorkoutDetailsParams = z.object({
     .describe('Filter by sport type (e.g., "cycling" for bike workouts)'),
 });
 
+export const GetActivityTotalsParams = z.object({
+  start_date: DateParamSchema.describe('Start date for the query (e.g., "365 days ago", "2024-01-01")'),
+  end_date: DateParamSchema.optional().describe('End date (defaults to today)'),
+  sports: z
+    .array(z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']))
+    .optional()
+    .describe('Filter to specific sports. If blank, returns all sports.'),
+});
+
 // Type exports
 export type GetStrainHistoryInput = z.infer<typeof GetStrainHistoryParams>;
 export type GetWorkoutHistoryInput = z.infer<typeof GetWorkoutHistoryParams>;
 export type GetRecoveryTrendsInput = z.infer<typeof GetRecoveryTrendsParams>;
 export type GetUpcomingWorkoutsInput = z.infer<typeof GetUpcomingWorkoutsParams>;
 export type GetPlannedWorkoutDetailsInput = z.infer<typeof GetPlannedWorkoutDetailsParams>;
+export type GetActivityTotalsInput = z.infer<typeof GetActivityTotalsParams>;

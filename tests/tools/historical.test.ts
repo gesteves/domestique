@@ -1019,4 +1019,270 @@ describe('HistoricalTools', () => {
       expect(result[0].whoop).toBeNull();
     });
   });
+
+  describe('getActivityTotals', () => {
+    const mockActivities: NormalizedWorkout[] = [
+      {
+        id: '1',
+        start_time: '2024-12-10T10:00:00+00:00',
+        activity_type: 'Cycling',
+        duration: '2:00:00',
+        distance: '60.5 km',
+        elevation_gain: '800 m',
+        tss: 120,
+        calories: 1200,
+        work_kj: 1500,
+        coasting_time: '0:15:00',
+        source: 'intervals.icu',
+        hr_zones: [
+          { name: 'Recovery', low_bpm: 0, high_bpm: 120, time_in_zone: '0:30:00' },
+          { name: 'Endurance', low_bpm: 120, high_bpm: 145, time_in_zone: '1:00:00' },
+          { name: 'Tempo', low_bpm: 145, high_bpm: 160, time_in_zone: '0:30:00' },
+        ],
+        power_zones: [
+          { name: 'Recovery', low_percent: 0, high_percent: 55, low_watts: 0, high_watts: 140, time_in_zone: '0:20:00' },
+          { name: 'Endurance', low_percent: 55, high_percent: 75, low_watts: 140, high_watts: 190, time_in_zone: '1:10:00' },
+          { name: 'Tempo', low_percent: 75, high_percent: 90, low_watts: 190, high_watts: 230, time_in_zone: '0:30:00' },
+        ],
+      },
+      {
+        id: '2',
+        start_time: '2024-12-12T08:00:00+00:00',
+        activity_type: 'Running',
+        duration: '0:45:00',
+        distance: '8.5 km',
+        elevation_gain: '100 m',
+        tss: 60,
+        calories: 500,
+        work_kj: 0,
+        source: 'intervals.icu',
+        hr_zones: [
+          { name: 'Recovery', low_bpm: 0, high_bpm: 130, time_in_zone: '0:10:00' },
+          { name: 'Endurance', low_bpm: 130, high_bpm: 155, time_in_zone: '0:35:00' },
+        ],
+        pace_zones: [
+          { name: 'Recovery', low_percent: 0, high_percent: 75, slow_pace: '6:00/km', fast_pace: '5:20/km', time_in_zone: '0:15:00' },
+          { name: 'Endurance', low_percent: 75, high_percent: 90, slow_pace: '5:20/km', fast_pace: '4:40/km', time_in_zone: '0:30:00' },
+        ],
+      },
+      {
+        id: '3',
+        start_time: '2024-12-13T09:00:00+00:00',
+        activity_type: 'Cycling',
+        duration: '1:30:00',
+        distance: '45.0 km',
+        elevation_gain: '600 m',
+        tss: 90,
+        calories: 900,
+        work_kj: 1100,
+        coasting_time: '0:10:00',
+        source: 'intervals.icu',
+        hr_zones: [
+          { name: 'Recovery', low_bpm: 0, high_bpm: 120, time_in_zone: '0:20:00' },
+          { name: 'Endurance', low_bpm: 120, high_bpm: 145, time_in_zone: '0:50:00' },
+          { name: 'Tempo', low_bpm: 145, high_bpm: 160, time_in_zone: '0:20:00' },
+        ],
+        power_zones: [
+          { name: 'Recovery', low_percent: 0, high_percent: 55, low_watts: 0, high_watts: 140, time_in_zone: '0:15:00' },
+          { name: 'Endurance', low_percent: 55, high_percent: 75, low_watts: 140, high_watts: 190, time_in_zone: '0:55:00' },
+          { name: 'Tempo', low_percent: 75, high_percent: 90, low_watts: 190, high_watts: 230, time_in_zone: '0:20:00' },
+        ],
+      },
+    ];
+
+    it('should aggregate activity totals for a date range', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
+
+      const result = await tools.getActivityTotals({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+      });
+
+      expect(result.period.start_date).toBe('2024-12-01');
+      expect(result.period.end_date).toBe('2024-12-15');
+      expect(result.period.days).toBe(15);
+      expect(result.period.active_days).toBe(3); // 3 unique dates
+      expect(result.period.weeks).toBe(3);
+
+      // Check totals
+      expect(result.totals.activities).toBe(3);
+      expect(result.totals.duration).toBe('4:15:00'); // 2:00 + 0:45 + 1:30
+      expect(result.totals.distance).toBe('114 km'); // 60.5 + 8.5 + 45 = 114
+      expect(result.totals.climbing).toBe('1500 m'); // 800 + 100 + 600
+      expect(result.totals.load).toBe(270); // 120 + 60 + 90
+      expect(result.totals.kcal).toBe(2600); // 1200 + 500 + 900
+      expect(result.totals.work).toBe('2600 kJ'); // 1500 + 0 + 1100
+      expect(result.totals.coasting).toBe('0:25:00'); // 0:15 + 0:10
+
+      // Check HR zones are aggregated
+      expect(result.totals.zones.heart_rate).toBeDefined();
+      expect(result.totals.zones.heart_rate!.length).toBeGreaterThan(0);
+
+      // Check by_sport breakdown
+      expect(result.by_sport.cycling).toBeDefined();
+      expect(result.by_sport.running).toBeDefined();
+      expect(result.by_sport.cycling.activities).toBe(2);
+      expect(result.by_sport.running.activities).toBe(1);
+
+      // Verify skipExpensiveCalls was passed
+      expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
+        '2024-12-01',
+        '2024-12-15',
+        undefined,
+        { skipExpensiveCalls: true }
+      );
+    });
+
+    it('should filter by sports', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
+
+      const result = await tools.getActivityTotals({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+        sports: ['cycling'],
+      });
+
+      expect(result.totals.activities).toBe(2); // Only cycling activities
+      expect(result.by_sport.cycling).toBeDefined();
+      expect(result.by_sport.running).toBeUndefined();
+    });
+
+    it('should parse natural language dates', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+
+      await tools.getActivityTotals({
+        start_date: '30 days ago',
+      });
+
+      expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
+        '2024-11-15',
+        '2024-12-15',
+        undefined,
+        { skipExpensiveCalls: true }
+      );
+    });
+
+    it('should default end_date to today', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+
+      await tools.getActivityTotals({
+        start_date: '2024-12-01',
+      });
+
+      expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
+        '2024-12-01',
+        '2024-12-15',
+        undefined,
+        { skipExpensiveCalls: true }
+      );
+    });
+
+    it('should handle empty activities', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+
+      const result = await tools.getActivityTotals({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+      });
+
+      expect(result.totals.activities).toBe(0);
+      expect(result.totals.duration).toBe('0:00:00');
+      expect(result.totals.distance).toBe('0 km');
+      expect(result.totals.load).toBe(0);
+      expect(result.period.active_days).toBe(0);
+      expect(Object.keys(result.by_sport)).toHaveLength(0);
+    });
+
+    it('should calculate zone percentages correctly', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
+
+      const result = await tools.getActivityTotals({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+      });
+
+      // Check cycling power zones
+      const cyclingPowerZones = result.by_sport.cycling.zones.power;
+      expect(cyclingPowerZones).toBeDefined();
+      expect(cyclingPowerZones!.length).toBe(3);
+
+      // Total power zone time: (20+15) + (70+55) + (30+20) = 35 + 125 + 50 = 210 min = 3:30:00
+      // Recovery: 35/210 = 16.7%
+      // Endurance: 125/210 = 59.5%
+      // Tempo: 50/210 = 23.8%
+      const recoveryZone = cyclingPowerZones!.find((z) => z.name === 'Recovery');
+      expect(recoveryZone).toBeDefined();
+      expect(recoveryZone!.time).toBe('0:35:00');
+      expect(recoveryZone!.percentage).toBeCloseTo(16.7, 0);
+
+      // Check running pace zones
+      const runningPaceZones = result.by_sport.running.zones.pace;
+      expect(runningPaceZones).toBeDefined();
+      expect(runningPaceZones!.length).toBe(2);
+    });
+
+    it('should include coasting only for cycling', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
+
+      const result = await tools.getActivityTotals({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+      });
+
+      // Cycling should have coasting
+      expect(result.by_sport.cycling.coasting).toBe('0:25:00');
+
+      // Running should not have coasting
+      expect(result.by_sport.running.coasting).toBeUndefined();
+    });
+
+    it('should format swimming distance in meters', async () => {
+      const swimmingActivities: NormalizedWorkout[] = [
+        {
+          id: '4',
+          start_time: '2024-12-14T07:00:00+00:00',
+          activity_type: 'Swimming',
+          duration: '0:30:00',
+          distance: '1500 m',
+          elevation_gain: '0 m',
+          tss: 40,
+          calories: 300,
+          source: 'intervals.icu',
+        },
+      ];
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(swimmingActivities);
+
+      const result = await tools.getActivityTotals({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+      });
+
+      // Swimming distance should be in meters
+      expect(result.by_sport.swimming.distance).toBe('1500 m');
+    });
+
+    it('should aggregate multiple sports correctly', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockActivities);
+
+      const result = await tools.getActivityTotals({
+        start_date: '2024-12-01',
+        end_date: '2024-12-15',
+        sports: ['cycling', 'running'],
+      });
+
+      expect(result.totals.activities).toBe(3);
+      expect(Object.keys(result.by_sport)).toHaveLength(2);
+
+      // Cycling totals
+      expect(result.by_sport.cycling.activities).toBe(2);
+      expect(result.by_sport.cycling.duration).toBe('3:30:00'); // 2:00 + 1:30
+      expect(result.by_sport.cycling.distance).toBe('106 km'); // 60.5 + 45 = 105.5, rounds to 106
+
+      // Running totals
+      expect(result.by_sport.running.activities).toBe(1);
+      expect(result.by_sport.running.duration).toBe('0:45:00');
+      expect(result.by_sport.running.distance).toBe('9 km'); // 8.5, rounds to 9
+    });
+  });
 });

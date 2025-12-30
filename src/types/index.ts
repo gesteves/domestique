@@ -1110,3 +1110,97 @@ export interface HRCurvesResponse {
     changes: HRCurveComparison[];
   };
 }
+
+// ============================================
+// Activity Totals
+// ============================================
+
+/**
+ * Zone entry with name, time, and percentage.
+ */
+export interface ZoneTotalEntry {
+  /** Zone name (e.g., "Recovery", "Endurance", "Tempo", "Sweet Spot") */
+  name: string;
+  /** Total time spent in this zone (e.g., "282:38:00") */
+  time: string;
+  /** Percentage of total time in this zone */
+  percentage: number;
+}
+
+/**
+ * Sport-specific totals.
+ */
+export interface SportTotals {
+  /** Number of activities for this sport */
+  activities: number;
+  /** Total duration for this sport (e.g., "396:34:00") */
+  duration: string;
+  /** Total distance for this sport (e.g., "12945 km" or "35 km" for swimming) */
+  distance: string;
+  /** Total climbing for this sport (e.g., "93782 m"). Only present if > 0. */
+  climbing?: string;
+  /** Total training load (TSS) for this sport */
+  load: number;
+  /** Total calories burned for this sport */
+  kcal: number;
+  /** Total work done for this sport (e.g., "308364 kJ"). Only present if > 0. */
+  work?: string;
+  /** Total coasting/recovery time (cycling only) */
+  coasting?: string;
+  /** Zone distributions for this sport */
+  zones: {
+    /** Power zone distribution (if available for this sport) */
+    power?: ZoneTotalEntry[];
+    /** Pace zone distribution (if available for this sport) */
+    pace?: ZoneTotalEntry[];
+    /** Heart rate zone distribution */
+    heart_rate?: ZoneTotalEntry[];
+  };
+}
+
+/**
+ * Activity totals response.
+ */
+export interface ActivityTotalsResponse {
+  /** Time period analyzed */
+  period: {
+    /** Start date of the period (YYYY-MM-DD) */
+    start_date: string;
+    /** End date of the period (YYYY-MM-DD) */
+    end_date: string;
+    /** Number of weeks in the period */
+    weeks: number;
+    /** Total days in the period */
+    days: number;
+    /** Days with at least one activity */
+    active_days: number;
+  };
+  /** Aggregated totals across all activities */
+  totals: {
+    /** Total number of activities */
+    activities: number;
+    /** Total moving time across all activities (e.g., "508:30:00") */
+    duration: string;
+    /** Total distance covered (e.g., "13979 km") */
+    distance: string;
+    /** Total elevation gain (e.g., "93782 m"). Only present if > 0. */
+    climbing?: string;
+    /** Total training load (TSS) */
+    load: number;
+    /** Total calories burned */
+    kcal: number;
+    /** Total work done in kilojoules (e.g., "308364 kJ"). Only present if > 0. */
+    work?: string;
+    /** Total coasting/recovery time (e.g., "3:45:00") */
+    coasting: string;
+    /** Combined zone data across all sports */
+    zones: {
+      /** Combined heart rate zone times across all sports */
+      heart_rate?: ZoneTotalEntry[];
+    };
+  };
+  /** Breakdown by sport type */
+  by_sport: {
+    [sport: string]: SportTotals;
+  };
+}

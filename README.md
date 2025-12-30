@@ -33,6 +33,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_workout_history` - Historical workouts with matched Whoop strain data
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time
 - `get_wellness_trends` - Wellness data trends (weight) over a date range
+- `get_activity_totals` - Aggregated activity totals over a date range, including duration, distance, training load, and zone distributions by sport
 
 ### Planning
 - `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
@@ -290,3 +291,5 @@ Once connected, you can ask Claude:
 - "What's my FTP?"
 - "What are my running zones?"
 - "How has my weight changed over the last 30 days?"
+- "What are my swimming, cycling and running totals for the past month?"
+- "How much time did I spend in each power zone this month?"

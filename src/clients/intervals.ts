@@ -1053,7 +1053,8 @@ export class IntervalsClient {
   async getActivities(
     startDate: string,
     endDate: string,
-    sport?: string
+    sport?: string,
+    options?: { skipExpensiveCalls?: boolean }
   ): Promise<NormalizedWorkout[]> {
     const activities = await this.fetch<IntervalsActivity[]>('/activities', {
       oldest: startDate,
@@ -1068,7 +1069,11 @@ export class IntervalsClient {
       );
     }
 
-    return Promise.all(filtered.map((a) => this.normalizeActivity(a)));
+    // Pre-fetch sport settings to populate cache before parallel normalization
+    // This avoids a race condition where all normalizeActivity calls try to fetch at once
+    await this.getSportSettings();
+
+    return Promise.all(filtered.map((a) => this.normalizeActivity(a, options)));
   }
 
   /**
@@ -1697,7 +1702,10 @@ export class IntervalsClient {
     };
   }
 
-  private async normalizeActivity(activity: IntervalsActivity): Promise<NormalizedWorkout> {
+  private async normalizeActivity(
+    activity: IntervalsActivity,
+    options?: { skipExpensiveCalls?: boolean }
+  ): Promise<NormalizedWorkout> {
     // Check if this is a Strava-only workout that's not available via the API
     const isStravaOnly = activity.source === 'STRAVA' && activity._note !== undefined;
 
@@ -1788,25 +1796,30 @@ export class IntervalsClient {
     );
 
     // Fetch heat metrics from stream data only if heat_strain_index stream is available
+    // Skip if skipExpensiveCalls is true (for bulk operations like activity totals)
     let heatMetrics = null;
-    if (activity.stream_types?.includes('heat_strain_index')) {
+    if (!options?.skipExpensiveCalls && activity.stream_types?.includes('heat_strain_index')) {
       heatMetrics = await this.getActivityHeatMetrics(activity.id);
     }
 
     // Fetch temperature metrics from stream data only if temp stream is available
+    // Skip if skipExpensiveCalls is true (for bulk operations like activity totals)
     let tempMetrics = null;
-    if (activity.stream_types?.includes('temp')) {
+    if (!options?.skipExpensiveCalls && activity.stream_types?.includes('temp')) {
       tempMetrics = await this.getActivityTemperatureMetrics(activity.id);
     }
 
     // Fetch notes for this activity
+    // Skip if skipExpensiveCalls is true (for bulk operations like activity totals)
     let notes: WorkoutNote[] | undefined;
-    try {
-      const notesResponse = await this.getActivityNotes(activity.id);
-      notes = notesResponse.notes.length > 0 ? notesResponse.notes : undefined;
-    } catch (error) {
-      // Notes may not be available for this activity
-      notes = undefined;
+    if (!options?.skipExpensiveCalls) {
+      try {
+        const notesResponse = await this.getActivityNotes(activity.id);
+        notes = notesResponse.notes.length > 0 ? notesResponse.notes : undefined;
+      } catch (error) {
+        // Notes may not be available for this activity
+        notes = undefined;
+      }
     }
 
     // Get athlete timezone for formatting start_time

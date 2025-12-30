@@ -589,10 +589,15 @@ describe('IntervalsClient', () => {
     });
 
     it('should include correct authorization header', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([]),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve([]),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
 
       await client.getActivities('2024-12-14', '2024-12-15');
 
@@ -614,10 +619,15 @@ describe('IntervalsClient', () => {
     });
 
     it('should handle empty response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([]),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve([]),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 

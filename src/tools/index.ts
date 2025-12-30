@@ -465,6 +465,36 @@ and will not be updated throughout the day.
       )
     );
 
+    server.tool(
+      'get_activity_totals',
+      `Fetches aggregated activity totals over a date range, including duration, distance, training load, calories, and zone distributions.
+
+<use-cases>
+- Summarizing training volume and load over a specific period (e.g., last year, last 90 days).
+- Understanding how training time is distributed across different sports.
+- Analyzing zone distribution to ensure proper polarized or threshold training balance.
+- Comparing training metrics across different sports (cycling, running, swimming, etc.).
+- Getting a high-level overview of training patterns without individual workout details.
+</use-cases>
+
+<notes>
+- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("365 days ago", "last year", etc.)
+- Zone names come from the athlete's sport settings (e.g., "Recovery", "Endurance", "Tempo", "Sweet Spot").
+</notes>`,
+      {
+        start_date: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "365 days ago", "2024-01-01")'),
+        end_date: z.string().optional().describe('End date (defaults to today)'),
+        sports: z.array(z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength'])).optional().describe('Filter to specific sports. If blank, returns all sports.'),
+      },
+      withToolResponse(
+        'get_activity_totals',
+        async (args: { start_date: string; end_date?: string; sports?: ('cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength')[] }) => this.historicalTools.getActivityTotals(args),
+        {
+          fieldDescriptions: getFieldDescriptions('activity_totals'),
+        }
+      )
+    );
+
     // Planning Tools
     server.tool(
       'get_upcoming_workouts',

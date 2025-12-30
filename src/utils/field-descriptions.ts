@@ -572,6 +572,48 @@ export const TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS = {
   workouts: 'Array of planned workouts from TrainerRoad and Intervals.icu for today. Empty array if no workouts planned.',
 };
 
+export const ACTIVITY_TOTALS_FIELD_DESCRIPTIONS = {
+  // Period information
+  period: 'Time period analyzed',
+  'period.start_date': 'Start date of the period (YYYY-MM-DD)',
+  'period.end_date': 'End date of the period (YYYY-MM-DD)',
+  'period.weeks': 'Number of weeks in the period',
+  'period.days': 'Total days in the period',
+  'period.active_days': 'Days with at least one activity',
+
+  // Totals
+  totals: 'Aggregated totals across all activities',
+  'totals.activities': 'Total number of activities',
+  'totals.duration': 'Total moving time across all activities (e.g., "508:30:00")',
+  'totals.distance': 'Total distance covered (e.g., "13979 km")',
+  'totals.climbing': 'Total elevation gain (e.g., "93782 m")',
+  'totals.load': 'Total training load (TSS)',
+  'totals.kcal': 'Total calories burned',
+  'totals.work': 'Total work done in kilojoules (e.g., "308364 kJ")',
+  'totals.coasting': 'Total coasting/recovery time (e.g., "3:45:00")',
+  'totals.zones': 'Combined zone data across all sports',
+  'totals.zones.heart_rate': 'Combined heart rate zone times across all sports',
+
+  // By sport
+  by_sport: 'Breakdown by sport type',
+  'by_sport.*.activities': 'Number of activities for this sport',
+  'by_sport.*.duration': 'Total duration for this sport',
+  'by_sport.*.distance': 'Total distance for this sport',
+  'by_sport.*.climbing': 'Total climbing for this sport',
+  'by_sport.*.load': 'Total training load for this sport',
+  'by_sport.*.kcal': 'Calories burned for this sport',
+  'by_sport.*.work': 'Work done for this sport',
+  'by_sport.*.coasting': 'Total coasting time for this sport (cycling only)',
+  'by_sport.*.zones.power': 'Power zone distribution (if available for this sport)',
+  'by_sport.*.zones.pace': 'Pace zone distribution (if available for this sport)',
+  'by_sport.*.zones.heart_rate': 'Heart rate zone distribution',
+
+  // Zone entries
+  'zones.*.name': 'Name of the zone (e.g., "Recovery", "Endurance", "Tempo")',
+  'zones.*.time': 'Total time spent in this zone',
+  'zones.*.percentage': 'Percentage of total time in this zone',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
@@ -594,7 +636,8 @@ type FieldCategory =
   | 'todays_recovery'
   | 'todays_strain'
   | 'todays_completed_workouts'
-  | 'todays_planned_workouts';
+  | 'todays_planned_workouts'
+  | 'activity_totals';
 
 /**
  * Get descriptions for a specific category
@@ -645,6 +688,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return TODAYS_COMPLETED_WORKOUTS_FIELD_DESCRIPTIONS;
     case 'todays_planned_workouts':
       return TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS;
+    case 'activity_totals':
+      return ACTIVITY_TOTALS_FIELD_DESCRIPTIONS;
   }
 }
 

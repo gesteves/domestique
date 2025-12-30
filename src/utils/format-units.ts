@@ -84,3 +84,31 @@ export function parseDurationToHours(duration: string): number {
   }
   return 0;
 }
+
+/**
+ * Parse a duration string (h:mm:ss) back to seconds.
+ * @param duration String like "7:12:40" or "0:45:00"
+ * @returns Duration in seconds (e.g., 25960)
+ */
+export function parseDurationToSeconds(duration: string): number {
+  const parts = duration.split(':').map(Number);
+  if (parts.length === 3) {
+    const [h, m, s] = parts;
+    return h * 3600 + m * 60 + s;
+  }
+  return 0;
+}
+
+/**
+ * Format a large duration in seconds to human-readable string with total hours.
+ * Uses HHH:MM:SS format for durations that may span many hours.
+ * @param seconds Duration in seconds
+ * @returns Formatted string like "508:30:00" or "3:45:00"
+ */
+export function formatLargeDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.round(seconds % 60);
+
+  return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
