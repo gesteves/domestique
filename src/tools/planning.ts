@@ -1,7 +1,7 @@
 import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { parseDateString, getToday, parseDateStringInTimezone, getTodayInTimezone } from '../utils/date-parser.js';
+import { parseDateStringInTimezone } from '../utils/date-parser.js';
 import type { PlannedWorkout, ActivityType, Race } from '../types/index.js';
 import type {
   GetUpcomingWorkoutsInput,
@@ -18,16 +18,23 @@ export class PlanningTools {
    * Get upcoming planned workouts from both calendars
    */
   async getUpcomingWorkouts(params: GetUpcomingWorkoutsInput): Promise<PlannedWorkout[]> {
-    const { days, sport } = params;
+    const { oldest, newest, sport } = params;
 
     // Use athlete's timezone for date calculations
     const timezone = await this.intervals.getAthleteTimezone();
-    const todayStr = getTodayInTimezone(timezone);
-    const today = new Date(todayStr + 'T00:00:00');
-    const endDate = addDays(today, days);
 
-    const startDateStr = format(today, 'yyyy-MM-dd');
-    const endDateStr = format(endDate, 'yyyy-MM-dd');
+    // Parse the oldest date, defaulting to "today"
+    const startDateStr = parseDateStringInTimezone(oldest ?? 'today', timezone, 'oldest');
+
+    // Parse newest or default to 7 days from oldest
+    let endDateStr: string;
+    if (newest) {
+      endDateStr = parseDateStringInTimezone(newest, timezone, 'newest');
+    } else {
+      const startDate = new Date(startDateStr + 'T00:00:00');
+      const endDate = addDays(startDate, 7);
+      endDateStr = format(endDate, 'yyyy-MM-dd');
+    }
 
     // Fetch from both sources in parallel
     const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([

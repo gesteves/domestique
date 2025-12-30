@@ -29,13 +29,8 @@ export const GetRecoveryTrendsParams = z.object({
 });
 
 export const GetUpcomingWorkoutsParams = z.object({
-  days: z
-    .number()
-    .int()
-    .min(1)
-    .max(30)
-    .default(7)
-    .describe('Number of days ahead to look (default: 7, max: 30)'),
+  oldest: DateParamSchema.optional().describe('Start date - defaults to today. ISO format (YYYY-MM-DD) or natural language (e.g., "today", "tomorrow")'),
+  newest: DateParamSchema.optional().describe('End date - defaults to 7 days from oldest'),
   sport: SportFilterSchema,
 });
 

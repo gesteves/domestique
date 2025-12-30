@@ -509,15 +509,17 @@ and will not be updated throughout the day.
 </use-cases>
 
 <notes>
-- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("today", "tomorrow", "next Monday", etc.)
+- Scheduled workouts in a given day may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 </notes>`,
       {
-        days: z.number().optional().default(7).describe('Number of days ahead to look (default: 7, max: 30)'),
+        oldest: z.string().optional().describe('Start date (defaults to today) - ISO format (YYYY-MM-DD) or natural language (e.g., "today", "tomorrow")'),
+        newest: z.string().optional().describe('End date (defaults to 7 days from oldest)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
       withToolResponse(
         'get_upcoming_workouts',
-        async (args: { days?: number; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts({ days: args.days ?? 7, sport: args.sport }),
+        async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts(args),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
         }

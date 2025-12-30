@@ -69,7 +69,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ days: 7 });
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
       expect(result).toHaveLength(4);
     });
@@ -78,7 +78,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ days: 7 });
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
       const dates = result.map((w) => new Date(w.scheduled_for).getTime());
       for (let i = 1; i < dates.length; i++) {
@@ -98,7 +98,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([duplicateWorkout]);
 
-      const result = await tools.getUpcomingWorkouts({ days: 7 });
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
       expect(result).toHaveLength(2); // Only TR workouts, duplicate removed
       expect(result.find((w) => w.source === 'intervals.icu')).toBeUndefined();
@@ -108,7 +108,7 @@ describe('PlanningTools', () => {
       const toolsWithoutTr = new PlanningTools(mockIntervalsClient, null);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await toolsWithoutTr.getUpcomingWorkouts({ days: 7 });
+      const result = await toolsWithoutTr.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
       expect(result).toHaveLength(2);
     });
@@ -117,17 +117,55 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockRejectedValue(new Error('Failed'));
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ days: 7 });
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
       expect(result).toHaveLength(2);
     });
 
-    it('should use correct date range', async () => {
+    it('should use correct date range with oldest only (defaults to 7 days)', async () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      await tools.getUpcomingWorkouts({ days: 7 });
+      await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
+      expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
+        '2024-12-15',
+        '2024-12-22'
+      );
+    });
+
+    it('should use correct date range with both oldest and newest', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      await tools.getUpcomingWorkouts({ oldest: '2024-12-15', newest: '2024-12-31' });
+
+      expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
+        '2024-12-15',
+        '2024-12-31'
+      );
+    });
+
+    it('should parse natural language dates', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      await tools.getUpcomingWorkouts({ oldest: 'today', newest: 'next week' });
+
+      // System time is set to 2024-12-15, "next week" should resolve to 2024-12-22
+      expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
+        '2024-12-15',
+        '2024-12-22'
+      );
+    });
+
+    it('should default oldest to today when not provided', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      await tools.getUpcomingWorkouts({});
+
+      // System time is set to 2024-12-15, should default to today + 7 days
       expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
         '2024-12-15',
         '2024-12-22'
