@@ -108,7 +108,6 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
 
   max_heat_strain_index: 'Maximum Heat Strain Index (HSI) reached during the activity, recorded by a CORE body temperature sensor.',
   median_heat_strain_index: 'Median Heat Strain Index (HSI) throughout the activity, recorded by a CORE body temperature sensor.',
-  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
 
   // Ambient temperature data
   min_ambient_temperature: 'Minimum ambient temperature (water temperature for swimming, air temperature for other activities) during the activity in Celsius, recorded by the user\'s watch or bike computer.',
@@ -351,7 +350,6 @@ export const HEAT_ZONES_FIELD_DESCRIPTIONS = {
   heat_zones: WORKOUT_FIELD_DESCRIPTIONS.heat_zones,
   max_heat_strain_index: WORKOUT_FIELD_DESCRIPTIONS.max_heat_strain_index,
   median_heat_strain_index: WORKOUT_FIELD_DESCRIPTIONS.median_heat_strain_index,
-  heat_training_load: 'Heat Training Load (HTL) score from 0-10, measuring the contribution of this activity to heat adaptation. Note: This is an approximation based on CORE\'s published documentation; the exact proprietary formula is not publicly available.',
 };
 
 export const POWER_CURVE_FIELD_DESCRIPTIONS = {

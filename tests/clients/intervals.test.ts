@@ -1726,8 +1726,6 @@ describe('IntervalsClient', () => {
       expect(result?.zones[0].name).toBe('Zone 1: No Heat Strain');
       expect(result?.max_heat_strain_index).toBe(9.0);
       expect(result?.median_heat_strain_index).toBeGreaterThan(0);
-      expect(result?.heat_training_load).toBeGreaterThan(0);
-      expect(result?.heat_training_load).toBeLessThanOrEqual(10);
     });
 
     it('should return null when heat strain data is not available', async () => {
@@ -2184,7 +2182,6 @@ describe('IntervalsClient', () => {
       // Heat metrics should be present
       expect(result.max_heat_strain_index).toBeDefined();
       expect(result.median_heat_strain_index).toBeDefined();
-      expect(result.heat_training_load).toBeDefined();
 
       // Should have made 5 fetch calls (activity + sport-settings + heat streams + notes + profile)
       expect(mockFetch).toHaveBeenCalledTimes(5);
@@ -2234,7 +2231,6 @@ describe('IntervalsClient', () => {
       // Heat metrics should be undefined
       expect(result.max_heat_strain_index).toBeUndefined();
       expect(result.median_heat_strain_index).toBeUndefined();
-      expect(result.heat_training_load).toBeUndefined();
 
       // Should only have made 4 fetch calls (activity + sport-settings + notes + profile, no heat streams)
       expect(mockFetch).toHaveBeenCalledTimes(4);

@@ -1202,7 +1202,6 @@ export class IntervalsClient {
     zones: HeatZone[];
     max_heat_strain_index: number;
     median_heat_strain_index: number;
-    heat_training_load: number;
   } | null> {
     try {
       interface StreamData {
@@ -1923,7 +1922,6 @@ export class IntervalsClient {
       // Heat metrics
       max_heat_strain_index: heatMetrics?.max_heat_strain_index,
       median_heat_strain_index: heatMetrics?.median_heat_strain_index,
-      heat_training_load: heatMetrics?.heat_training_load,
 
       // Temperature metrics
       min_ambient_temperature: tempMetrics?.min_ambient_temperature,

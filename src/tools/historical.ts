@@ -287,7 +287,6 @@ export class HistoricalTools {
     heat_zones: HeatZone[] | null;
     max_heat_strain_index?: number;
     median_heat_strain_index?: number;
-    heat_training_load?: number;
   }> {
     try {
       const heatMetrics = await this.intervals.getActivityHeatMetrics(activityId);
@@ -302,7 +301,6 @@ export class HistoricalTools {
         heat_zones: heatMetrics.zones,
         max_heat_strain_index: heatMetrics.max_heat_strain_index,
         median_heat_strain_index: heatMetrics.median_heat_strain_index,
-        heat_training_load: heatMetrics.heat_training_load,
       };
     } catch (error) {
       console.error('Error fetching workout heat zones:', error);
