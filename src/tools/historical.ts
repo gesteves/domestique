@@ -71,7 +71,11 @@ export class HistoricalTools {
 
     try {
       // Fetch Intervals.icu activities
-      const workouts = await this.intervals.getActivities(startDate, endDate, params.sport);
+      // Use skipExpensiveCalls since historical queries can return many activities
+      // and per-activity API calls (heat zones, notes) would cause rate limiting
+      const workouts = await this.intervals.getActivities(startDate, endDate, params.sport, {
+        skipExpensiveCalls: true,
+      });
 
       // If no Whoop client, return workouts without Whoop data
       if (!this.whoop) {

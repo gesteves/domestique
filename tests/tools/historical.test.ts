@@ -97,7 +97,8 @@ describe('HistoricalTools', () => {
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
         '2024-12-15',
-        undefined
+        undefined,
+        { skipExpensiveCalls: true }
       );
     });
 
@@ -112,7 +113,8 @@ describe('HistoricalTools', () => {
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-11-15',
         '2024-12-15',
-        undefined
+        undefined,
+        { skipExpensiveCalls: true }
       );
     });
 
@@ -127,7 +129,8 @@ describe('HistoricalTools', () => {
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
         '2024-12-15',
-        undefined
+        undefined,
+        { skipExpensiveCalls: true }
       );
     });
 
@@ -143,7 +146,8 @@ describe('HistoricalTools', () => {
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
         '2024-12-15',
-        'cycling'
+        'cycling',
+        { skipExpensiveCalls: true }
       );
     });
 
