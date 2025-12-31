@@ -109,6 +109,52 @@ describe('PlanningTools sync operations', () => {
       );
     });
 
+    it('should add midnight time when only date is provided', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 129,
+        uid: 'uid-129',
+        name: 'Date Only Run',
+        start_date_local: '2024-12-23T00:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+      });
+
+      await tools.createRunWorkout({
+        scheduled_for: '2024-12-23',
+        name: 'Date Only Run',
+        workout_doc: '- 10m Z2 Pace',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date_local: '2024-12-23T00:00:00',
+        })
+      );
+    });
+
+    it('should preserve time when full datetime is provided', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 130,
+        uid: 'uid-130',
+        name: 'Datetime Run',
+        start_date_local: '2024-12-24T14:30:00',
+        type: 'Run',
+        category: 'WORKOUT',
+      });
+
+      await tools.createRunWorkout({
+        scheduled_for: '2024-12-24T14:30:00',
+        name: 'Datetime Run',
+        workout_doc: '- 10m Z2 Pace',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date_local: '2024-12-24T14:30:00',
+        })
+      );
+    });
+
     it('should include domestique tag automatically', async () => {
       vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
         id: 125,

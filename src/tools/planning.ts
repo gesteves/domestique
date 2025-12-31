@@ -205,12 +205,21 @@ export class PlanningTools {
   async createRunWorkout(input: CreateRunWorkoutInput): Promise<CreateWorkoutResponse> {
     const timezone = await this.intervals.getAthleteTimezone();
 
-    // Parse the scheduled date
-    const scheduledDate = parseDateStringInTimezone(
-      input.scheduled_for,
-      timezone,
-      'scheduled_for'
-    );
+    let scheduledDate: string;
+
+    // Check if input already has a time component (ISO datetime format)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(input.scheduled_for)) {
+      // Preserve the full datetime
+      scheduledDate = input.scheduled_for;
+    } else {
+      // Parse the date string and add midnight
+      const dateOnly = parseDateStringInTimezone(
+        input.scheduled_for,
+        timezone,
+        'scheduled_for'
+      );
+      scheduledDate = `${dateOnly}T00:00:00`;
+    }
 
     // Create the event via API
     const response = await this.intervals.createEvent({
