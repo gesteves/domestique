@@ -37,7 +37,6 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Planning
 - `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
-- `get_planned_workout_details` - Detailed information about a specific planned workout for a future date
 - `get_upcoming_races` - Upcoming races from the TrainerRoad calendar (only triathlons for now)
 
 ### Analysis

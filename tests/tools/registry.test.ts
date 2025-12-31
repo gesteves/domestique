@@ -109,7 +109,6 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_workout_history');
       expect(registeredTools).toContain('get_recovery_trends');
       expect(registeredTools).toContain('get_upcoming_workouts');
-      expect(registeredTools).toContain('get_planned_workout_details');
       // Analysis tools
       expect(registeredTools).toContain('get_training_load_trends');
       expect(registeredTools).toContain('get_workout_intervals');
@@ -127,7 +126,7 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_activity_totals');
       // Races
       expect(registeredTools).toContain('get_upcoming_races');
-      expect(registeredTools.length).toBe(22);
+      expect(registeredTools.length).toBe(21);
     });
 
     it('should call server.tool for each tool', () => {
@@ -137,7 +136,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(22);
+      expect(mockServer.tool).toHaveBeenCalledTimes(21);
     });
 
     it('should pass description and schema to each tool', () => {

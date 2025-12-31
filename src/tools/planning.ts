@@ -3,10 +3,7 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone } from '../utils/date-parser.js';
 import type { PlannedWorkout, ActivityType, Race } from '../types/index.js';
-import type {
-  GetUpcomingWorkoutsInput,
-  GetPlannedWorkoutDetailsInput,
-} from './types.js';
+import type { GetUpcomingWorkoutsInput } from './types.js';
 
 export class PlanningTools {
   constructor(
@@ -49,38 +46,6 @@ export class PlanningTools {
     ]);
 
     // Merge, deduplicate, and sort by date
-    const merged = this.mergeWorkouts(trainerroadWorkouts, intervalsWorkouts);
-    return merged.sort(
-      (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
-    );
-  }
-
-  /**
-   * Get planned workouts for a specific date, optionally filtered by sport.
-   * Returns merged workouts from both TrainerRoad and Intervals.icu.
-   */
-  async getPlannedWorkoutDetails(
-    params: GetPlannedWorkoutDetailsInput
-  ): Promise<PlannedWorkout[]> {
-    const { date, sport } = params;
-
-    // Use athlete's timezone for date parsing
-    const timezone = await this.intervals.getAthleteTimezone();
-    const dateStr = parseDateStringInTimezone(date, timezone, 'date');
-
-    // Fetch from both sources for the specified date
-    const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
-      this.trainerroad?.getPlannedWorkouts(dateStr, dateStr, timezone).catch((e) => {
-        console.error('Error fetching TrainerRoad workouts:', e);
-        return [];
-      }) ?? Promise.resolve([]),
-      this.intervals.getPlannedEvents(dateStr, dateStr).catch((e) => {
-        console.error('Error fetching Intervals.icu events:', e);
-        return [];
-      }),
-    ]);
-
-    // Merge and deduplicate
     let workouts = this.mergeWorkouts(trainerroadWorkouts, intervalsWorkouts);
 
     // Filter by sport if specified
@@ -89,12 +54,18 @@ export class PlanningTools {
         cycling: 'Cycling',
         running: 'Running',
         swimming: 'Swimming',
+        skiing: 'Skiing',
+        hiking: 'Hiking',
+        rowing: 'Rowing',
+        strength: 'Strength',
       };
       const activityType = sportMap[sport];
       workouts = workouts.filter((w) => w.sport === activityType);
     }
 
-    return workouts;
+    return workouts.sort(
+      (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
+    );
   }
 
   /**

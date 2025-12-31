@@ -527,34 +527,6 @@ and will not be updated throughout the day.
     );
 
     server.tool(
-      'get_planned_workout_details',
-      `Fetches planned workouts and fitness activity for a future date, with an optional sport filter.
-
-<use-cases>
-- Checking what workouts are planned for a specific future date.
-- Understanding expected training load for a particular day.
-- Determining if a planned workout is appropriate given current recovery status.
-- Filtering by sport to see sport-specific workouts on a given date.
-</use-cases>
-      
-<notes>
-- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Tomorrow", "Next monday", etc.)
-- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-</notes>`,
-      {
-        date: z.string().describe('Date to find workout on - ISO format (YYYY-MM-DD) or natural language (e.g., "next wednesday", "tomorrow")'),
-        sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport type'),
-      },
-      withToolResponse(
-        'get_planned_workout_details',
-        async (args: { date: string; sport?: 'cycling' | 'running' | 'swimming' }) => this.planningTools.getPlannedWorkoutDetails(args),
-        {
-          fieldDescriptions: getFieldDescriptions('planned'),
-        }
-      )
-    );
-
-    server.tool(
       'get_upcoming_races',
       `Fetches upcoming races from the TrainerRoad calendar.
 

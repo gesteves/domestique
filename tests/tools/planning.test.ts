@@ -171,90 +171,54 @@ describe('PlanningTools', () => {
         '2024-12-22'
       );
     });
-  });
-
-  describe('getPlannedWorkoutDetails', () => {
-    const trBikeWorkout: PlannedWorkout = {
-      id: 'tr-1',
-      scheduled_for: '2024-12-16T09:00:00Z',
-      name: 'Sweet Spot Base',
-      description: 'Hard intervals',
-      expected_tss: 88,
-      expected_if: 0.88,
-      sport: 'Cycling',
-      source: 'trainerroad',
-    };
-
-    const intRunWorkout: PlannedWorkout = {
-      id: 'int-1',
-      scheduled_for: '2024-12-16T17:00:00Z',
-      name: 'Easy Run',
-      expected_tss: 35,
-      sport: 'Running',
-      source: 'intervals.icu',
-    };
-
-    it('should return all merged workouts for a date', async () => {
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([trBikeWorkout]);
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([intRunWorkout]);
-
-      const result = await tools.getPlannedWorkoutDetails({ date: '2024-12-16' });
-
-      expect(result).toHaveLength(2);
-      expect(result.find((w) => w.sport === 'Cycling')).toBeDefined();
-      expect(result.find((w) => w.sport === 'Running')).toBeDefined();
-    });
 
     it('should filter by sport when specified', async () => {
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([trBikeWorkout]);
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([intRunWorkout]);
+      const bikeWorkout: PlannedWorkout = {
+        id: 'tr-1',
+        scheduled_for: '2024-12-16T09:00:00Z',
+        name: 'Sweet Spot Base',
+        expected_tss: 88,
+        sport: 'Cycling',
+        source: 'trainerroad',
+      };
 
-      const bikeResult = await tools.getPlannedWorkoutDetails({ date: '2024-12-16', sport: 'cycling' });
-      expect(bikeResult).toHaveLength(1);
-      expect(bikeResult[0].sport).toBe('Cycling');
+      const runWorkout: PlannedWorkout = {
+        id: 'int-1',
+        scheduled_for: '2024-12-17T17:00:00Z',
+        name: 'Easy Run',
+        expected_tss: 35,
+        sport: 'Running',
+        source: 'intervals.icu',
+      };
 
-      const runResult = await tools.getPlannedWorkoutDetails({ date: '2024-12-16', sport: 'running' });
-      expect(runResult).toHaveLength(1);
-      expect(runResult[0].sport).toBe('Running');
-    });
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([bikeWorkout]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([runWorkout]);
 
-    it('should return empty array when no workouts match', async () => {
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      const cyclingResult = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'cycling' });
+      expect(cyclingResult).toHaveLength(1);
+      expect(cyclingResult[0].sport).toBe('Cycling');
 
-      const result = await tools.getPlannedWorkoutDetails({ date: '2024-12-16' });
-
-      expect(result).toEqual([]);
+      const runningResult = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'running' });
+      expect(runningResult).toHaveLength(1);
+      expect(runningResult[0].sport).toBe('Running');
     });
 
     it('should return empty array when sport filter has no match', async () => {
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([trBikeWorkout]);
+      const bikeWorkout: PlannedWorkout = {
+        id: 'tr-1',
+        scheduled_for: '2024-12-16T09:00:00Z',
+        name: 'Sweet Spot Base',
+        expected_tss: 88,
+        sport: 'Cycling',
+        source: 'trainerroad',
+      };
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([bikeWorkout]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getPlannedWorkoutDetails({ date: '2024-12-16', sport: 'swimming' });
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'swimming' });
 
       expect(result).toEqual([]);
-    });
-
-    it('should parse natural language date', async () => {
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
-
-      await tools.getPlannedWorkoutDetails({ date: 'tomorrow' });
-
-      // Third parameter is timezone (UTC from the mock)
-      expect(mockTrainerRoadClient.getPlannedWorkouts).toHaveBeenCalledWith('2024-12-16', '2024-12-16', 'UTC');
-      expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith('2024-12-16', '2024-12-16');
-    });
-
-    it('should handle errors gracefully', async () => {
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockRejectedValue(new Error('Failed'));
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([intRunWorkout]);
-
-      const result = await tools.getPlannedWorkoutDetails({ date: '2024-12-16' });
-
-      expect(result).toHaveLength(1);
-      expect(result[0].sport).toBe('Running');
     });
   });
 });
