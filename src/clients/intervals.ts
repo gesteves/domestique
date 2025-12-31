@@ -302,10 +302,10 @@ interface IntervalsWellness {
 }
 
 interface IntervalsEvent {
-    id: number;
+  id: number;
   uid?: string;
   start_date_local: string;
-    name: string;
+  name: string;
   description?: string;
   type: string;
   category?: string;
@@ -313,6 +313,46 @@ interface IntervalsEvent {
   icu_intensity?: number;
   moving_time?: number;
   duration?: number;
+  tags?: string[];
+  external_id?: string;
+}
+
+/**
+ * Input for creating an event in Intervals.icu.
+ */
+export interface CreateEventInput {
+  /** Workout name */
+  name: string;
+  /** Description/notes - can include structured workout syntax */
+  description?: string;
+  /** Event type (e.g., "Run", "Ride") */
+  type: string;
+  /** Category - should be "WORKOUT" for workouts */
+  category: 'WORKOUT' | 'NOTE' | 'RACE' | 'OTHER';
+  /** Start date in YYYY-MM-DD or datetime format */
+  start_date_local: string;
+  /** Duration in seconds */
+  moving_time?: number;
+  /** Training load (TSS) */
+  icu_training_load?: number;
+  /** Tags for tracking */
+  tags?: string[];
+  /** External ID for linking to source (e.g., TrainerRoad UID) */
+  external_id?: string;
+}
+
+/**
+ * Response from event creation.
+ */
+export interface CreateEventResponse {
+  id: number;
+  uid: string;
+  name: string;
+  start_date_local: string;
+  type: string;
+  category: string;
+  tags?: string[];
+  external_id?: string;
 }
 
 // Raw interval from Intervals.icu API
@@ -2000,6 +2040,8 @@ export class IntervalsClient {
         : undefined,
       sport: this.activityTypeToSport(event.type),
       source: 'intervals.icu',
+      tags: event.tags,
+      external_id: event.external_id,
     };
   }
 
@@ -2332,5 +2374,138 @@ export class IntervalsClient {
     }));
 
     return { durations, activities };
+  }
+
+  // ============================================
+  // Event CRUD Operations
+  // ============================================
+
+  /**
+   * POST JSON to an athlete endpoint.
+   */
+  private async postJson<T>(
+    endpoint: string,
+    body: unknown,
+    context?: { operation: string; resource?: string }
+  ): Promise<T> {
+    console.log(`[Intervals] POST to ${endpoint}`);
+
+    const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
+
+    const errorContext = context ?? {
+      operation: `post ${endpoint}`,
+      resource: undefined,
+    };
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          Authorization: this.authHeader,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      if (error instanceof IntervalsApiError) {
+        throw error;
+      }
+      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+    }
+  }
+
+  /**
+   * DELETE an athlete endpoint.
+   */
+  private async deleteHttp(
+    endpoint: string,
+    context?: { operation: string; resource?: string }
+  ): Promise<void> {
+    console.log(`[Intervals] DELETE ${endpoint}`);
+
+    const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
+
+    const errorContext = context ?? {
+      operation: `delete ${endpoint}`,
+      resource: undefined,
+    };
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'DELETE',
+        headers: {
+          Authorization: this.authHeader,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+      }
+    } catch (error) {
+      if (error instanceof IntervalsApiError) {
+        throw error;
+      }
+      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+    }
+  }
+
+  /**
+   * Create a new event/workout on the athlete's calendar.
+   * POST /api/v1/athlete/{id}/events
+   */
+  async createEvent(input: CreateEventInput): Promise<CreateEventResponse> {
+    const response = await this.postJson<CreateEventResponse>(
+      '/events',
+      input,
+      { operation: 'create event', resource: input.name }
+    );
+    return response;
+  }
+
+  /**
+   * Delete an event/workout from the athlete's calendar.
+   * DELETE /api/v1/athlete/{id}/events/{eventId}
+   */
+  async deleteEvent(eventId: string | number): Promise<void> {
+    await this.deleteHttp(
+      `/events/${eventId}`,
+      { operation: 'delete event', resource: `event ${eventId}` }
+    );
+  }
+
+  /**
+   * Get a single event by ID.
+   * GET /api/v1/athlete/{id}/events/{eventId}
+   */
+  async getEvent(eventId: string | number): Promise<IntervalsEvent> {
+    return await this.fetch<IntervalsEvent>(
+      `/events/${eventId}`,
+      undefined,
+      { operation: 'get event', resource: `event ${eventId}` }
+    );
+  }
+
+  /**
+   * Get all events with a specific tag within a date range.
+   * Used for finding Domestique-created workouts.
+   */
+  async getEventsByTag(
+    tag: string,
+    startDate: string,
+    endDate: string
+  ): Promise<IntervalsEvent[]> {
+    const events = await this.fetch<IntervalsEvent[]>('/events', {
+      oldest: startDate,
+      newest: endDate,
+    });
+    return events.filter((e) => e.tags?.includes(tag));
   }
 }

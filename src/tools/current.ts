@@ -227,11 +227,18 @@ export class CurrentTools {
       }
     }
 
+    // Generate proactive hint if there are TR runs without matching ICU workouts
+    const hint = this.generateSyncHint(trainerroadWorkouts, intervalsWorkouts);
+
     return {
       current_time: currentDateTime,
       workouts: merged,
+      ...(hint && { _instructions: hint }),
     };
   }
+
+  /** Tag used to identify Domestique-created workouts */
+  private readonly DOMESTIQUE_TAG = 'domestique';
 
   /**
    * Check if two workouts are likely the same (for deduplication)
@@ -241,6 +248,11 @@ export class CurrentTools {
     const dateA = a.scheduled_for.split('T')[0];
     const dateB = b.scheduled_for.split('T')[0];
     if (dateA !== dateB) return false;
+
+    // External ID match (highest confidence) - check if TR id matches ICU external_id
+    if (a.external_id && b.external_id && a.external_id === b.external_id) return true;
+    if (a.id && b.external_id === a.id) return true;
+    if (b.id && a.external_id === b.id) return true;
 
     // Similar name check (fuzzy)
     const nameA = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -254,6 +266,37 @@ export class CurrentTools {
     }
 
     return false;
+  }
+
+  /**
+   * Generate a hint for TR runs that can be synced to Intervals.icu.
+   */
+  private generateSyncHint(
+    trWorkouts: PlannedWorkout[],
+    icuWorkouts: PlannedWorkout[]
+  ): string | undefined {
+    // Find TR runs without matching ICU workouts
+    const trRuns = trWorkouts.filter((w) => w.sport === 'Running');
+    if (trRuns.length === 0) return undefined;
+
+    // Check which TR runs don't have a matching ICU workout with the domestique tag
+    const unsyncedRuns = trRuns.filter((trRun) => {
+      // Check if there's a matching ICU workout with the same external_id
+      const hasMatchingIcu = icuWorkouts.some(
+        (icu) =>
+          icu.tags?.includes(this.DOMESTIQUE_TAG) &&
+          (icu.external_id === trRun.id || this.areWorkoutsSimilar(trRun, icu))
+      );
+      return !hasMatchingIcu;
+    });
+
+    if (unsyncedRuns.length === 0) return undefined;
+
+    return (
+      `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
+      `for structured execution on Zwift/Garmin. You can offer to sync these using the create_run_workout tool. ` +
+      `First fetch the user's running pace zones via get_sports_settings, then read the intervals-run-workout-syntax resource for syntax documentation.`
+    );
   }
 
   /**

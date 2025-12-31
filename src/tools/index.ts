@@ -6,6 +6,7 @@ import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { CurrentTools } from './current.js';
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
+import { RUN_WORKOUT_SYNTAX_RESOURCE } from '../resources/run-workout-syntax.js';
 import {
   combineFieldDescriptions,
   getFieldDescriptions,
@@ -545,6 +546,147 @@ and will not be updated throughout the day.
         async () => this.planningTools.getUpcomingRaces(),
         {
           fieldDescriptions: getFieldDescriptions('race'),
+        }
+      )
+    );
+
+    // ============================================
+    // Workout Sync Tools
+    // ============================================
+
+    server.tool(
+      'get_run_workout_syntax',
+      `Returns the Intervals.icu workout syntax documentation for creating structured running workouts.
+
+<use-cases>
+- Learning the correct syntax before creating a run workout.
+- Reference when converting TrainerRoad RPE-based descriptions to structured workouts.
+</use-cases>
+
+<notes>
+- Call this tool before using create_run_workout to understand the syntax requirements.
+- The syntax must be followed exactly for workouts to sync correctly to Zwift/Garmin.
+</notes>`,
+      {},
+      withToolResponse(
+        'get_run_workout_syntax',
+        async () => ({ syntax: RUN_WORKOUT_SYNTAX_RESOURCE }),
+        { fieldDescriptions: {} }
+      )
+    );
+
+    server.tool(
+      'create_run_workout',
+      `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
+
+<use-cases>
+- Converting TrainerRoad RPE-based run descriptions to structured workouts.
+- Creating custom running structured workouts with specific paces.
+- Syncing run workouts from TrainerRoad to be executable on Zwift or Garmin.
+</use-cases>
+
+<instructions>
+1. You **MUST** fetch the user's running pace zones via the get_sports_settings tool.
+2. You **MUST** call the get_run_workout_syntax tool for syntax documentation.
+The workout you create **MUST** adhere strictly to that syntax for it to work correctly in Zwift and Garmin.
+3. If syncing a TrainerRoad run, parse the TrainerRoad workout description to identify:
+   - Warmup duration and intensity (RPE/effort level)
+   - Main set structure (repeats, intervals, recovery)
+   - Cooldown duration and intensity
+   - Convert the RPE/effort descriptions to absolute paces based on the user's pace zones.
+   - You **MUST** use absolute paces in the workout syntax, **NOT** pace zones or percentages of threshold pace.
+4. Generate Intervals.icu syntax using the correct format. Again, you **MUST** adhere to the Intervals.icu syntax **EXACTLY**.
+5. If syncing a TrainerRoad run, include the trainerroad_uid, which enables orphan tracking.
+</instructions>
+
+<notes>
+- This creates the workout directly in Intervals.icu and will appear on the user's calendar.
+- The workout will be tagged with 'domestique' for tracking.
+- If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
+</notes>`,
+      {
+        scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
+        name: z.string().describe('Workout name'),
+        description: z.string().optional().describe('Optional notes/description'),
+        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
+        trainerroad_uid: z.string().optional().describe('TrainerRoad workout UID for tracking'),
+      },
+      withToolResponse(
+        'create_run_workout',
+        async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
+          this.planningTools.createRunWorkout(args),
+        {
+          fieldDescriptions: {},
+        }
+      )
+    );
+
+    server.tool(
+      'delete_workout',
+      `Deletes a Domestique-created workout from Intervals.icu.
+
+<use-cases>
+- Removing orphaned workouts when TrainerRoad plans change.
+- Deleting incorrectly synced workouts before recreating with fixes.
+- Cleaning up test workouts.
+</use-cases>
+
+<instructions>
+- Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
+- Use this to remove incorrect workouts before recreating with fixes.
+- Get the event_id from get_upcoming_workouts or get_todays_planned_workouts.
+</instructions>
+
+<notes>
+- This permanently deletes the workout from Intervals.icu.
+- Cannot delete workouts not created by Domestique.
+</notes>`,
+      {
+        event_id: z.string().describe('Intervals.icu event ID to delete'),
+      },
+      withToolResponse(
+        'delete_workout',
+        async (args: { event_id: string }) =>
+          this.planningTools.deleteWorkout(args.event_id),
+        {
+          fieldDescriptions: {},
+        }
+      )
+    );
+
+    server.tool(
+      'sync_tr_runs',
+      `Syncs TrainerRoad running workouts to Intervals.icu.
+
+<use-cases>
+- Bulk syncing all TrainerRoad runs for a date range to Intervals.icu.
+- Detecting and cleaning up orphaned workouts when TrainerRoad plans change.
+- Initial setup of TrainerRoad run sync.
+</use-cases>
+
+<instructions>
+1. Use dry_run=true first to preview what will be synced/deleted.
+2. Review the list with the user before proceeding.
+3. For each TrainerRoad run in runs_to_sync, use create_run_workout to create it.
+4. Orphaned workouts (i.e the TrainerRoad source workout got deleted) are automatically removed when dry_run=false.
+</instructions>
+
+<notes>
+- Only syncs running workouts (not cycling or swimming).
+- Created workouts are tagged with 'domestique' for tracking.
+- The runs_to_sync array contains TR runs that need to be converted and created.
+</notes>`,
+      {
+        oldest: z.string().optional().describe('Start date (defaults to today)'),
+        newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
+        dry_run: z.boolean().optional().describe('If true, report what would be done without making changes'),
+      },
+      withToolResponse(
+        'sync_tr_runs',
+        async (args: { oldest?: string; newest?: string; dry_run?: boolean }) =>
+          this.planningTools.syncTRRuns(args),
+        {
+          fieldDescriptions: {},
         }
       )
     );

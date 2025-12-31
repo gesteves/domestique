@@ -37,6 +37,7 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
       setRequestHandler: vi.fn(),
       connect: vi.fn(),
       close: vi.fn(),
+      resource: vi.fn(),
     };
   }),
 }));
