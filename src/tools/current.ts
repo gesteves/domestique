@@ -285,7 +285,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, upcomingRaces] = await Promise.all([
+    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, todaysRace] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return { current_time: getCurrentDateTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
@@ -315,11 +315,15 @@ export class CurrentTools {
         return { current_time: getCurrentDateTimeInTimezone(timezone), workouts: [] };
       }),
       this.trainerroad
-        ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
-            console.error('Error fetching upcoming races for daily summary:', e);
-            return [] as Race[];
+        ? this.trainerroad.getUpcomingRaces(timezone).then((races) => {
+            // Filter for today's race only
+            const todaysRace = races.find((race) => race.scheduled_for.startsWith(today));
+            return todaysRace ?? null;
+          }).catch((e) => {
+            console.error('Error fetching races for daily summary:', e);
+            return null as Race | null;
           })
-        : Promise.resolve([] as Race[]),
+        : Promise.resolve(null as Race | null),
     ]);
 
     // Extract data from response objects
@@ -359,7 +363,7 @@ export class CurrentTools {
       wellness: filteredWellness,
       planned_workouts: plannedWorkouts,
       completed_workouts: completedWorkouts,
-      upcoming_races: upcomingRaces,
+      scheduled_race: todaysRace,
       workouts_planned: plannedWorkouts.length,
       workouts_completed: completedWorkouts.length,
       tss_planned: Math.round(tssPlanned),

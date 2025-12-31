@@ -838,8 +838,8 @@ export interface DailySummary {
   planned_workouts: PlannedWorkout[];
   /** Completed workouts from Intervals.icu with matched Whoop data */
   completed_workouts: WorkoutWithWhoop[];
-  /** Upcoming races from TrainerRoad calendar */
-  upcoming_races: Race[];
+  /** Race scheduled for today (if any) */
+  scheduled_race: Race | null;
   /** Number of workouts planned for today */
   workouts_planned: number;
   /** Number of workouts completed today */

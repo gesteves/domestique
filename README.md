@@ -16,7 +16,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ## Available Tools
 
 ### Daily Overview
-- `get_daily_summary` - Complete snapshot of today including recovery, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts, planned workouts, and upcoming races
+- `get_daily_summary` - Complete snapshot of today including recovery, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts, planned workouts, and today's race, if any
 
 ### Today's Data
 - `get_todays_recovery` - Today's Whoop recovery, sleep, and HRV data

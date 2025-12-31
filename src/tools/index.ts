@@ -164,7 +164,7 @@ export class ToolRegistry {
 - Wellness metrics, such as vitals and subjective status
 - All workouts and fitness activities completed so far today
 - All workouts and fitness activities scheduled for today
-- All upcoming races on the user's calendar
+- Today's scheduled race, if any
 
 <use-cases>
 - Getting a comprehensive overview of the user's current status in a single call.

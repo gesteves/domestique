@@ -3,7 +3,7 @@ import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements } from '../../src/types/index.js';
+import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
@@ -807,6 +807,134 @@ describe('CurrentTools', () => {
       const result = await tools.getDailySummary();
 
       expect(result.wellness).toBeNull();
+    });
+
+    it('should return scheduled_race when a race is scheduled for today', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const todaysRace: Race = {
+        scheduled_for: '2024-12-15T07:00:00Z',
+        name: 'Winter Triathlon',
+        sport: 'Triathlon',
+      };
+
+      const futureRace: Race = {
+        scheduled_for: '2024-12-25T08:00:00Z',
+        name: 'Christmas Race',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([todaysRace, futureRace]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.scheduled_race).toEqual(todaysRace);
+
+      vi.useRealTimers();
+    });
+
+    it('should return null scheduled_race when no races are scheduled', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.scheduled_race).toBeNull();
+    });
+
+    it('should return null scheduled_race when races exist but none for today', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const futureRace: Race = {
+        scheduled_for: '2024-12-25T08:00:00Z',
+        name: 'Christmas Race',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([futureRace]);
+
+      const result = await tools.getDailySummary();
+
+      expect(result.scheduled_race).toBeNull();
+
+      vi.useRealTimers();
+    });
+
+    it('should handle race fetch failure gracefully', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockRejectedValue(new Error('Failed'));
+
+      const result = await tools.getDailySummary();
+
+      expect(result.scheduled_race).toBeNull();
+    });
+
+    it('should return null scheduled_race when TrainerRoad client is not configured', async () => {
+      const toolsWithoutTr = new CurrentTools(mockIntervalsClient, mockWhoopClient, null);
+
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await toolsWithoutTr.getDailySummary();
+
+      expect(result.scheduled_race).toBeNull();
     });
   });
 });
