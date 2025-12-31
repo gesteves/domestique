@@ -555,24 +555,26 @@ and will not be updated throughout the day.
 
     server.tool(
       'create_run_workout',
-      `Creates a structured running workout in Intervals.icu that syncs to Zwift/Garmin.
+      `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
 
 <use-cases>
 - Converting TrainerRoad RPE-based run descriptions to structured workouts.
-- Creating custom running workouts with specific pace zones.
-- Syncing run workouts from TrainerRoad to be executable on Zwift/Garmin.
+- Creating custom running structured workouts with specific paces.
+- Syncing run workouts from TrainerRoad to be executable on Zwift or Garmin.
 </use-cases>
 
 <instructions>
-1. First, fetch the user's running pace zones via the get_sports_settings tool.
-2. Read the intervals-run-workout-syntax resource for syntax documentation.
+1. You **MUST** fetch the user's running pace zones via the get_sports_settings tool.
+2. You **MUST** read the \`intervals-run-workout-syntax\` resource for syntax documentation.
+The workout you create **MUST** adhere strictly to that syntax for it to work correctly in Zwift and Garmin.
 3. If syncing a TrainerRoad run, parse the TrainerRoad workout description to identify:
    - Warmup duration and intensity (RPE/effort level)
    - Main set structure (repeats, intervals, recovery)
    - Cooldown duration and intensity
-   - Map RPE/effort descriptions to the user's pace zones based on their zone names.
-4. Generate Intervals.icu syntax using the correct format.
-5. If syncing a TrainerRoad run, include trainerroad_uid, which enables orphan tracking.
+   - Convert the RPE/effort descriptions to absolute paces based on the user's pace zones.
+   - You **MUST** use absolute paces in the workout syntax, **NOT** pace zones or percentages of threshold pace.
+4. Generate Intervals.icu syntax using the correct format. Again, you **MUST** adhere to the Intervals.icu syntax **EXACTLY**.
+5. If syncing a TrainerRoad run, include the trainerroad_uid, which enables orphan tracking.
 </instructions>
 
 <notes>
