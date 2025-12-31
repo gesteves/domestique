@@ -361,6 +361,72 @@ export interface PlannedWorkout {
   expected_duration?: string; // Human-readable, e.g., "1:30:00"
   sport?: ActivityType;
   source: 'intervals.icu' | 'trainerroad' | 'zwift';
+  /** Tags associated with this workout (for tracking Domestique-created workouts) */
+  tags?: string[];
+  /** External ID linking to source (e.g., TrainerRoad UID) */
+  external_id?: string;
+}
+
+// ============================================
+// Workout Creation Types
+// ============================================
+
+/**
+ * Input for creating a run workout in Intervals.icu.
+ */
+export interface CreateRunWorkoutInput {
+  /** Scheduled date in YYYY-MM-DD format or ISO datetime */
+  scheduled_for: string;
+  /** Workout name (e.g., "Run Intervals") */
+  name: string;
+  /** Optional description/notes */
+  description?: string;
+  /** Structured workout definition in Intervals.icu syntax */
+  workout_doc: string;
+  /** TrainerRoad workout UID for tracking (enables orphan detection) */
+  trainerroad_uid?: string;
+}
+
+/**
+ * Response from creating a workout.
+ */
+export interface CreateWorkoutResponse {
+  /** Intervals.icu event ID */
+  id: number;
+  /** Intervals.icu event UID */
+  uid: string;
+  /** Name of the created workout */
+  name: string;
+  /** Scheduled date/time */
+  scheduled_for: string;
+  /** URL to view the workout in Intervals.icu */
+  intervals_icu_url: string;
+}
+
+/**
+ * Result from sync operation.
+ */
+export interface SyncTRRunsResult {
+  /** Number of TR runs found that need syncing */
+  tr_runs_found: number;
+  /** Number of orphaned workouts deleted */
+  orphans_deleted: number;
+  /** TR runs that need to be synced (LLM should use create_run_workout for each) */
+  runs_to_sync: Array<{
+    tr_uid: string;
+    tr_name: string;
+    tr_description?: string;
+    scheduled_for: string;
+    expected_tss?: number;
+    expected_duration?: string;
+  }>;
+  /** Details of deleted orphans */
+  deleted: Array<{
+    name: string;
+    reason: string;
+  }>;
+  /** Any errors encountered */
+  errors: string[];
 }
 
 /**
@@ -914,6 +980,8 @@ export interface TodaysPlannedWorkoutsResponse {
   current_time: string;
   /** Planned workouts from TrainerRoad and Intervals.icu */
   workouts: PlannedWorkout[];
+  /** Optional hint for the LLM about TR runs that can be synced */
+  _instructions?: string;
 }
 
 // ============================================

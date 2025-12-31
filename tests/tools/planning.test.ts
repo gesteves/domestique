@@ -71,7 +71,7 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
-      expect(result).toHaveLength(4);
+      expect(result.workouts).toHaveLength(4);
     });
 
     it('should sort workouts by date', async () => {
@@ -80,7 +80,7 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
-      const dates = result.map((w) => new Date(w.scheduled_for).getTime());
+      const dates = result.workouts.map((w) => new Date(w.scheduled_for).getTime());
       for (let i = 1; i < dates.length; i++) {
         expect(dates[i]).toBeGreaterThanOrEqual(dates[i - 1]);
       }
@@ -100,8 +100,8 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
-      expect(result).toHaveLength(2); // Only TR workouts, duplicate removed
-      expect(result.find((w) => w.source === 'intervals.icu')).toBeUndefined();
+      expect(result.workouts).toHaveLength(2); // Only TR workouts, duplicate removed
+      expect(result.workouts.find((w) => w.source === 'intervals.icu')).toBeUndefined();
     });
 
     it('should handle TrainerRoad client not configured', async () => {
@@ -110,7 +110,7 @@ describe('PlanningTools', () => {
 
       const result = await toolsWithoutTr.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
-      expect(result).toHaveLength(2);
+      expect(result.workouts).toHaveLength(2);
     });
 
     it('should handle errors gracefully', async () => {
@@ -119,7 +119,7 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
-      expect(result).toHaveLength(2);
+      expect(result.workouts).toHaveLength(2);
     });
 
     it('should use correct date range with oldest only (defaults to 7 days)', async () => {
@@ -195,12 +195,12 @@ describe('PlanningTools', () => {
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([runWorkout]);
 
       const cyclingResult = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'cycling' });
-      expect(cyclingResult).toHaveLength(1);
-      expect(cyclingResult[0].sport).toBe('Cycling');
+      expect(cyclingResult.workouts).toHaveLength(1);
+      expect(cyclingResult.workouts[0].sport).toBe('Cycling');
 
       const runningResult = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'running' });
-      expect(runningResult).toHaveLength(1);
-      expect(runningResult[0].sport).toBe('Running');
+      expect(runningResult.workouts).toHaveLength(1);
+      expect(runningResult.workouts[0].sport).toBe('Running');
     });
 
     it('should return empty array when sport filter has no match', async () => {
@@ -218,7 +218,7 @@ describe('PlanningTools', () => {
 
       const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'swimming' });
 
-      expect(result).toEqual([]);
+      expect(result.workouts).toEqual([]);
     });
   });
 });

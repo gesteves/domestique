@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { validateToken, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
+import { RUN_WORKOUT_SYNTAX_RESOURCE } from './resources/run-workout-syntax.js';
 
 export interface ServerOptions {
   port: number;
@@ -183,11 +184,30 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     // For new sessions (initialization), create a new server and transport
     const mcpServer = new McpServer(
       { name: 'domestique', version: '1.0.0' },
-      { capabilities: { tools: { listChanged: true } } }
+      { capabilities: { tools: { listChanged: true }, resources: {} } }
     );
 
     // Register tools for this connection
     toolRegistry.registerTools(mcpServer);
+
+    // Register resources
+    mcpServer.resource(
+      'intervals-run-workout-syntax',
+      'intervals-run-workout-syntax://docs',
+      {
+        description: 'Documentation for creating structured running workouts in Intervals.icu format',
+        mimeType: 'text/markdown',
+      },
+      async () => ({
+        contents: [
+          {
+            uri: 'intervals-run-workout-syntax://docs',
+            mimeType: 'text/markdown',
+            text: RUN_WORKOUT_SYNTAX_RESOURCE,
+          },
+        ],
+      })
+    );
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),

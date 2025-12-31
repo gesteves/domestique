@@ -126,7 +126,11 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_activity_totals');
       // Races
       expect(registeredTools).toContain('get_upcoming_races');
-      expect(registeredTools.length).toBe(21);
+      // Workout sync tools
+      expect(registeredTools).toContain('create_run_workout');
+      expect(registeredTools).toContain('delete_workout');
+      expect(registeredTools).toContain('sync_tr_runs');
+      expect(registeredTools.length).toBe(24);
     });
 
     it('should call server.tool for each tool', () => {
@@ -136,7 +140,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(21);
+      expect(mockServer.tool).toHaveBeenCalledTimes(24);
     });
 
     it('should pass description and schema to each tool', () => {

@@ -7,6 +7,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Query completed workouts from Intervals.icu with matched Whoop strain data
 - Access sleep and recovery metrics (HRV, sleep, recovery score) from Whoop
 - View planned workouts from TrainerRoad and Intervals.icu
+- Sync TrainerRoad running workouts to Intervals.icu as structured workouts for Zwift/Garmin
 - Analyze fitness trends (CTL/ATL/TSB)
 - Comprehensive workout analysis with intervals, notes, and weather data
 - Incorporates heat strain data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
@@ -38,6 +39,11 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ### Planning
 - `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
 - `get_upcoming_races` - Upcoming races from the TrainerRoad calendar (only triathlons for now)
+
+### Workout Sync (TrainerRoad → Intervals.icu)
+- `create_run_workout` - Create a structured running workout in Intervals.icu from a plain English description. Can convert TrainerRoad's RPE-based runs to pace-based runs that sync to Zwift and Garmin
+- `delete_workout` - Deletes a Domestique-created workout from Intervals.icu
+- `sync_tr_runs` - Identify TrainerRoad runs that need syncing and orphaned workouts that should be cleaned up
 
 ### Analysis
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR
@@ -292,3 +298,4 @@ Once connected, you can ask Claude:
 - "How has my weight changed over the last 30 days?"
 - "What are my swimming, cycling and running totals for the past month?"
 - "How much time did I spend in each power zone this month?"
+- "Sync my TrainerRoad runs to Intervals.icu so they sync to Zwift"
