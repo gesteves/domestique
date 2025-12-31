@@ -340,6 +340,19 @@ export const INTERVALS_FIELD_DESCRIPTIONS = {
   count: 'Number of repetitions in this interval set',
 };
 
+export const NOTES_FIELD_DESCRIPTIONS = {
+  activity_id: 'Unique ID of the activity in Intervals.icu',
+  notes: 'Array of notes/messages left by the athlete for this activity',
+  id: 'Unique identifier of the note',
+  athlete_id: 'Intervals.icu athlete ID who wrote the note',
+  name: 'Name of the athlete who wrote the note',
+  created: 'Timestamp when the note was created (ISO 8601)',
+  type: 'Note type (typically TEXT)',
+  content: 'The actual note content written by the athlete',
+  attachment_url: 'URL to an attached file (if any)',
+  attachment_mime_type: 'MIME type of the attachment (e.g., image/jpeg)',
+};
+
 export const WEATHER_FIELD_DESCRIPTIONS = {
   activity_id: 'Unique ID of the activity in Intervals.icu',
   weather_description: 'Weather summary for the activity. Null if weather data is unavailable (e.g., indoor activities).',
@@ -626,6 +639,7 @@ type FieldCategory =
   | 'athlete_profile'
   | 'sport_settings'
   | 'intervals'
+  | 'notes'
   | 'weather'
   | 'heat_zones'
   | 'power_curve'
@@ -666,6 +680,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return SPORT_SETTINGS_FIELD_DESCRIPTIONS;
     case 'intervals':
       return INTERVALS_FIELD_DESCRIPTIONS;
+    case 'notes':
+      return NOTES_FIELD_DESCRIPTIONS;
     case 'weather':
       return WEATHER_FIELD_DESCRIPTIONS;
     case 'heat_zones':

@@ -253,7 +253,7 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(25);
+      expect(registeredHandlers.size).toBe(26);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_todays_recovery')).toBe(true);
@@ -272,6 +272,7 @@ describe('Tool Response Wrapper', () => {
       expect(registeredHandlers.has('get_upcoming_races')).toBe(true);
       expect(registeredHandlers.has('get_training_load_trends')).toBe(true);
       expect(registeredHandlers.has('get_workout_intervals')).toBe(true);
+      expect(registeredHandlers.has('get_workout_notes')).toBe(true);
       expect(registeredHandlers.has('get_workout_weather')).toBe(true);
       expect(registeredHandlers.has('get_workout_heat_zones')).toBe(true);
       expect(registeredHandlers.has('get_power_curve')).toBe(true);

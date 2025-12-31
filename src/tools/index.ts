@@ -753,6 +753,33 @@ Get the activity_id from:
     );
 
     server.tool(
+      'get_workout_notes',
+      `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
+
+<use-cases>
+- Understanding how the user may have subjectively felt during a workout, and anything else not captured by objective fitness metrics.
+- Reading feedback left by other Intervals.icu users, which could be a coach or a follower.
+</use-cases>
+
+<instructions>
+- **ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
+- Get the activity_id from get_workout_history.
+- Make sure to fetch attachments and follow links left in the notes.
+- Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
+</instructions>`,
+      {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+      },
+      withToolResponse(
+        'get_workout_notes',
+        async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
+        {
+          fieldDescriptions: getFieldDescriptions('notes'),
+        }
+      )
+    );
+
+    server.tool(
       'get_workout_weather',
       `Fetches the weather conditions during a given outdoor workout.
 

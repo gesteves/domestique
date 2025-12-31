@@ -9,6 +9,7 @@ import type {
   WellnessTrends,
   TrainingLoadTrends,
   WorkoutIntervalsResponse,
+  WorkoutNotesResponse,
   ActivityPowerCurve,
   ActivityPaceCurve,
   ActivityHRCurve,
@@ -619,6 +620,59 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivityIntervals).mockRejectedValue(new Error('Activity not found'));
 
       await expect(tools.getWorkoutIntervals('invalid-id')).rejects.toThrow('Activity not found');
+    });
+  });
+
+  describe('getWorkoutNotes', () => {
+    const mockNotesResponse: WorkoutNotesResponse = {
+      activity_id: 'i12345',
+      notes: [
+        {
+          id: 1,
+          athlete_id: 'athlete-1',
+          name: 'John Doe',
+          created: '2024-12-15T10:00:00Z',
+          type: 'TEXT',
+          content: 'Felt strong today, legs were fresh after rest day.',
+        },
+        {
+          id: 2,
+          athlete_id: 'athlete-1',
+          name: 'John Doe',
+          created: '2024-12-15T11:00:00Z',
+          type: 'TEXT',
+          content: 'Power numbers were great on the intervals.',
+        },
+      ],
+    };
+
+    it('should fetch workout notes for activity', async () => {
+      vi.mocked(mockIntervalsClient.getActivityNotes).mockResolvedValue(mockNotesResponse);
+
+      const result = await tools.getWorkoutNotes('i12345');
+
+      expect(result).toEqual(mockNotesResponse);
+      expect(result.activity_id).toBe('i12345');
+      expect(result.notes).toHaveLength(2);
+      expect(result.notes[0].content).toContain('Felt strong today');
+      expect(mockIntervalsClient.getActivityNotes).toHaveBeenCalledWith('i12345');
+    });
+
+    it('should return empty notes array when no notes exist', async () => {
+      vi.mocked(mockIntervalsClient.getActivityNotes).mockResolvedValue({
+        activity_id: 'i12345',
+        notes: [],
+      });
+
+      const result = await tools.getWorkoutNotes('i12345');
+
+      expect(result.notes).toEqual([]);
+    });
+
+    it('should propagate errors from client', async () => {
+      vi.mocked(mockIntervalsClient.getActivityNotes).mockRejectedValue(new Error('API error'));
+
+      await expect(tools.getWorkoutNotes('i12345')).rejects.toThrow('API error');
     });
   });
 
