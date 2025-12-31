@@ -280,7 +280,7 @@ describe('Tool Response Wrapper', () => {
       // Workout sync tools
       expect(registeredHandlers.has('create_run_workout')).toBe(true);
       expect(registeredHandlers.has('delete_workout')).toBe(true);
-      expect(registeredHandlers.has('sync_tr_runs')).toBe(true);
+      expect(registeredHandlers.has('sync_trainerroad_runs')).toBe(true);
     });
 
     it('should set up timezone getter when Whoop client is configured', async () => {

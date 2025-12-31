@@ -129,7 +129,7 @@ describe('ToolRegistry', () => {
       // Workout sync tools
       expect(registeredTools).toContain('create_run_workout');
       expect(registeredTools).toContain('delete_workout');
-      expect(registeredTools).toContain('sync_tr_runs');
+      expect(registeredTools).toContain('sync_trainerroad_runs');
       expect(registeredTools.length).toBe(25);
     });
 

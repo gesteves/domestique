@@ -655,7 +655,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     );
 
     server.tool(
-      'sync_tr_runs',
+      'sync_trainerroad_runs',
       `Syncs TrainerRoad running workouts to Intervals.icu.
 
 <use-cases>
@@ -682,7 +682,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         dry_run: z.boolean().optional().describe('If true, report what would be done without making changes'),
       },
       withToolResponse(
-        'sync_tr_runs',
+        'sync_trainerroad_runs',
         async (args: { oldest?: string; newest?: string; dry_run?: boolean }) =>
           this.planningTools.syncTRRuns(args),
         {
