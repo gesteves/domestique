@@ -363,7 +363,7 @@ and will not be updated throughout the day.
 - Returns empty array if Whoop is not configured.
 </notes>`,
       {
-        oldest: z.string().describe('Start date - ISO format (YYYY-MM-DD) or natural language (e.g., "7 days ago")'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
       },
       withToolResponse(
@@ -394,7 +394,7 @@ and will not be updated throughout the day.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
       {
-        oldest: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
@@ -425,7 +425,7 @@ and will not be updated throughout the day.
 - Returns empty array if Whoop is not configured.
 </notes>`,
       {
-        oldest: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
       },
       withToolResponse(
@@ -453,7 +453,7 @@ and will not be updated throughout the day.
 - Only returns days on which wellness data was recorded.
 </notes>`,
       {
-        oldest: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "30 days ago")'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
       },
       withToolResponse(
@@ -482,7 +482,7 @@ and will not be updated throughout the day.
 - Zone names come from the athlete's sport settings (e.g., "Recovery", "Endurance", "Tempo", "Sweet Spot").
 </notes>`,
       {
-        oldest: z.string().describe('Start date in ISO format (YYYY-MM-DD) or natural language (e.g., "365 days ago", "2024-01-01")'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
         sports: z.array(z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength'])).optional().describe('Filter to specific sports. If blank, returns all sports.'),
       },
@@ -513,8 +513,8 @@ and will not be updated throughout the day.
 - Scheduled workouts in a given day may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 </notes>`,
       {
-        oldest: z.string().optional().describe('Start date (defaults to today) - ISO format (YYYY-MM-DD) or natural language (e.g., "today", "tomorrow")'),
-        newest: z.string().optional().describe('End date (defaults to 7 days from oldest)'),
+        oldest: z.string().optional().describe('Start date (defaults to today; e.g., "2024-01-01", "tomorrow")'),
+        newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
       withToolResponse(
@@ -691,11 +691,11 @@ Get the activity_id from:
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </notes>`,
       {
-        oldest: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
-        newest: z.string().optional().describe('End of analysis period (defaults to today)'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
         durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200, 7200])'),
-        compare_to_oldest: z.string().optional().describe('Start of comparison period for before/after analysis'),
-        compare_to_newest: z.string().optional().describe('End of comparison period'),
+        compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
+        compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
       withToolResponse(
         'get_power_curve',
@@ -732,13 +732,13 @@ Get the activity_id from:
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </notes>`,
       {
-        oldest: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
-        newest: z.string().optional().describe('End of analysis period (defaults to today)'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
         sport: z.enum(['running', 'swimming']).describe('Sport to analyze'),
         distances: z.array(z.number()).optional().describe('Custom distances in meters (e.g., [400, 1000, 5000])'),
         gap: z.boolean().optional().describe('Use gradient-adjusted pace for running (normalizes for hills)'),
-        compare_to_oldest: z.string().optional().describe('Start of comparison period for before/after analysis'),
-        compare_to_newest: z.string().optional().describe('End of comparison period'),
+        compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
+        compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
       withToolResponse(
         'get_pace_curve',
@@ -771,12 +771,12 @@ Get the activity_id from:
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </notes>`,
       {
-        oldest: z.string().describe('Start of analysis period - ISO format (YYYY-MM-DD) or natural language'),
-        newest: z.string().optional().describe('End of analysis period (defaults to today)'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
         sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport (omit for all sports)'),
         durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200])'),
-        compare_to_oldest: z.string().optional().describe('Start of comparison period for before/after analysis'),
-        compare_to_newest: z.string().optional().describe('End of comparison period'),
+        compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
+        compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
       withToolResponse(
         'get_hr_curve',
