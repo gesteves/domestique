@@ -7,14 +7,14 @@ describe('heat-zones', () => {
       // Mock stream data: 10 seconds total
       const timeData = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
       const heatStrainData = [
-        0.5, // Zone 1: No Heat Strain (0-0.9)
+        0.5, // Zone 1: No Heat Strain (0-<1)
         0.8, // Zone 1
-        1.5, // Zone 2: Moderate Heat Strain (1-2.9)
+        1.5, // Zone 2: Moderate Heat Strain (1-<3)
         2.0, // Zone 2
-        3.5, // Zone 3: High Heat Strain (3-6.9)
+        3.5, // Zone 3: High Heat Strain (3-<7)
         5.0, // Zone 3
         6.0, // Zone 3
-        7.5, // Zone 4: Extremely High Heat Strain (>7)
+        7.5, // Zone 4: Extremely High Heat Strain (>=7)
         8.0, // Zone 4
         9.0, // Zone 4
       ];
@@ -26,19 +26,19 @@ describe('heat-zones', () => {
       // Zone 1: 2 seconds (0.5, 0.8)
       expect(zones[0].name).toBe('Zone 1: No Heat Strain');
       expect(zones[0].low_heat_strain_index).toBe(0);
-      expect(zones[0].high_heat_strain_index).toBe(0.9);
+      expect(zones[0].high_heat_strain_index).toBe(1);
       expect(zones[0].time_in_zone).toBe('0:00:02');
 
       // Zone 2: 2 seconds (1.5, 2.0)
       expect(zones[1].name).toBe('Zone 2: Moderate Heat Strain');
       expect(zones[1].low_heat_strain_index).toBe(1);
-      expect(zones[1].high_heat_strain_index).toBe(2.9);
+      expect(zones[1].high_heat_strain_index).toBe(3);
       expect(zones[1].time_in_zone).toBe('0:00:02');
 
       // Zone 3: 3 seconds (3.5, 5.0, 6.0)
       expect(zones[2].name).toBe('Zone 3: High Heat Strain');
       expect(zones[2].low_heat_strain_index).toBe(3);
-      expect(zones[2].high_heat_strain_index).toBe(6.9);
+      expect(zones[2].high_heat_strain_index).toBe(7);
       expect(zones[2].time_in_zone).toBe('0:00:03');
 
       // Zone 4: 3 seconds (7.5, 8.0, 9.0)
@@ -63,10 +63,10 @@ describe('heat-zones', () => {
     it('should handle boundary values correctly', () => {
       const timeData = [0, 1, 2, 3];
       const heatStrainData = [
-        0.9,  // Zone 1 (0-0.9 inclusive)
-        1.0,  // Zone 2 (1-2.9)
+        0.9,  // Zone 1 (0-<1)
+        1.0,  // Zone 2 (1-<3)
         2.9,  // Zone 2
-        3.0,  // Zone 3 (3-6.9)
+        3.0,  // Zone 3 (3-<7)
       ];
 
       const zones = calculateHeatZones(timeData, heatStrainData);

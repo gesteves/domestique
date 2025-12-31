@@ -9,17 +9,17 @@ const HEAT_ZONE_DEFINITIONS = [
   {
     name: 'Zone 1: No Heat Strain',
     low: 0,
-    high: 0.9,
+    high: 1,
   },
   {
     name: 'Zone 2: Moderate Heat Strain',
     low: 1,
-    high: 2.9,
+    high: 3,
   },
   {
     name: 'Zone 3: High Heat Strain',
     low: 3,
-    high: 6.9,
+    high: 7,
   },
   {
     name: 'Zone 4: Extremely High Heat Strain',
@@ -70,7 +70,7 @@ export function calculateHeatZones(
     // Find the appropriate zone for this HSI value
     for (let zoneIndex = 0; zoneIndex < HEAT_ZONE_DEFINITIONS.length; zoneIndex++) {
       const zone = HEAT_ZONE_DEFINITIONS[zoneIndex];
-      const inZone = hsi >= zone.low && (zone.high === null || hsi <= zone.high);
+      const inZone = hsi >= zone.low && (zone.high === null || hsi < zone.high);
 
       if (inZone) {
         // Calculate time spent at this data point

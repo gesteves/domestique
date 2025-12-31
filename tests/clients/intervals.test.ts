@@ -1887,7 +1887,7 @@ describe('IntervalsClient', () => {
       expect(result).toHaveLength(4);
       expect(result?.[0].name).toBe('Zone 1: No Heat Strain');
       expect(result?.[0].low_heat_strain_index).toBe(0);
-      expect(result?.[0].high_heat_strain_index).toBe(0.9);
+      expect(result?.[0].high_heat_strain_index).toBe(1);
       expect(result?.[1].name).toBe('Zone 2: Moderate Heat Strain');
       expect(result?.[2].name).toBe('Zone 3: High Heat Strain');
       expect(result?.[3].name).toBe('Zone 4: Extremely High Heat Strain');
