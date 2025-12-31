@@ -116,23 +116,23 @@ Add prompts at specific times within a step using `time^` syntax and `<!>` separ
 
 ## Complete Examples
 
-### Long Run with Marathon Pace
+### Running Long Run with Marathon Pace
 
 ```
 Warmup
-- 2km 70-75% pace
-- 2km 75-78% pace
-- 2km 78-82% pace
+- 2km 6:15-6:00/km Pace
+- 2km 6:00-5:45/km Pace
+- 2km 5:45-5:30/km Pace
 
 Main Set 2x
-- 6km 90-92% pace
-- 2km 75-80% pace
+- 6km 4:45-4:40/km Pace
+- 2km 5:45-5:30/km Pace
 
 Cooldown
-- 2km 72-76% pace
+- 2km 6:00-6:15/km Pace
 ```
 
-### Running Intervals with Absolute Pace
+### Running 1km Repeats
 
 ```
 Warmup
@@ -146,19 +146,66 @@ Cooldown
 - 10m 5:45-6:15/km Pace
 ```
 
-### Running Track Session
+### Running Track Session (800m Repeats)
 
 ```
 Warmup
-- 2km Z2 Pace
-- 4x 100m strides 3:30/km Pace
+- 2km 5:45/km Pace
+
+Strides 4x
+- 100m 3:30/km Pace
+- 100m 6:00/km Pace
 
 Main Set 5x
-- 800m 3:20/km Pace
-- 400m recovery 5:30/km Pace
+- 0.8km 3:20/km Pace
+- 0.4km 5:30/km Pace
 
 Cooldown
-- 2km Z1 Pace
+- 2km 6:15/km Pace
+```
+
+### Running Tempo Run
+
+```
+Warmup
+- 15m ramp 6:30-5:30/km Pace
+
+Main Set
+- 20m 4:30/km Pace
+
+Cooldown
+- 10m ramp 5:30-6:30/km Pace
+```
+
+### Running Threshold Intervals
+
+```
+Warmup
+- 2km 6:00/km Pace
+- 1km 5:15/km Pace
+
+Main Set 4x
+- 5m 4:20/km Pace
+- 3m 5:45/km Pace
+
+Cooldown
+- 2km 6:15/km Pace
+```
+
+### Running Progressive Long Run
+
+```
+Warmup
+- 3km 6:00/km Pace
+
+Main Set
+- 5km 5:30/km Pace
+- 5km 5:15/km Pace
+- 5km 5:00/km Pace
+- 2km 4:45/km Pace
+
+Cooldown
+- 2km 6:00/km Pace
 ```
 
 ## Syntax Rules Summary
