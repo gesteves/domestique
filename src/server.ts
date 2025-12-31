@@ -198,15 +198,18 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
         description: 'Documentation for creating structured running workouts in Intervals.icu format',
         mimeType: 'text/markdown',
       },
-      async () => ({
-        contents: [
-          {
-            uri: 'intervals-run-workout-syntax://docs',
-            mimeType: 'text/markdown',
-            text: RUN_WORKOUT_SYNTAX_RESOURCE,
-          },
-        ],
-      })
+      async () => {
+        console.log('[MCP] Resource requested: intervals-run-workout-syntax');
+        return {
+          contents: [
+            {
+              uri: 'intervals-run-workout-syntax://docs',
+              mimeType: 'text/markdown',
+              text: RUN_WORKOUT_SYNTAX_RESOURCE,
+            },
+          ],
+        };
+      }
     );
 
     const transport = new StreamableHTTPServerTransport({

@@ -6,6 +6,7 @@ import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { CurrentTools } from './current.js';
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
+import { RUN_WORKOUT_SYNTAX_RESOURCE } from '../resources/run-workout-syntax.js';
 import {
   combineFieldDescriptions,
   getFieldDescriptions,
@@ -554,6 +555,27 @@ and will not be updated throughout the day.
     // ============================================
 
     server.tool(
+      'get_run_workout_syntax',
+      `Returns the Intervals.icu workout syntax documentation for creating structured running workouts.
+
+<use-cases>
+- Learning the correct syntax before creating a run workout.
+- Reference when converting TrainerRoad RPE-based descriptions to structured workouts.
+</use-cases>
+
+<notes>
+- Call this tool before using create_run_workout to understand the syntax requirements.
+- The syntax must be followed exactly for workouts to sync correctly to Zwift/Garmin.
+</notes>`,
+      {},
+      withToolResponse(
+        'get_run_workout_syntax',
+        async () => ({ syntax: RUN_WORKOUT_SYNTAX_RESOURCE }),
+        { fieldDescriptions: {} }
+      )
+    );
+
+    server.tool(
       'create_run_workout',
       `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
 
@@ -565,7 +587,7 @@ and will not be updated throughout the day.
 
 <instructions>
 1. You **MUST** fetch the user's running pace zones via the get_sports_settings tool.
-2. You **MUST** read the \`intervals-run-workout-syntax\` resource for syntax documentation.
+2. You **MUST** call the get_run_workout_syntax tool for syntax documentation.
 The workout you create **MUST** adhere strictly to that syntax for it to work correctly in Zwift and Garmin.
 3. If syncing a TrainerRoad run, parse the TrainerRoad workout description to identify:
    - Warmup duration and intensity (RPE/effort level)

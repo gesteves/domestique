@@ -40,7 +40,8 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars
 - `get_upcoming_races` - Upcoming races from the TrainerRoad calendar (only triathlons for now)
 
-### Workout Sync (TrainerRoad → Intervals.icu)
+### Workout Management
+- `get_run_workout_syntax` - Returns the Intervals.icu workout syntax documentation for creating structured running workouts
 - `create_run_workout` - Create a structured running workout in Intervals.icu from a plain English description. Can convert TrainerRoad's RPE-based runs to pace-based runs that sync to Zwift and Garmin
 - `delete_workout` - Deletes a Domestique-created workout from Intervals.icu
 - `sync_tr_runs` - Identify TrainerRoad runs that need syncing and orphaned workouts that should be cleaned up
