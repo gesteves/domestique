@@ -1,6 +1,6 @@
 # Intervals.icu Running Workout Syntax
 
-This document describes the plain-text syntax for creating structured workouts in Intervals.icu. Use this format to generate workout files that can be imported directly.
+This document describes the plain-text syntax for creating structured workouts in Intervals.icu. You **MUST** use this exact format to generate workout files that can be imported directly.
 
 ## Basic Structure
 
@@ -39,21 +39,14 @@ Another Section 3x
 
 ## Intensity Targets
 
-### Zone-Based Pace
-
-| Type | Syntax | Examples |
-|------|--------|----------|
-| Percent of threshold pace | `N% pace` | `78-82% pace`, `90% pace` |
-| Zones | `ZN Pace` | `Z2 Pace`, `Z4 Pace` |
-
-### Absolute Pace
-
 Absolute pace values use `mm:ss` format and can specify a single pace or a range.
 
 | Syntax | Examples |
 |--------|----------|
 | Single pace | `6:30/km`, `7:00/mi` |
 | Pace range | `7:15-7:00/km`, `8:00-7:30/mi` |
+
+**Note**: You **MUST** use absolute paces to ensure maximum compatibility of the workout with Zwift and Garmin. **DO NOT** use pace zones or percentages of threshold pace.
 
 **Pace Units:**
 
@@ -82,7 +75,6 @@ Gradual intensity changes use the `ramp` keyword (case-insensitive):
 
 ```
 - 10m ramp 7:15-7:00/km pace
-- 10m ramp 60-80% pace
 ```
 
 ## Repeats
@@ -92,15 +84,15 @@ Two methods to define repeats:
 **In section header:**
 ```
 Main Set 5x
-- 3m 120% pace
-- 2m 50% pace
+- 3m 4:30-5:00/km pace
+- 2m 7:15-7:00/km pace
 ```
 
 **Standalone line:**
 ```
 5x
-- 3m 120% pace
-- 2m 50% pace
+- 3m 4:30-5:00/km pace
+- 2m 7:15-7:00/km pace
 ```
 
 Nested repeats are not supported.
@@ -110,8 +102,8 @@ Nested repeats are not supported.
 Any text before the first duration/intensity becomes the step cue:
 
 ```
-- Recovery 30s 50% pace
-- Run hard! 4m 120% pace
+- Recovery 30s 7:00/km pace
+- Run hard! 4m 4:30/km pace
 ```
 
 ### Timed Text Prompts
@@ -119,7 +111,7 @@ Any text before the first duration/intensity becomes the step cue:
 Add prompts at specific times within a step using `time^` syntax and `<!>` separator:
 
 ```
-- First prompt 33^Second prompt at 33s <!> 10m ramp 25-75% pace
+- First prompt 33^Second prompt at 33s <!> 10m ramp 4:30-5:00/km pace
 ```
 
 ## Complete Examples
@@ -174,7 +166,7 @@ Cooldown
 1. **Section headers**: Lines without `-` prefix
 2. **Steps**: Lines starting with `-`
 3. **Repeats**: `Nx` in header or standalone line before block
-4. **Ranges**: Use hyphen `a-b` (e.g., `85-90%`, `7:00-6:30/km`)
+4. **Ranges**: Use hyphen `a-b` (e.g. `7:00-6:30/km`)
 5. **Keywords**: Case-insensitive (`ramp`, `Ramp`, `RAMP` all work)
 6. **Blank lines**: Use between sections for readability
 7. **Sport type**: Determined by workout metadata; steps can override with explicit HR or Pace keywords
@@ -184,6 +176,6 @@ Cooldown
 Before creating a workout, you should:
 
 1. Fetch the user's running pace zones and threshold pace via the get_sports_settings tool
-2. Use your best judgment to map RPE descriptions from the TrainerRoad workout to the user's specific pace zones, percentages of threshold pace, or absolute paces
+2. Use your best judgment to map RPE descriptions from the TrainerRoad workout to the correct pace for each step
 3. Verify the structure of the generated workout with the user, and adjust based on feedback
 4. Create the workout using Intervals.icu syntax
