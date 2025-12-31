@@ -224,6 +224,5 @@ Before creating a workout, you should:
 
 1. Fetch the user's running pace zones and threshold pace via the get_sports_settings tool
 2. Use your best judgment to map RPE descriptions from the TrainerRoad workout to the correct pace for each step
-3. Ensure the syntax for the workout adheres **EXACTLY** to these instructions
-4. Verify the structure of the generated workout with the user, and adjust based on feedback
-5. Create the workout using Intervals.icu syntax
+3. Verify the structure of the generated workout with the user, and adjust based on feedback
+4. Create the workout using Intervals.icu syntax, ensuring that it adheres **EXACTLY** to these instructions
