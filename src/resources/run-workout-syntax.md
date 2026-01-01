@@ -1,6 +1,6 @@
 # Intervals.icu Running Workout Syntax
 
-This document describes the plain-text syntax for creating structured workouts in Intervals.icu. You **MUST** use this exact format to generate workout files that can be imported directly.
+This document describes the plain-text syntax for creating structured running workouts in Intervals.icu. You **MUST** use this exact format to generate workout files that can be imported directly.
 
 ## Basic Structure
 
