@@ -697,7 +697,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
 
 <use-cases>
 - Matching completed workout intervals to a TrainerRoad workout structure.
-- Defining custom interval boundaries on a recorded activity.
+- Defining custom interval boundaries on a completed workout.
 - Re-analyzing a workout with corrected interval timing.
 </use-cases>
 
