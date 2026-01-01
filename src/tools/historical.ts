@@ -1,7 +1,7 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { parseDateString, getToday, parseDateStringInTimezone, getTodayInTimezone } from '../utils/date-parser.js';
-import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
+import { matchWhoopActivity } from '../utils/workout-utils.js';
 import {
   parseDurationToHours,
   parseDurationToSeconds,
@@ -97,33 +97,12 @@ export class HistoricalTools {
       // Match and merge
       return workouts.map((workout) => ({
         ...workout,
-        whoop: this.findAndMatchWhoopActivity(workout, whoopActivities),
+        whoop: matchWhoopActivity(workout, whoopActivities),
       }));
     } catch (error) {
       console.error('Error fetching workout history:', error);
       throw error;
     }
-  }
-
-  /**
-   * Find and match a Whoop activity to an Intervals.icu workout
-   */
-  private findAndMatchWhoopActivity(
-    workout: NormalizedWorkout,
-    whoopActivities: StrainActivity[]
-  ): WhoopMatchedData | null {
-    const match = findMatchingWhoopActivity(workout, whoopActivities);
-    if (!match) return null;
-
-    return {
-      strain_score: match.strain_score,
-      average_heart_rate: match.average_heart_rate,
-      max_heart_rate: match.max_heart_rate,
-      calories: match.calories,
-      distance: match.distance,
-      elevation_gain: match.elevation_gain,
-      zone_durations: match.zone_durations,
-    };
   }
 
   /**

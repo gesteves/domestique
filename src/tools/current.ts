@@ -2,7 +2,7 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone, getCurrentDateTimeInTimezone } from '../utils/date-parser.js';
-import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
+import { DOMESTIQUE_TAG, areWorkoutsSimilar, generateSyncHint, matchWhoopActivity } from '../utils/workout-utils.js';
 import type {
   StrainData,
   FitnessMetrics,
@@ -138,34 +138,13 @@ export class CurrentTools {
         current_time: currentDateTime,
         workouts: workouts.map((workout) => ({
           ...workout,
-          whoop: this.findAndMatchWhoopActivity(workout, whoopActivities),
+          whoop: matchWhoopActivity(workout, whoopActivities),
         })),
       };
     } catch (error) {
       console.error('Error fetching today\'s completed workouts:', error);
       throw error;
     }
-  }
-
-  /**
-   * Find and match a Whoop activity to an Intervals.icu workout
-   */
-  private findAndMatchWhoopActivity(
-    workout: NormalizedWorkout,
-    whoopActivities: StrainActivity[]
-  ): WhoopMatchedData | null {
-    const match = findMatchingWhoopActivity(workout, whoopActivities);
-    if (!match) return null;
-
-    return {
-      strain_score: match.strain_score,
-      average_heart_rate: match.average_heart_rate,
-      max_heart_rate: match.max_heart_rate,
-      calories: match.calories,
-      distance: match.distance,
-      elevation_gain: match.elevation_gain,
-      zone_durations: match.zone_durations,
-    };
   }
 
   /**
@@ -220,7 +199,7 @@ export class CurrentTools {
     // Add Intervals.icu workouts that don't seem to be duplicates
     for (const intervalsWorkout of intervalsWorkouts) {
       const isDuplicate = trainerroadWorkouts.some((tr) =>
-        this.areWorkoutsSimilar(tr, intervalsWorkout)
+        areWorkoutsSimilar(tr, intervalsWorkout)
       );
       if (!isDuplicate) {
         merged.push(intervalsWorkout);
@@ -228,75 +207,13 @@ export class CurrentTools {
     }
 
     // Generate proactive hint if there are TR runs without matching ICU workouts
-    const hint = this.generateSyncHint(trainerroadWorkouts, intervalsWorkouts);
+    const hint = generateSyncHint(trainerroadWorkouts, intervalsWorkouts);
 
     return {
       current_time: currentDateTime,
       workouts: merged,
       ...(hint && { _instructions: hint }),
     };
-  }
-
-  /** Tag used to identify Domestique-created workouts */
-  private readonly DOMESTIQUE_TAG = 'domestique';
-
-  /**
-   * Check if two workouts are likely the same (for deduplication)
-   */
-  private areWorkoutsSimilar(a: PlannedWorkout, b: PlannedWorkout): boolean {
-    // Same day check
-    const dateA = a.scheduled_for.split('T')[0];
-    const dateB = b.scheduled_for.split('T')[0];
-    if (dateA !== dateB) return false;
-
-    // External ID match (highest confidence) - check if TR id matches ICU external_id
-    if (a.external_id && b.external_id && a.external_id === b.external_id) return true;
-    if (a.id && b.external_id === a.id) return true;
-    if (b.id && a.external_id === b.id) return true;
-
-    // Similar name check (fuzzy)
-    const nameA = a.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const nameB = b.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (nameA.includes(nameB) || nameB.includes(nameA)) return true;
-
-    // Similar TSS check
-    if (a.expected_tss && b.expected_tss) {
-      const tssDiff = Math.abs(a.expected_tss - b.expected_tss);
-      if (tssDiff < 5) return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Generate a hint for TR runs that can be synced to Intervals.icu.
-   */
-  private generateSyncHint(
-    trWorkouts: PlannedWorkout[],
-    icuWorkouts: PlannedWorkout[]
-  ): string | undefined {
-    // Find TR runs without matching ICU workouts
-    const trRuns = trWorkouts.filter((w) => w.sport === 'Running');
-    if (trRuns.length === 0) return undefined;
-
-    // Check which TR runs don't have a matching ICU workout with the domestique tag
-    const unsyncedRuns = trRuns.filter((trRun) => {
-      // Check if there's a matching ICU workout with the same external_id
-      const hasMatchingIcu = icuWorkouts.some(
-        (icu) =>
-          icu.tags?.includes(this.DOMESTIQUE_TAG) &&
-          (icu.external_id === trRun.id || this.areWorkoutsSimilar(trRun, icu))
-      );
-      return !hasMatchingIcu;
-    });
-
-    if (unsyncedRuns.length === 0) return undefined;
-
-    return (
-      `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
-      `for structured execution on Zwift/Garmin. You can offer to sync these using the create_run_workout tool. ` +
-      `First fetch the user's running pace zones via get_sports_settings, then read the intervals-run-workout-syntax resource for syntax documentation.`
-    );
   }
 
   /**
