@@ -595,7 +595,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
    - Cooldown duration and intensity
    - Convert the RPE/effort descriptions to absolute paces based on the user's pace zones.
    - You **MUST** use absolute paces in the workout syntax, **NOT** pace zones or percentages of threshold pace.
-4. Generate Intervals.icu syntax using the correct format. Again, you **MUST** adhere to the Intervals.icu syntax **EXACTLY**.
+4. Generate the Intervals.icu syntax using the correct format. Again, you **MUST** adhere to the Intervals.icu syntax **EXACTLY**.
 5. If syncing a TrainerRoad run, include the trainerroad_uid, which enables orphan tracking.
 </instructions>
 
