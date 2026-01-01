@@ -30,6 +30,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
         client.updateActivityIntervals('i12345_activity123', intervals)
       ).resolves.not.toThrow();
 
+      // API uses start_index/end_index instead of start_time/end_time
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/v1/activity/i12345_activity123/intervals'),
         expect.objectContaining({
@@ -37,7 +38,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
           }),
-          body: expect.stringContaining('"start_time":0'),
+          body: expect.stringContaining('"start_index":0'),
         })
       );
     });
@@ -114,9 +115,10 @@ describe('IntervalsClient updateActivityIntervals', () => {
       const body = JSON.parse(callArgs[1].body);
 
       expect(body).toHaveLength(5);
+      // API uses start_index/end_index instead of start_time/end_time
       expect(body[0]).toEqual({
-        start_time: 0,
-        end_time: 300,
+        start_index: 0,
+        end_index: 300,
         type: 'RECOVERY',
         label: 'Warmup',
       });
@@ -139,6 +141,9 @@ describe('IntervalsClient updateActivityIntervals', () => {
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
 
+      // API uses start_index/end_index
+      expect(body[0].start_index).toBe(0);
+      expect(body[0].end_index).toBe(300);
       expect(body[0].label).toBeUndefined();
     });
 

@@ -2389,8 +2389,6 @@ export class IntervalsClient {
     body: unknown,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
-    console.log(`[Intervals] POST to ${endpoint}`);
-
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
 
     const errorContext = context ?? {
@@ -2429,8 +2427,6 @@ export class IntervalsClient {
     endpoint: string,
     context?: { operation: string; resource?: string }
   ): Promise<void> {
-    console.log(`[Intervals] DELETE ${endpoint}`);
-
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
 
     const errorContext = context ?? {
@@ -2469,8 +2465,6 @@ export class IntervalsClient {
     queryParams?: Record<string, string | boolean>,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
-    console.log(`[Intervals] PUT to /activity/${activityId}${endpoint}`);
-
     const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
 
     if (queryParams) {
@@ -2574,10 +2568,20 @@ export class IntervalsClient {
     intervals: ActivityIntervalInput[],
     replaceAll: boolean = true
   ): Promise<void> {
+    // Map our input format to the API format
+    // The API uses start_index/end_index (data point indices) rather than start_time/end_time
+    // For 1Hz data (most common), these are equal to seconds
+    const apiIntervals = intervals.map((interval) => ({
+      start_index: interval.start_time,
+      end_index: interval.end_time,
+      type: interval.type,
+      label: interval.label,
+    }));
+
     await this.putActivity<unknown>(
       activityId,
       '/intervals',
-      intervals,
+      apiIntervals,
       { all: replaceAll },
       { operation: 'update activity intervals', resource: `activity ${activityId}` }
     );
