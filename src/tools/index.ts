@@ -707,7 +707,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
    - You may need to convert timestamps to seconds (e.g., "0:05:00" = 300 seconds, "1:15:00" = 4500 seconds)
 2. Determine WORK vs RECOVERY type using the power_zones embedded in the workout:
    - Generally speaking, Zone 1 is RECOVERY, and anything else is WORK
-   - That said, use your best judgement: A Zone 2 interval after a Zone 4 or Zone 5 one could reasonably be considered a RECOVERY interval
+   - That said, use your best judgement: A Zone 2 interval after a Zone 4 or 5 interval could reasonably be considered a RECOVERY interval
 3. Call this tool with the activity_id and parsed intervals array.
 4. Set the replace_existing_intervals, as needed, depending on the user's instructions
 </instructions>
@@ -717,7 +717,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
 - Set replace_existing_intervals to false to merge new intervals with existing ones.
 - Intervals.icu will recalculate all metrics (power, HR, cadence, TSS, etc.) from the recorded activity data.
 - Times are in seconds from the start of the activity.
-- Use the workout's power_zones (not current athlete settings) for type inference, as FTP may have changed since the workout.
+- Use the workout's power_zones (not current athlete sport settings) for type inference, as FTP may have changed since the workout.
 </notes>`,
       {
         activity_id: z.string().describe('Intervals.icu activity ID'),
