@@ -3,14 +3,14 @@ import { buildToolResponse, buildEmptyResponse } from '../../src/utils/response-
 
 describe('response-builder', () => {
   describe('buildToolResponse', () => {
-    it('should build response with structuredContent containing data and field descriptions', () => {
+    it('should build response with structuredContent containing data and field descriptions', async () => {
       const data = { metric: 42, name: 'test' };
       const fieldDescriptions = {
         metric: 'A numeric value',
         name: 'A string identifier',
       };
 
-      const result = buildToolResponse({
+      const result = await buildToolResponse({
         data,
         fieldDescriptions,
       });
@@ -35,7 +35,7 @@ describe('response-builder', () => {
       });
     });
 
-    it('should format complex nested data', () => {
+    it('should format complex nested data', async () => {
       const data = {
         workouts: [
           { id: '1', tss: 50 },
@@ -55,7 +55,7 @@ describe('response-builder', () => {
         count: 'Count of workouts',
       };
 
-      const result = buildToolResponse({
+      const result = await buildToolResponse({
         data,
         fieldDescriptions,
       });
@@ -68,7 +68,7 @@ describe('response-builder', () => {
       expect(result.structuredContent.field_descriptions.tss).toBe('Training stress score');
     });
 
-    it('should remove null and undefined from data', () => {
+    it('should remove null and undefined from data', async () => {
       const data = {
         value: null,
         optional: undefined,
@@ -76,7 +76,7 @@ describe('response-builder', () => {
       };
       const fieldDescriptions = { value: 'Nullable value', present: 'Present field' };
 
-      const result = buildToolResponse({
+      const result = await buildToolResponse({
         data,
         fieldDescriptions,
       });
@@ -88,7 +88,7 @@ describe('response-builder', () => {
       expect(result.structuredContent.field_descriptions).toEqual({ present: 'Present field' });
     });
 
-    it('should include heat zones summary only when heat data is present', () => {
+    it('should include heat zones summary only when heat data is present', async () => {
       // Data WITH heat zones
       const dataWithHeat = {
         workouts: [
@@ -108,7 +108,7 @@ describe('response-builder', () => {
         time_in_zone: 'Time in zone',
       };
 
-      const resultWithHeat = buildToolResponse({
+      const resultWithHeat = await buildToolResponse({
         data: dataWithHeat,
         fieldDescriptions,
       });
@@ -127,7 +127,7 @@ describe('response-builder', () => {
         ],
       };
 
-      const resultWithoutHeat = buildToolResponse({
+      const resultWithoutHeat = await buildToolResponse({
         data: dataWithoutHeat,
         fieldDescriptions,
       });
@@ -136,11 +136,11 @@ describe('response-builder', () => {
       expect(resultWithoutHeat.structuredContent.field_descriptions.heat_zones).toBeUndefined();
     });
 
-    it('should return text content as formatted JSON for backwards compatibility', () => {
+    it('should return text content as formatted JSON for backwards compatibility', async () => {
       const data = { value: 123 };
       const fieldDescriptions = { value: 'A value' };
 
-      const result = buildToolResponse({
+      const result = await buildToolResponse({
         data,
         fieldDescriptions,
       });
@@ -152,6 +152,21 @@ describe('response-builder', () => {
       // Should be parseable
       const parsed = JSON.parse(text);
       expect(parsed.response.value).toBe(123);
+    });
+
+    it('should not include _debug in production mode', async () => {
+      // In test environment, NODE_ENV is 'test', not 'development',
+      // so _debug should not be included
+      const data = { value: 123 };
+      const fieldDescriptions = { value: 'A value' };
+
+      const result = await buildToolResponse({
+        data,
+        fieldDescriptions,
+      });
+
+      // _debug should not be present when NODE_ENV is not 'development'
+      expect(result.structuredContent._debug).toBeUndefined();
     });
   });
 

@@ -4,6 +4,7 @@
  */
 
 import { enhanceWithHeatZonesSummary } from './field-descriptions.js';
+import { countTokens } from './token-counter.js';
 
 /**
  * Recursively removes null and undefined values from an object or array.
@@ -101,9 +102,14 @@ export interface ResponseBuilderOptions {
   fieldDescriptions: Record<string, string>;
 }
 
+export interface DebugInfo {
+  token_count: number;
+}
+
 export interface StructuredToolResponse {
   response: unknown;
   field_descriptions: Record<string, string>;
+  _debug?: DebugInfo;
   [key: string]: unknown;
 }
 
@@ -119,8 +125,10 @@ export interface ToolResponse {
  * Returns both:
  * - content: Serialized JSON text for backwards compatibility
  * - structuredContent: Parsed JSON for modern MCP clients
+ *
+ * In development mode, adds a _debug object with token count.
  */
-export function buildToolResponse(options: ResponseBuilderOptions): ToolResponse {
+export async function buildToolResponse(options: ResponseBuilderOptions): Promise<ToolResponse> {
   const { data } = options;
 
   // Remove null/undefined fields to reduce token usage
@@ -137,8 +145,22 @@ export function buildToolResponse(options: ResponseBuilderOptions): ToolResponse
     field_descriptions: fieldDescriptions,
   };
 
+  // Build the content text (without debug info first)
+  const contentText = JSON.stringify(structuredContent, null, 2);
+
+  // In development mode, add token count to _debug
+  const tokenCount = await countTokens(contentText);
+  if (tokenCount !== null) {
+    structuredContent._debug = { token_count: tokenCount };
+  }
+
+  // Re-serialize with debug info if present
+  const finalContentText = tokenCount !== null
+    ? JSON.stringify(structuredContent, null, 2)
+    : contentText;
+
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(structuredContent, null, 2) }],
+    content: [{ type: 'text' as const, text: finalContentText }],
     structuredContent,
   };
 }

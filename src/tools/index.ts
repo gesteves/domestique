@@ -106,7 +106,7 @@ function withToolResponse<TArgs, TResult>(
     console.log(`[Tool] Calling tool: ${toolName}`);
     try {
       const data = await handler(args);
-      return buildToolResponse({
+      return await buildToolResponse({
         data,
         fieldDescriptions: options.fieldDescriptions,
       });

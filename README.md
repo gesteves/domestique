@@ -185,6 +185,35 @@ The inspector will open a web interface where you can:
 - View request/response payloads
 - Debug connection issues
 
+### Debug Token Counting
+
+In development mode, tool responses include a `_debug` object with token count information. This helps you understand how many tokens each tool response would consume when passed to Claude.
+
+To enable this feature:
+
+1. Add your Anthropic API key to `.env`:
+   ```bash
+   ANTHROPIC_API_KEY=your-anthropic-api-key
+   ```
+
+2. Restart the development server:
+   ```bash
+   docker compose restart domestique
+   ```
+
+Tool responses will now include:
+```json
+{
+  "response": { ... },
+  "field_descriptions": { ... },
+  "_debug": {
+    "token_count": 1234
+  }
+}
+```
+
+This feature is automatically disabled in production (when `NODE_ENV` is not `development`) or when `ANTHROPIC_API_KEY` is not set.
+
 ## Local Development
 
 ### Using Docker Compose (recommended)
