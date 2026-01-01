@@ -220,7 +220,7 @@ Cooldown
 
 ## Workflow
 
-Before creating a workout, you should:
+Before creating a workout, you must:
 
 1. Fetch the user's running pace zones and threshold pace via the get_sports_settings tool
 2. Use your best judgment to map RPE descriptions from the TrainerRoad workout to the correct pace for each step
