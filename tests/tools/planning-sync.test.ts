@@ -240,6 +240,233 @@ describe('PlanningTools sync operations', () => {
     });
   });
 
+  describe('createCyclingWorkout', () => {
+    it('should create cycling workout with all required fields', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 200,
+        uid: 'uid-200',
+        name: 'Sweet Spot Intervals',
+        start_date_local: '2024-12-16',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      const result = await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-16',
+        name: 'Sweet Spot Intervals',
+        workout_doc: 'Warmup\n- 10m ramp 50-75% 90rpm\n\nMain Set 3x\n- 15m 88-92% 85rpm\n- 5m 55% 90rpm\n\nCooldown\n- 10m ramp 55-40% 85rpm',
+      });
+
+      expect(result.id).toBe(200);
+      expect(result.uid).toBe('uid-200');
+      expect(result.name).toBe('Sweet Spot Intervals');
+      expect(result.intervals_icu_url).toContain('2024-12-16');
+    });
+
+    it('should create cycling workout with optional description', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 201,
+        uid: 'uid-201',
+        name: 'VO2 Max Workout',
+        start_date_local: '2024-12-17',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      const result = await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-17',
+        name: 'VO2 Max Workout',
+        description: 'High intensity intervals for VO2 max development',
+        workout_doc: 'Main Set 5x\n- 3m 120% 100rpm\n- 2m 50% 85rpm',
+      });
+
+      expect(result.id).toBe(201);
+
+      // Verify createEvent was called with correct parameters
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'VO2 Max Workout',
+          type: 'Ride',
+          category: 'WORKOUT',
+          tags: ['domestique'],
+        })
+      );
+    });
+
+    it('should put description before workout_doc', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 202,
+        uid: 'uid-202',
+        name: 'Ordered Ride',
+        start_date_local: '2024-12-22',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-22',
+        name: 'Ordered Ride',
+        description: 'Notes about the workout',
+        workout_doc: 'Warmup\n- 10m 75% 90rpm',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: 'Notes about the workout\n\nWarmup\n- 10m 75% 90rpm',
+        })
+      );
+    });
+
+    it('should add midnight time when only date is provided', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 203,
+        uid: 'uid-203',
+        name: 'Date Only Ride',
+        start_date_local: '2024-12-23T00:00:00',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-23',
+        name: 'Date Only Ride',
+        workout_doc: '- 60m 75% 90rpm',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date_local: '2024-12-23T00:00:00',
+        })
+      );
+    });
+
+    it('should preserve time when full datetime is provided', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 204,
+        uid: 'uid-204',
+        name: 'Datetime Ride',
+        start_date_local: '2024-12-24T14:30:00',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-24T14:30:00',
+        name: 'Datetime Ride',
+        workout_doc: '- 60m 75% 90rpm',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date_local: '2024-12-24T14:30:00',
+        })
+      );
+    });
+
+    it('should include domestique tag automatically', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 205,
+        uid: 'uid-205',
+        name: 'Tagged Ride',
+        start_date_local: '2024-12-18',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-18',
+        name: 'Tagged Ride',
+        workout_doc: '- 90m 65-75% 85-95rpm',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tags: ['domestique'],
+        })
+      );
+    });
+
+    it('should use Ride as the workout type', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 206,
+        uid: 'uid-206',
+        name: 'Ride Type Test',
+        start_date_local: '2024-12-19',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-19',
+        name: 'Ride Type Test',
+        workout_doc: '- 30m 100% 90rpm',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'Ride',
+        })
+      );
+    });
+
+    it('should not include external_id (unlike run workouts)', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 207,
+        uid: 'uid-207',
+        name: 'No External ID',
+        start_date_local: '2024-12-20',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-20',
+        name: 'No External ID',
+        workout_doc: '- 45m 80% 90rpm',
+      });
+
+      const callArgs = vi.mocked(mockIntervalsClient.createEvent).mock.calls[0][0];
+      expect(callArgs.external_id).toBeUndefined();
+    });
+
+    it('should handle API errors gracefully', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockRejectedValue(
+        new Error('API request failed: 500')
+      );
+
+      await expect(
+        tools.createCyclingWorkout({
+          scheduled_for: '2024-12-20',
+          name: 'Failed Ride',
+          workout_doc: '- 10m 50% 90rpm',
+        })
+      ).rejects.toThrow('API request failed');
+    });
+
+    it('should return correct response structure', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 208,
+        uid: 'uid-208',
+        name: 'Structure Test',
+        start_date_local: '2024-12-21',
+        type: 'Ride',
+        category: 'WORKOUT',
+      });
+
+      const result = await tools.createCyclingWorkout({
+        scheduled_for: '2024-12-21',
+        name: 'Structure Test',
+        workout_doc: '- 15m 88% 85rpm',
+      });
+
+      expect(result).toHaveProperty('id');
+      expect(result).toHaveProperty('uid');
+      expect(result).toHaveProperty('name');
+      expect(result).toHaveProperty('scheduled_for');
+      expect(result).toHaveProperty('intervals_icu_url');
+    });
+  });
+
   describe('deleteWorkout', () => {
     it('should delete workout with domestique tag successfully', async () => {
       vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({

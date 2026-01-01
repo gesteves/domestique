@@ -388,6 +388,20 @@ export interface CreateRunWorkoutInput {
 }
 
 /**
+ * Input for creating a cycling workout in Intervals.icu.
+ */
+export interface CreateCyclingWorkoutInput {
+  /** Scheduled date in YYYY-MM-DD format or ISO datetime */
+  scheduled_for: string;
+  /** Workout name (e.g., "Sweet Spot Intervals") */
+  name: string;
+  /** Optional description/notes */
+  description?: string;
+  /** Structured workout definition in Intervals.icu syntax */
+  workout_doc: string;
+}
+
+/**
  * Response from creating a workout.
  */
 export interface CreateWorkoutResponse {

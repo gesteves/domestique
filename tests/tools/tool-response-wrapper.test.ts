@@ -253,7 +253,7 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(27);
+      expect(registeredHandlers.size).toBe(29);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_todays_recovery')).toBe(true);
@@ -282,6 +282,9 @@ describe('Tool Response Wrapper', () => {
       expect(registeredHandlers.has('create_run_workout')).toBe(true);
       expect(registeredHandlers.has('delete_workout')).toBe(true);
       expect(registeredHandlers.has('sync_trainerroad_runs')).toBe(true);
+      // Cycling workout tools
+      expect(registeredHandlers.has('get_cycling_workout_syntax')).toBe(true);
+      expect(registeredHandlers.has('create_cycling_workout')).toBe(true);
     });
 
     it('should set up timezone getter when Whoop client is configured', async () => {

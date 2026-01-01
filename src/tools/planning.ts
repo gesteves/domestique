@@ -7,6 +7,7 @@ import type {
   ActivityType,
   Race,
   CreateRunWorkoutInput,
+  CreateCyclingWorkoutInput,
   CreateWorkoutResponse,
   SyncTRRunsResult,
   SetWorkoutIntervalsInput,
@@ -232,6 +233,48 @@ export class PlanningTools {
       start_date_local: scheduledDate,
       tags: [DOMESTIQUE_TAG],
       external_id: input.trainerroad_uid,
+    });
+
+    return {
+      id: response.id,
+      uid: response.uid,
+      name: response.name,
+      scheduled_for: response.start_date_local,
+      intervals_icu_url: `https://intervals.icu/calendar/${scheduledDate.split('T')[0]}`,
+    };
+  }
+
+  /**
+   * Create a structured cycling workout in Intervals.icu.
+   * The workout will be tagged with 'domestique' for tracking.
+   */
+  async createCyclingWorkout(input: CreateCyclingWorkoutInput): Promise<CreateWorkoutResponse> {
+    const timezone = await this.intervals.getAthleteTimezone();
+
+    let scheduledDate: string;
+
+    // Check if input already has a time component (ISO datetime format)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(input.scheduled_for)) {
+      // Preserve the full datetime
+      scheduledDate = input.scheduled_for;
+    } else {
+      // Parse the date string and add midnight
+      const dateOnly = parseDateStringInTimezone(
+        input.scheduled_for,
+        timezone,
+        'scheduled_for'
+      );
+      scheduledDate = `${dateOnly}T00:00:00`;
+    }
+
+    // Create the event via API
+    const response = await this.intervals.createEvent({
+      name: input.name,
+      description: (input.description ? `${input.description}\n\n` : '') + input.workout_doc,
+      type: 'Ride',
+      category: 'WORKOUT',
+      start_date_local: scheduledDate,
+      tags: [DOMESTIQUE_TAG],
     });
 
     return {

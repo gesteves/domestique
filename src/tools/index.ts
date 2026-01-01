@@ -7,6 +7,7 @@ import { CurrentTools } from './current.js';
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
 import { RUN_WORKOUT_SYNTAX_RESOURCE } from '../resources/run-workout-syntax.js';
+import { CYCLING_WORKOUT_SYNTAX_RESOURCE } from '../resources/cycling-workout-syntax.js';
 import {
   combineFieldDescriptions,
   getFieldDescriptions,
@@ -563,14 +564,35 @@ and will not be updated throughout the day.
 - Reference when converting TrainerRoad RPE-based descriptions to structured workouts.
 </use-cases>
 
-<notes>
-- Call this tool before using create_run_workout to understand the syntax requirements.
-- The syntax must be followed exactly for workouts to sync correctly to Zwift/Garmin.
-</notes>`,
+<instructions>
+- You **MUST** call this tool before using create_run_workout to understand the syntax requirements.
+- The syntax **MUST** be followed exactly for workouts to sync correctly to Zwift/Garmin.
+</instructions>`,
       {},
       withToolResponse(
         'get_run_workout_syntax',
         async () => ({ syntax: RUN_WORKOUT_SYNTAX_RESOURCE }),
+        { fieldDescriptions: {} }
+      )
+    );
+
+    server.tool(
+      'get_cycling_workout_syntax',
+      `Returns the Intervals.icu workout syntax documentation for creating structured cycling workouts.
+
+<use-cases>
+- Learning the correct syntax before creating a cycling workout.
+- Reference when creating custom cycling workouts from plain-English descriptions.
+</use-cases>
+
+<instructions>
+- You **MUST** call this tool before using create_cycling_workout to understand the syntax requirements.
+- The syntax **MUST** be followed exactly for workouts to sync correctly to Zwift/Garmin.
+</instructions>`,
+      {},
+      withToolResponse(
+        'get_cycling_workout_syntax',
+        async () => ({ syntax: CYCLING_WORKOUT_SYNTAX_RESOURCE }),
         { fieldDescriptions: {} }
       )
     );
@@ -615,6 +637,43 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         'create_run_workout',
         async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
           this.planningTools.createRunWorkout(args),
+        {
+          fieldDescriptions: {},
+        }
+      )
+    );
+
+    server.tool(
+      'create_cycling_workout',
+      `Creates a structured cycling workout in Intervals.icu that syncs to Zwift or Garmin.
+
+<use-cases>
+- Creating custom cycling structured workouts with specific paces based on a plain-english description provided by the user.
+</use-cases>
+
+<instructions>
+1. You **MUST** fetch the user's cycling power zones via the get_sports_settings tool.
+2. You **MUST** call the get_cycling_workout_syntax tool for syntax documentation.
+   - The workout you create **MUST** adhere strictly to that syntax for it to work correctly in Zwift and Garmin.
+3. Generate the Intervals.icu syntax using the correct format. Again, you **MUST** adhere to the Intervals.icu syntax **EXACTLY**.
+4. **DO NOT** use this to recreate TrainerRoad cycling workouts. **DO NOT** offer the user to do this. TrainerRoad cycling workout descriptions are too vague to be recreated using Intervals.icu syntax.
+</instructions>
+
+<notes>
+- This creates the workout directly in Intervals.icu and will appear on the user's calendar.
+- The workout will be tagged with 'domestique' for tracking.
+- If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
+</notes>`,
+      {
+        scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
+        name: z.string().describe('Workout name'),
+        description: z.string().optional().describe('Optional notes/description'),
+        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
+      },
+      withToolResponse(
+        'create_cycling_workout',
+        async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
+          this.planningTools.createCyclingWorkout(args),
         {
           fieldDescriptions: {},
         }
