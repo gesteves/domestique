@@ -45,6 +45,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `create_run_workout` - Creates a structured running workout in Intervals.icu from a plain English description
 - `delete_workout` - Deletes a Domestique-created workout from Intervals.icu
 - `sync_trainerroad_runs` - Recreates running workouts in the TrainerRoad calendar as structured workouts in Intervals.icu so they sync to Zwift or Garmin
+- `set_workout_intervals` - Sets intervals on a completed activity
 
 ### Analysis
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR

@@ -9,6 +9,8 @@ import type {
   CreateRunWorkoutInput,
   CreateWorkoutResponse,
   SyncTRRunsResult,
+  SetWorkoutIntervalsInput,
+  SetWorkoutIntervalsResponse,
 } from '../types/index.js';
 import type { GetUpcomingWorkoutsInput } from './types.js';
 
@@ -359,5 +361,44 @@ export class PlanningTools {
     }
 
     return result;
+  }
+
+  /**
+   * Set intervals on a completed activity in Intervals.icu.
+   *
+   * This tool is used to define workout intervals on a completed activity
+   * based on data parsed from a TrainerRoad workout screenshot.
+   *
+   * Intervals.icu will recalculate all metrics (power, HR, cadence, etc.)
+   * from the recorded activity data based on the provided time ranges.
+   */
+  async setWorkoutIntervals(input: SetWorkoutIntervalsInput): Promise<SetWorkoutIntervalsResponse> {
+    const { activity_id, intervals, replace_existing_intervals = true } = input;
+
+    if (!intervals.length) {
+      throw new Error('At least one interval is required');
+    }
+
+    // Validate that all intervals have required fields
+    for (let i = 0; i < intervals.length; i++) {
+      const interval = intervals[i];
+      if (typeof interval.start_time !== 'number' || interval.start_time < 0) {
+        throw new Error(`Interval ${i + 1}: start_time must be a non-negative number`);
+      }
+      if (typeof interval.end_time !== 'number' || interval.end_time <= interval.start_time) {
+        throw new Error(`Interval ${i + 1}: end_time must be greater than start_time`);
+      }
+      if (interval.type !== 'WORK' && interval.type !== 'RECOVERY') {
+        throw new Error(`Interval ${i + 1}: type must be 'WORK' or 'RECOVERY'`);
+      }
+    }
+
+    await this.intervals.updateActivityIntervals(activity_id, intervals, replace_existing_intervals);
+
+    return {
+      activity_id,
+      intervals_set: intervals.length,
+      intervals_icu_url: `https://intervals.icu/activities/${activity_id}`,
+    };
   }
 }

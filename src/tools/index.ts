@@ -691,6 +691,69 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
       )
     );
 
+    server.tool(
+      'set_workout_intervals',
+      `Sets intervals on a completed activity in Intervals.icu.
+
+<use-cases>
+- Matching completed workout intervals to a TrainerRoad workout structure.
+- Defining custom interval boundaries on a recorded activity.
+- Re-analyzing a workout with corrected interval timing.
+</use-cases>
+
+<instructions>
+1. Determine the interval data from the information given by the user:
+   - Extract start time, end time, and an optional label for each interval
+   - You may need to convert timestamps to seconds (e.g., "0:05:00" = 300 seconds, "1:15:00" = 4500 seconds)
+2. Determine WORK vs RECOVERY type using the power_zones embedded in the workout:
+   - Generally speaking, Zone 1 is RECOVERY, and anything else is WORK
+   - That said, use your best judgement: A Zone 2 interval after a Zone 4 or Zone 5 one could reasonably be considered a RECOVERY interval
+3. Call this tool with the activity_id and parsed intervals array.
+4. Set the replace_existing_intervals, as needed, depending on the user's instructions
+</instructions>
+
+<notes>
+- By default, all existing intervals on the activity will be replaced.
+- Set replace_existing_intervals to false to merge new intervals with existing ones.
+- Intervals.icu will recalculate all metrics (power, HR, cadence, TSS, etc.) from the recorded activity data.
+- Times are in seconds from the start of the activity.
+- Use the workout's power_zones (not current athlete settings) for type inference, as FTP may have changed since the workout.
+</notes>`,
+      {
+        activity_id: z.string().describe('Intervals.icu activity ID'),
+        intervals: z
+          .array(
+            z.object({
+              start_time: z.number().describe('Start time in seconds from activity start'),
+              end_time: z.number().describe('End time in seconds from activity start'),
+              type: z.enum(['WORK', 'RECOVERY']).describe('Interval type based on power zone'),
+              label: z.string().optional().describe('Optional interval label (e.g., "Warmup", "Interval 1")'),
+            })
+          )
+          .describe('Array of intervals to set on the activity'),
+        replace_existing_intervals: z
+          .boolean()
+          .optional()
+          .describe('Whether to replace all existing intervals (true, default) or merge with existing (false)'),
+      },
+      withToolResponse(
+        'set_workout_intervals',
+        async (args: {
+          activity_id: string;
+          intervals: Array<{
+            start_time: number;
+            end_time: number;
+            type: 'WORK' | 'RECOVERY';
+            label?: string;
+          }>;
+          replace_existing_intervals?: boolean;
+        }) => this.planningTools.setWorkoutIntervals(args),
+        {
+          fieldDescriptions: getFieldDescriptions('set_workout_intervals'),
+        }
+      )
+    );
+
     // ============================================
     // Analysis Tools
     // ============================================

@@ -253,7 +253,7 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(26);
+      expect(registeredHandlers.size).toBe(27);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_todays_recovery')).toBe(true);

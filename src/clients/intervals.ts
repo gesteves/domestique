@@ -32,6 +32,7 @@ import type {
   DailyWellness,
   WellnessTrends,
   ActivityType,
+  ActivityIntervalInput,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
@@ -2458,6 +2459,56 @@ export class IntervalsClient {
   }
 
   /**
+   * PUT JSON to an activity endpoint.
+   * Uses /activity/{id} instead of /athlete/{id}
+   */
+  private async putActivity<T>(
+    activityId: string,
+    endpoint: string,
+    body: unknown,
+    queryParams?: Record<string, string | boolean>,
+    context?: { operation: string; resource?: string }
+  ): Promise<T> {
+    console.log(`[Intervals] PUT to /activity/${activityId}${endpoint}`);
+
+    const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
+
+    if (queryParams) {
+      Object.entries(queryParams).forEach(([key, value]) => {
+        url.searchParams.set(key, String(value));
+      });
+    }
+
+    const errorContext = context ?? {
+      operation: `put activity ${endpoint}`,
+      resource: `activity ${activityId}`,
+    };
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'PUT',
+        headers: {
+          Authorization: this.authHeader,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      if (error instanceof IntervalsApiError) {
+        throw error;
+      }
+      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+    }
+  }
+
+  /**
    * Create a new event/workout on the athlete's calendar.
    * POST /api/v1/athlete/{id}/events
    */
@@ -2507,5 +2558,28 @@ export class IntervalsClient {
       newest: endDate,
     });
     return events.filter((e) => e.tags?.includes(tag));
+  }
+
+  /**
+   * Update intervals on a completed activity.
+   * PUT /api/v1/activity/{id}/intervals?all={replaceAll}
+   *
+   * When replaceAll is true, all existing intervals on the activity are replaced.
+   * When replaceAll is false, the new intervals are merged with existing ones.
+   * Intervals.icu will recalculate all metrics (power, HR, cadence, etc.)
+   * from the recorded activity data based on the provided time ranges.
+   */
+  async updateActivityIntervals(
+    activityId: string,
+    intervals: ActivityIntervalInput[],
+    replaceAll: boolean = true
+  ): Promise<void> {
+    await this.putActivity<unknown>(
+      activityId,
+      '/intervals',
+      intervals,
+      { all: replaceAll },
+      { operation: 'update activity intervals', resource: `activity ${activityId}` }
+    );
   }
 }

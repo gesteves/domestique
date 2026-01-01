@@ -430,6 +430,44 @@ export interface SyncTRRunsResult {
 }
 
 /**
+ * Input for setting intervals on a completed activity.
+ */
+export interface ActivityIntervalInput {
+  /** Start time in seconds from the beginning of the activity */
+  start_time: number;
+  /** End time in seconds from the beginning of the activity */
+  end_time: number;
+  /** Interval type: WORK (hard effort) or RECOVERY (easy/rest) */
+  type: 'WORK' | 'RECOVERY';
+  /** Optional label for the interval (e.g., "Warmup", "Interval 1", "Recovery") */
+  label?: string;
+}
+
+/**
+ * Input for the set_workout_intervals tool.
+ */
+export interface SetWorkoutIntervalsInput {
+  /** Intervals.icu activity ID */
+  activity_id: string;
+  /** Array of intervals to set on the activity */
+  intervals: ActivityIntervalInput[];
+  /** Whether to replace all existing intervals (true) or merge with existing (false). Defaults to true. */
+  replace_existing_intervals?: boolean;
+}
+
+/**
+ * Response from setting workout intervals.
+ */
+export interface SetWorkoutIntervalsResponse {
+  /** Intervals.icu activity ID */
+  activity_id: string;
+  /** Number of intervals set */
+  intervals_set: number;
+  /** URL to view the activity in Intervals.icu */
+  intervals_icu_url: string;
+}
+
+/**
  * Upcoming race from the TrainerRoad calendar.
  * A race is detected when an all-day event exists alongside workout legs with the same name.
  */

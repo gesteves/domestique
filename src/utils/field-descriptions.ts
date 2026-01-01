@@ -627,6 +627,15 @@ export const ACTIVITY_TOTALS_FIELD_DESCRIPTIONS = {
   'zones.*.percentage': 'Percentage of total time in this zone',
 };
 
+/**
+ * Field descriptions for set_workout_intervals response
+ */
+const SET_WORKOUT_INTERVALS_FIELD_DESCRIPTIONS: Record<string, string> = {
+  activity_id: 'Intervals.icu activity ID that was updated',
+  intervals_set: 'Number of intervals that were set on the activity',
+  intervals_icu_url: 'URL to view the activity in Intervals.icu',
+};
+
 type FieldCategory =
   | 'workout'
   | 'whoop'
@@ -651,7 +660,8 @@ type FieldCategory =
   | 'todays_strain'
   | 'todays_completed_workouts'
   | 'todays_planned_workouts'
-  | 'activity_totals';
+  | 'activity_totals'
+  | 'set_workout_intervals';
 
 /**
  * Get descriptions for a specific category
@@ -706,6 +716,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return TODAYS_PLANNED_WORKOUTS_FIELD_DESCRIPTIONS;
     case 'activity_totals':
       return ACTIVITY_TOTALS_FIELD_DESCRIPTIONS;
+    case 'set_workout_intervals':
+      return SET_WORKOUT_INTERVALS_FIELD_DESCRIPTIONS;
   }
 }
 

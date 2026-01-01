@@ -221,4 +221,150 @@ describe('PlanningTools', () => {
       expect(result.workouts).toEqual([]);
     });
   });
+
+  describe('setWorkoutIntervals', () => {
+    it('should set intervals on activity successfully', async () => {
+      vi.mocked(mockIntervalsClient.updateActivityIntervals).mockResolvedValue(undefined);
+
+      const result = await tools.setWorkoutIntervals({
+        activity_id: 'i12345_activity123',
+        intervals: [
+          { start_time: 0, end_time: 300, type: 'RECOVERY', label: 'Warmup' },
+          { start_time: 300, end_time: 600, type: 'WORK', label: 'Interval 1' },
+          { start_time: 600, end_time: 660, type: 'RECOVERY', label: 'Recovery 1' },
+        ],
+      });
+
+      expect(result.activity_id).toBe('i12345_activity123');
+      expect(result.intervals_set).toBe(3);
+      expect(result.intervals_icu_url).toBe('https://intervals.icu/activities/i12345_activity123');
+
+      expect(mockIntervalsClient.updateActivityIntervals).toHaveBeenCalledWith(
+        'i12345_activity123',
+        [
+          { start_time: 0, end_time: 300, type: 'RECOVERY', label: 'Warmup' },
+          { start_time: 300, end_time: 600, type: 'WORK', label: 'Interval 1' },
+          { start_time: 600, end_time: 660, type: 'RECOVERY', label: 'Recovery 1' },
+        ],
+        true
+      );
+    });
+
+    it('should pass replace_existing_intervals=false to client when specified', async () => {
+      vi.mocked(mockIntervalsClient.updateActivityIntervals).mockResolvedValue(undefined);
+
+      await tools.setWorkoutIntervals({
+        activity_id: 'activity123',
+        intervals: [{ start_time: 0, end_time: 300, type: 'WORK' }],
+        replace_existing_intervals: false,
+      });
+
+      expect(mockIntervalsClient.updateActivityIntervals).toHaveBeenCalledWith(
+        'activity123',
+        [{ start_time: 0, end_time: 300, type: 'WORK' }],
+        false
+      );
+    });
+
+    it('should pass replace_existing_intervals=true to client when explicitly specified', async () => {
+      vi.mocked(mockIntervalsClient.updateActivityIntervals).mockResolvedValue(undefined);
+
+      await tools.setWorkoutIntervals({
+        activity_id: 'activity123',
+        intervals: [{ start_time: 0, end_time: 300, type: 'WORK' }],
+        replace_existing_intervals: true,
+      });
+
+      expect(mockIntervalsClient.updateActivityIntervals).toHaveBeenCalledWith(
+        'activity123',
+        [{ start_time: 0, end_time: 300, type: 'WORK' }],
+        true
+      );
+    });
+
+    it('should set intervals without labels', async () => {
+      vi.mocked(mockIntervalsClient.updateActivityIntervals).mockResolvedValue(undefined);
+
+      const result = await tools.setWorkoutIntervals({
+        activity_id: 'activity456',
+        intervals: [
+          { start_time: 0, end_time: 300, type: 'WORK' },
+          { start_time: 300, end_time: 360, type: 'RECOVERY' },
+        ],
+      });
+
+      expect(result.intervals_set).toBe(2);
+    });
+
+    it('should throw error when intervals array is empty', async () => {
+      await expect(
+        tools.setWorkoutIntervals({
+          activity_id: 'activity123',
+          intervals: [],
+        })
+      ).rejects.toThrow('At least one interval is required');
+    });
+
+    it('should throw error for negative start_time', async () => {
+      await expect(
+        tools.setWorkoutIntervals({
+          activity_id: 'activity123',
+          intervals: [{ start_time: -1, end_time: 300, type: 'WORK' }],
+        })
+      ).rejects.toThrow('Interval 1: start_time must be a non-negative number');
+    });
+
+    it('should throw error when end_time is not greater than start_time', async () => {
+      await expect(
+        tools.setWorkoutIntervals({
+          activity_id: 'activity123',
+          intervals: [{ start_time: 300, end_time: 300, type: 'WORK' }],
+        })
+      ).rejects.toThrow('Interval 1: end_time must be greater than start_time');
+    });
+
+    it('should throw error when end_time is less than start_time', async () => {
+      await expect(
+        tools.setWorkoutIntervals({
+          activity_id: 'activity123',
+          intervals: [{ start_time: 300, end_time: 200, type: 'WORK' }],
+        })
+      ).rejects.toThrow('Interval 1: end_time must be greater than start_time');
+    });
+
+    it('should throw error for invalid interval type', async () => {
+      await expect(
+        tools.setWorkoutIntervals({
+          activity_id: 'activity123',
+          intervals: [{ start_time: 0, end_time: 300, type: 'INVALID' as 'WORK' }],
+        })
+      ).rejects.toThrow("Interval 1: type must be 'WORK' or 'RECOVERY'");
+    });
+
+    it('should validate all intervals and report first error', async () => {
+      await expect(
+        tools.setWorkoutIntervals({
+          activity_id: 'activity123',
+          intervals: [
+            { start_time: 0, end_time: 300, type: 'WORK' }, // valid
+            { start_time: 300, end_time: 200, type: 'RECOVERY' }, // invalid
+            { start_time: -1, end_time: 100, type: 'WORK' }, // also invalid but checked second
+          ],
+        })
+      ).rejects.toThrow('Interval 2: end_time must be greater than start_time');
+    });
+
+    it('should propagate API errors', async () => {
+      vi.mocked(mockIntervalsClient.updateActivityIntervals).mockRejectedValue(
+        new Error('Activity not found')
+      );
+
+      await expect(
+        tools.setWorkoutIntervals({
+          activity_id: 'nonexistent',
+          intervals: [{ start_time: 0, end_time: 300, type: 'WORK' }],
+        })
+      ).rejects.toThrow('Activity not found');
+    });
+  });
 });
