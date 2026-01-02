@@ -418,6 +418,42 @@ export interface CreateWorkoutResponse {
 }
 
 /**
+ * Input for updating a workout in Intervals.icu.
+ */
+export interface UpdateWorkoutInput {
+  /** Intervals.icu event ID */
+  event_id: string;
+  /** New workout name (optional) */
+  name?: string;
+  /** New description/notes (optional) */
+  description?: string;
+  /** New structured workout definition in Intervals.icu syntax (optional) */
+  workout_doc?: string;
+  /** New scheduled date in YYYY-MM-DD format or ISO datetime (optional) */
+  scheduled_for?: string;
+  /** New event type - e.g., "Run", "Ride" (optional) */
+  type?: string;
+}
+
+/**
+ * Response from updating a workout.
+ */
+export interface UpdateWorkoutResponse {
+  /** Intervals.icu event ID */
+  id: number;
+  /** Intervals.icu event UID */
+  uid: string;
+  /** Name of the updated workout */
+  name: string;
+  /** Scheduled date/time */
+  scheduled_for: string;
+  /** URL to view the workout in Intervals.icu */
+  intervals_icu_url: string;
+  /** Fields that were updated */
+  updated_fields: string[];
+}
+
+/**
  * Result from sync operation.
  */
 export interface SyncTRRunsResult {
@@ -434,10 +470,30 @@ export interface SyncTRRunsResult {
     expected_tss?: number;
     expected_duration?: string;
   }>;
+  /** TR runs that need to be updated (LLM should use update_workout for each) */
+  runs_to_update: Array<{
+    tr_uid: string;
+    tr_name: string;
+    tr_description?: string;
+    scheduled_for: string;
+    expected_tss?: number;
+    expected_duration?: string;
+    /** Intervals.icu event ID of the existing workout to update */
+    icu_event_id: string;
+    /** Current name of the ICU workout */
+    icu_name: string;
+    /** List of changed fields (e.g., ['name', 'date', 'description']) */
+    changes: string[];
+  }>;
   /** Details of deleted orphans */
   deleted: Array<{
     name: string;
     reason: string;
+  }>;
+  /** Details of updated workouts */
+  updated: Array<{
+    name: string;
+    changes: string[];
   }>;
   /** Any errors encountered */
   errors: string[];

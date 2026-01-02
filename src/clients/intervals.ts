@@ -356,6 +356,45 @@ export interface CreateEventResponse {
   external_id?: string;
 }
 
+/**
+ * Input for updating an event in Intervals.icu.
+ * All fields are optional - only provided fields will be updated.
+ */
+export interface UpdateEventInput {
+  /** Workout name */
+  name?: string;
+  /** Description/notes - can include structured workout syntax */
+  description?: string;
+  /** Event type (e.g., "Run", "Ride") */
+  type?: string;
+  /** Category - should be "WORKOUT" for workouts */
+  category?: 'WORKOUT' | 'NOTE' | 'RACE' | 'OTHER';
+  /** Start date in YYYY-MM-DD or datetime format */
+  start_date_local?: string;
+  /** Duration in seconds */
+  moving_time?: number;
+  /** Training load (TSS) */
+  icu_training_load?: number;
+  /** Tags for tracking */
+  tags?: string[];
+  /** External ID for linking to source (e.g., TrainerRoad UID) */
+  external_id?: string;
+}
+
+/**
+ * Response from event update.
+ */
+export interface UpdateEventResponse {
+  id: number;
+  uid: string;
+  name: string;
+  start_date_local: string;
+  type: string;
+  category: string;
+  tags?: string[];
+  external_id?: string;
+}
+
 // Raw interval from Intervals.icu API
 interface IntervalsRawInterval {
     id: number;
@@ -2421,6 +2460,45 @@ export class IntervalsClient {
   }
 
   /**
+   * PUT JSON to an athlete endpoint.
+   */
+  private async putJson<T>(
+    endpoint: string,
+    body: unknown,
+    context?: { operation: string; resource?: string }
+  ): Promise<T> {
+    const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
+
+    const errorContext = context ?? {
+      operation: `put ${endpoint}`,
+      resource: undefined,
+    };
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'PUT',
+        headers: {
+          Authorization: this.authHeader,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      if (error instanceof IntervalsApiError) {
+        throw error;
+      }
+      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+    }
+  }
+
+  /**
    * DELETE an athlete endpoint.
    */
   private async deleteHttp(
@@ -2511,6 +2589,24 @@ export class IntervalsClient {
       '/events',
       input,
       { operation: 'create event', resource: input.name }
+    );
+    return response;
+  }
+
+  /**
+   * Update an existing event/workout on the athlete's calendar.
+   * PUT /api/v1/athlete/{id}/events/{eventId}
+   *
+   * Only provided fields will be updated.
+   */
+  async updateEvent(
+    eventId: string | number,
+    input: UpdateEventInput
+  ): Promise<UpdateEventResponse> {
+    const response = await this.putJson<UpdateEventResponse>(
+      `/events/${eventId}`,
+      input,
+      { operation: 'update event', resource: `event ${eventId}` }
     );
     return response;
   }

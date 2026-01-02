@@ -10,6 +10,8 @@ import type {
   CreateRunWorkoutInput,
   CreateCyclingWorkoutInput,
   CreateWorkoutResponse,
+  UpdateWorkoutInput,
+  UpdateWorkoutResponse,
   SyncTRRunsResult,
   SetWorkoutIntervalsInput,
   SetWorkoutIntervalsResponse,
@@ -249,8 +251,88 @@ export class PlanningTools {
   }
 
   /**
+   * Update a Domestique-created workout in Intervals.icu.
+   * Only updates workouts tagged with 'domestique'.
+   */
+  async updateWorkout(input: UpdateWorkoutInput): Promise<UpdateWorkoutResponse> {
+    const { event_id, name, description, workout_doc, scheduled_for, type } = input;
+
+    // First, verify the workout exists and has the domestique tag
+    const existingEvent = await this.intervals.getEvent(event_id);
+
+    if (!existingEvent.tags?.includes(DOMESTIQUE_TAG)) {
+      throw new Error(
+        `Cannot update this workout: it was not created by Domestique. ` +
+        `Only workouts tagged with "${DOMESTIQUE_TAG}" can be updated via this tool.`
+      );
+    }
+
+    // Build the update payload - only include fields that were provided
+    const updatePayload: Record<string, unknown> = {};
+    const updatedFields: string[] = [];
+
+    if (name !== undefined) {
+      updatePayload.name = name;
+      updatedFields.push('name');
+    }
+
+    // Handle description + workout_doc combination
+    if (description !== undefined || workout_doc !== undefined) {
+      const newDescription = description ?? '';
+      const newWorkoutDoc = workout_doc ?? '';
+      updatePayload.description = newDescription
+        ? `${newDescription}\n\n${newWorkoutDoc}`
+        : newWorkoutDoc;
+      if (description !== undefined) updatedFields.push('description');
+      if (workout_doc !== undefined) updatedFields.push('workout_doc');
+    }
+
+    if (scheduled_for !== undefined) {
+      const timezone = await this.intervals.getAthleteTimezone();
+
+      // Check if input already has a time component
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(scheduled_for)) {
+        updatePayload.start_date_local = scheduled_for;
+      } else {
+        const dateOnly = parseDateStringInTimezone(scheduled_for, timezone, 'scheduled_for');
+        updatePayload.start_date_local = `${dateOnly}T00:00:00`;
+      }
+      updatedFields.push('scheduled_for');
+    }
+
+    if (type !== undefined) {
+      updatePayload.type = type;
+      updatedFields.push('type');
+    }
+
+    // Check if there's anything to update (besides tags)
+    if (updatedFields.length === 0) {
+      throw new Error(
+        'No fields provided to update. Specify at least one of: name, description, workout_doc, scheduled_for, type'
+      );
+    }
+
+    // Always preserve the existing tags (including domestique)
+    updatePayload.tags = existingEvent.tags;
+
+    const response = await this.intervals.updateEvent(event_id, updatePayload);
+
+    // Determine the scheduled date for the URL
+    const scheduledDate = (updatePayload.start_date_local as string) ?? existingEvent.start_date_local;
+
+    return {
+      id: response.id,
+      uid: response.uid,
+      name: response.name,
+      scheduled_for: response.start_date_local,
+      intervals_icu_url: `https://intervals.icu/calendar/${scheduledDate.split('T')[0]}`,
+      updated_fields: updatedFields,
+    };
+  }
+
+  /**
    * Sync TrainerRoad running workouts to Intervals.icu.
-   * Identifies TR runs that need syncing and orphaned Domestique workouts.
+   * Identifies TR runs that need syncing, updating, and orphaned Domestique workouts.
    */
   async syncTRRuns(params: {
     oldest?: string;
@@ -261,7 +343,9 @@ export class PlanningTools {
       tr_runs_found: 0,
       orphans_deleted: 0,
       runs_to_sync: [],
+      runs_to_update: [],
       deleted: [],
+      updated: [],
       errors: [],
     };
 
@@ -294,13 +378,19 @@ export class PlanningTools {
       endDate
     );
 
-    // 3. Find TR runs that need syncing (no matching ICU workout with same external_id)
-    const domestiqueExternalIds = new Set(
-      domestiqueWorkouts.map((d) => d.external_id).filter(Boolean)
+    // 3. Build lookup map: external_id -> ICU workout
+    const icuByExternalId = new Map(
+      domestiqueWorkouts
+        .filter((d) => d.external_id)
+        .map((d) => [d.external_id!, d])
     );
 
+    // 4. Categorize TR runs: new (need syncing) or changed (need updating)
     for (const trRun of trRuns) {
-      if (!domestiqueExternalIds.has(trRun.id)) {
+      const existingIcu = icuByExternalId.get(trRun.id);
+
+      if (!existingIcu) {
+        // No matching ICU workout - needs to be created
         result.runs_to_sync.push({
           tr_uid: trRun.id,
           tr_name: trRun.name,
@@ -309,16 +399,34 @@ export class PlanningTools {
           expected_tss: trRun.expected_tss,
           expected_duration: trRun.expected_duration,
         });
+      } else {
+        // Matching ICU workout exists - check for changes
+        const changes = this.detectWorkoutChanges(trRun, existingIcu);
+
+        if (changes.length > 0) {
+          result.runs_to_update.push({
+            tr_uid: trRun.id,
+            tr_name: trRun.name,
+            tr_description: trRun.description,
+            scheduled_for: trRun.scheduled_for,
+            expected_tss: trRun.expected_tss,
+            expected_duration: trRun.expected_duration,
+            icu_event_id: String(existingIcu.id),
+            icu_name: existingIcu.name,
+            changes,
+          });
+        }
+        // If no changes, workout is already synced and up-to-date
       }
     }
 
-    // 4. Find orphaned Domestique workouts (external_id no longer in TR)
+    // 5. Find orphaned Domestique workouts (external_id no longer in TR)
     const trIds = new Set(trRuns.map((tr) => tr.id));
     const orphans = domestiqueWorkouts.filter(
       (d) => d.external_id && !trIds.has(d.external_id)
     );
 
-    // 5. Delete orphans if not dry run
+    // 6. Delete orphans if not dry run
     if (!params.dry_run) {
       for (const orphan of orphans) {
         try {
@@ -343,6 +451,45 @@ export class PlanningTools {
     }
 
     return result;
+  }
+
+  /**
+   * Detect what has changed between a TR workout and its synced ICU workout.
+   * Returns array of changed field names.
+   */
+  private detectWorkoutChanges(
+    trRun: PlannedWorkout,
+    icuWorkout: { name: string; start_date_local: string; description?: string }
+  ): string[] {
+    const changes: string[] = [];
+
+    // Name change
+    if (trRun.name !== icuWorkout.name) {
+      changes.push('name');
+    }
+
+    // Date change (compare date portion only)
+    const trDate = trRun.scheduled_for.split('T')[0];
+    const icuDate = icuWorkout.start_date_local.split('T')[0];
+    if (trDate !== icuDate) {
+      changes.push('date');
+    }
+
+    // Description change - check if TR description is still contained in ICU description
+    // (ICU description may have workout_doc appended)
+    if (trRun.description && icuWorkout.description) {
+      const trDesc = trRun.description.trim();
+      const icuDesc = icuWorkout.description.trim();
+      // TR description should be contained in ICU description
+      if (!icuDesc.includes(trDesc)) {
+        changes.push('description');
+      }
+    } else if (trRun.description && !icuWorkout.description) {
+      // TR has description, ICU doesn't
+      changes.push('description');
+    }
+
+    return changes;
   }
 
   /**

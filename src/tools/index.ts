@@ -714,6 +714,45 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     );
 
     server.tool(
+      'update_workout',
+      `Updates a Domestique-created workout in Intervals.icu.
+
+<use-cases>
+- Modifying the name or description of a synced workout.
+- Changing the scheduled date of a workout.
+- Updating the structured workout definition (workout_doc).
+</use-cases>
+
+<instructions>
+- Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
+- Get the event_id from get_upcoming_workouts or get_todays_planned_workouts.
+- Only provide the fields you want to update; omitted fields remain unchanged.
+</instructions>
+
+<notes>
+- The 'domestique' tag is automatically preserved.
+- Changing the type (e.g., Run to Ride) without updating workout_doc may result in invalid syntax.
+- Cannot update workouts not created by Domestique.
+</notes>`,
+      {
+        event_id: z.string().describe('Intervals.icu event ID to update'),
+        name: z.string().optional().describe('New workout name'),
+        description: z.string().optional().describe('New description/notes'),
+        workout_doc: z.string().optional().describe('New structured workout in Intervals.icu syntax'),
+        scheduled_for: z.string().optional().describe('New date (YYYY-MM-DD) or datetime'),
+        type: z.string().optional().describe('New event type (e.g., "Run", "Ride")'),
+      },
+      withToolResponse(
+        'update_workout',
+        async (args: { event_id: string; name?: string; description?: string; workout_doc?: string; scheduled_for?: string; type?: string }) =>
+          this.planningTools.updateWorkout(args),
+        {
+          fieldDescriptions: {},
+        }
+      )
+    );
+
+    server.tool(
       'sync_trainerroad_runs',
       `Syncs TrainerRoad running workouts to Intervals.icu.
 

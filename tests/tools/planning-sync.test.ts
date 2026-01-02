@@ -589,6 +589,8 @@ describe('PlanningTools sync operations', () => {
           name: 'Easy Run',
           external_id: 'tr-1', // Already synced
           tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00',
+          description: '30min Easy RPE4',
         },
       ]);
 
@@ -607,6 +609,8 @@ describe('PlanningTools sync operations', () => {
           name: 'Easy Run',
           external_id: 'tr-1',
           tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00',
+          description: '30min Easy RPE4',
         },
         {
           id: 101,
@@ -614,6 +618,7 @@ describe('PlanningTools sync operations', () => {
           name: 'Deleted TR Run',
           external_id: 'tr-deleted', // TR workout no longer exists
           tags: ['domestique'],
+          start_date_local: '2024-12-17T09:00:00',
         },
       ]);
       vi.mocked(mockIntervalsClient.deleteEvent).mockResolvedValue(undefined);
@@ -651,9 +656,11 @@ describe('PlanningTools sync operations', () => {
         {
           id: 100,
           uid: 'uid-100',
-          name: 'Synced Run',
+          name: 'Easy Run', // Match name to avoid change detection
           external_id: 'tr-1',
           tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00',
+          description: '30min Easy RPE4',
         },
         {
           id: 101,
@@ -661,6 +668,7 @@ describe('PlanningTools sync operations', () => {
           name: 'Orphan',
           external_id: 'tr-gone',
           tags: ['domestique'],
+          start_date_local: '2024-12-19T09:00:00',
         },
       ]);
       vi.mocked(mockIntervalsClient.deleteEvent).mockResolvedValue(undefined);
@@ -904,6 +912,259 @@ describe('PlanningTools sync operations', () => {
       const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
 
       expect(result._instructions).toBeUndefined();
+    });
+  });
+
+  describe('change detection in syncTRRuns', () => {
+    const baseTrRuns: PlannedWorkout[] = [
+      {
+        id: 'tr-1',
+        scheduled_for: '2024-12-16T09:00:00Z',
+        name: 'Easy Run',
+        sport: 'Running',
+        source: 'trainerroad',
+        description: '30min Easy RPE4',
+        expected_tss: 30,
+        expected_duration: '30m',
+      },
+    ];
+
+    it('should detect name change', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(baseTrRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 100,
+          uid: 'uid-100',
+          name: 'Old Name', // Different from TR name
+          external_id: 'tr-1',
+          tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00',
+          description: '30min Easy RPE4',
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      expect(result.runs_to_update).toHaveLength(1);
+      expect(result.runs_to_update[0].changes).toContain('name');
+      expect(result.runs_to_update[0].icu_event_id).toBe('100');
+      expect(result.runs_to_update[0].icu_name).toBe('Old Name');
+    });
+
+    it('should detect date change', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(baseTrRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 101,
+          uid: 'uid-101',
+          name: 'Easy Run',
+          external_id: 'tr-1',
+          tags: ['domestique'],
+          start_date_local: '2024-12-17T09:00:00', // Different date
+          description: '30min Easy RPE4',
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      expect(result.runs_to_update).toHaveLength(1);
+      expect(result.runs_to_update[0].changes).toContain('date');
+    });
+
+    it('should detect description change', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(baseTrRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 102,
+          uid: 'uid-102',
+          name: 'Easy Run',
+          external_id: 'tr-1',
+          tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00',
+          description: 'Completely different description', // Doesn't contain TR desc
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      expect(result.runs_to_update).toHaveLength(1);
+      expect(result.runs_to_update[0].changes).toContain('description');
+    });
+
+    it('should not flag as changed when TR description is contained in ICU', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(baseTrRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 103,
+          uid: 'uid-103',
+          name: 'Easy Run',
+          external_id: 'tr-1',
+          tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00',
+          // ICU has TR description + workout_doc appended
+          description: '30min Easy RPE4\n\nWarmup\n- 10m Z2 Pace',
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      // No changes should be detected
+      expect(result.runs_to_update).toHaveLength(0);
+      expect(result.runs_to_sync).toHaveLength(0);
+    });
+
+    it('should detect multiple changes at once', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(baseTrRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 104,
+          uid: 'uid-104',
+          name: 'Old Name',
+          external_id: 'tr-1',
+          tags: ['domestique'],
+          start_date_local: '2024-12-20T09:00:00', // Different date
+          description: 'Old description', // Different description
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      expect(result.runs_to_update).toHaveLength(1);
+      expect(result.runs_to_update[0].changes).toContain('name');
+      expect(result.runs_to_update[0].changes).toContain('date');
+      expect(result.runs_to_update[0].changes).toContain('description');
+    });
+
+    it('should not flag unchanged workouts', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(baseTrRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 105,
+          uid: 'uid-105',
+          name: 'Easy Run', // Same name
+          external_id: 'tr-1',
+          tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00', // Same date
+          description: '30min Easy RPE4', // Same description
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      expect(result.runs_to_update).toHaveLength(0);
+      expect(result.runs_to_sync).toHaveLength(0);
+    });
+
+    it('should handle mixed scenario (create + update + delete)', async () => {
+      const trRuns: PlannedWorkout[] = [
+        {
+          id: 'tr-new',
+          scheduled_for: '2024-12-16T09:00:00Z',
+          name: 'New Run',
+          sport: 'Running',
+          source: 'trainerroad',
+        },
+        {
+          id: 'tr-changed',
+          scheduled_for: '2024-12-18T09:00:00Z',
+          name: 'Updated Run Name',
+          sport: 'Running',
+          source: 'trainerroad',
+        },
+      ];
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        // Matches tr-changed but with old name
+        {
+          id: 200,
+          uid: 'uid-200',
+          name: 'Old Run Name',
+          external_id: 'tr-changed',
+          tags: ['domestique'],
+          start_date_local: '2024-12-18T09:00:00',
+        },
+        // Orphan - TR workout no longer exists
+        {
+          id: 201,
+          uid: 'uid-201',
+          name: 'Orphan Run',
+          external_id: 'tr-orphan',
+          tags: ['domestique'],
+          start_date_local: '2024-12-19T09:00:00',
+        },
+      ]);
+      vi.mocked(mockIntervalsClient.deleteEvent).mockResolvedValue(undefined);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      // tr-new should be in runs_to_sync (new)
+      expect(result.runs_to_sync).toHaveLength(1);
+      expect(result.runs_to_sync[0].tr_uid).toBe('tr-new');
+
+      // tr-changed should be in runs_to_update (changed name)
+      expect(result.runs_to_update).toHaveLength(1);
+      expect(result.runs_to_update[0].tr_uid).toBe('tr-changed');
+      expect(result.runs_to_update[0].changes).toContain('name');
+
+      // tr-orphan should be deleted
+      expect(result.orphans_deleted).toBe(1);
+      expect(result.deleted[0].name).toBe('Orphan Run');
+    });
+
+    it('should return runs_to_update with correct structure', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(baseTrRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 300,
+          uid: 'uid-300',
+          name: 'Old Name',
+          external_id: 'tr-1',
+          tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00',
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      expect(result.runs_to_update[0]).toHaveProperty('tr_uid');
+      expect(result.runs_to_update[0]).toHaveProperty('tr_name');
+      expect(result.runs_to_update[0]).toHaveProperty('scheduled_for');
+      expect(result.runs_to_update[0]).toHaveProperty('icu_event_id');
+      expect(result.runs_to_update[0]).toHaveProperty('icu_name');
+      expect(result.runs_to_update[0]).toHaveProperty('changes');
+      expect(result.runs_to_update[0].tr_description).toBe('30min Easy RPE4');
+      expect(result.runs_to_update[0].expected_tss).toBe(30);
+      expect(result.runs_to_update[0].expected_duration).toBe('30m');
+    });
+
+    it('should compare only date portion ignoring time', async () => {
+      const trRuns: PlannedWorkout[] = [
+        {
+          id: 'tr-time-test',
+          scheduled_for: '2024-12-16T14:30:00Z', // Different time
+          name: 'Time Test Run',
+          sport: 'Running',
+          source: 'trainerroad',
+        },
+      ];
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trRuns);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
+        {
+          id: 400,
+          uid: 'uid-400',
+          name: 'Time Test Run',
+          external_id: 'tr-time-test',
+          tags: ['domestique'],
+          start_date_local: '2024-12-16T09:00:00', // Same date, different time
+        },
+      ]);
+
+      const result = await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      // Should not detect a change since only the time is different
+      expect(result.runs_to_update).toHaveLength(0);
     });
   });
 });
