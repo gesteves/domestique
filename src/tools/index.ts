@@ -17,6 +17,8 @@ import { ApiError, DateParseError } from '../errors/index.js';
 
 interface ResponseOptions {
   fieldDescriptions: Record<string, string>;
+  /** Optional metadata for ChatGPT widgets (not visible to model) */
+  widgetMeta?: Record<string, unknown>;
 }
 
 interface ErrorDetails {
@@ -109,6 +111,7 @@ function withToolResponse<TArgs, TResult>(
       return await buildToolResponse({
         data,
         fieldDescriptions: options.fieldDescriptions,
+        widgetMeta: options.widgetMeta,
       });
     } catch (error) {
       return buildErrorResponse(error);
@@ -572,7 +575,9 @@ and will not be updated throughout the day.
       withToolResponse(
         'get_run_workout_syntax',
         async () => ({ syntax: RUN_WORKOUT_SYNTAX_RESOURCE }),
-        { fieldDescriptions: {} }
+        {
+          fieldDescriptions: {},
+        }
       )
     );
 
@@ -593,7 +598,9 @@ and will not be updated throughout the day.
       withToolResponse(
         'get_cycling_workout_syntax',
         async () => ({ syntax: CYCLING_WORKOUT_SYNTAX_RESOURCE }),
-        { fieldDescriptions: {} }
+        {
+          fieldDescriptions: {},
+        }
       )
     );
 

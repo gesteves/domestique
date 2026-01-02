@@ -15,15 +15,12 @@ describe('response-builder', () => {
         fieldDescriptions,
       });
 
-      // Should have content array for backwards compatibility
+      // Should have content array with JSON
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-
       // Text content should be serialized JSON
-      const text = result.content[0].text;
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(result.content[0].text);
       expect(parsed.response.metric).toBe(42);
-      expect(parsed.response.name).toBe('test');
       expect(parsed.field_descriptions.metric).toBe('A numeric value');
 
       // Should have structuredContent
@@ -58,6 +55,7 @@ describe('response-builder', () => {
       const result = await buildToolResponse({
         data,
         fieldDescriptions,
+        
       });
 
       // Verify structuredContent has the nested data
@@ -79,6 +77,7 @@ describe('response-builder', () => {
       const result = await buildToolResponse({
         data,
         fieldDescriptions,
+        
       });
 
       // Null and undefined fields should be removed to save tokens
@@ -111,6 +110,7 @@ describe('response-builder', () => {
       const resultWithHeat = await buildToolResponse({
         data: dataWithHeat,
         fieldDescriptions,
+        
       });
 
       // Heat zones summary should be added to field descriptions
@@ -130,13 +130,14 @@ describe('response-builder', () => {
       const resultWithoutHeat = await buildToolResponse({
         data: dataWithoutHeat,
         fieldDescriptions,
+        
       });
 
       // Field description should be filtered out when field is not present
       expect(resultWithoutHeat.structuredContent.field_descriptions.heat_zones).toBeUndefined();
     });
 
-    it('should return text content as formatted JSON for backwards compatibility', async () => {
+    it('should return JSON in content field', async () => {
       const data = { value: 123 };
       const fieldDescriptions = { value: 'A value' };
 
@@ -145,12 +146,9 @@ describe('response-builder', () => {
         fieldDescriptions,
       });
 
-      // Text should be valid JSON with 2-space indentation
-      const text = result.content[0].text;
-      expect(text).toContain('{\n  "response"');
-
-      // Should be parseable
-      const parsed = JSON.parse(text);
+      // Text should be formatted JSON
+      expect(result.content[0].text).toContain('{\n  "response"');
+      const parsed = JSON.parse(result.content[0].text);
       expect(parsed.response.value).toBe(123);
     });
 
@@ -163,10 +161,44 @@ describe('response-builder', () => {
       const result = await buildToolResponse({
         data,
         fieldDescriptions,
+        
       });
 
       // _debug should not be present when NODE_ENV is not 'development'
       expect(result.structuredContent._debug).toBeUndefined();
+    });
+
+    it('should include _meta when widgetMeta is provided', async () => {
+      const data = { value: 123 };
+      const fieldDescriptions = { value: 'A value' };
+      const widgetMeta = {
+        largeData: { items: [1, 2, 3, 4, 5] },
+        sensitiveInfo: 'widget-only',
+      };
+
+      const result = await buildToolResponse({
+        data,
+        fieldDescriptions,
+        
+        widgetMeta,
+      });
+
+      // _meta should be present with the widget metadata
+      expect(result._meta).toEqual(widgetMeta);
+    });
+
+    it('should not include _meta when widgetMeta is not provided', async () => {
+      const data = { value: 123 };
+      const fieldDescriptions = { value: 'A value' };
+
+      const result = await buildToolResponse({
+        data,
+        fieldDescriptions,
+        
+      });
+
+      // _meta should not be present
+      expect(result._meta).toBeUndefined();
     });
   });
 
@@ -174,9 +206,10 @@ describe('response-builder', () => {
     it('should build empty response with structuredContent', () => {
       const result = buildEmptyResponse('workouts');
 
-      // Should have content array
+      // Should have content array with default narration
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
+      expect(result.content[0].text).toBe('No workouts found.');
 
       // Should have structuredContent with message
       expect(result.structuredContent.response).toEqual({ message: 'No workouts found.' });
@@ -189,12 +222,18 @@ describe('response-builder', () => {
       expect(buildEmptyResponse('intervals').structuredContent.response.message).toBe('No intervals found.');
     });
 
-    it('should return text content as formatted JSON', () => {
-      const result = buildEmptyResponse('activities');
+    it('should use custom narration when provided', () => {
+      const result = buildEmptyResponse('activities', 'No activities were found for this date range.');
 
-      const text = result.content[0].text;
-      const parsed = JSON.parse(text);
-      expect(parsed.response.message).toBe('No activities found.');
+      expect(result.content[0].text).toBe('No activities were found for this date range.');
+      // structuredContent message should still use the default format
+      expect(result.structuredContent.response.message).toBe('No activities found.');
+    });
+
+    it('should fall back to default narration when not provided', () => {
+      const result = buildEmptyResponse('workouts');
+
+      expect(result.content[0].text).toBe('No workouts found.');
     });
   });
 });

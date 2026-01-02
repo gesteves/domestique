@@ -87,7 +87,7 @@ describe('Tool Response Wrapper', () => {
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      // Text content contains serialized JSON for backwards compatibility
+      // Text content is serialized JSON
       expect(result.content[0].text).toContain('"field_descriptions"');
       // structuredContent has the parsed response
       expect(result.structuredContent).toBeDefined();

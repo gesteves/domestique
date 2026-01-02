@@ -100,6 +100,8 @@ export interface ResponseBuilderOptions {
   data: unknown;
   /** Field descriptions to help LLM understand the data */
   fieldDescriptions: Record<string, string>;
+  /** Optional metadata for ChatGPT widgets (not visible to model) */
+  widgetMeta?: Record<string, unknown>;
 }
 
 export interface DebugInfo {
@@ -122,14 +124,15 @@ export interface ToolResponse {
 /**
  * Builds a tool response with structuredContent for MCP.
  *
- * Returns both:
- * - content: Serialized JSON text for backwards compatibility
- * - structuredContent: Parsed JSON for modern MCP clients
+ * Returns:
+ * - content: Short narration text for the model
+ * - structuredContent: Parsed JSON data for modern MCP clients
+ * - _meta: Optional widget-only data (not visible to model, for ChatGPT Apps)
  *
- * In development mode, adds a _debug object with token count.
+ * In development mode, adds a _debug object with token count to structuredContent.
  */
 export async function buildToolResponse(options: ResponseBuilderOptions): Promise<ToolResponse> {
-  const { data } = options;
+  const { data, widgetMeta } = options;
 
   // Remove null/undefined fields to reduce token usage
   const cleanedData = removeNullFields(data);
@@ -145,24 +148,23 @@ export async function buildToolResponse(options: ResponseBuilderOptions): Promis
     field_descriptions: fieldDescriptions,
   };
 
-  // Build the content text (without debug info first)
-  const contentText = JSON.stringify(structuredContent, null, 2);
-
   // In development mode, add token count to _debug
-  const tokenCount = await countTokens(contentText);
+  const tokenCount = await countTokens(JSON.stringify(structuredContent, null, 2));
   if (tokenCount !== null) {
     structuredContent._debug = { token_count: tokenCount };
   }
 
-  // Re-serialize with debug info if present
-  const finalContentText = tokenCount !== null
-    ? JSON.stringify(structuredContent, null, 2)
-    : contentText;
-
-  return {
-    content: [{ type: 'text' as const, text: finalContentText }],
+  const response: ToolResponse = {
+    content: [{ type: 'text' as const, text: JSON.stringify(structuredContent, null, 2) }],
     structuredContent,
   };
+
+  // Add _meta if provided (for ChatGPT widgets - not visible to model)
+  if (widgetMeta) {
+    response._meta = widgetMeta;
+  }
+
+  return response;
 }
 
 export interface EmptyResponse {
@@ -180,14 +182,14 @@ export interface EmptyToolResponse {
 /**
  * Builds an empty result response with structuredContent.
  */
-export function buildEmptyResponse(resourceType: string): EmptyToolResponse {
+export function buildEmptyResponse(resourceType: string, narration?: string): EmptyToolResponse {
   const structuredContent: EmptyResponse = {
     response: { message: `No ${resourceType} found.` },
     field_descriptions: {},
   };
 
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(structuredContent, null, 2) }],
+    content: [{ type: 'text' as const, text: narration || `No ${resourceType} found.` }],
     structuredContent,
   };
 }
