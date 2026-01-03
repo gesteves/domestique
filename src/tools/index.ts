@@ -171,6 +171,7 @@ export class ToolRegistry {
     server.registerTool(
       'get_daily_summary',
       {
+        title: 'Daily Summary',
         description: `Fetches a complete snapshot of the user's current status today, including:
 - Whoop recovery, sleep performance, and strain
 - Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
@@ -210,6 +211,7 @@ export class ToolRegistry {
     server.registerTool(
       'get_todays_recovery',
       {
+        title: "Today's Recovery",
         description: `Returns today's Whoop recovery and sleep data.
 
 <use-cases>
@@ -238,6 +240,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_todays_strain',
       {
+        title: "Today's Strain",
         description: `Fetches today's Whoop strain data, including any activities logged in the Whoop app.
 
 <use-cases>
@@ -264,6 +267,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_todays_completed_workouts',
       {
+        title: "Today's Completed Workouts",
         description: `Fetches all workouts and fitness activities the user has completed today from Intervals.icu.
 
 <use-cases>
@@ -291,6 +295,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_todays_planned_workouts',
       {
+        title: "Today's Planned Workouts",
         description: `Fetches all workouts and fitness activities the user has planned for today, from both TrainerRoad and Intervals.icu calendars.
 
 <use-cases>
@@ -318,6 +323,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_athlete_profile',
       {
+        title: 'Athlete Profile',
         description: `Returns the athlete's profile from Intervals.icu including:
   - Athlete info: name, location, timezone, gender, date of birth, and age.
   - The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
@@ -346,6 +352,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_sports_settings',
       {
+        title: 'Sport Settings',
         description: `Fetches settings from Intervals.icu for a single sport, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
 
 <use-cases>
@@ -376,6 +383,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_strain_history',
       {
+        title: 'Strain History',
         description: `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
 
 <use-cases>
@@ -408,6 +416,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_workout_history',
       {
+        title: 'Workout History',
         description: `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
 
 <use-cases>
@@ -443,6 +452,7 @@ and will not be updated throughout the day.
     server.registerTool(
       'get_workout_details',
       {
+        title: 'Workout Details',
         description: `Fetches the details of a single completed workout by its activity ID.
 
 <use-cases>
@@ -478,6 +488,7 @@ Get the activity_id from:
     server.registerTool(
       'get_recovery_trends',
       {
+        title: 'Recovery Trends',
         description: `Fetches Whoop recovery and sleep data over a date range.
 
 <use-cases>
@@ -511,6 +522,7 @@ Get the activity_id from:
     server.registerTool(
       'get_wellness_trends',
       {
+        title: 'Wellness Trends',
         description: `Fetches wellness data over a date range from Intervals.icu.
 
 <use-cases>
@@ -542,6 +554,7 @@ Get the activity_id from:
     server.registerTool(
       'get_activity_totals',
       {
+        title: 'Activity Totals',
         description: `Fetches aggregated activity totals over a date range, including duration, distance, training load, calories, and zone distributions.
 
 <use-cases>
@@ -576,6 +589,7 @@ Get the activity_id from:
     server.registerTool(
       'get_upcoming_workouts',
       {
+        title: 'Upcoming Workouts',
         description: `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter.
 
 <use-cases>
@@ -609,6 +623,7 @@ Get the activity_id from:
     server.registerTool(
       'get_upcoming_races',
       {
+        title: 'Upcoming Races',
         description: `Fetches upcoming races from the TrainerRoad calendar.
 
 <use-cases>
@@ -638,6 +653,7 @@ Get the activity_id from:
     server.registerTool(
       'get_run_workout_syntax',
       {
+        title: 'Run Workout Syntax',
         description: `Returns the Intervals.icu workout syntax documentation for creating structured running workouts.
 
 <use-cases>
@@ -663,6 +679,7 @@ Get the activity_id from:
     server.registerTool(
       'get_cycling_workout_syntax',
       {
+        title: 'Cycling Workout Syntax',
         description: `Returns the Intervals.icu workout syntax documentation for creating structured cycling workouts.
 
 <use-cases>
@@ -688,6 +705,7 @@ Get the activity_id from:
     server.registerTool(
       'create_run_workout',
       {
+        title: 'Create Run Workout',
         description: `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
 
 <use-cases>
@@ -737,6 +755,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     server.registerTool(
       'create_cycling_workout',
       {
+        title: 'Create Cycling Workout',
         description: `Creates a structured cycling workout in Intervals.icu that syncs to Zwift or Garmin.
 
 <use-cases>
@@ -777,6 +796,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     server.registerTool(
       'delete_workout',
       {
+        title: 'Delete Workout',
         description: `Deletes a Domestique-created workout from Intervals.icu.
 
 <use-cases>
@@ -813,6 +833,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     server.registerTool(
       'update_workout',
       {
+        title: 'Update Workout',
         description: `Updates a Domestique-created workout in Intervals.icu.
 
 <use-cases>
@@ -855,6 +876,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     server.registerTool(
       'sync_trainerroad_runs',
       {
+        title: 'Sync TrainerRoad Runs',
         description: `Syncs TrainerRoad running workouts to Intervals.icu.
 
 <use-cases>
@@ -896,6 +918,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     server.registerTool(
       'set_workout_intervals',
       {
+        title: 'Set Workout Intervals',
         description: `Sets intervals on a completed activity in Intervals.icu.
 
 <use-cases>
@@ -966,6 +989,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     server.registerTool(
       'get_training_load_trends',
       {
+        title: 'Training Load Trends',
         description: `Returns training load metrics, including CTL, ATL, TSB, ramp rate, and ACWR, over a specified period of time.
 
 <use-cases>
@@ -996,6 +1020,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
     server.registerTool(
       'get_workout_intervals',
       {
+        title: 'Workout Intervals',
         description: `Fetches a detailed interval breakdown for a specific workout.
 
 <use-cases>
@@ -1029,6 +1054,7 @@ Get the activity_id from:
     server.registerTool(
       'get_workout_notes',
       {
+        title: 'Workout Notes',
         description: `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
 
 <use-cases>
@@ -1059,6 +1085,7 @@ Get the activity_id from:
     server.registerTool(
       'get_workout_weather',
       {
+        title: 'Workout Weather',
         description: `Fetches the weather conditions during a given outdoor workout.
 
 <use-cases>
@@ -1087,6 +1114,7 @@ Get the activity_id from:
     server.registerTool(
       'get_workout_heat_zones',
       {
+        title: 'Workout Heat Zones',
         description: `Fetches heat zone data for a specific workout, showing time spent in each heat strain zone.
 
 <use-cases>
@@ -1125,6 +1153,7 @@ Get the activity_id from:
     server.registerTool(
       'get_power_curve',
       {
+        title: 'Power Curve',
         description: `Fetches cycling power curves showing best power output at various durations for a given date range.
 
 <use-cases>
@@ -1165,6 +1194,7 @@ Get the activity_id from:
     server.registerTool(
       'get_pace_curve',
       {
+        title: 'Pace Curve',
         description: `Fetches pace curves for swimming or running, showing best times at various distances for a given date range.
 
 <use-cases>
@@ -1211,6 +1241,7 @@ Get the activity_id from:
     server.registerTool(
       'get_hr_curve',
       {
+        title: 'Heart Rate Curve',
         description: `Fetches HR curves showing maximum sustained heart rate at various durations for a given date range.
 
 <use-cases>

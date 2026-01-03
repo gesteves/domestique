@@ -150,7 +150,7 @@ describe('ToolRegistry', () => {
       expect(mockServer.registerTool).toHaveBeenCalledTimes(31);
     });
 
-    it('should pass config object with description and annotations to each tool', () => {
+    it('should pass config object with title, description, and annotations to each tool', () => {
       const mockServer = {
         registerTool: vi.fn(),
       };
@@ -161,9 +161,17 @@ describe('ToolRegistry', () => {
       const [name, config, handler] = mockServer.registerTool.mock.calls[0];
       expect(typeof name).toBe('string');
       expect(typeof config).toBe('object');
+      expect(typeof config.title).toBe('string'); // Human-readable title
       expect(typeof config.description).toBe('string');
       expect(config.annotations).toBeDefined();
       expect(typeof handler).toBe('function');
+
+      // Verify all tools have titles
+      for (const call of mockServer.registerTool.mock.calls) {
+        const [toolName, toolConfig] = call;
+        expect(toolConfig.title, `Tool ${toolName} should have a title`).toBeDefined();
+        expect(typeof toolConfig.title).toBe('string');
+      }
     });
   });
 });
