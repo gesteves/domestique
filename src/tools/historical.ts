@@ -239,6 +239,24 @@ export class HistoricalTools {
   }
 
   // ============================================
+  // Workout Details
+  // ============================================
+
+  /**
+   * Get full details for a single workout.
+   * Returns comprehensive data including power model estimates, interval summary,
+   * Z2 metrics, compliance, and all other available metrics.
+   */
+  async getWorkoutDetails(activityId: string): Promise<NormalizedWorkout> {
+    try {
+      return await this.intervals.getActivity(activityId);
+    } catch (error) {
+      console.error('Error fetching workout details:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
   // Workout Intervals
   // ============================================
 

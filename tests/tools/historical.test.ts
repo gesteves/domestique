@@ -569,6 +569,81 @@ describe('HistoricalTools', () => {
     });
   });
 
+  describe('getWorkoutDetails', () => {
+    const mockWorkoutDetails: NormalizedWorkout = {
+      id: 'i12345',
+      start_time: '2024-12-10T10:00:00+00:00',
+      activity_type: 'Cycling',
+      name: 'Morning Ride',
+      duration: '1:00:00',
+      distance: '30.5 km',
+      tss: 85,
+      source: 'intervals.icu',
+      intervals_icu_url: 'https://intervals.icu/activities/i12345',
+      // Power model estimates
+      pm_cp: 250,
+      pm_w_prime: 15000,
+      pm_pmax: 900,
+      pm_ftp: 270,
+      pm_ftp_secs: 1200,
+      pm_ftp_watts: 285,
+      // Rolling fitness
+      rolling_ftp: 275,
+      rolling_ftp_delta: 5,
+      // Interval summary
+      interval_summary: ['2x 5m 300w', '3x 10m 250w'],
+      // Load breakdown
+      power_load: 85,
+      hr_load: 80,
+      // Z2 metrics
+      power_hr_z2: 1.35,
+      power_hr_z2_mins: 30,
+      cadence_z2: 90,
+      // Compliance
+      compliance: 95,
+    };
+
+    it('should fetch workout details for activity', async () => {
+      vi.mocked(mockIntervalsClient.getActivity).mockResolvedValue(mockWorkoutDetails);
+
+      const result = await tools.getWorkoutDetails('i12345');
+
+      expect(result).toEqual(mockWorkoutDetails);
+      expect(result.id).toBe('i12345');
+      expect(result.pm_cp).toBe(250);
+      expect(result.pm_w_prime).toBe(15000);
+      expect(result.rolling_ftp).toBe(275);
+      expect(result.interval_summary).toEqual(['2x 5m 300w', '3x 10m 250w']);
+      expect(result.power_hr_z2).toBe(1.35);
+      expect(result.compliance).toBe(95);
+      expect(mockIntervalsClient.getActivity).toHaveBeenCalledWith('i12345');
+    });
+
+    it('should return workout details without optional fields', async () => {
+      const minimalWorkout: NormalizedWorkout = {
+        id: 'i12346',
+        start_time: '2024-12-11T08:00:00+00:00',
+        activity_type: 'Running',
+        duration: '0:45:00',
+        source: 'intervals.icu',
+      };
+      vi.mocked(mockIntervalsClient.getActivity).mockResolvedValue(minimalWorkout);
+
+      const result = await tools.getWorkoutDetails('i12346');
+
+      expect(result.id).toBe('i12346');
+      expect(result.pm_cp).toBeUndefined();
+      expect(result.interval_summary).toBeUndefined();
+      expect(result.compliance).toBeUndefined();
+    });
+
+    it('should propagate errors from client', async () => {
+      vi.mocked(mockIntervalsClient.getActivity).mockRejectedValue(new Error('Activity not found'));
+
+      await expect(tools.getWorkoutDetails('invalid-id')).rejects.toThrow('Activity not found');
+    });
+  });
+
   describe('getWorkoutIntervals', () => {
     const mockIntervalsResponse: WorkoutIntervalsResponse = {
       activity_id: 'i12345',

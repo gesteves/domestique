@@ -413,6 +413,38 @@ and will not be updated throughout the day.
     );
 
     server.tool(
+      'get_workout_details',
+      `Fetches the details of a single completed workout by its activity ID.
+
+<use-cases>
+- Getting all available metrics for a specific workout in one call
+</use-cases>
+
+<instructions>
+Get the activity_id from:
+- get_workout_history (for past workouts)
+- get_todays_completed_workouts (for today's workouts)
+- get_daily_summary (for today's workouts)
+</instructions>
+
+<notes>
+- This returns more detailed data than what's included in get_workout_history results.
+- Includes athlete notes, detailed intervals, weather during the activity (if available), power zones, pace zones, heart rate zones, and heat zones
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions.
+</notes>`,
+      {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+      },
+      withToolResponse(
+        'get_workout_details',
+        async (args: { activity_id: string }) => this.historicalTools.getWorkoutDetails(args.activity_id),
+        {
+          fieldDescriptions: combineFieldDescriptions('workout', 'workout_details'),
+        }
+      )
+    );
+
+    server.tool(
       'get_recovery_trends',
       `Fetches Whoop recovery and sleep data over a date range.
 

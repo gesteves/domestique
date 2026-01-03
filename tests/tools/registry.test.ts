@@ -111,6 +111,7 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_upcoming_workouts');
       // Analysis tools
       expect(registeredTools).toContain('get_training_load_trends');
+      expect(registeredTools).toContain('get_workout_details');
       expect(registeredTools).toContain('get_workout_intervals');
       expect(registeredTools).toContain('get_workout_notes');
       expect(registeredTools).toContain('get_workout_weather');
@@ -136,7 +137,7 @@ describe('ToolRegistry', () => {
       // Cycling workout tools
       expect(registeredTools).toContain('get_cycling_workout_syntax');
       expect(registeredTools).toContain('create_cycling_workout');
-      expect(registeredTools.length).toBe(30);
+      expect(registeredTools.length).toBe(31);
     });
 
     it('should call server.tool for each tool', () => {
@@ -146,7 +147,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(30);
+      expect(mockServer.tool).toHaveBeenCalledTimes(31);
     });
 
     it('should pass description and schema to each tool', () => {

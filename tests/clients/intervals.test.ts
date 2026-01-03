@@ -721,14 +721,14 @@ describe('IntervalsClient', () => {
       const result = await client.getActivity('i113367711');
 
       const callUrl = mockFetch.mock.calls[0][0] as string;
-      expect(callUrl).toContain('/activities/i113367711');
+      expect(callUrl).toContain('/activity/i113367711');
       expect(result.id).toBe('i113367711');
       expect(result.is_indoor).toBe(true);
       expect(result.start_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/);
     });
 
     it('should handle icu_ prefixed fields from single activity endpoint', async () => {
-      // The /activities/{id} endpoint returns icu_ prefixed fields for power, efficiency, fitness, and energy
+      // The /activity/{id} endpoint returns icu_ prefixed fields for power, efficiency, fitness, and energy
       const mockSingleActivityResponse = {
         id: 'i113796426',
         start_date_local: '2025-12-25T12:01:55',
@@ -2181,7 +2181,19 @@ describe('IntervalsClient', () => {
         json: () => Promise.resolve([]),
       });
 
-      // Fifth call: profile (for timezone)
+      // Fifth call: intervals
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }),
+      });
+
+      // Sixth call: intervals streams (heat_strain_index)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      // Seventh call: profile (for timezone)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProfile),
@@ -2193,8 +2205,8 @@ describe('IntervalsClient', () => {
       expect(result.max_heat_strain_index).toBeDefined();
       expect(result.median_heat_strain_index).toBeDefined();
 
-      // Should have made 5 fetch calls (activity + sport-settings + heat streams + notes + profile)
-      expect(mockFetch).toHaveBeenCalledTimes(5);
+      // Should have made 7 fetch calls (activity + sport-settings + heat streams + notes + intervals + intervals streams + profile)
+      expect(mockFetch).toHaveBeenCalledTimes(7);
       const heatStreamUrl = mockFetch.mock.calls[2][0] as string;
       expect(heatStreamUrl).toContain('/streams');
       expect(heatStreamUrl).toContain('heat_strain_index');
@@ -2230,7 +2242,19 @@ describe('IntervalsClient', () => {
         json: () => Promise.resolve([]),
       });
 
-      // Fourth call: profile (for timezone)
+      // Fourth call: intervals
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }),
+      });
+
+      // Fifth call: intervals streams
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      // Sixth call: profile (for timezone)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProfile),
@@ -2242,8 +2266,8 @@ describe('IntervalsClient', () => {
       expect(result.max_heat_strain_index).toBeUndefined();
       expect(result.median_heat_strain_index).toBeUndefined();
 
-      // Should only have made 4 fetch calls (activity + sport-settings + notes + profile, no heat streams)
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // Should have made 6 fetch calls (activity + sport-settings + notes + intervals + intervals streams + profile)
+      expect(mockFetch).toHaveBeenCalledTimes(6);
     });
 
     it('should fetch temperature metrics when temp is in stream_types', async () => {
@@ -2287,7 +2311,19 @@ describe('IntervalsClient', () => {
         json: () => Promise.resolve([]),
       });
 
-      // Fifth call: profile (for timezone)
+      // Fifth call: intervals
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }),
+      });
+
+      // Sixth call: intervals streams
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      // Seventh call: profile (for timezone)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProfile),
@@ -2302,8 +2338,8 @@ describe('IntervalsClient', () => {
       expect(result.start_ambient_temperature).toBeDefined();
       expect(result.end_ambient_temperature).toBeDefined();
 
-      // Should have made 5 fetch calls (activity + sport-settings + temp streams + notes + profile)
-      expect(mockFetch).toHaveBeenCalledTimes(5);
+      // Should have made 7 fetch calls (activity + sport-settings + temp streams + notes + intervals + intervals streams + profile)
+      expect(mockFetch).toHaveBeenCalledTimes(7);
       const tempStreamUrl = mockFetch.mock.calls[2][0] as string;
       expect(tempStreamUrl).toContain('/streams');
       expect(tempStreamUrl).toContain('temp');
@@ -2340,7 +2376,19 @@ describe('IntervalsClient', () => {
         json: () => Promise.resolve([]),
       });
 
-      // Fourth call: profile (for timezone)
+      // Fourth call: intervals
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }),
+      });
+
+      // Fifth call: intervals streams
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      // Sixth call: profile (for timezone)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProfile),
@@ -2355,8 +2403,8 @@ describe('IntervalsClient', () => {
       expect(result.start_ambient_temperature).toBeUndefined();
       expect(result.end_ambient_temperature).toBeUndefined();
 
-      // Should only have made 4 fetch calls (activity + sport-settings + notes + profile, no temp streams)
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // Should have made 6 fetch calls (activity + sport-settings + notes + intervals + intervals streams + profile)
+      expect(mockFetch).toHaveBeenCalledTimes(6);
     });
 
     it('should fetch both heat and temp when both are in stream_types', async () => {
@@ -2411,7 +2459,19 @@ describe('IntervalsClient', () => {
         json: () => Promise.resolve([]),
       });
 
-      // Sixth call: profile (for timezone)
+      // Sixth call: intervals
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }),
+      });
+
+      // Seventh call: intervals streams
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      // Eighth call: profile (for timezone)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProfile),
@@ -2423,8 +2483,8 @@ describe('IntervalsClient', () => {
       expect(result.max_heat_strain_index).toBeDefined();
       expect(result.min_ambient_temperature).toBeDefined();
 
-      // Should have made 6 fetch calls (activity + sport-settings + heat streams + temp streams + notes + profile)
-      expect(mockFetch).toHaveBeenCalledTimes(6);
+      // Should have made 8 fetch calls (activity + sport-settings + heat streams + temp streams + notes + intervals + intervals streams + profile)
+      expect(mockFetch).toHaveBeenCalledTimes(8);
     });
 
     it('should handle missing stream_types field gracefully', async () => {
@@ -2457,7 +2517,19 @@ describe('IntervalsClient', () => {
         json: () => Promise.resolve([]),
       });
 
-      // Fourth call: profile (for timezone)
+      // Fourth call: intervals
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }),
+      });
+
+      // Fifth call: intervals streams
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      // Sixth call: profile (for timezone)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockProfile),
@@ -2469,8 +2541,8 @@ describe('IntervalsClient', () => {
       expect(result.max_heat_strain_index).toBeUndefined();
       expect(result.min_ambient_temperature).toBeUndefined();
 
-      // Should only have made 4 fetch calls (activity + sport-settings + notes + profile, no streams)
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // Should have made 6 fetch calls (activity + sport-settings + notes + intervals + intervals streams + profile)
+      expect(mockFetch).toHaveBeenCalledTimes(6);
     });
   });
 

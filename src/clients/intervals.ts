@@ -113,11 +113,12 @@ interface IntervalsActivity {
   id: string;
   start_date_local: string;
   start_date: string; // UTC timestamp with Z suffix
-  type: string;
+  type?: string;
   name?: string;
   description?: string;
   moving_time?: number;
   elapsed_time?: number;
+  icu_recording_time?: number; // Total recording time in seconds
   distance?: number;
   icu_training_load?: number;
   icu_intensity?: number;
@@ -148,6 +149,10 @@ interface IntervalsActivity {
   icu_hr_zones?: number[]; // HR zone boundaries
   icu_power_zones?: number[]; // Power zone boundaries (% of FTP)
   pace_zones?: number[]; // Pace zone boundaries
+
+  // Sweet spot boundaries (from single activity endpoint)
+  icu_sweet_spot_min?: number;
+  icu_sweet_spot_max?: number;
 
   // Threshold pace for this activity
   threshold_pace?: number; // Speed in m/s (needs conversion based on pace_units)
@@ -214,8 +219,23 @@ interface IntervalsActivity {
   // Thresholds for this activity
   icu_ftp?: number;
   icu_eftp?: number;
-  icu_pm_ftp?: number; // activity-derived eFTP
+  icu_pm_ftp?: number; // activity-derived eFTP from power model
   lthr?: number; // Lactate threshold HR at time of activity
+  athlete_max_hr?: number; // Max HR setting at time of activity
+
+  // Power model estimates (from single activity endpoint)
+  icu_pm_cp?: number; // Critical Power from power model
+  icu_pm_w_prime?: number; // W' from power model
+  icu_pm_p_max?: number; // Pmax from power model
+  icu_pm_ftp_secs?: number; // Duration for modeled FTP
+  icu_pm_ftp_watts?: number; // Modeled FTP watts
+
+  // Rolling fitness estimates (from single activity endpoint)
+  icu_rolling_cp?: number | null;
+  icu_rolling_w_prime?: number;
+  icu_rolling_p_max?: number;
+  icu_rolling_ftp?: number;
+  icu_rolling_ftp_delta?: number;
 
   // Energy (API returns both prefixed and non-prefixed depending on endpoint)
   joules?: number;
@@ -243,6 +263,24 @@ interface IntervalsActivity {
 
   // Stream types available for this activity
   stream_types?: string[]; // e.g., ["time", "watts", "heartrate", "temp", "heat_strain_index"]
+
+  // Interval summary (from single activity endpoint)
+  interval_summary?: string[]; // e.g., ["2x 5m 133w", "3x 10m 202w"]
+
+  // Load breakdown by metric (from single activity endpoint)
+  power_load?: number;
+  hr_load?: number;
+  pace_load?: number | null;
+  hr_load_type?: string; // e.g., "HRSS"
+  pace_load_type?: string | null;
+
+  // Z2 metrics (from single activity endpoint)
+  icu_power_hr_z2?: number; // Power/HR ratio in Z2
+  icu_power_hr_z2_mins?: number; // Minutes in Z2 for this calculation
+  icu_cadence_z2?: number; // Average cadence in Z2
+
+  // Compliance (from single activity endpoint)
+  compliance?: number; // Workout compliance percentage (0-100)
 }
 
 interface IntervalsWellness {
@@ -1145,7 +1183,7 @@ export class IntervalsClient {
     if (sport) {
       const normalizedSport = normalizeActivityType(sport);
       filtered = activities.filter(
-        (a) => normalizeActivityType(a.type) === normalizedSport
+        (a) => a.type && normalizeActivityType(a.type) === normalizedSport
       );
     }
 
@@ -1157,11 +1195,19 @@ export class IntervalsClient {
   }
 
   /**
-   * Get a single activity by ID
+   * Get a single activity by ID with full details.
+   * This fetches all available data including heat metrics, temperature, and notes.
+   * Uses the /activity/{id} endpoint which returns more detailed data than the list endpoint.
    */
   async getActivity(activityId: string): Promise<NormalizedWorkout> {
-    const activity = await this.fetch<IntervalsActivity>(`/activities/${activityId}`);
-    return await this.normalizeActivity(activity);
+    // Use fetchActivity which calls /activity/{id} endpoint (not /athlete/{id}/activities)
+    const activity = await this.fetchActivity<IntervalsActivity>(activityId, '');
+    // Ensure the activity has an ID (single activity endpoint may not include it in response)
+    if (!activity.id) {
+      activity.id = activityId;
+    }
+    // Always fetch full details for single activity requests (skipExpensiveCalls: false)
+    return await this.normalizeActivity(activity, { skipExpensiveCalls: false });
   }
 
   /**
@@ -1824,7 +1870,7 @@ export class IntervalsClient {
     const gapSecPerKm = activity.gap ? activity.gap * 1000 : undefined;
 
     // Determine if this is a swimming activity for unit formatting
-    const isSwim = isSwimmingActivity(activity.type);
+    const isSwim = activity.type ? isSwimmingActivity(activity.type) : false;
 
     // Calculate duration in seconds
     const durationSeconds = activity.moving_time ?? activity.elapsed_time ?? 0;
@@ -1902,13 +1948,29 @@ export class IntervalsClient {
       }
     }
 
+    // Fetch detailed interval data for this activity
+    // Skip if skipExpensiveCalls is true (for bulk operations like activity totals)
+    let intervals: WorkoutInterval[] | undefined;
+    let intervalGroups: IntervalGroup[] | undefined;
+    if (!options?.skipExpensiveCalls) {
+      try {
+        const intervalsResponse = await this.getActivityIntervals(activity.id);
+        intervals = intervalsResponse.intervals.length > 0 ? intervalsResponse.intervals : undefined;
+        intervalGroups = intervalsResponse.groups.length > 0 ? intervalsResponse.groups : undefined;
+      } catch (error) {
+        // Intervals may not be available for this activity
+        intervals = undefined;
+        intervalGroups = undefined;
+      }
+    }
+
     // Get athlete timezone for formatting start_time
     const timezone = await this.getAthleteTimezone();
 
     return {
       id: activity.id,
       start_time: localStringToISO8601WithTimezone(activity.start_date_local, timezone),
-      activity_type: normalizeActivityType(activity.type),
+      activity_type: activity.type ? normalizeActivityType(activity.type) : 'Other',
       name: activity.name,
       description: activity.description,
       duration: formatDuration(durationSeconds),
@@ -1998,7 +2060,7 @@ export class IntervalsClient {
       // Activity context flags
       // is_indoor: true if trainer flag is set, OR activity type contains "virtual", OR source is Zwift
       is_indoor: activity.trainer === true ||
-        activity.type.toLowerCase().includes('virtual') ||
+        activity.type?.toLowerCase().includes('virtual') ||
         activity.source?.toLowerCase() === 'zwift',
       is_commute: activity.commute,
       is_race: activity.race,
@@ -2038,6 +2100,30 @@ export class IntervalsClient {
 
       // Notes
       notes,
+
+      // Detailed interval data
+      intervals,
+      interval_groups: intervalGroups,
+
+      // Rolling fitness estimates
+      rolling_ftp: activity.icu_rolling_ftp,
+      rolling_ftp_delta: activity.icu_rolling_ftp_delta,
+
+      // Interval summary
+      interval_summary: activity.interval_summary,
+
+      // Load breakdown by metric type
+      power_load: activity.power_load,
+      hr_load: activity.hr_load,
+      pace_load: activity.pace_load ?? undefined,
+
+      // Z2 aerobic metrics
+      power_hr_z2: activity.icu_power_hr_z2,
+      power_hr_z2_mins: activity.icu_power_hr_z2_mins,
+      cadence_z2: activity.icu_cadence_z2,
+
+      // Workout compliance
+      compliance: activity.compliance,
     };
   }
 

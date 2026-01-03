@@ -144,6 +144,30 @@ export interface NormalizedWorkout {
 
   // Notes
   notes?: WorkoutNote[]; // Notes/messages left by the athlete for this activity
+
+  // Detailed interval data (only included with skipExpensiveCalls: false)
+  intervals?: WorkoutInterval[]; // Individual intervals with power, HR, cadence, and timing data
+  interval_groups?: IntervalGroup[]; // Grouped intervals (e.g., "4x 5m @ 200w")
+
+  // Rolling fitness estimates
+  rolling_ftp?: number; // Rolling FTP estimate
+  rolling_ftp_delta?: number; // Change from rolling FTP
+
+  // Interval summary (human-readable summary of intervals)
+  interval_summary?: string[]; // e.g., ["2x 5m 133w", "3x 10m 202w"]
+
+  // Load breakdown by metric type
+  power_load?: number; // Training load from power
+  hr_load?: number; // Training load from heart rate
+  pace_load?: number; // Training load from pace (running/swimming)
+
+  // Z2 aerobic metrics
+  power_hr_z2?: number; // Power/HR ratio in Z2 (aerobic efficiency)
+  power_hr_z2_mins?: number; // Minutes in Z2 for this calculation
+  cadence_z2?: number; // Average cadence in Z2
+
+  // Workout compliance
+  compliance?: number; // Workout compliance percentage (0-100) - how well the athlete followed the planned workout
 }
 
 // Zone time entry for power zones

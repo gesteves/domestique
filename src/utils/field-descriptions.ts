@@ -120,6 +120,36 @@ export const WORKOUT_FIELD_DESCRIPTIONS = {
   notes: 'Array of notes/messages left by the athlete or other Intervals.icu users (like a coach) for this activity. Each note contains: the author, created date, type, content (the note text), and optional attachment_url and attachment_mime_type.',
 };
 
+/**
+ * Additional field descriptions for detailed workout data.
+ * These fields are available when calling get_workout_details.
+ */
+export const WORKOUT_DETAILS_FIELD_DESCRIPTIONS = {
+  // Detailed interval data
+  intervals: 'Array of individual workout intervals with detailed metrics including power, HR, cadence, duration, and timing. Each interval includes type (WORK/RECOVERY), label, and various performance metrics.',
+  interval_groups: 'Grouped intervals showing repeated efforts. Example: "4x 5m @ 200w" would be grouped together. Includes average power, HR, cadence, and count.',
+
+  // Rolling fitness estimates
+  rolling_ftp: 'Rolling FTP estimate from the athlete\'s recent activities, in watts. This is Intervals.icu\'s current estimate of the athlete\'s FTP based on recent training.',
+  rolling_ftp_delta: 'Change in rolling FTP from previous value. Positive means FTP is increasing.',
+
+  // Interval summary
+  interval_summary: 'Human-readable summary of the workout intervals. Example: ["2x 5m 133w", "3x 10m 202w"]. Useful for quickly understanding workout structure.',
+
+  // Load breakdown
+  power_load: 'Training load calculated from power data (TSS).',
+  hr_load: 'Training load calculated from heart rate data (HRSS or similar).',
+  pace_load: 'Training load calculated from pace data (for running/swimming).',
+
+  // Z2 aerobic metrics
+  power_hr_z2: 'Power to heart rate ratio in Zone 2 (watts per bpm). A measure of aerobic efficiency - higher values indicate better efficiency.',
+  power_hr_z2_mins: 'Minutes of data used to calculate the Z2 power/HR ratio.',
+  cadence_z2: 'Average cadence during Zone 2 effort (RPM for cycling, steps/min for running).',
+
+  // Compliance
+  compliance: 'Workout compliance percentage (0-100). Measures how closely the athlete followed a planned workout. 0 means no planned workout was matched.',
+};
+
 export const WHOOP_FIELD_DESCRIPTIONS = {
   // Strain activity
   strain_score: 'Whoop metric of the cardiovascular load, the level of strain the workout had on the user\'s cardiovascular system based on the user\'s heart rate. Strain is scored on a logarithmic scale from 0 to 21. Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21',
@@ -638,6 +668,7 @@ const SET_WORKOUT_INTERVALS_FIELD_DESCRIPTIONS: Record<string, string> = {
 
 type FieldCategory =
   | 'workout'
+  | 'workout_details'
   | 'whoop'
   | 'body_measurements'
   | 'sleep'
@@ -670,6 +701,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
   switch (category) {
     case 'workout':
       return WORKOUT_FIELD_DESCRIPTIONS;
+    case 'workout_details':
+      return WORKOUT_DETAILS_FIELD_DESCRIPTIONS;
     case 'whoop':
       return WHOOP_FIELD_DESCRIPTIONS;
     case 'body_measurements':
