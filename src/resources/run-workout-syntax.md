@@ -216,11 +216,10 @@ Cooldown
 4. **Ranges**: Use hyphen `a-b` (e.g. `7:00-6:30/km`)
 5. **Keywords**: Case-insensitive (`ramp`, `Ramp`, `RAMP` all work)
 6. **Blank lines**: Use between sections for readability
-7. **Sport type**: Determined by workout metadata; steps can override with explicit HR or Pace keywords
 
 ## Workflow
 
-To create a workout, you **MUST**:
+Before creating a workout, you must:
 
 1. Fetch the user's running pace zones and threshold pace via the get_sports_settings tool
 2. Use your best judgment to map RPE descriptions from the TrainerRoad workout to the correct pace for each step
