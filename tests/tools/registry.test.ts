@@ -92,7 +92,7 @@ describe('ToolRegistry', () => {
     it('should register tools with mock server', () => {
       const registeredTools: string[] = [];
       const mockServer = {
-        tool: vi.fn().mockImplementation((name: string) => {
+        registerTool: vi.fn().mockImplementation((name: string) => {
           registeredTools.push(name);
         }),
       };
@@ -140,28 +140,29 @@ describe('ToolRegistry', () => {
       expect(registeredTools.length).toBe(31);
     });
 
-    it('should call server.tool for each tool', () => {
+    it('should call server.registerTool for each tool', () => {
       const mockServer = {
-        tool: vi.fn(),
+        registerTool: vi.fn(),
       };
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.tool).toHaveBeenCalledTimes(31);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(31);
     });
 
-    it('should pass description and schema to each tool', () => {
+    it('should pass config object with description and annotations to each tool', () => {
       const mockServer = {
-        tool: vi.fn(),
+        registerTool: vi.fn(),
       };
 
       registry.registerTools(mockServer as any);
 
-      // Check first tool call has correct structure
-      const [name, description, schema, handler] = mockServer.tool.mock.calls[0];
+      // Check first tool call has correct structure (registerTool uses name, config, handler)
+      const [name, config, handler] = mockServer.registerTool.mock.calls[0];
       expect(typeof name).toBe('string');
-      expect(typeof description).toBe('string');
-      expect(typeof schema).toBe('object');
+      expect(typeof config).toBe('object');
+      expect(typeof config.description).toBe('string');
+      expect(config.annotations).toBeDefined();
       expect(typeof handler).toBe('function');
     });
   });

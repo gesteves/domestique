@@ -48,7 +48,7 @@ vi.mock('../../src/clients/trainerroad.js', () => ({
 
 describe('Tool Response Wrapper', () => {
   let registry: ToolRegistry;
-  let mockServer: { tool: ReturnType<typeof vi.fn> };
+  let mockServer: { registerTool: ReturnType<typeof vi.fn> };
   let registeredHandlers: Map<string, (args: unknown) => Promise<unknown>>;
 
   beforeEach(() => {
@@ -56,7 +56,8 @@ describe('Tool Response Wrapper', () => {
     registeredHandlers = new Map();
 
     mockServer = {
-      tool: vi.fn().mockImplementation((name: string, _description: string, _schema: unknown, handler: (args: unknown) => Promise<unknown>) => {
+      // registerTool takes (name, config, handler) instead of (name, description, schema, handler)
+      registerTool: vi.fn().mockImplementation((name: string, _config: unknown, handler: (args: unknown) => Promise<unknown>) => {
         registeredHandlers.set(name, handler);
       }),
     };
@@ -149,7 +150,7 @@ describe('Tool Response Wrapper', () => {
       });
 
       const newMockServer = {
-        tool: vi.fn().mockImplementation((name: string, _desc: string, _schema: unknown, handler: (args: unknown) => Promise<unknown>) => {
+        registerTool: vi.fn().mockImplementation((name: string, _config: unknown, handler: (args: unknown) => Promise<unknown>) => {
           registeredHandlers.set(name, handler);
         }),
       };
