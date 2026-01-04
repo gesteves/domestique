@@ -196,6 +196,7 @@ export class ToolRegistry {
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -226,6 +227,7 @@ export class ToolRegistry {
 and will not be updated throughout the day.
 - Returns null if Whoop is not configured.
 </notes>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -253,6 +255,7 @@ and will not be updated throughout the day.
 <notes>
 - Returns null if Whoop is not configured.
 </notes>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -281,6 +284,7 @@ and will not be updated throughout the day.
 <notes>
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -308,6 +312,7 @@ and will not be updated throughout the day.
 <notes>
 - Planned workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 </notes>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -338,6 +343,7 @@ and will not be updated throughout the day.
 - You **MUST** use the user's preferred units in all responses.
 - If you don't know the user's preferred units, you **MUST** call this tool before responding to the user, so you can get their preferences.
 </instructions>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -635,6 +641,7 @@ Get the activity_id from:
 <instructions>
 - The description of the race may contain important details about the race, including if it's an A, B or C race; and details about the course.
 </instructions>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -665,6 +672,7 @@ Get the activity_id from:
 - You **MUST** call this tool before using create_run_workout to understand the syntax requirements.
 - The syntax **MUST** be followed exactly for workouts to sync correctly to Zwift/Garmin.
 </instructions>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
@@ -691,6 +699,7 @@ Get the activity_id from:
 - You **MUST** call this tool before using create_cycling_workout to understand the syntax requirements.
 - The syntax **MUST** be followed exactly for workouts to sync correctly to Zwift/Garmin.
 </instructions>`,
+        inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
