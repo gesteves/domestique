@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   DOMESTIQUE_TAG,
   areWorkoutsSimilar,
-  generateSyncHint,
   matchWhoopActivity,
 } from '../../src/utils/workout-utils.js';
 import type { PlannedWorkout, NormalizedWorkout, StrainActivity } from '../../src/types/index.js';
@@ -84,105 +83,6 @@ describe('workout-utils', () => {
       const a = createPlannedWorkout({ name: 'Sprint Intervals', expected_tss: 80 });
       const b = createPlannedWorkout({ name: 'Recovery Ride', expected_tss: 30 });
       expect(areWorkoutsSimilar(a, b)).toBe(false);
-    });
-  });
-
-  describe('generateSyncHint', () => {
-    const createTrRun = (
-      id: string,
-      overrides: Partial<PlannedWorkout> = {}
-    ): PlannedWorkout => ({
-      id,
-      name: 'TR Run',
-      scheduled_for: '2024-12-15T08:00:00',
-      sport: 'Running',
-      source: 'trainerroad',
-      ...overrides,
-    });
-
-    const createIcuWorkout = (
-      id: string,
-      overrides: Partial<PlannedWorkout> = {}
-    ): PlannedWorkout => ({
-      id,
-      name: 'ICU Workout',
-      scheduled_for: '2024-12-15T08:00:00',
-      sport: 'Running',
-      source: 'intervals.icu',
-      ...overrides,
-    });
-
-    it('should return undefined when no TR runs exist', () => {
-      const trWorkouts: PlannedWorkout[] = [
-        { id: '1', name: 'Ride', scheduled_for: '2024-12-15T08:00:00', sport: 'Cycling', source: 'trainerroad' },
-      ];
-      const icuWorkouts: PlannedWorkout[] = [];
-      expect(generateSyncHint(trWorkouts, icuWorkouts)).toBeUndefined();
-    });
-
-    it('should return undefined when TR runs are already synced', () => {
-      const trWorkouts = [createTrRun('tr-123')];
-      const icuWorkouts = [
-        createIcuWorkout('icu-1', {
-          external_id: 'tr-123',
-          tags: [DOMESTIQUE_TAG],
-        }),
-      ];
-      expect(generateSyncHint(trWorkouts, icuWorkouts)).toBeUndefined();
-    });
-
-    it('should return hint when TR runs exist without matching ICU workouts', () => {
-      const trWorkouts = [createTrRun('tr-123')];
-      const icuWorkouts: PlannedWorkout[] = [];
-
-      const result = generateSyncHint(trWorkouts, icuWorkouts);
-
-      expect(result).toContain('Found 1 TrainerRoad running workout(s)');
-      expect(result).toContain('create_run_workout');
-    });
-
-    it('should return hint when matching ICU workout lacks domestique tag', () => {
-      const trWorkouts = [createTrRun('tr-123')];
-      const icuWorkouts = [
-        createIcuWorkout('icu-1', {
-          external_id: 'tr-123',
-          // No domestique tag
-        }),
-      ];
-
-      const result = generateSyncHint(trWorkouts, icuWorkouts);
-
-      expect(result).toContain('Found 1 TrainerRoad running workout(s)');
-    });
-
-    it('should count multiple unsynced runs', () => {
-      const trWorkouts = [
-        createTrRun('tr-1'),
-        createTrRun('tr-2'),
-        createTrRun('tr-3'),
-      ];
-      const icuWorkouts: PlannedWorkout[] = [];
-
-      const result = generateSyncHint(trWorkouts, icuWorkouts);
-
-      expect(result).toContain('Found 3 TrainerRoad running workout(s)');
-    });
-
-    it('should handle mix of synced and unsynced runs', () => {
-      const trWorkouts = [
-        createTrRun('tr-1'),
-        createTrRun('tr-2'),
-      ];
-      const icuWorkouts = [
-        createIcuWorkout('icu-1', {
-          external_id: 'tr-1',
-          tags: [DOMESTIQUE_TAG],
-        }),
-      ];
-
-      const result = generateSyncHint(trWorkouts, icuWorkouts);
-
-      expect(result).toContain('Found 1 TrainerRoad running workout(s)');
     });
   });
 

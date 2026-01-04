@@ -39,38 +39,6 @@ export function areWorkoutsSimilar(a: PlannedWorkout, b: PlannedWorkout): boolea
 }
 
 /**
- * Generate a hint for TR runs that can be synced to Intervals.icu.
- * Returns undefined if there are no unsynced runs.
- */
-export function generateSyncHint(
-  trWorkouts: PlannedWorkout[],
-  icuWorkouts: PlannedWorkout[]
-): string | undefined {
-  // Find TR runs without matching ICU workouts
-  const trRuns = trWorkouts.filter((w) => w.sport === 'Running');
-  if (trRuns.length === 0) return undefined;
-
-  // Check which TR runs don't have a matching ICU workout with the domestique tag
-  const unsyncedRuns = trRuns.filter((trRun) => {
-    // Check if there's a matching ICU workout with the same external_id
-    const hasMatchingIcu = icuWorkouts.some(
-      (icu) =>
-        icu.tags?.includes(DOMESTIQUE_TAG) &&
-        (icu.external_id === trRun.id || areWorkoutsSimilar(trRun, icu))
-    );
-    return !hasMatchingIcu;
-  });
-
-  if (unsyncedRuns.length === 0) return undefined;
-
-  return (
-    `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
-    `for structured execution on Zwift/Garmin. You can offer to sync these using the create_run_workout tool. ` +
-    `First fetch the user's running pace zones via get_sports_settings, then read the intervals-run-workout-syntax resource for syntax documentation.`
-  );
-}
-
-/**
  * Find and match a Whoop activity to an Intervals.icu workout.
  * Returns the matched Whoop data or null if no match found.
  */

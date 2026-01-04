@@ -20,12 +20,24 @@ import {
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
 import { buildToolResponse, type ToolResponse } from '../utils/response-builder.js';
+import { type HintGenerator, generateHints } from '../utils/hints.js';
+import {
+  trainerroadSyncHint,
+  dailySummarySyncHint,
+  completedWorkoutsHints,
+  recoveryHints,
+  dailySummaryFitnessHints,
+  powerCurveProgressHint,
+  paceCurveProgressHint,
+} from '../utils/hints/index.js';
 import { ApiError, DateParseError } from '../errors/index.js';
 
-interface ResponseOptions {
+interface ResponseOptions<TResult = unknown> {
   fieldDescriptions: Record<string, string>;
   /** Optional metadata for ChatGPT widgets (not visible to model) */
   widgetMeta?: Record<string, unknown>;
+  /** Optional hint generators to provide actionable next steps */
+  hints?: HintGenerator<TResult>[];
 }
 
 interface ErrorDetails {
@@ -109,16 +121,21 @@ function buildErrorResponse(error: unknown): ErrorResponse {
 function withToolResponse<TArgs, TResult>(
   toolName: string,
   handler: (args: TArgs) => Promise<TResult>,
-  options: ResponseOptions
+  options: ResponseOptions<TResult>
 ): (args: TArgs) => Promise<ToolResponse | ErrorResponse> {
   return async (args: TArgs) => {
     console.log(`[Tool] Calling tool: ${toolName}`);
     try {
       const data = await handler(args);
+
+      // Generate hints from the response data if hint generators are provided
+      const hints = options.hints ? generateHints(data, options.hints) : undefined;
+
       return await buildToolResponse({
         data,
         fieldDescriptions: options.fieldDescriptions,
         widgetMeta: options.widgetMeta,
+        hints,
       });
     } catch (error) {
       return buildErrorResponse(error);
@@ -204,6 +221,7 @@ export class ToolRegistry {
         async () => this.currentTools.getDailySummary(),
         {
           fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
+          hints: [dailySummarySyncHint, ...dailySummaryFitnessHints],
         }
       )
     );
@@ -235,6 +253,7 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysRecovery(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_recovery', 'sleep', 'recovery'),
+          hints: recoveryHints,
         }
       )
     );
@@ -292,6 +311,7 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysCompletedWorkouts(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_completed_workouts', 'workout', 'whoop'),
+          hints: completedWorkoutsHints,
         }
       )
     );
@@ -320,6 +340,7 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysPlannedWorkouts(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_planned_workouts', 'planned'),
+          hints: [trainerroadSyncHint],
         }
       )
     );
@@ -622,6 +643,7 @@ Get the activity_id from:
         async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts(args),
         {
           fieldDescriptions: getFieldDescriptions('planned'),
+          hints: [trainerroadSyncHint],
         }
       )
     );
@@ -1194,6 +1216,7 @@ Get the activity_id from:
           this.historicalTools.getPowerCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('power_curve'),
+          hints: [powerCurveProgressHint],
         }
       )
     );
@@ -1241,6 +1264,7 @@ Get the activity_id from:
           this.historicalTools.getPaceCurve(args),
         {
           fieldDescriptions: getFieldDescriptions('pace_curve'),
+          hints: [paceCurveProgressHint],
         }
       )
     );
