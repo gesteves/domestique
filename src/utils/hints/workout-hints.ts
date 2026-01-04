@@ -1,5 +1,6 @@
 /**
  * Hint generators for workout-related tools.
+ * These hints guide the LLM on what other tools to call for deeper analysis.
  */
 
 import type { HintGenerator } from '../hints.js';
@@ -8,7 +9,6 @@ import type {
   TodaysPlannedWorkoutsResponse,
   DailySummary,
   TodaysCompletedWorkoutsResponse,
-  WorkoutWithWhoop,
 } from '../../types/index.js';
 import { DOMESTIQUE_TAG, areWorkoutsSimilar } from '../workout-utils.js';
 
@@ -18,8 +18,7 @@ interface UpcomingWorkoutsResponse {
 }
 
 /**
- * Generate a hint for TR runs that can be synced to Intervals.icu.
- * Works on the merged workout list by analyzing source and tags.
+ * Find TR runs that don't have matching ICU workouts with the domestique tag.
  */
 function findUnsyncedTRRuns(workouts: PlannedWorkout[]): PlannedWorkout[] {
   // Find TR runs
@@ -44,8 +43,8 @@ function findUnsyncedTRRuns(workouts: PlannedWorkout[]): PlannedWorkout[] {
 }
 
 /**
- * Hint generator for syncing TR runs to ICU.
- * Used by get_todays_planned_workouts and get_upcoming_workouts.
+ * Hint for syncing TR runs to ICU.
+ * Guides LLM to offer syncing unsynced TrainerRoad runs.
  */
 export const trainerroadSyncHint: HintGenerator<TodaysPlannedWorkoutsResponse | UpcomingWorkoutsResponse> = (
   data
@@ -61,8 +60,7 @@ export const trainerroadSyncHint: HintGenerator<TodaysPlannedWorkoutsResponse | 
 };
 
 /**
- * Hint generator for the daily summary's planned workouts.
- * Same logic as trainerroadSyncHint but extracts workouts from DailySummary.
+ * Hint for the daily summary's planned workouts.
  */
 export const dailySummarySyncHint: HintGenerator<DailySummary> = (data) => {
   const unsyncedRuns = findUnsyncedTRRuns(data.planned_workouts);
@@ -76,60 +74,18 @@ export const dailySummarySyncHint: HintGenerator<DailySummary> = (data) => {
 };
 
 /**
- * Hint for suggesting workout analysis on completed workouts.
- * Suggests using get_workout_details for workouts with significant TSS.
+ * Hint for drilling into completed workout details.
+ * Guides LLM on which tools to call for deeper workout analysis.
  */
-export const workoutAnalysisHint: HintGenerator<TodaysCompletedWorkoutsResponse> = (data) => {
-  // Find workouts that might benefit from detailed analysis (TSS >= 50)
-  const significantWorkouts = data.workouts.filter(
-    (w) => w.tss && w.tss >= 50
-  );
+export const completedWorkoutsAnalysisHint: HintGenerator<TodaysCompletedWorkoutsResponse> = (data) => {
+  if (data.workouts.length === 0) return undefined;
 
-  if (significantWorkouts.length === 0) return undefined;
-
-  const workoutNames = significantWorkouts.map((w) => w.name).filter(Boolean).join(', ');
-  if (!workoutNames) return undefined;
+  const workoutIds = data.workouts.map((w) => w.id).join(', ');
 
   return (
-    `The following workout(s) may benefit from detailed analysis via get_workout_details: ${workoutNames}. ` +
-    `This provides intervals, notes, weather, and zone data for deeper insight.`
-  );
-};
-
-/**
- * Hint for suggesting outdoor workout weather analysis.
- * Identifies outdoor workouts that could benefit from weather context.
- * Note: We can only suggest this for cycling/running workouts since we can't
- * determine indoor vs outdoor from the type alone.
- */
-export const outdoorWeatherHint: HintGenerator<TodaysCompletedWorkoutsResponse> = (data) => {
-  // Look for cycling or running workouts that might be outdoor
-  // (We can't definitively tell indoor vs outdoor from the response)
-  const potentialOutdoorWorkouts = data.workouts.filter(
-    (w) => w.activity_type === 'Cycling' || w.activity_type === 'Running'
-  );
-
-  if (potentialOutdoorWorkouts.length === 0) return undefined;
-
-  return (
-    `Cycling/running workout(s) detected. If outdoor, consider fetching weather data via get_workout_weather ` +
-    `to understand environmental factors that may have affected performance.`
-  );
-};
-
-/**
- * Hint for workouts with Whoop data that show high strain.
- */
-export const highStrainWorkoutHint: HintGenerator<TodaysCompletedWorkoutsResponse> = (data) => {
-  const highStrainWorkouts = data.workouts.filter(
-    (w) => w.whoop?.strain_score && w.whoop.strain_score >= 15
-  );
-
-  if (highStrainWorkouts.length === 0) return undefined;
-
-  return (
-    `High strain workout(s) detected (strain >= 15). Consider checking recovery status ` +
-    `via get_todays_recovery to assess readiness for additional training.`
+    `To analyze these workouts in more detail, use get_workout_details with activity_id to see intervals, ` +
+    `notes, weather, and zone distributions. For interval-by-interval breakdown, use get_workout_intervals. ` +
+    `Available workout IDs: ${workoutIds}`
   );
 };
 
@@ -137,23 +93,5 @@ export const highStrainWorkoutHint: HintGenerator<TodaysCompletedWorkoutsRespons
  * Combined hint generators for completed workouts.
  */
 export const completedWorkoutsHints: HintGenerator<TodaysCompletedWorkoutsResponse>[] = [
-  workoutAnalysisHint,
-  outdoorWeatherHint,
-  highStrainWorkoutHint,
+  completedWorkoutsAnalysisHint,
 ];
-
-/**
- * Hint for workouts with heat zone data.
- */
-export const heatZonesHint: HintGenerator<WorkoutWithWhoop[]> = (workouts) => {
-  const workoutsWithHeat = workouts.filter(
-    (w) => w.heat_zones && Object.keys(w.heat_zones).length > 0
-  );
-
-  if (workoutsWithHeat.length === 0) return undefined;
-
-  return (
-    `Heat zone data available for ${workoutsWithHeat.length} workout(s). ` +
-    `Use get_workout_heat_zones for detailed heat strain analysis.`
-  );
-};

@@ -1,5 +1,6 @@
 /**
  * Hint generators for fitness and training load tools.
+ * These hints guide the LLM on what other tools to call for deeper analysis.
  */
 
 import type { HintGenerator } from '../hints.js';
@@ -10,83 +11,46 @@ import type {
 } from '../../types/index.js';
 
 /**
- * Hint for high training ramp rate.
+ * Hint for drilling into daily summary data.
+ * Guides LLM on which tools can provide more detail on specific areas.
  */
-export const trainingLoadRiskHint: HintGenerator<DailySummary> = (data) => {
-  const fitness = data.fitness;
-  if (!fitness) return undefined;
+export const dailySummaryDrilldownHint: HintGenerator<DailySummary> = (data) => {
+  const hints: string[] = [];
 
-  // Check ramp rate - risky if > 8
-  if (fitness.ramp_rate !== undefined && fitness.ramp_rate > 8) {
-    return (
-      `Ramp rate is ${fitness.ramp_rate.toFixed(1)} TSS/week, which is aggressive. ` +
-      `Consider moderating the training increase to reduce overtraining risk.`
+  if (data.completed_workouts.length > 0) {
+    const workoutIds = data.completed_workouts.map((w) => w.id).join(', ');
+    hints.push(
+      `For detailed workout analysis, use get_workout_details or get_workout_intervals with activity_id. ` +
+      `Available IDs: ${workoutIds}`
     );
   }
 
-  return undefined;
-};
-
-/**
- * Hint for low form (TSB) suggesting rest.
- */
-export const lowFormHint: HintGenerator<DailySummary> = (data) => {
-  const fitness = data.fitness;
-  if (!fitness?.tsb) return undefined;
-
-  if (fitness.tsb < -30) {
-    return (
-      `Form (TSB) is very low at ${fitness.tsb.toFixed(0)}. The athlete may be ` +
-      `significantly fatigued. Consider reducing training load or scheduling rest.`
+  if (data.fitness) {
+    hints.push(
+      `For training load trends over time, use get_training_load_trends to see CTL/ATL/TSB progression.`
     );
   }
 
-  return undefined;
+  return hints.length > 0 ? hints.join(' ') : undefined;
 };
 
 /**
- * Hint for high form (good taper) before a race.
- */
-export const raceReadinessHint: HintGenerator<DailySummary> = (data) => {
-  const fitness = data.fitness;
-  const race = data.scheduled_race;
-
-  if (!fitness?.tsb || !race) return undefined;
-
-  if (fitness.tsb >= 10 && fitness.tsb <= 25) {
-    return (
-      `Form (TSB) is ${fitness.tsb.toFixed(0)}, which is in the optimal race range (10-25). ` +
-      `The athlete appears well-tapered for ${race.name}.`
-    );
-  } else if (fitness.tsb < 0 && race) {
-    return (
-      `Form (TSB) is ${fitness.tsb.toFixed(0)}, which is negative. ` +
-      `The athlete may not be fully recovered for ${race.name}. ` +
-      `Consider additional rest before the race.`
-    );
-  }
-
-  return undefined;
-};
-
-/**
- * Hint for power curve improvements.
+ * Hint for power curve analysis.
+ * Guides LLM to check settings if there are improvements.
  */
 export const powerCurveProgressHint: HintGenerator<PowerCurvesResponse> = (data) => {
-  if (!data.comparison) return undefined;
-
-  const improvements = data.comparison.changes.filter((c) => c.improved);
-  if (improvements.length === 0) return undefined;
-
-  const significantImprovements = improvements.filter(
-    (c) => c.change_percent >= 3
-  );
-
-  if (significantImprovements.length > 0) {
-    const labels = significantImprovements.map((c) => c.duration_label).join(', ');
+  if (!data.comparison) {
     return (
-      `Significant power improvements detected at ${labels}. ` +
-      `Consider updating FTP via get_sports_settings to see if zones need adjustment.`
+      `To compare power curves between periods, call this tool again with compare_to_oldest and ` +
+      `compare_to_newest parameters to see progress over time.`
+    );
+  }
+
+  const improvements = data.comparison.changes.filter((c) => c.improved && c.change_percent >= 3);
+  if (improvements.length > 0) {
+    return (
+      `Significant power improvements detected. Use get_sports_settings with sport='cycling' to check ` +
+      `if FTP and power zones should be updated based on these improvements.`
     );
   }
 
@@ -94,23 +58,22 @@ export const powerCurveProgressHint: HintGenerator<PowerCurvesResponse> = (data)
 };
 
 /**
- * Hint for pace curve improvements.
+ * Hint for pace curve analysis.
+ * Guides LLM to check settings if there are improvements.
  */
 export const paceCurveProgressHint: HintGenerator<PaceCurvesResponse> = (data) => {
-  if (!data.comparison) return undefined;
-
-  const improvements = data.comparison.changes.filter((c) => c.improved);
-  if (improvements.length === 0) return undefined;
-
-  const significantImprovements = improvements.filter(
-    (c) => c.change_percent >= 3
-  );
-
-  if (significantImprovements.length > 0) {
-    const labels = significantImprovements.map((c) => c.distance_label).join(', ');
+  if (!data.comparison) {
     return (
-      `Significant pace improvements detected at ${labels}. ` +
-      `Consider updating pace zones via get_sports_settings to see if training zones need adjustment.`
+      `To compare pace curves between periods, call this tool again with compare_to_oldest and ` +
+      `compare_to_newest parameters to see progress over time.`
+    );
+  }
+
+  const improvements = data.comparison.changes.filter((c) => c.improved && c.change_percent >= 3);
+  if (improvements.length > 0) {
+    return (
+      `Significant pace improvements detected. Use get_sports_settings with sport='running' to check ` +
+      `if pace zones should be updated based on these improvements.`
     );
   }
 
@@ -121,7 +84,5 @@ export const paceCurveProgressHint: HintGenerator<PaceCurvesResponse> = (data) =
  * Combined hint generators for daily summary fitness data.
  */
 export const dailySummaryFitnessHints: HintGenerator<DailySummary>[] = [
-  trainingLoadRiskHint,
-  lowFormHint,
-  raceReadinessHint,
+  dailySummaryDrilldownHint,
 ];
