@@ -173,3 +173,15 @@ curl -X POST http://localhost:3000/mcp \
 5. When making changes, ensure that @README.md is up to date.
 6. When adding new tools or modifying existing ones, ensure that the tool descriptions and the field descriptions are up to date.
 7. Always ensure tests pass with `nvm use && npm test` and always add tests for new functionality.
+
+## MCP Client Compatibility Notes
+
+When implementing MCP features, be aware of these compatibility differences between Claude and ChatGPT:
+
+1. **Tool responses**: ChatGPT uses `structuredContent` for JSON data and expects `content` for narration (e.g., "Here's your daily summary:"). Claude only uses `content`. For compatibility, `structuredContent` should have the tool response as JSON and `content` should have the stringified version of the same JSON.
+
+2. **MCP prompts**: ChatGPT doesn't support MCP prompts. Claude inserts prompts as .txt files instead of as regular prompts. Therefore, it's not worth investing in the prompt functionality.
+
+3. **MCP resources**: Claude can't access MCP resources before, during, or after calling tools. It's better to implement tools that return the resource content directly (like `get_run_workout_syntax` or `get_cycling_workout_syntax`) rather than relying on MCP resources.
+
+4. **Elicitations**: Neither ChatGPT nor Claude support MCP elicitations, so they can't be used to get user input or show confirmation dialogs.

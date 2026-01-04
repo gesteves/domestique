@@ -335,3 +335,15 @@ Once connected, you can ask Claude:
 - "What are my swimming, cycling and running totals for the past month?"
 - "How much time did I spend in each power zone this month?"
 - "Sync my TrainerRoad runs to Intervals.icu so they sync to Zwift"
+
+## MCP Client Compatibility Notes
+
+This server is designed to work with both Claude and ChatGPT. However, there are some compatibility differences to be aware of:
+
+- **Tool responses**: ChatGPT uses `structuredContent` for JSON data and expects `content` for narration. Claude only uses `content`. This server returns both for compatibility.
+
+- **MCP prompts**: ChatGPT doesn't support MCP prompts, and Claude inserts them as .txt files rather than as regular prompts. The `daily_summary` prompt is provided but may not work as expected on all clients.
+
+- **MCP resources**: Claude can't access MCP resources before, during, or after calling tools. This server provides tools like `get_run_workout_syntax` and `get_cycling_workout_syntax` that return resource content directly as an alternative.
+
+- **Elicitations**: Neither ChatGPT nor Claude support MCP elicitations for user input or confirmation dialogs.
