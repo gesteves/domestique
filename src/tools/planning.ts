@@ -337,7 +337,6 @@ export class PlanningTools {
   async syncTRRuns(params: {
     oldest?: string;
     newest?: string;
-    dry_run?: boolean;
   }): Promise<SyncTRRunsResult> {
     const result: SyncTRRunsResult = {
       tr_runs_found: 0,
@@ -426,27 +425,17 @@ export class PlanningTools {
       (d) => d.external_id && !trIds.has(d.external_id)
     );
 
-    // 6. Delete orphans if not dry run
-    if (!params.dry_run) {
-      for (const orphan of orphans) {
-        try {
-          await this.intervals.deleteEvent(orphan.id);
-          result.orphans_deleted++;
-          result.deleted.push({
-            name: orphan.name,
-            reason: 'TrainerRoad workout no longer exists',
-          });
-        } catch (error) {
-          result.errors.push(`Failed to delete orphan "${orphan.name}": ${error}`);
-        }
-      }
-    } else {
-      // In dry run mode, report what would be deleted
-      for (const orphan of orphans) {
+    // 6. Delete orphans
+    for (const orphan of orphans) {
+      try {
+        await this.intervals.deleteEvent(orphan.id);
+        result.orphans_deleted++;
         result.deleted.push({
           name: orphan.name,
-          reason: 'TrainerRoad workout no longer exists (dry run - not deleted)',
+          reason: 'TrainerRoad workout no longer exists',
         });
+      } catch (error) {
+        result.errors.push(`Failed to delete orphan "${orphan.name}": ${error}`);
       }
     }
 

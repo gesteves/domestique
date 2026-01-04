@@ -630,26 +630,6 @@ describe('PlanningTools sync operations', () => {
       expect(result.deleted[0].reason).toContain('no longer exists');
     });
 
-    it('should not delete orphans in dry_run mode', async () => {
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
-      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([
-        {
-          id: 101,
-          uid: 'uid-101',
-          name: 'Orphaned Run',
-          external_id: 'tr-orphan',
-          tags: ['domestique'],
-        },
-      ]);
-
-      const result = await tools.syncTRRuns({ oldest: '2024-12-15', dry_run: true });
-
-      expect(result.orphans_deleted).toBe(0);
-      expect(result.deleted).toHaveLength(1);
-      expect(result.deleted[0].reason).toContain('dry run');
-      expect(mockIntervalsClient.deleteEvent).not.toHaveBeenCalled();
-    });
-
     it('should return correct counts', async () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trRuns);
       vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([

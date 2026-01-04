@@ -895,10 +895,9 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
 </use-cases>
 
 <instructions>
-1. Use dry_run=true first to preview what will be synced/deleted.
-2. Review the list with the user before proceeding.
-3. For each TrainerRoad run in runs_to_sync, use create_run_workout to create it.
-4. Orphaned workouts (i.e the TrainerRoad source workout got deleted) are automatically removed when dry_run=false.
+1. Call this tool to get the list of TR runs that need syncing.
+2. For each TrainerRoad run in runs_to_sync, use create_run_workout to create it.
+3. Orphaned workouts (i.e the TrainerRoad source workout got deleted) are automatically removed.
 </instructions>
 
 <notes>
@@ -909,14 +908,13 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         inputSchema: {
           oldest: z.string().optional().describe('Start date (defaults to today)'),
           newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
-          dry_run: z.boolean().optional().describe('If true, report what would be done without making changes'),
         },
-        // Can be destructive when dry_run=false (deletes orphans), but also creates external resources
+        // Can be destructive (deletes orphans), but also creates external resources
         annotations: { openWorldHint: true, destructiveHint: true },
       },
       withToolResponse(
         'sync_trainerroad_runs',
-        async (args: { oldest?: string; newest?: string; dry_run?: boolean }) =>
+        async (args: { oldest?: string; newest?: string }) =>
           this.planningTools.syncTRRuns(args),
         {
           fieldDescriptions: {},
