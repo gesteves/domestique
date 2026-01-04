@@ -198,6 +198,9 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
       {
         description: 'Documentation for creating structured running workouts in Intervals.icu format',
         mimeType: 'text/markdown',
+        annotations: {
+          audience: ['assistant'],
+        },
       },
       async () => {
         console.log('[MCP] Resource requested: intervals-run-workout-syntax');
@@ -219,6 +222,9 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
       {
         description: 'Documentation for creating structured cycling workouts in Intervals.icu format',
         mimeType: 'text/markdown',
+        annotations: {
+          audience: ['assistant'],
+        },
       },
       async () => {
         console.log('[MCP] Resource requested: intervals-cycling-workout-syntax');
