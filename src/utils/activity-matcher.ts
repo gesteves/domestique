@@ -71,6 +71,43 @@ function getMatchingTimestamp(workout: NormalizedWorkout): string {
 }
 
 /**
+ * Find the best matching Whoop activity for a workout.
+ * Returns high confidence matches only (timestamp within 5 minutes + same activity type).
+ * Optionally excludes already-used activity IDs.
+ */
+function findBestMatch(
+  workout: NormalizedWorkout,
+  whoopActivities: StrainActivity[],
+  excludeIds?: Set<string>
+): StrainActivity | null {
+  // Skip matching for unavailable workouts (e.g., Strava-only)
+  if (workout.unavailable || !workout.activity_type) {
+    return null;
+  }
+
+  const workoutTimestamp = getMatchingTimestamp(workout);
+  const workoutStart = parseISO(workoutTimestamp);
+
+  for (const activity of whoopActivities) {
+    if (excludeIds?.has(activity.id)) continue;
+
+    const activityStart = parseISO(activity.start_time);
+    const timeDiff = Math.abs(differenceInMinutes(workoutStart, activityStart));
+    const sameType = areActivityTypesCompatible(
+      workout.activity_type,
+      activity.activity_type
+    );
+
+    // High confidence: timestamp match + type match
+    if (timeDiff <= 5 && sameType) {
+      return activity;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Match workouts across platforms using timestamp and activity type.
  * Algorithm:
  * - High confidence only: Start times within 5 minutes AND same activity type
@@ -86,44 +123,16 @@ export function matchActivities(
   const usedWhoopIds = new Set<string>();
 
   for (const workout of intervalsWorkouts) {
-    // Skip matching for unavailable workouts (e.g., Strava-only)
-    if (workout.unavailable || !workout.activity_type) {
+    const match = findBestMatch(workout, whoopActivities, usedWhoopIds);
+
+    if (match) {
+      usedWhoopIds.add(match.id);
       matched.push({
         intervals_workout: workout,
-      });
-      continue;
-    }
-
-    const workoutTimestamp = getMatchingTimestamp(workout);
-    const workoutStart = parseISO(workoutTimestamp);
-
-    let highConfidenceMatch: StrainActivity | null = null;
-
-    for (const activity of whoopActivities) {
-      if (usedWhoopIds.has(activity.id)) continue;
-
-      const activityStart = parseISO(activity.start_time);
-      const timeDiff = Math.abs(differenceInMinutes(workoutStart, activityStart));
-      const sameType = areActivityTypesCompatible(
-        workout.activity_type,
-        activity.activity_type
-      );
-
-      // High confidence: timestamp match + type match
-      if (timeDiff <= 5 && sameType) {
-        highConfidenceMatch = activity;
-        break; // Found best possible match
-      }
-    }
-
-    if (highConfidenceMatch) {
-      usedWhoopIds.add(highConfidenceMatch.id);
-      matched.push({
-        intervals_workout: workout,
-        whoop_activity: highConfidenceMatch,
+        whoop_activity: match,
       });
     } else {
-      // No match found, include workout without Whoop data
+      // No match found (or unavailable workout), include without Whoop data
       matched.push({
         intervals_workout: workout,
       });
@@ -151,27 +160,5 @@ export function findMatchingWhoopActivity(
   workout: NormalizedWorkout,
   whoopActivities: StrainActivity[]
 ): StrainActivity | null {
-  // Skip matching for unavailable workouts (e.g., Strava-only)
-  if (workout.unavailable || !workout.activity_type) {
-    return null;
-  }
-
-  const workoutTimestamp = getMatchingTimestamp(workout);
-  const workoutStart = parseISO(workoutTimestamp);
-
-  // Only look for high confidence matches: timestamp + type match
-  for (const activity of whoopActivities) {
-    const activityStart = parseISO(activity.start_time);
-    const timeDiff = Math.abs(differenceInMinutes(workoutStart, activityStart));
-    const sameType = areActivityTypesCompatible(
-      workout.activity_type,
-      activity.activity_type
-    );
-
-    if (timeDiff <= 5 && sameType) {
-      return activity;
-    }
-  }
-
-  return null;
+  return findBestMatch(workout, whoopActivities);
 }

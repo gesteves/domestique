@@ -38,6 +38,7 @@ import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
   formatDuration,
   formatDistance,
+  formatDurationLabel,
   formatSpeed,
   formatPace,
   isSwimmingActivity,
@@ -2299,20 +2300,6 @@ export class IntervalsClient {
   // ============================================
 
   /**
-   * Format duration in seconds to human-readable label.
-   * e.g., 5 -> "5s", 60 -> "1min", 3600 -> "1hr"
-   */
-  private formatDurationLabel(seconds: number): string {
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) {
-      const mins = Math.floor(seconds / 60);
-      return `${mins}min`;
-    }
-    const hours = Math.floor(seconds / 3600);
-    return `${hours}hr`;
-  }
-
-  /**
    * Format distance in meters to human-readable label.
    * e.g., 400 -> "400m", 1000 -> "1km", 1609 -> "1mi"
    */
@@ -2389,7 +2376,7 @@ export class IntervalsClient {
       weight_kg: curve.weight,
       curve: curve.watts.map((watts, index) => ({
         duration_seconds: durations[index],
-        duration_label: this.formatDurationLabel(durations[index]),
+        duration_label: formatDurationLabel(durations[index]),
         watts,
         watts_per_kg:
           curve.weight > 0 ? Math.round((watts / curve.weight) * 100) / 100 : 0,
@@ -2494,7 +2481,7 @@ export class IntervalsClient {
       date: curve.start_date_local,
       curve: curve.bpm.map((bpm, index) => ({
         duration_seconds: durations[index],
-        duration_label: this.formatDurationLabel(durations[index]),
+        duration_label: formatDurationLabel(durations[index]),
         bpm,
       })),
     }));

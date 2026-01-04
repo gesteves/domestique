@@ -7,6 +7,7 @@ import {
   parseDurationToSeconds,
   formatLargeDuration,
   formatDistance,
+  formatDurationLabel,
   isSwimmingActivity,
 } from '../utils/format-units.js';
 import type {
@@ -352,19 +353,6 @@ export class HistoricalTools {
   private readonly DEFAULT_SWIMMING_DISTANCES = [100, 200, 400, 800, 1500, 1900, 3800];
 
   /**
-   * Format duration in seconds to human-readable label
-   */
-  private formatDurationLabel(seconds: number): string {
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) {
-      const mins = Math.floor(seconds / 60);
-      return `${mins}min`;
-    }
-    const hours = Math.floor(seconds / 3600);
-    return `${hours}hr`;
-  }
-
-  /**
    * Format distance in meters to human-readable label
    */
   private formatDistanceLabel(meters: number): string {
@@ -420,7 +408,7 @@ export class HistoricalTools {
         period_end: endDate,
         sport: 'cycling',
         activity_count: activities.length,
-        durations_analyzed: apiDurations.map((d) => this.formatDurationLabel(d)),
+        durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
         summary,
       };
 
@@ -784,7 +772,7 @@ export class HistoricalTools {
         period_end: endDate,
         sport: params.sport || null,
         activity_count: activities.length,
-        durations_analyzed: apiDurations.map((d) => this.formatDurationLabel(d)),
+        durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
         summary,
       };
 

@@ -112,3 +112,18 @@ export function formatLargeDuration(seconds: number): string {
 
   return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
+
+/**
+ * Format duration in seconds to a compact human-readable label.
+ * @param seconds Duration in seconds
+ * @returns Formatted string like "5s", "1min", or "1hr"
+ */
+export function formatDurationLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) {
+    const mins = Math.floor(seconds / 60);
+    return `${mins}min`;
+  }
+  const hours = Math.floor(seconds / 3600);
+  return `${hours}hr`;
+}
