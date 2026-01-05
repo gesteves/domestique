@@ -346,4 +346,4 @@ This server is designed to work with both Claude and ChatGPT. However, there are
 
 - **MCP resources**: ChatGPT does not support [resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources); Claude does but doesn't seem to reliably use them while invoking tools. As an alternative, this server provides tools like `get_run_workout_syntax` and `get_cycling_workout_syntax` that return the resource contents directly.
 
-- **`_meta` fields**: ChatGPT [provides](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) `_meta` fields in tool inputs, which could be used to identify that the request is coming from ChatGPT, and do provides things like the location and locale of the user. Claude doesn't provide any hints.
+- **`_meta` fields**: ChatGPT [provides](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) `_meta` fields in tool inputs, which could be used to identify that the request is coming from ChatGPT, and provides things like the location and locale of the user. Claude doesn't provide any hints.
