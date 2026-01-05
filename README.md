@@ -340,10 +340,10 @@ Once connected, you can ask Claude:
 
 This server is designed to work with both Claude and ChatGPT. However, there are some compatibility differences to be aware of:
 
-- **Tool responses**: ChatGPT uses `structuredContent` for JSON data and expects `content` for narration. Claude only uses `content`. This server returns both for compatibility.
+- **Tool responses**: ChatGPT uses `structuredContent` for JSON data and [expects](https://developers.openai.com/apps-sdk/build/mcp-server#step-3--return-structured-data-and-metadata) `content` for narration in tools responses. Claude only uses `content`. This server's tool responses return the same content in both fields for compatibility.
 
-- **MCP prompts**: ChatGPT doesn't support MCP prompts, and Claude inserts them as .txt files rather than as regular prompts. The `daily_summary` prompt is provided but may not work as expected on all clients.
+- **MCP prompts**: ChatGPT doesn't support [prompts](https://modelcontextprotocol.io/specification/2025-11-25/server/prompts), and Claude inserts them as .txt files rather than as regular prompts. The `daily_summary` prompt is provided but may not work as expected on all clients.
 
-- **MCP resources**: Claude can't access MCP resources before, during, or after calling tools. This server provides tools like `get_run_workout_syntax` and `get_cycling_workout_syntax` that return resource content directly as an alternative.
+- **MCP resources**: Claude doesn't seem to use [resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources) for automatic context inclusion while invoking tools. As an alternative, this server provides tools like `get_run_workout_syntax` and `get_cycling_workout_syntax` that return the resource contents directly.
 
-- **Elicitations**: Neither ChatGPT nor Claude support MCP elicitations for user input or confirmation dialogs.
+- **Elicitations**: Neither ChatGPT nor Claude support [elicitations](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation) for user input or confirmation dialogs.
