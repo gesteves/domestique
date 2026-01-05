@@ -180,8 +180,8 @@ When implementing MCP features, be aware of these compatibility differences betw
 
 1. **Tool responses**: ChatGPT uses `structuredContent` for JSON data and expects `content` for narration (e.g., "Here's your daily summary:"). Claude only uses `content`. For compatibility, `structuredContent` should have the tool response as JSON and `content` should have the stringified version of the same JSON.
 
-2. **MCP prompts**: ChatGPT doesn't support MCP prompts. Claude inserts prompts as .txt files instead of as regular prompts. Therefore, it's not worth investing in the prompt functionality.
+2. **MCP prompts**: ChatGPT doesn't support MCP prompts. Claude inserts prompts as .txt files instead of as regular prompts. Therefore, it's not worth investing in the prompt functionality. Going forward, don't implement or suggest implementing any more prompts.
 
-3. **MCP resources**: Claude can't access MCP resources before, during, or after calling tools. It's better to implement tools that return the resource content directly (like `get_run_workout_syntax` or `get_cycling_workout_syntax`) rather than relying on MCP resources.
+3. **MCP resources**: Claude can't seem access MCP resources while calling tools. If any future resources are implemented, you must also implement tools that return the resource content directly (like `get_run_workout_syntax` or `get_cycling_workout_syntax`) as a fallback mechanism for compatibility.
 
-4. **Elicitations**: Neither ChatGPT nor Claude support MCP elicitations, so they can't be used to get user input or show confirmation dialogs.
+4. **Elicitations**: Neither ChatGPT nor Claude support MCP elicitations, so they can't be used to get user input or show confirmation dialogs. Don't implement or suggest implementing elicitations in the future.
