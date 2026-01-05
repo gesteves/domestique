@@ -340,7 +340,7 @@ Once connected, you can ask Claude:
 
 This server is designed to work with both Claude and ChatGPT. However, there are some compatibility differences to be aware of:
 
-- **Tool responses**: ChatGPT uses `structuredContent` for JSON data and [expects](https://developers.openai.com/apps-sdk/build/mcp-server#step-3--return-structured-data-and-metadata) `content` for narration in tools responses. Claude only uses `content`. This server's tool responses return the same content in both fields for compatibility.
+- **Tool responses**: ChatGPT uses `structuredContent` for JSON data and [expects](https://developers.openai.com/apps-sdk/build/mcp-server#step-3--return-structured-data-and-metadata) plain text or Markdown `content` for narration in tools responses. Claude only uses `content`. This server's tool responses return the same JSON payload in both fields for compatibility.
 
 - **MCP prompts**: ChatGPT doesn't support [prompts](https://modelcontextprotocol.io/specification/2025-11-25/server/prompts), and Claude inserts them as .txt files rather than as regular prompts. The `daily_summary` prompt is provided but may not work as expected on all clients.
 
