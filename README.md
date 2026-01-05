@@ -344,6 +344,6 @@ This server is designed to work with both Claude and ChatGPT. However, there are
 
 - **MCP prompts**: ChatGPT doesn't support [prompts](https://modelcontextprotocol.io/specification/2025-11-25/server/prompts), and Claude inserts them as .txt files rather than as regular prompts. The `daily_summary` prompt is provided but may not work as expected on all clients.
 
-- **MCP resources**: Claude doesn't seem to use [resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources) for automatic context inclusion while invoking tools. As an alternative, this server provides tools like `get_run_workout_syntax` and `get_cycling_workout_syntax` that return the resource contents directly.
+- **MCP resources**: Claude doesn't seem to reliably use [resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources) while invoking tools. As an alternative, this server provides tools like `get_run_workout_syntax` and `get_cycling_workout_syntax` that return the resource contents directly.
 
 - **Elicitations**: Neither ChatGPT nor Claude support [elicitations](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation) for user input or confirmation dialogs.
