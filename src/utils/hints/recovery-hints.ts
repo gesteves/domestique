@@ -14,11 +14,10 @@ export const recoveryPlanningHint: HintGenerator<TodaysRecoveryResponse> = (data
   const recovery = data.whoop.recovery;
   if (!recovery) return undefined;
 
-  return (
-    `To understand how this recovery data relates to today's training, use get_todays_planned_workouts ` +
-    `to see what workouts are scheduled. For historical context, use get_recovery_trends to see ` +
-    `how today's recovery compares to recent patterns.`
-  );
+  return [
+    `To understand how this recovery data relates to today's training, use get_todays_planned_workouts to see what workouts are scheduled.`,
+    `For historical context, use get_recovery_trends to see how today's recovery compares to recent patterns.`,
+  ];
 };
 
 /**

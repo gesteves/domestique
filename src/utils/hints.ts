@@ -4,10 +4,10 @@
  */
 
 /**
- * A hint generator function that analyzes response data and returns a hint string.
- * Returns undefined if no hint is applicable.
+ * A hint generator function that analyzes response data and returns hint(s).
+ * Can return a single hint string, an array of hints, or undefined if no hint is applicable.
  */
-export type HintGenerator<T> = (data: T) => string | undefined;
+export type HintGenerator<T> = (data: T) => string | string[] | undefined;
 
 /**
  * Runs multiple hint generators against the data and collects non-null results.
@@ -26,7 +26,11 @@ export function generateHints<T>(
   for (const generator of generators) {
     const hint = generator(data);
     if (hint) {
-      hints.push(hint);
+      if (Array.isArray(hint)) {
+        hints.push(...hint);
+      } else {
+        hints.push(hint);
+      }
     }
   }
 

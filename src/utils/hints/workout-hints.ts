@@ -82,11 +82,10 @@ export const completedWorkoutsAnalysisHint: HintGenerator<TodaysCompletedWorkout
 
   const workoutIds = data.workouts.map((w) => w.id).join(', ');
 
-  return (
-    `To analyze these workouts in more detail, use get_workout_details with activity_id to see intervals, ` +
-    `notes, weather, and zone distributions. For interval-by-interval breakdown, use get_workout_intervals. ` +
-    `Available workout IDs: ${workoutIds}`
-  );
+  return [
+    `For full workout analysis, use get_workout_details with activity_id to get intervals, notes, weather, and zones. Available IDs: ${workoutIds}`,
+    `For specific data only, use get_workout_intervals, get_workout_notes, or get_workout_weather with activity_id.`,
+  ];
 };
 
 /**

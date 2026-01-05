@@ -20,8 +20,10 @@ export const dailySummaryDrilldownHint: HintGenerator<DailySummary> = (data) => 
   if (data.completed_workouts.length > 0) {
     const workoutIds = data.completed_workouts.map((w) => w.id).join(', ');
     hints.push(
-      `For detailed workout analysis, use get_workout_details or get_workout_intervals with activity_id. ` +
-      `Available IDs: ${workoutIds}`
+      `For full workout analysis, use get_workout_details with activity_id to get intervals, notes, weather, and zones. Available IDs: ${workoutIds}`
+    );
+    hints.push(
+      `For specific data only, use get_workout_intervals, get_workout_notes, or get_workout_weather with activity_id.`
     );
   }
 
@@ -31,7 +33,7 @@ export const dailySummaryDrilldownHint: HintGenerator<DailySummary> = (data) => 
     );
   }
 
-  return hints.length > 0 ? hints.join(' ') : undefined;
+  return hints.length > 0 ? hints : undefined;
 };
 
 /**
