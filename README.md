@@ -338,7 +338,7 @@ Once connected, you can ask Claude:
 
 ## MCP Client Compatibility Notes
 
-This server is designed to work with both Claude and ChatGPT. However, there are some compatibility differences to be aware of:
+This server has been tested with Claude and ChatGPT. However, there are some compatibility differences to be aware of:
 
 - **Tool responses**: ChatGPT uses `structuredContent` for JSON data and [expects](https://developers.openai.com/apps-sdk/build/mcp-server#step-3--return-structured-data-and-metadata) plain text or Markdown `content` for narration in tools responses. Claude only uses `content`. This server's tool responses return the same JSON payload in both fields for compatibility.
 
