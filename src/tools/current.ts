@@ -2,7 +2,7 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateString, getToday, getTodayInTimezone, parseDateStringInTimezone, getCurrentDateTimeInTimezone } from '../utils/date-parser.js';
-import { DOMESTIQUE_TAG, areWorkoutsSimilar, generateSyncHint, matchWhoopActivity } from '../utils/workout-utils.js';
+import { DOMESTIQUE_TAG, areWorkoutsSimilar, matchWhoopActivity } from '../utils/workout-utils.js';
 import type {
   StrainData,
   FitnessMetrics,
@@ -206,13 +206,9 @@ export class CurrentTools {
       }
     }
 
-    // Generate proactive hint if there are TR runs without matching ICU workouts
-    const hint = generateSyncHint(trainerroadWorkouts, intervalsWorkouts);
-
     return {
       current_time: currentDateTime,
       workouts: merged,
-      ...(hint && { _instructions: hint }),
     };
   }
 

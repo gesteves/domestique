@@ -1112,8 +1112,6 @@ export interface TodaysPlannedWorkoutsResponse {
   current_time: string;
   /** Planned workouts from TrainerRoad and Intervals.icu */
   workouts: PlannedWorkout[];
-  /** Optional hint for the LLM about TR runs that can be synced */
-  _instructions?: string;
 }
 
 // ============================================

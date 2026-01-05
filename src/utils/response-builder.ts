@@ -102,6 +102,8 @@ export interface ResponseBuilderOptions {
   fieldDescriptions: Record<string, string>;
   /** Optional metadata for ChatGPT widgets (not visible to model) */
   widgetMeta?: Record<string, unknown>;
+  /** Optional hints providing actionable next steps based on the data */
+  hints?: string[];
 }
 
 export interface DebugInfo {
@@ -111,6 +113,7 @@ export interface DebugInfo {
 export interface StructuredToolResponse {
   response: unknown;
   field_descriptions: Record<string, string>;
+  _hints?: string[];
   _debug?: DebugInfo;
   [key: string]: unknown;
 }
@@ -132,7 +135,7 @@ export interface ToolResponse {
  * In development mode, adds a _debug object with token count to structuredContent.
  */
 export async function buildToolResponse(options: ResponseBuilderOptions): Promise<ToolResponse> {
-  const { data, widgetMeta } = options;
+  const { data, widgetMeta, hints } = options;
 
   // Remove null/undefined fields to reduce token usage
   const cleanedData = removeNullFields(data);
@@ -147,6 +150,11 @@ export async function buildToolResponse(options: ResponseBuilderOptions): Promis
     response: cleanedData,
     field_descriptions: fieldDescriptions,
   };
+
+  // Add hints if provided
+  if (hints && hints.length > 0) {
+    structuredContent._hints = hints;
+  }
 
   // In development mode, add token count to _debug
   const tokenCount = await countTokens(JSON.stringify(structuredContent, null, 2));

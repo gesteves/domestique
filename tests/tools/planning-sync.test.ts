@@ -823,77 +823,9 @@ describe('PlanningTools sync operations', () => {
     });
   });
 
-  describe('proactive hints', () => {
-    it('should include hint when TR runs can be synced', async () => {
-      const trRuns: PlannedWorkout[] = [
-        {
-          id: 'tr-run-1',
-          scheduled_for: '2024-12-16T09:00:00Z',
-          name: 'Easy Run',
-          sport: 'Running',
-          source: 'trainerroad',
-        },
-      ];
-
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trRuns);
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
-
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
-
-      expect(result._instructions).toBeDefined();
-      expect(result._instructions).toContain('TrainerRoad running workout');
-      expect(result._instructions).toContain('create_run_workout');
-    });
-
-    it('should not include hint when no TR runs', async () => {
-      const trBike: PlannedWorkout[] = [
-        {
-          id: 'tr-bike-1',
-          scheduled_for: '2024-12-16T09:00:00Z',
-          name: 'Sweet Spot',
-          sport: 'Cycling',
-          source: 'trainerroad',
-        },
-      ];
-
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trBike);
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
-
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
-
-      expect(result._instructions).toBeUndefined();
-    });
-
-    it('should not include hint when TR runs are already synced', async () => {
-      const trRuns: PlannedWorkout[] = [
-        {
-          id: 'tr-run-1',
-          scheduled_for: '2024-12-16T09:00:00Z',
-          name: 'Easy Run',
-          sport: 'Running',
-          source: 'trainerroad',
-        },
-      ];
-
-      const icuWorkouts: PlannedWorkout[] = [
-        {
-          id: 'icu-1',
-          scheduled_for: '2024-12-16T09:00:00Z',
-          name: 'Easy Run',
-          external_id: 'tr-run-1',
-          tags: ['domestique'],
-          source: 'intervals.icu',
-        },
-      ];
-
-      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trRuns);
-      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(icuWorkouts);
-
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
-
-      expect(result._instructions).toBeUndefined();
-    });
-  });
+  // Note: Proactive hints are now generated at the tool wrapper level (withToolResponse)
+  // and added to _hints in the structuredContent, not in the raw tool response.
+  // Tests for hints are in tests/utils/hints/*.test.ts
 
   describe('change detection in syncTRRuns', () => {
     const baseTrRuns: PlannedWorkout[] = [

@@ -2,7 +2,7 @@ import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone } from '../utils/date-parser.js';
-import { DOMESTIQUE_TAG, areWorkoutsSimilar, generateSyncHint } from '../utils/workout-utils.js';
+import { DOMESTIQUE_TAG, areWorkoutsSimilar } from '../utils/workout-utils.js';
 import type {
   PlannedWorkout,
   ActivityType,
@@ -19,12 +19,10 @@ import type {
 import type { GetUpcomingWorkoutsInput } from './types.js';
 
 /**
- * Response type for upcoming workouts with optional hints.
+ * Response type for upcoming workouts.
  */
 export interface UpcomingWorkoutsResponse {
   workouts: PlannedWorkout[];
-  /** Optional hint for the LLM about TR runs that can be synced */
-  _instructions?: string;
 }
 
 export class PlanningTools {
@@ -89,12 +87,8 @@ export class PlanningTools {
       (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
     );
 
-    // Generate proactive hint if there are TR runs without matching ICU workouts
-    const hint = generateSyncHint(trainerroadWorkouts, intervalsWorkouts);
-
     return {
       workouts: sortedWorkouts,
-      ...(hint && { _instructions: hint }),
     };
   }
 
