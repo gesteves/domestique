@@ -24,9 +24,9 @@ import { type HintGenerator, generateHints } from '../utils/hints.js';
 import {
   trainerroadSyncHint,
   dailySummarySyncHint,
-  completedWorkoutsHints,
+  workoutHistoryHints,
   recoveryHints,
-  dailySummaryFitnessHints,
+  dailySummaryHints,
   powerCurveProgressHint,
   paceCurveProgressHint,
 } from '../utils/hints/index.js';
@@ -221,7 +221,7 @@ export class ToolRegistry {
         async () => this.currentTools.getDailySummary(),
         {
           fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
-          hints: [dailySummarySyncHint, ...dailySummaryFitnessHints],
+          hints: [dailySummarySyncHint, ...dailySummaryHints],
         }
       )
     );
@@ -311,7 +311,6 @@ and will not be updated throughout the day.
         async () => this.currentTools.getTodaysCompletedWorkouts(),
         {
           fieldDescriptions: combineFieldDescriptions('todays_completed_workouts', 'workout', 'whoop'),
-          hints: completedWorkoutsHints,
         }
       )
     );
@@ -472,6 +471,7 @@ and will not be updated throughout the day.
         async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
         {
           fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
+          hints: workoutHistoryHints,
         }
       )
     );

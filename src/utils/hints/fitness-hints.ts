@@ -11,29 +11,25 @@ import type {
 } from '../../types/index.js';
 
 /**
- * Hint for drilling into daily summary data.
- * Guides LLM on which tools can provide more detail on specific areas.
+ * Hint for drilling into daily summary fitness data.
+ * Guides LLM on which tools can provide more detail on training load.
  */
-export const dailySummaryDrilldownHint: HintGenerator<DailySummary> = (data) => {
-  const hints: string[] = [];
-
-  if (data.completed_workouts.length > 0) {
-    const workoutIds = data.completed_workouts.map((w) => w.id).join(', ');
-    hints.push(
-      `For full workout analysis, use get_workout_details with activity_id to get intervals, notes, weather, and zones. Available IDs: ${workoutIds}`
-    );
-    hints.push(
-      `For specific data only, use get_workout_intervals, get_workout_notes, or get_workout_weather with activity_id.`
-    );
-  }
-
+export const dailySummaryFitnessHint: HintGenerator<DailySummary> = (data) => {
   if (data.fitness) {
-    hints.push(
-      `For training load trends over time, use get_training_load_trends to see CTL/ATL/TSB progression.`
-    );
+    return `For training load trends over time, use get_training_load_trends to see CTL/ATL/TSB progression.`;
   }
+  return undefined;
+};
 
-  return hints.length > 0 ? hints : undefined;
+/**
+ * Hint for drilling into daily summary recovery data.
+ * Guides LLM on which tools can provide historical recovery context.
+ */
+export const dailySummaryRecoveryHint: HintGenerator<DailySummary> = (data) => {
+  if (data.whoop.recovery) {
+    return `For historical context, use get_recovery_trends to see how today's recovery compares to recent patterns.`;
+  }
+  return undefined;
 };
 
 /**
@@ -83,8 +79,9 @@ export const paceCurveProgressHint: HintGenerator<PaceCurvesResponse> = (data) =
 };
 
 /**
- * Combined hint generators for daily summary fitness data.
+ * Combined hint generators for daily summary data.
  */
-export const dailySummaryFitnessHints: HintGenerator<DailySummary>[] = [
-  dailySummaryDrilldownHint,
+export const dailySummaryHints: HintGenerator<DailySummary>[] = [
+  dailySummaryFitnessHint,
+  dailySummaryRecoveryHint,
 ];
