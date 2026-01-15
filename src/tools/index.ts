@@ -188,7 +188,7 @@ export class ToolRegistry {
       'get_todays_summary',
       {
         title: "Today's Summary",
-        description: `Fetches a complete snapshot of the user's current status today in a single call. This is THE tool for all "today's" data.
+        description: `Fetches a complete snapshot of the user's current status today in a single call. This is the tool to call to get all of "today's" data.
 
 **Includes:**
 - Whoop recovery, sleep performance, and strain (including HRV, sleep stages, and strain score)
