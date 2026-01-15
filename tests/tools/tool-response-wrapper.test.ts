@@ -78,7 +78,7 @@ describe('Tool Response Wrapper', () => {
 
   describe('response format', () => {
     it('should wrap response with structuredContent including field descriptions', async () => {
-      const handler = registeredHandlers.get('get_todays_recovery');
+      const handler = registeredHandlers.get('get_athlete_profile');
       expect(handler).toBeDefined();
 
       const result = (await handler!({})) as {
@@ -97,67 +97,9 @@ describe('Tool Response Wrapper', () => {
     });
 
     it('should include data in the response', async () => {
-      // Mock a response from the underlying tool
-      const { WhoopClient } = await import('../../src/clients/whoop.js');
-      const mockWhoopClient = new WhoopClient({
-        accessToken: 'test',
-        refreshToken: 'test',
-        clientId: 'test',
-        clientSecret: 'test',
-      });
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
-        sleep: {
-          sleep_summary: {
-            total_in_bed_time: '8:00:00',
-            total_awake_time: '0:30:00',
-            total_no_data_time: '0:00:00',
-            total_light_sleep_time: '3:30:00',
-            total_slow_wave_sleep_time: '2:00:00',
-            total_rem_sleep_time: '2:00:00',
-            total_restorative_sleep: '4:00:00',
-            sleep_cycle_count: 4,
-            disturbance_count: 3,
-          },
-          sleep_needed: {
-            total_sleep_needed: '7:30:00',
-            baseline: '7:00:00',
-            need_from_sleep_debt: '0:15:00',
-            need_from_recent_strain: '0:15:00',
-            need_from_recent_nap: '0:00:00',
-          },
-          sleep_performance_percentage: 90,
-          sleep_performance_level: 'OPTIMAL',
-          sleep_performance_level_description: 'Optimal sleep performance',
-        },
-        recovery: {
-          recovery_score: 85,
-          hrv_rmssd: 65,
-          resting_heart_rate: 52,
-          recovery_level: 'SUFFICIENT',
-          recovery_level_description: 'Your recovery is sufficient for hard training',
-        },
-      });
+      const handler = registeredHandlers.get('get_athlete_profile');
+      expect(handler).toBeDefined();
 
-      // Re-create registry to use the mock
-      const newRegistry = new ToolRegistry({
-        intervals: { apiKey: 'test', athleteId: 'test' },
-        whoop: {
-          accessToken: 'test',
-          refreshToken: 'test',
-          clientId: 'test',
-          clientSecret: 'test',
-        },
-      });
-
-      const newMockServer = {
-        registerTool: vi.fn().mockImplementation((name: string, _config: unknown, handler: (args: unknown) => Promise<unknown>) => {
-          registeredHandlers.set(name, handler);
-        }),
-      };
-
-      newRegistry.registerTools(newMockServer as unknown as Parameters<typeof newRegistry.registerTools>[0]);
-
-      const handler = registeredHandlers.get('get_todays_recovery');
       const result = (await handler!({})) as { content: Array<{ type: string; text: string }> };
 
       // The response should be JSON-formatted
@@ -254,16 +196,12 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(31);
+      expect(registeredHandlers.size).toBe(27);
 
       // Verify key tools are registered
-      expect(registeredHandlers.has('get_todays_recovery')).toBe(true);
-      expect(registeredHandlers.has('get_todays_strain')).toBe(true);
-      expect(registeredHandlers.has('get_todays_completed_workouts')).toBe(true);
-      expect(registeredHandlers.has('get_todays_planned_workouts')).toBe(true);
+      expect(registeredHandlers.has('get_todays_summary')).toBe(true);
       expect(registeredHandlers.has('get_athlete_profile')).toBe(true);
       expect(registeredHandlers.has('get_sports_settings')).toBe(true);
-      expect(registeredHandlers.has('get_daily_summary')).toBe(true);
       expect(registeredHandlers.has('get_strain_history')).toBe(true);
       expect(registeredHandlers.has('get_workout_history')).toBe(true);
       expect(registeredHandlers.has('get_recovery_trends')).toBe(true);

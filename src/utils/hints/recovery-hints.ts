@@ -4,18 +4,17 @@
  */
 
 import type { HintGenerator } from '../hints.js';
-import type { TodaysRecoveryResponse } from '../../types/index.js';
+import type { DailySummary } from '../../types/index.js';
 
 /**
- * Hint for correlating recovery with planned workouts.
- * Guides LLM to check what's planned and potentially suggest modifications.
+ * Hint for correlating recovery with historical trends.
+ * Guides LLM to check historical recovery patterns.
  */
-export const recoveryPlanningHint: HintGenerator<TodaysRecoveryResponse> = (data) => {
+export const recoveryTrendsHint: HintGenerator<DailySummary> = (data) => {
   const recovery = data.whoop.recovery;
   if (!recovery) return undefined;
 
   return [
-    `To understand how this recovery data relates to today's training, use get_todays_planned_workouts to see what workouts are scheduled.`,
     `For historical context, use get_recovery_trends to see how today's recovery compares to recent patterns.`,
   ];
 };
@@ -23,6 +22,6 @@ export const recoveryPlanningHint: HintGenerator<TodaysRecoveryResponse> = (data
 /**
  * Combined hint generators for recovery data.
  */
-export const recoveryHints: HintGenerator<TodaysRecoveryResponse>[] = [
-  recoveryPlanningHint,
+export const recoveryHints: HintGenerator<DailySummary>[] = [
+  recoveryTrendsHint,
 ];

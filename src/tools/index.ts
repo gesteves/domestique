@@ -25,7 +25,6 @@ import {
   trainerroadSyncHint,
   dailySummarySyncHint,
   workoutHistoryHints,
-  recoveryHints,
   dailySummaryHints,
   powerCurveProgressHint,
   paceCurveProgressHint,
@@ -184,162 +183,50 @@ export class ToolRegistry {
    * Register all tools with the MCP server
    */
   registerTools(server: McpServer): void {
-    // Daily Summary (most likely to be called first)
+    // Today's Summary (most likely to be called first)
     server.registerTool(
-      'get_daily_summary',
+      'get_todays_summary',
       {
-        title: 'Daily Summary',
-        description: `Fetches a complete snapshot of the user's current status today, including:
-- Whoop recovery, sleep performance, and strain
+        title: "Today's Summary",
+        description: `Fetches a complete snapshot of the user's current status today in a single call. This is THE tool for all "today's" data.
+
+**Includes:**
+- Whoop recovery, sleep performance, and strain (including HRV, sleep stages, and strain score)
 - Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
 - Wellness metrics, such as vitals and subjective status
-- All workouts and fitness activities completed so far today
-- All workouts and fitness activities scheduled for today
+- All workouts and fitness activities completed so far today (with matched Whoop strain data)
+- All workouts and fitness activities scheduled for today (from both TrainerRoad and Intervals.icu)
 - Today's scheduled race, if any
 
 <use-cases>
-- Getting a comprehensive overview of the user's current status in a single call.
-- Assessing readiness for training by combining recovery, fitness, and planned workouts.
-- Understanding the balance between completed and planned training load.
-- Providing a complete daily status report without multiple tool calls.
+- Getting today's recovery and readiness data (recovery score, HRV, sleep quality/duration)
+- Checking today's accumulated strain and stress
+- Reviewing completed workouts and their metrics
+- Viewing planned/scheduled workouts for today
+- Assessing readiness for training by combining recovery, fitness, and planned workouts
+- Understanding the balance between completed and planned training load
+- Providing a complete daily status report in a single call
 </use-cases>
 
 <instructions>
-- Use this if you need a complete picture of the user's status today; it's more efficient than calling individual tools when you need the full picture.
-- Metrics and activities (completed and schedule) can change over the course of the day; agents are encourage to call this tool as the day progresses to get up-to-the-minute data rather than rely on the results of previous call
+- **ALWAYS** use this tool when you need any "today's" data: recovery, sleep, strain, completed workouts, or planned workouts.
+- Metrics and activities (completed and scheduled) can change over the course of the day; agents are encouraged to call this tool as the day progresses to get up-to-the-minute data rather than rely on the results of a previous call.
 </instructions>
 
 <notes>
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
+- Sleep and recovery metrics from Whoop are calculated once a day when the user wakes up and will not be updated throughout the day; strain accumulates throughout the day.
 </notes>`,
         inputSchema: {},
         annotations: READ_ONLY,
       },
       withToolResponse(
-        'get_daily_summary',
-        async () => this.currentTools.getDailySummary(),
+        'get_todays_summary',
+        async () => this.currentTools.getTodaysSummary(),
         {
           fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
           hints: [dailySummarySyncHint, ...dailySummaryHints],
-        }
-      )
-    );
-
-    // Daily Tools (in order of likelihood)
-    server.registerTool(
-      'get_todays_recovery',
-      {
-        title: "Today's Recovery",
-        description: `Returns today's Whoop recovery and sleep data.
-
-<use-cases>
-- Checking the user's readiness for training based on recovery score and HRV.
-- Understanding sleep quality and duration to assess recovery status.
-- Determining if the user should adjust their training intensity based on recovery metrics.
-- Providing context for why the user may be feeling tired or energized.
-</use-cases>
-
-<notes>
-- Sleep and recovery metrics are calculated by Whoop once a day, when the user wakes up,
-and will not be updated throughout the day.
-- Returns null if Whoop is not configured.
-</notes>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withToolResponse(
-        'get_todays_recovery',
-        async () => this.currentTools.getTodaysRecovery(),
-        {
-          fieldDescriptions: combineFieldDescriptions('todays_recovery', 'sleep', 'recovery'),
-          hints: recoveryHints,
-        }
-      )
-    );
-
-    server.registerTool(
-      'get_todays_strain',
-      {
-        title: "Today's Strain",
-        description: `Fetches today's Whoop strain data, including any activities logged in the Whoop app.
-
-<use-cases>
-- Checking how much physiological stress the user has accumulated today.
-- Understanding if the user has already done enough training for the day.
-- Assessing whether planned workouts should be adjusted based on current strain.
-- Correlating strain with recovery to understand training-recovery balance.
-</use-cases>
-
-<notes>
-- Returns null if Whoop is not configured.
-</notes>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withToolResponse(
-        'get_todays_strain',
-        async () => this.currentTools.getTodaysStrain(),
-        {
-          fieldDescriptions: combineFieldDescriptions('todays_strain', 'whoop'),
-        }
-      )
-    );
-
-    server.registerTool(
-      'get_todays_completed_workouts',
-      {
-        title: "Today's Completed Workouts",
-        description: `Fetches all workouts and fitness activities the user has completed today from Intervals.icu.
-
-<use-cases>
-- Reviewing what workouts the user has already completed today.
-- Checking training load (TSS) accumulated so far today.
-- Identifying workouts that may need detailed analysis via get_workout_intervals.
-- Understanding the user's training volume and intensity for the day.
-- Understanding total time in zones for the day (power, pace, heart race, and/or heat zones).
-</use-cases>
-
-<notes>
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
-</notes>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withToolResponse(
-        'get_todays_completed_workouts',
-        async () => this.currentTools.getTodaysCompletedWorkouts(),
-        {
-          fieldDescriptions: combineFieldDescriptions('todays_completed_workouts', 'workout', 'whoop'),
-        }
-      )
-    );
-
-    server.registerTool(
-      'get_todays_planned_workouts',
-      {
-        title: "Today's Planned Workouts",
-        description: `Fetches all workouts and fitness activities the user has planned for today, from both TrainerRoad and Intervals.icu calendars.
-
-<use-cases>
-- Checking what workouts the user has scheduled for today.
-- Understanding expected training load (TSS) for the day.
-- Determining if planned workouts are appropriate given recovery status.
-- Helping the user plan their day around scheduled training.
-</use-cases>
-
-<notes>
-- Planned workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-</notes>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withToolResponse(
-        'get_todays_planned_workouts',
-        async () => this.currentTools.getTodaysPlannedWorkouts(),
-        {
-          fieldDescriptions: combineFieldDescriptions('todays_planned_workouts', 'planned'),
-          hints: [trainerroadSyncHint],
         }
       )
     );
@@ -421,7 +308,7 @@ and will not be updated throughout the day.
 
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
-- If you only need to get today\'s strain data, it's more efficient to call get_todays_strain.
+- If you only need today's strain data, use get_todays_summary instead.
 - Returns empty array if Whoop is not configured.
 </notes>`,
         inputSchema: {
@@ -489,7 +376,7 @@ and will not be updated throughout the day.
 <instructions>
 Get the activity_id from:
 - get_workout_history (for past workouts)
-- get_todays_completed_workouts (for today's workouts)
+- get_todays_summary (for today's workouts)
 - get_daily_summary (for today's workouts)
 </instructions>
 
@@ -528,7 +415,7 @@ Get the activity_id from:
 
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
-- If you only need to get today\'s recovery and sleep data, it's more efficient to call get_todays_recovery.
+- If you only need today's recovery and sleep data, use get_todays_summary instead.
 - Returns empty array if Whoop is not configured.
 </notes>`,
         inputSchema: {
@@ -839,7 +726,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
 <instructions>
 - Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
 - Use this to remove incorrect workouts before recreating with fixes.
-- Get the event_id from get_upcoming_workouts or get_todays_planned_workouts.
+- Get the event_id from get_upcoming_workouts or get_todays_summary.
 </instructions>
 
 <notes>
@@ -875,7 +762,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
 
 <instructions>
 - Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
-- Get the event_id from get_upcoming_workouts or get_todays_planned_workouts.
+- Get the event_id from get_upcoming_workouts or get_todays_summary.
 - Only provide the fields you want to update; omitted fields remain unchanged.
 </instructions>
 
@@ -1064,7 +951,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
 <instructions>
 Get the activity_id from:
 - get_workout_history (for past workouts)
-- get_todays_completed_workouts (for today's workouts)
+- get_todays_summary (for today's workouts)
 </instructions>`,
         inputSchema: {
           activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),

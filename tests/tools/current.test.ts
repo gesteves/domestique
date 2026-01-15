@@ -454,7 +454,7 @@ describe('CurrentTools', () => {
     });
   });
 
-  describe('getDailySummary', () => {
+  describe('getTodaysSummary', () => {
     const mockSleep: WhoopSleepData = {
       sleep_summary: {
         total_in_bed_time: '8:00:00',
@@ -593,7 +593,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue(mockPlannedWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.whoop.sleep).toEqual(mockSleep);
       expect(result.whoop.recovery).toEqual(mockRecovery);
@@ -628,7 +628,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       // Should be ISO 8601 format with timezone offset
       // 10:30:45 UTC = 05:30:45 America/New_York (UTC-5)
@@ -652,7 +652,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.fitness).not.toBeNull();
       expect(result.fitness?.ctl).toBe(65);
@@ -676,7 +676,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.fitness).toBeNull();
     });
@@ -690,7 +690,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await toolsWithoutWhoop.getDailySummary();
+      const result = await toolsWithoutWhoop.getTodaysSummary();
 
       expect(result.whoop.sleep).toBeNull();
       expect(result.whoop.recovery).toBeNull();
@@ -719,7 +719,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.wellness).not.toBeNull();
       // Non-duplicate fields are present
@@ -765,7 +765,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       // After filtering, no fields remain, so wellness should be null
       expect(result.wellness).toBeNull();
@@ -785,7 +785,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.wellness).toBeNull();
     });
@@ -804,7 +804,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.wellness).toBeNull();
     });
@@ -839,7 +839,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([todaysRace, futureRace]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.scheduled_race).toEqual(todaysRace);
 
@@ -861,7 +861,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.scheduled_race).toBeNull();
     });
@@ -890,7 +890,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([futureRace]);
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.scheduled_race).toBeNull();
 
@@ -912,7 +912,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockRejectedValue(new Error('Failed'));
 
-      const result = await tools.getDailySummary();
+      const result = await tools.getTodaysSummary();
 
       expect(result.scheduled_race).toBeNull();
     });
@@ -932,7 +932,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await toolsWithoutTr.getDailySummary();
+      const result = await toolsWithoutTr.getTodaysSummary();
 
       expect(result.scheduled_race).toBeNull();
     });
