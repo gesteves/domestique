@@ -376,7 +376,6 @@ export class ToolRegistry {
 Get the activity_id from:
 - get_workout_history (for past workouts)
 - get_todays_summary (for today's workouts)
-- get_daily_summary (for today's workouts)
 </instructions>
 
 <notes>
