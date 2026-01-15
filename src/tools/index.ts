@@ -216,7 +216,6 @@ export class ToolRegistry {
 <notes>
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
-- Sleep and recovery metrics from Whoop are calculated once a day when the user wakes up and will not be updated throughout the day; strain accumulates throughout the day.
 </notes>`,
         inputSchema: {},
         annotations: READ_ONLY,
