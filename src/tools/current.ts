@@ -229,13 +229,14 @@ export class CurrentTools {
   }
 
   /**
-   * Get a complete daily summary including recovery, strain, and workouts.
-   * Consolidates 4 tool calls into 1 for efficiency.
+   * Get a complete summary of today's data including recovery, strain, and workouts.
+   * This is the single tool for all "today's" data - recovery, sleep, strain,
+   * completed workouts, and planned workouts.
    *
    * Note: Whoop insight fields (recovery_level, strain_level, sleep_performance_level, etc.)
    * are included directly in the recovery and strain objects.
    */
-  async getDailySummary(): Promise<DailySummary> {
+  async getTodaysSummary(): Promise<DailySummary> {
     // Use athlete's timezone to determine "today"
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
