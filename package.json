@@ -26,12 +26,12 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "chrono-node": "^2.9.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "express": "^5.2.1",
-    "node-ical": "^0.24.0",
+    "node-ical": "^0.25.1",
     "redis": "^5.10.0",
     "zod": "^4.3.6"
   },
