@@ -182,6 +182,20 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
       return;
     }
 
+    // If the client sent a session ID but we don't recognize it (e.g. after a
+    // server restart/deployment), return 404 so the client knows to re-initialize.
+    // Per the MCP spec, 404 signals "session not found" and the client should
+    // start a new session by sending a fresh initialization request.
+    if (sessionId) {
+      console.log(`Unknown session ID: ${sessionId}, returning 404 to trigger re-initialization`);
+      res.status(404).json({
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Session not found' },
+        id: null,
+      });
+      return;
+    }
+
     // For new sessions (initialization), create a new server and transport
     const mcpServer = new McpServer(
       { name: 'domestique', version: '1.0.0' },
@@ -287,29 +301,6 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
       if (!res.headersSent) {
         res.status(500).json({ error: 'Internal server error' });
       }
-    }
-  });
-
-  // Handle session termination via DELETE
-  app.delete('/mcp', validateToken, async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-    if (!sessionId || !sessions[sessionId]) {
-      res.status(404).json({ error: 'Session not found' });
-      return;
-    }
-
-    const { transport, server } = sessions[sessionId];
-
-    try {
-      await transport.close();
-      await server.close();
-      delete sessions[sessionId];
-      console.log(`Session terminated: ${sessionId}`);
-      res.status(204).send();
-    } catch (error) {
-      console.error('Error terminating session:', error);
-      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
