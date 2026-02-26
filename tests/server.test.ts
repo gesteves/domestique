@@ -119,6 +119,69 @@ describe('Server', () => {
       expect(response.status).not.toBe(404);
     });
 
+    it('should return 404 for unknown session ID', async () => {
+      const response = await fetch(`${baseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-token',
+          'mcp-session-id': 'stale-session-id-from-before-deployment',
+        },
+        body: JSON.stringify({}),
+      });
+
+      expect(response.status).toBe(404);
+      const body = await response.json();
+      expect(body).toEqual({
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Session not found' },
+        id: null,
+      });
+    });
+
+    it('should reuse transport for known session ID', async () => {
+      // First, create a session by making a request without a session ID
+      await fetch(`${baseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-token',
+        },
+        body: JSON.stringify({}),
+      });
+
+      // Wait for the async onsessioninitialized callback to fire
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Now make a request with the known session ID
+      const response = await fetch(`${baseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-token',
+          'mcp-session-id': 'test-session-id',
+        },
+        body: JSON.stringify({}),
+      });
+
+      // Should reuse the existing session, not return 404
+      expect(response.status).toBe(200);
+    });
+
+    it('should create new session when no session ID is provided', async () => {
+      const response = await fetch(`${baseUrl}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-token',
+        },
+        body: JSON.stringify({}),
+      });
+
+      // Should create a new session successfully
+      expect(response.status).toBe(200);
+    });
+
     it('should register daily_summary prompt on session initialization', async () => {
       const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
 
