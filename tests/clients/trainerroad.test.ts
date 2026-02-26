@@ -248,6 +248,75 @@ END:VCALENDAR`;
 
       expect(result[0].sport).toBe('Swimming');
     });
+
+    it('should not match sport keywords that are substrings of workout names', async () => {
+      const garrowbyIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:garrowby@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:2:00 - Garrowby +7
+DESCRIPTION:TSS 128, IF 0.80, kJ(Cal) 1503. Garrowby +7 is a 4x18-minute segmented Sweet Spot workout.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(garrowbyIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      // "Garrowby" contains "row" but should NOT be classified as Rowing
+      expect(result[0].sport).toBe('Cycling');
+      expect(result[0].name).toBe('Garrowby +7');
+    });
+
+    it('should detect Rowing sport when "row" is a standalone word', async () => {
+      const rowIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:row@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:0:30 - Easy Row
+DESCRIPTION:Easy rowing session.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(rowIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result[0].sport).toBe('Rowing');
+    });
+
+    it('should not match "run" as a substring in workout names', async () => {
+      const brunIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:brun@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:30 - Brundage +2
+DESCRIPTION:TSS 95, IF 0.75. Brundage +2 is a steady endurance ride.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(brunIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      // "Brundage" contains "run" but should NOT be classified as Running
+      expect(result[0].sport).toBe('Cycling');
+    });
   });
 
   describe('duration formatting', () => {

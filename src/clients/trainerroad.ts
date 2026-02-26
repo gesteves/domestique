@@ -442,10 +442,12 @@ export class TrainerRoadClient {
 
     // Extract keywords from name and try normalizing them
     // Look for common activity type keywords in the name
+    // Use word boundary matching to avoid false positives (e.g., "row" in "Garrowby")
     const nameLower = name.toLowerCase();
     const keywords = ['run', 'running', 'swim', 'swimming', 'ride', 'cycling', 'bike', 'hike', 'hiking', 'ski', 'skiing', 'row', 'rowing'];
     for (const keyword of keywords) {
-      if (nameLower.includes(keyword)) {
+      const wordBoundaryRegex = new RegExp(`\\b${keyword}\\b`);
+      if (wordBoundaryRegex.test(nameLower)) {
         const keywordNormalized = normalizeActivityType(keyword);
         if (keywordNormalized !== 'Other') {
           return keywordNormalized;
