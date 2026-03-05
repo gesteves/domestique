@@ -20,6 +20,7 @@ import {
   getFieldDescriptions,
 } from '../utils/field-descriptions.js';
 import { buildToolResponse, type ToolResponse } from '../utils/response-builder.js';
+import { formatResponseDates } from '../utils/date-formatting.js';
 import { type HintGenerator, generateHints } from '../utils/hints.js';
 import {
   trainerroadSyncHint,
@@ -116,22 +117,28 @@ function buildErrorResponse(error: unknown): ErrorResponse {
 /**
  * Wraps a tool handler with response building and comprehensive error handling.
  * Catches all errors and formats them consistently for LLM consumption.
+ * Formats all date fields in the response to human-readable strings.
  */
 function withToolResponse<TArgs, TResult>(
   toolName: string,
   handler: (args: TArgs) => Promise<TResult>,
-  options: ResponseOptions<TResult>
+  options: ResponseOptions<TResult>,
+  getTimezone?: () => Promise<string>
 ): (args: TArgs) => Promise<ToolResponse | ErrorResponse> {
   return async (args: TArgs) => {
     console.log(`[Tool] Calling tool: ${toolName}`);
     try {
       const data = await handler(args);
 
+      // Format all date fields to human-readable strings
+      const timezone = getTimezone ? await getTimezone() : null;
+      const formattedData = timezone ? formatResponseDates(data, timezone) : data;
+
       // Generate hints from the response data if hint generators are provided
-      const hints = options.hints ? generateHints(data, options.hints) : undefined;
+      const hints = options.hints ? generateHints(formattedData as TResult, options.hints) : undefined;
 
       return await buildToolResponse({
-        data,
+        data: formattedData,
         fieldDescriptions: options.fieldDescriptions,
         widgetMeta: options.widgetMeta,
         hints,
@@ -157,9 +164,11 @@ export class ToolRegistry {
   private currentTools: CurrentTools;
   private historicalTools: HistoricalTools;
   private planningTools: PlanningTools;
+  private intervalsClient: IntervalsClient;
 
   constructor(config: ToolsConfig) {
     const intervalsClient = new IntervalsClient(config.intervals);
+    this.intervalsClient = intervalsClient;
     const whoopClient = config.whoop ? new WhoopClient(config.whoop) : null;
     const trainerroadClient = config.trainerroad
       ? new TrainerRoadClient(config.trainerroad)
@@ -183,6 +192,14 @@ export class ToolRegistry {
    * Register all tools with the MCP server
    */
   registerTools(server: McpServer): void {
+    const getTimezone = () => this.intervalsClient.getAthleteTimezone();
+
+    // Helper that wraps withToolResponse with the timezone getter for date formatting
+    const withDatedToolResponse = <TArgs, TResult>(
+      toolName: string,
+      handler: (args: TArgs) => Promise<TResult>,
+      options: ResponseOptions<TResult>
+    ) => withToolResponse(toolName, handler, options, getTimezone);
     // Today's Summary (most likely to be called first)
     server.registerTool(
       'get_todays_summary',
@@ -220,7 +237,7 @@ export class ToolRegistry {
         inputSchema: {},
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_todays_summary',
         async () => this.currentTools.getTodaysSummary(),
         {
@@ -252,7 +269,7 @@ export class ToolRegistry {
         inputSchema: {},
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_athlete_profile',
         async () => this.currentTools.getAthleteProfile(),
         {
@@ -282,7 +299,7 @@ export class ToolRegistry {
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_sports_settings',
         async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
         {
@@ -316,7 +333,7 @@ export class ToolRegistry {
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_strain_history',
         async (args: { oldest: string; newest?: string }) => this.currentTools.getStrainHistory(args),
         {
@@ -352,7 +369,7 @@ export class ToolRegistry {
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_workout_history',
         async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
         {
@@ -388,7 +405,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_workout_details',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutDetails(args.activity_id),
         {
@@ -422,7 +439,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_recovery_trends',
         async (args: { oldest: string; newest?: string }) => this.historicalTools.getRecoveryTrends(args),
         {
@@ -454,7 +471,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_wellness_trends',
         async (args: { oldest: string; newest?: string }) => this.historicalTools.getWellnessTrends(args),
         {
@@ -488,7 +505,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_activity_totals',
         async (args: { oldest: string; newest?: string; sports?: ('cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength')[] }) => this.historicalTools.getActivityTotals(args),
         {
@@ -523,7 +540,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_upcoming_workouts',
         async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts(args),
         {
@@ -551,7 +568,7 @@ Get the activity_id from:
         inputSchema: {},
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_upcoming_races',
         async () => this.planningTools.getUpcomingRaces(),
         {
@@ -582,7 +599,7 @@ Get the activity_id from:
         inputSchema: {},
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_run_workout_syntax',
         async () => ({ syntax: RUN_WORKOUT_SYNTAX_RESOURCE }),
         {
@@ -609,7 +626,7 @@ Get the activity_id from:
         inputSchema: {},
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_cycling_workout_syntax',
         async () => ({ syntax: CYCLING_WORKOUT_SYNTAX_RESOURCE }),
         {
@@ -658,7 +675,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         },
         annotations: CREATES_EXTERNAL,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'create_run_workout',
         async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
           this.planningTools.createRunWorkout(args),
@@ -699,7 +716,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         },
         annotations: CREATES_EXTERNAL,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'create_cycling_workout',
         async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
           this.planningTools.createCyclingWorkout(args),
@@ -736,7 +753,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         },
         annotations: DESTRUCTIVE,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'delete_workout',
         async (args: { event_id: string }) =>
           this.planningTools.deleteWorkout(args.event_id),
@@ -779,7 +796,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         },
         annotations: MODIFIES_EXTERNAL,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'update_workout',
         async (args: { event_id: string; name?: string; description?: string; workout_doc?: string; scheduled_for?: string; type?: string }) =>
           this.planningTools.updateWorkout(args),
@@ -819,7 +836,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         // Can be destructive (deletes orphans), but also creates external resources
         annotations: { openWorldHint: true, destructiveHint: true },
       },
-      withToolResponse(
+      withDatedToolResponse(
         'sync_trainerroad_runs',
         async (args: { oldest?: string; newest?: string }) =>
           this.planningTools.syncTRRuns(args),
@@ -878,7 +895,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         },
         annotations: MODIFIES_EXTERNAL,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'set_workout_intervals',
         async (args: {
           activity_id: string;
@@ -922,7 +939,7 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_training_load_trends',
         async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
         {
@@ -956,7 +973,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_workout_intervals',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
         {
@@ -987,7 +1004,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_workout_notes',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
         {
@@ -1016,7 +1033,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_workout_weather',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
         {
@@ -1051,7 +1068,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_workout_heat_zones',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
         {
@@ -1095,7 +1112,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_power_curve',
         async (args: { oldest: string; newest?: string; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
           this.historicalTools.getPowerCurve(args),
@@ -1143,7 +1160,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_pace_curve',
         async (args: { oldest: string; newest?: string; sport: 'running' | 'swimming'; distances?: number[]; gap?: boolean; compare_to_oldest?: string; compare_to_newest?: string }) =>
           this.historicalTools.getPaceCurve(args),
@@ -1186,7 +1203,7 @@ Get the activity_id from:
         },
         annotations: READ_ONLY,
       },
-      withToolResponse(
+      withDatedToolResponse(
         'get_hr_curve',
         async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming'; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
           this.historicalTools.getHRCurve(args),

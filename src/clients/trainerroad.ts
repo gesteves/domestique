@@ -368,7 +368,7 @@ export class TrainerRoadClient {
         // Use fromZonedTime to interpret midnight as being in the target timezone
         // This creates a UTC Date representing midnight in that timezone
         const midnightInTz = fromZonedTime(`${dateStr}T00:00:00`, timezone);
-        // Then format it back in that timezone
+        // Then format it back in that timezone with offset
         date = formatInTimeZone(midnightInTz, timezone, "yyyy-MM-dd'T'HH:mm:ssXXX");
       } else {
         date = `${dateStr}T00:00:00.000Z`;
