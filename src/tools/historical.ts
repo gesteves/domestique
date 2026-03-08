@@ -1,21 +1,17 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { parseDateStringInTimezone, parseDateRangeInTimezone } from '../utils/date-parser.js';
-import { matchWhoopActivity } from '../utils/workout-utils.js';
+import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
 import {
   parseDurationToHours,
   parseDurationToSeconds,
   formatLargeDuration,
-  formatDistance,
   formatDurationLabel,
-  isSwimmingActivity,
 } from '../utils/format-units.js';
 import type {
   TrainingLoadTrends,
   WorkoutWithWhoop,
-  StrainActivity,
   NormalizedWorkout,
-  WhoopMatchedData,
   WorkoutIntervalsResponse,
   WorkoutNotesResponse,
   PowerCurvesResponse,
@@ -38,10 +34,6 @@ import type {
   ActivityTotalsResponse,
   ZoneTotalEntry,
   SportTotals,
-  HRZone,
-  PowerZone,
-  PaceZone,
-  ActivityType,
 } from '../types/index.js';
 import { filterWhoopDuplicateFieldsFromTrends } from '../types/index.js';
 import type {
@@ -67,40 +59,15 @@ export class HistoricalTools {
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
 
-    try {
-      // Fetch Intervals.icu activities
-      // Use skipExpensiveCalls since historical queries can return many activities
-      // and per-activity API calls (heat zones, notes) would cause rate limiting
-      const workouts = await this.intervals.getActivities(startDate, endDate, params.sport, {
-        skipExpensiveCalls: true,
-      });
+    // Fetch Intervals.icu activities
+    // Use skipExpensiveCalls since historical queries can return many activities
+    // and per-activity API calls (heat zones, notes) would cause rate limiting
+    const workouts = await this.intervals.getActivities(startDate, endDate, params.sport, {
+      skipExpensiveCalls: true,
+    });
 
-      // If no Whoop client, return workouts without Whoop data
-      if (!this.whoop) {
-        return workouts.map((workout) => ({
-          ...workout,
-          whoop: null,
-        }));
-      }
-
-      // Fetch Whoop activities for the same date range
-      let whoopActivities: StrainActivity[] = [];
-      try {
-        whoopActivities = await this.whoop.getWorkouts(startDate, endDate);
-      } catch (error) {
-        console.error('Error fetching Whoop activities for matching:', error);
-        // Continue without Whoop data rather than failing entirely
-      }
-
-      // Match and merge
-      return workouts.map((workout) => ({
-        ...workout,
-        whoop: matchWhoopActivity(workout, whoopActivities),
-      }));
-    } catch (error) {
-      console.error('Error fetching workout history:', error);
-      throw error;
-    }
+    // Enrich with matched Whoop data
+    return enrichWorkoutsWithWhoop(workouts, this.whoop, startDate, endDate);
   }
 
   /**
@@ -136,17 +103,12 @@ export class HistoricalTools {
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
 
-    try {
-      const data = await this.whoop.getRecoveries(startDate, endDate);
+    const data = await this.whoop.getRecoveries(startDate, endDate);
 
-      // Calculate summary statistics
-      const summary = this.calculateRecoverySummary(data);
+    // Calculate summary statistics
+    const summary = this.calculateRecoverySummary(data);
 
-      return { data, summary };
-    } catch (error) {
-      console.error('Error fetching recovery trends:', error);
-      throw error;
-    }
+    return { data, summary };
   }
 
   private calculateRecoverySummary(data: WhoopRecoveryTrendEntry[]): {
@@ -200,18 +162,13 @@ export class HistoricalTools {
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
 
-    try {
-      const trends = await this.intervals.getWellnessTrends(startDate, endDate);
+    const trends = await this.intervals.getWellnessTrends(startDate, endDate);
 
-      // Filter out Whoop-duplicate fields when Whoop is connected
-      // Whoop provides more detailed sleep/HRV metrics
-      return this.whoop
-        ? filterWhoopDuplicateFieldsFromTrends(trends)
-        : trends;
-    } catch (error) {
-      console.error('Error fetching wellness trends:', error);
-      throw error;
-    }
+    // Filter out Whoop-duplicate fields when Whoop is connected
+    // Whoop provides more detailed sleep/HRV metrics
+    return this.whoop
+      ? filterWhoopDuplicateFieldsFromTrends(trends)
+      : trends;
   }
 
   // ============================================
@@ -222,12 +179,7 @@ export class HistoricalTools {
    * Get training load trends (CTL/ATL/TSB) with ACWR analysis
    */
   async getTrainingLoadTrends(days: number = 42): Promise<TrainingLoadTrends> {
-    try {
-      return await this.intervals.getTrainingLoadTrends(days);
-    } catch (error) {
-      console.error('Error fetching training load trends:', error);
-      throw error;
-    }
+    return await this.intervals.getTrainingLoadTrends(days);
   }
 
   // ============================================
@@ -240,12 +192,7 @@ export class HistoricalTools {
    * Z2 metrics, compliance, and all other available metrics.
    */
   async getWorkoutDetails(activityId: string): Promise<NormalizedWorkout> {
-    try {
-      return await this.intervals.getActivity(activityId);
-    } catch (error) {
-      console.error('Error fetching workout details:', error);
-      throw error;
-    }
+    return await this.intervals.getActivity(activityId);
   }
 
   // ============================================
@@ -256,12 +203,7 @@ export class HistoricalTools {
    * Get detailed intervals for a specific workout
    */
   async getWorkoutIntervals(activityId: string): Promise<WorkoutIntervalsResponse> {
-    try {
-      return await this.intervals.getActivityIntervals(activityId);
-    } catch (error) {
-      console.error('Error fetching workout intervals:', error);
-      throw error;
-    }
+    return await this.intervals.getActivityIntervals(activityId);
   }
 
   // ============================================
@@ -272,12 +214,7 @@ export class HistoricalTools {
    * Get notes/messages for a specific workout
    */
   async getWorkoutNotes(activityId: string): Promise<WorkoutNotesResponse> {
-    try {
-      return await this.intervals.getActivityNotes(activityId);
-    } catch (error) {
-      console.error('Error fetching workout notes:', error);
-      throw error;
-    }
+    return await this.intervals.getActivityNotes(activityId);
   }
 
   // ============================================
@@ -289,12 +226,7 @@ export class HistoricalTools {
    * Only relevant for outdoor activities.
    */
   async getWorkoutWeather(activityId: string): Promise<{ activity_id: string; weather_description: string | null }> {
-    try {
-      return await this.intervals.getActivityWeather(activityId);
-    } catch (error) {
-      console.error('Error fetching workout weather:', error);
-      throw error;
-    }
+    return await this.intervals.getActivityWeather(activityId);
   }
 
   // ============================================
@@ -311,24 +243,19 @@ export class HistoricalTools {
     max_heat_strain_index?: number;
     median_heat_strain_index?: number;
   }> {
-    try {
-      const heatMetrics = await this.intervals.getActivityHeatMetrics(activityId);
-      if (!heatMetrics) {
-        return {
-          activity_id: activityId,
-          heat_zones: null,
-        };
-      }
+    const heatMetrics = await this.intervals.getActivityHeatMetrics(activityId);
+    if (!heatMetrics) {
       return {
         activity_id: activityId,
-        heat_zones: heatMetrics.zones,
-        max_heat_strain_index: heatMetrics.max_heat_strain_index,
-        median_heat_strain_index: heatMetrics.median_heat_strain_index,
+        heat_zones: null,
       };
-    } catch (error) {
-      console.error('Error fetching workout heat zones:', error);
-      throw error;
     }
+    return {
+      activity_id: activityId,
+      heat_zones: heatMetrics.zones,
+      max_heat_strain_index: heatMetrics.max_heat_strain_index,
+      median_heat_strain_index: heatMetrics.median_heat_strain_index,
+    };
   }
 
   // ============================================
@@ -379,55 +306,50 @@ export class HistoricalTools {
 
     const durations = params.durations || this.DEFAULT_POWER_DURATIONS;
 
-    try {
-      // Fetch current period data
-      const { durations: apiDurations, activities } = await this.intervals.getPowerCurves(
-        startDate,
-        endDate,
-        'Ride', // Cycling only for power curves
-        durations
-      );
+    // Fetch current period data
+    const { durations: apiDurations, activities } = await this.intervals.getPowerCurves(
+      startDate,
+      endDate,
+      'Ride', // Cycling only for power curves
+      durations
+    );
 
-      // Calculate summary for key durations
-      const summary = this.calculatePowerSummary(activities, apiDurations);
+    // Calculate summary for key durations
+    const summary = this.calculatePowerSummary(activities, apiDurations);
 
-      const response: PowerCurvesResponse = {
-        period_start: startDate,
-        period_end: endDate,
-        sport: 'cycling',
-        activity_count: activities.length,
-        durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
-        summary,
+    const response: PowerCurvesResponse = {
+      period_start: startDate,
+      period_end: endDate,
+      sport: 'cycling',
+      activity_count: activities.length,
+      durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
+      summary,
+    };
+
+    // If comparison period provided, calculate comparison
+    if (params.compare_to_oldest && params.compare_to_newest) {
+      const compareStart = parseDateStringInTimezone(params.compare_to_oldest, timezone, 'compare_to_oldest');
+      const compareEnd = parseDateStringInTimezone(params.compare_to_newest, timezone, 'compare_to_newest');
+
+      const { durations: compareDurations, activities: compareActivities } =
+        await this.intervals.getPowerCurves(
+          compareStart,
+          compareEnd,
+          'Ride',
+          durations
+        );
+
+      const compareSummary = this.calculatePowerSummary(compareActivities, compareDurations);
+
+      response.comparison = {
+        previous_period_start: compareStart,
+        previous_period_end: compareEnd,
+        previous_activity_count: compareActivities.length,
+        changes: this.calculatePowerComparison(summary, compareSummary, apiDurations),
       };
-
-      // If comparison period provided, calculate comparison
-      if (params.compare_to_oldest && params.compare_to_newest) {
-        const compareStart = parseDateStringInTimezone(params.compare_to_oldest, timezone, 'compare_to_oldest');
-        const compareEnd = parseDateStringInTimezone(params.compare_to_newest, timezone, 'compare_to_newest');
-
-        const { durations: compareDurations, activities: compareActivities } =
-          await this.intervals.getPowerCurves(
-            compareStart,
-            compareEnd,
-            'Ride',
-            durations
-          );
-
-        const compareSummary = this.calculatePowerSummary(compareActivities, compareDurations);
-
-        response.comparison = {
-          previous_period_start: compareStart,
-          previous_period_end: compareEnd,
-          previous_activity_count: compareActivities.length,
-          changes: this.calculatePowerComparison(summary, compareSummary, apiDurations),
-        };
-      }
-
-      return response;
-    } catch (error) {
-      console.error('Error fetching power curves:', error);
-      throw error;
     }
+
+    return response;
   }
 
   /**
@@ -556,63 +478,58 @@ export class HistoricalTools {
       : this.DEFAULT_RUNNING_DISTANCES;
     const distances = params.distances || defaultDistances;
 
-    try {
-      // Fetch current period data
-      const { distances: apiDistances, gap_adjusted, activities } =
+    // Fetch current period data
+    const { distances: apiDistances, gap_adjusted, activities } =
+      await this.intervals.getPaceCurves(
+        startDate,
+        endDate,
+        type,
+        distances,
+        params.gap
+      );
+
+    // Calculate summary for key distances
+    const summary = this.calculatePaceSummary(activities, apiDistances, isSwimming);
+
+    const response: PaceCurvesResponse = {
+      period_start: startDate,
+      period_end: endDate,
+      sport: params.sport,
+      gap_adjusted,
+      activity_count: activities.length,
+      distances_analyzed: apiDistances.map((d) => this.formatDistanceLabel(d)),
+      summary,
+    };
+
+    // If comparison period provided, calculate comparison
+    if (params.compare_to_oldest && params.compare_to_newest) {
+      const compareStart = parseDateStringInTimezone(params.compare_to_oldest, timezone, 'compare_to_oldest');
+      const compareEnd = parseDateStringInTimezone(params.compare_to_newest, timezone, 'compare_to_newest');
+
+      const { distances: compareDistances, activities: compareActivities } =
         await this.intervals.getPaceCurves(
-          startDate,
-          endDate,
+          compareStart,
+          compareEnd,
           type,
           distances,
           params.gap
         );
 
-      // Calculate summary for key distances
-      const summary = this.calculatePaceSummary(activities, apiDistances, isSwimming);
+      const compareSummary = this.calculatePaceSummary(
+        compareActivities,
+        compareDistances,
+        isSwimming
+      );
 
-      const response: PaceCurvesResponse = {
-        period_start: startDate,
-        period_end: endDate,
-        sport: params.sport,
-        gap_adjusted,
-        activity_count: activities.length,
-        distances_analyzed: apiDistances.map((d) => this.formatDistanceLabel(d)),
-        summary,
+      response.comparison = {
+        previous_period_start: compareStart,
+        previous_period_end: compareEnd,
+        previous_activity_count: compareActivities.length,
+        changes: this.calculatePaceComparison(summary, compareSummary, isSwimming),
       };
-
-      // If comparison period provided, calculate comparison
-      if (params.compare_to_oldest && params.compare_to_newest) {
-        const compareStart = parseDateStringInTimezone(params.compare_to_oldest, timezone, 'compare_to_oldest');
-        const compareEnd = parseDateStringInTimezone(params.compare_to_newest, timezone, 'compare_to_newest');
-
-        const { distances: compareDistances, activities: compareActivities } =
-          await this.intervals.getPaceCurves(
-            compareStart,
-            compareEnd,
-            type,
-            distances,
-            params.gap
-          );
-
-        const compareSummary = this.calculatePaceSummary(
-          compareActivities,
-          compareDistances,
-          isSwimming
-        );
-
-        response.comparison = {
-          previous_period_start: compareStart,
-          previous_period_end: compareEnd,
-          previous_activity_count: compareActivities.length,
-          changes: this.calculatePaceComparison(summary, compareSummary, isSwimming),
-        };
-      }
-
-      return response;
-    } catch (error) {
-      console.error('Error fetching pace curves:', error);
-      throw error;
     }
+
+    return response;
   }
 
   /**
@@ -737,50 +654,45 @@ export class HistoricalTools {
     else if (params.sport === 'running') type = 'Run';
     else if (params.sport === 'swimming') type = 'Swim';
 
-    try {
-      // Fetch current period data
-      const { durations: apiDurations, activities } = await this.intervals.getHRCurves(
-        startDate,
-        endDate,
-        type,
-        durations
-      );
+    // Fetch current period data
+    const { durations: apiDurations, activities } = await this.intervals.getHRCurves(
+      startDate,
+      endDate,
+      type,
+      durations
+    );
 
-      // Calculate summary for key durations
-      const summary = this.calculateHRSummary(activities, apiDurations);
+    // Calculate summary for key durations
+    const summary = this.calculateHRSummary(activities, apiDurations);
 
-      const response: HRCurvesResponse = {
-        period_start: startDate,
-        period_end: endDate,
-        sport: params.sport || null,
-        activity_count: activities.length,
-        durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
-        summary,
+    const response: HRCurvesResponse = {
+      period_start: startDate,
+      period_end: endDate,
+      sport: params.sport || null,
+      activity_count: activities.length,
+      durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
+      summary,
+    };
+
+    // If comparison period provided, calculate comparison
+    if (params.compare_to_oldest && params.compare_to_newest) {
+      const compareStart = parseDateStringInTimezone(params.compare_to_oldest, timezone, 'compare_to_oldest');
+      const compareEnd = parseDateStringInTimezone(params.compare_to_newest, timezone, 'compare_to_newest');
+
+      const { durations: compareDurations, activities: compareActivities } =
+        await this.intervals.getHRCurves(compareStart, compareEnd, type, durations);
+
+      const compareSummary = this.calculateHRSummary(compareActivities, compareDurations);
+
+      response.comparison = {
+        previous_period_start: compareStart,
+        previous_period_end: compareEnd,
+        previous_activity_count: compareActivities.length,
+        changes: this.calculateHRComparison(summary, compareSummary),
       };
-
-      // If comparison period provided, calculate comparison
-      if (params.compare_to_oldest && params.compare_to_newest) {
-        const compareStart = parseDateStringInTimezone(params.compare_to_oldest, timezone, 'compare_to_oldest');
-        const compareEnd = parseDateStringInTimezone(params.compare_to_newest, timezone, 'compare_to_newest');
-
-        const { durations: compareDurations, activities: compareActivities } =
-          await this.intervals.getHRCurves(compareStart, compareEnd, type, durations);
-
-        const compareSummary = this.calculateHRSummary(compareActivities, compareDurations);
-
-        response.comparison = {
-          previous_period_start: compareStart,
-          previous_period_end: compareEnd,
-          previous_activity_count: compareActivities.length,
-          changes: this.calculateHRComparison(summary, compareSummary),
-        };
-      }
-
-      return response;
-    } catch (error) {
-      console.error('Error fetching HR curves:', error);
-      throw error;
     }
+
+    return response;
   }
 
   /**
@@ -889,51 +801,46 @@ export class HistoricalTools {
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
 
-    try {
-      // Fetch activities with skipExpensiveCalls to avoid per-activity API calls
-      // but still get normalized zone data with proper names
-      const activities = await this.intervals.getActivities(startDate, endDate, undefined, {
-        skipExpensiveCalls: true,
-      });
+    // Fetch activities with skipExpensiveCalls to avoid per-activity API calls
+    // but still get normalized zone data with proper names
+    const activities = await this.intervals.getActivities(startDate, endDate, undefined, {
+      skipExpensiveCalls: true,
+    });
 
-      // Filter by sports if specified
-      const filteredActivities = params.sports
-        ? activities.filter((a) => {
-            if (!a.activity_type) return false;
-            const sport = this.normalizeActivityTypeToSport(a.activity_type);
-            return params.sports!.includes(sport as typeof params.sports extends (infer T)[] ? T : never);
-          })
-        : activities;
+    // Filter by sports if specified
+    const filteredActivities = params.sports
+      ? activities.filter((a) => {
+          if (!a.activity_type) return false;
+          const sport = normalizeActivityTypeToSport(a.activity_type);
+          return params.sports!.includes(sport as typeof params.sports extends (infer T)[] ? T : never);
+        })
+      : activities;
 
-      // Calculate period stats
-      const periodDays = this.daysBetween(startDate, endDate) + 1;
-      const uniqueDates = new Set(
-        filteredActivities.map((a) => a.start_time.split('T')[0])
-      );
-      const activeDays = uniqueDates.size;
-      const weeks = Math.ceil(periodDays / 7);
+    // Calculate period stats
+    const periodDays = this.daysBetween(startDate, endDate) + 1;
+    const uniqueDates = new Set(
+      filteredActivities.map((a) => a.start_time.split('T')[0])
+    );
+    const activeDays = uniqueDates.size;
+    const weeks = Math.ceil(periodDays / 7);
 
-      // Aggregate totals
-      const totals = this.aggregateTotals(filteredActivities);
+    // Aggregate totals
+    const totals = this.aggregateTotals(filteredActivities);
 
-      // Group by sport
-      const bySport = this.aggregateBySport(filteredActivities);
+    // Group by sport
+    const bySport = this.aggregateBySport(filteredActivities);
 
-      return {
-        period: {
-          start_date: startDate,
-          end_date: endDate,
-          weeks,
-          days: periodDays,
-          active_days: activeDays,
-        },
-        totals,
-        by_sport: bySport,
-      };
-    } catch (error) {
-      console.error('Error fetching activity totals:', error);
-      throw error;
-    }
+    return {
+      period: {
+        start_date: startDate,
+        end_date: endDate,
+        weeks,
+        days: periodDays,
+        active_days: activeDays,
+      },
+      totals,
+      by_sport: bySport,
+    };
   }
 
   /**
@@ -944,30 +851,6 @@ export class HistoricalTools {
     const endDate = new Date(end);
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  }
-
-  /**
-   * Normalize activity type to sport category
-   */
-  private normalizeActivityTypeToSport(activityType: ActivityType): string {
-    switch (activityType) {
-      case 'Cycling':
-        return 'cycling';
-      case 'Running':
-        return 'running';
-      case 'Swimming':
-        return 'swimming';
-      case 'Skiing':
-        return 'skiing';
-      case 'Hiking':
-        return 'hiking';
-      case 'Rowing':
-        return 'rowing';
-      case 'Strength':
-        return 'strength';
-      default:
-        return 'other';
-    }
   }
 
   /**
@@ -1104,7 +987,7 @@ export class HistoricalTools {
 
     for (const activity of activities) {
       const sport = activity.activity_type
-        ? this.normalizeActivityTypeToSport(activity.activity_type)
+        ? normalizeActivityTypeToSport(activity.activity_type)
         : 'other';
       if (!sportGroups.has(sport)) {
         sportGroups.set(sport, []);

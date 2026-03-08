@@ -4,15 +4,9 @@ import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateRangeInTimezone } from '../utils/date-parser.js';
 import { getTodayInTimezone } from '../utils/date-parser.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
-import { DOMESTIQUE_TAG, mergeWorkouts, matchWhoopActivity } from '../utils/workout-utils.js';
+import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
 import type {
   StrainData,
-  FitnessMetrics,
-  PlannedWorkout,
-  NormalizedWorkout,
-  WorkoutWithWhoop,
-  StrainActivity,
-  WhoopMatchedData,
   AthleteProfile,
   DailySummary,
   SportSettingsResponse,
@@ -20,8 +14,6 @@ import type {
   TodaysStrainResponse,
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
-  WhoopSleepData,
-  WhoopRecoveryData,
   Race,
 } from '../types/index.js';
 import { filterWhoopDuplicateFields } from '../types/index.js';
@@ -53,19 +45,14 @@ export class CurrentTools {
       };
     }
 
-    try {
-      const { sleep, recovery } = await this.whoop.getTodayRecovery();
-      return {
-        current_time: currentDateTime,
-        whoop: {
-          sleep,
-          recovery,
-        },
-      };
-    } catch (error) {
-      console.error('Error fetching today\'s recovery:', error);
-      throw error;
-    }
+    const { sleep, recovery } = await this.whoop.getTodayRecovery();
+    return {
+      current_time: currentDateTime,
+      whoop: {
+        sleep,
+        recovery,
+      },
+    };
   }
 
   /**
@@ -87,18 +74,13 @@ export class CurrentTools {
       };
     }
 
-    try {
-      const strain = await this.whoop.getTodayStrain();
-      return {
-        current_time: currentDateTime,
-        whoop: {
-          strain,
-        },
-      };
-    } catch (error) {
-      console.error('Error fetching today\'s strain:', error);
-      throw error;
-    }
+    const strain = await this.whoop.getTodayStrain();
+    return {
+      current_time: currentDateTime,
+      whoop: {
+        strain,
+      },
+    };
   }
 
   /**
@@ -111,42 +93,16 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
-    try {
-      // Fetch Intervals.icu activities
-      const workouts = await this.intervals.getActivities(today, today);
+    // Fetch Intervals.icu activities
+    const workouts = await this.intervals.getActivities(today, today);
 
-      // If no Whoop client, return workouts without Whoop data
-      if (!this.whoop) {
-        return {
-          current_time: currentDateTime,
-          workouts: workouts.map((workout) => ({
-            ...workout,
-            whoop: null,
-          })),
-        };
-      }
+    // Enrich with matched Whoop data
+    const enrichedWorkouts = await enrichWorkoutsWithWhoop(workouts, this.whoop, today, today);
 
-      // Fetch Whoop activities for today
-      let whoopActivities: StrainActivity[] = [];
-      try {
-        whoopActivities = await this.whoop.getWorkouts(today, today);
-      } catch (error) {
-        console.error('Error fetching Whoop activities for matching:', error);
-        // Continue without Whoop data rather than failing entirely
-      }
-
-      // Match and merge
-      return {
-        current_time: currentDateTime,
-        workouts: workouts.map((workout) => ({
-          ...workout,
-          whoop: matchWhoopActivity(workout, whoopActivities),
-        })),
-      };
-    } catch (error) {
-      console.error('Error fetching today\'s completed workouts:', error);
-      throw error;
-    }
+    return {
+      current_time: currentDateTime,
+      workouts: enrichedWorkouts,
+    };
   }
 
   /**
@@ -161,12 +117,7 @@ export class CurrentTools {
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
 
-    try {
-      return await this.whoop.getStrainData(startDate, endDate);
-    } catch (error) {
-      console.error('Error fetching strain history:', error);
-      throw error;
-    }
+    return await this.whoop.getStrainData(startDate, endDate);
   }
 
   /**
@@ -180,20 +131,14 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
-    // Fetch from both sources in parallel
-    const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
-      this.trainerroad?.getTodayWorkouts(timezone).catch((e) => {
-        console.error('Error fetching TrainerRoad workouts:', e);
-        return [];
-      }) ?? Promise.resolve([]),
-      this.intervals.getPlannedEvents(today, today).catch((e) => {
-        console.error('Error fetching Intervals.icu events:', e);
-        return [];
-      }),
-    ]);
-
-    // Merge workouts, preferring TrainerRoad for duplicates (has more detail)
-    const merged = mergeWorkouts(trainerroadWorkouts, intervalsWorkouts);
+    // Fetch, merge, and deduplicate from both sources
+    const merged = await fetchAndMergePlannedWorkouts(
+      this.intervals,
+      this.trainerroad,
+      today,
+      today,
+      timezone
+    );
 
     return {
       current_time: currentDateTime,

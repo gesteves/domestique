@@ -2,10 +2,9 @@ import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone } from '../utils/date-parser.js';
-import { DOMESTIQUE_TAG, mergeWorkouts } from '../utils/workout-utils.js';
+import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import type {
   PlannedWorkout,
-  ActivityType,
   Race,
   CreateRunWorkoutInput,
   CreateCyclingWorkoutInput,
@@ -53,33 +52,18 @@ export class PlanningTools {
       endDateStr = format(endDate, 'yyyy-MM-dd');
     }
 
-    // Fetch from both sources in parallel
-    const [trainerroadWorkouts, intervalsWorkouts] = await Promise.all([
-      this.trainerroad?.getPlannedWorkouts(startDateStr, endDateStr, timezone).catch((e) => {
-        console.error('Error fetching TrainerRoad workouts:', e);
-        return [];
-      }) ?? Promise.resolve([]),
-      this.intervals.getPlannedEvents(startDateStr, endDateStr).catch((e) => {
-        console.error('Error fetching Intervals.icu events:', e);
-        return [];
-      }),
-    ]);
-
-    // Merge, deduplicate, and sort by date
-    let workouts = mergeWorkouts(trainerroadWorkouts, intervalsWorkouts);
+    // Fetch, merge, and deduplicate from both sources
+    let workouts = await fetchAndMergePlannedWorkouts(
+      this.intervals,
+      this.trainerroad,
+      startDateStr,
+      endDateStr,
+      timezone
+    );
 
     // Filter by sport if specified
     if (sport) {
-      const sportMap: Record<string, ActivityType> = {
-        cycling: 'Cycling',
-        running: 'Running',
-        swimming: 'Swimming',
-        skiing: 'Skiing',
-        hiking: 'Hiking',
-        rowing: 'Rowing',
-        strength: 'Strength',
-      };
-      const activityType = sportMap[sport];
+      const activityType = sportToActivityType(sport);
       workouts = workouts.filter((w) => w.sport === activityType);
     }
 

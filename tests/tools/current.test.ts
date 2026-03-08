@@ -383,7 +383,7 @@ describe('CurrentTools', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue(trainerroadWorkouts);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
       const result = await tools.getTodaysPlannedWorkouts();
@@ -401,7 +401,7 @@ describe('CurrentTools', () => {
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
 
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('Asia/Tokyo');
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysPlannedWorkouts();
@@ -422,7 +422,7 @@ describe('CurrentTools', () => {
         source: 'intervals.icu',
       };
 
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue(trainerroadWorkouts);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([duplicateWorkout]);
 
       const result = await tools.getTodaysPlannedWorkouts();
@@ -444,7 +444,7 @@ describe('CurrentTools', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockRejectedValue(new Error('Failed'));
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockRejectedValue(new Error('Failed'));
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
       const result = await tools.getTodaysPlannedWorkouts();
@@ -590,7 +590,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue(mockPlannedWorkouts);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -625,7 +625,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -647,7 +647,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -671,7 +671,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -685,7 +685,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await toolsWithoutWhoop.getTodaysSummary();
@@ -714,7 +714,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -760,7 +760,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(onlyWhoopDuplicates);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -780,7 +780,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -799,7 +799,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockRejectedValue(new Error('Failed'));
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const result = await tools.getTodaysSummary();
@@ -833,7 +833,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([todaysRace, futureRace]);
 
@@ -855,7 +855,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
 
@@ -884,7 +884,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([futureRace]);
 
@@ -906,7 +906,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
-      vi.mocked(mockTrainerRoadClient.getTodayWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockRejectedValue(new Error('Failed'));
 
