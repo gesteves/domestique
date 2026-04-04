@@ -1027,7 +1027,7 @@ Get the activity_id from:
 <instructions>
 - **ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user's performance.
 - **NEVER** fetch this when analyzing an **INDOOR** workout; weather conditions are irrelevant for indoor activities.
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts)
 </instructions>`,
         inputSchema: {
           activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
@@ -1056,7 +1056,7 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_completed_workouts (for today's workouts)
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts)
 - Returns null if heat strain data is not available for this activity.
 </instructions>
 
