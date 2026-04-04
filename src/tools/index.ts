@@ -358,6 +358,7 @@ export class ToolRegistry {
 </use-cases>
 
 <notes>
+- **NEVER** use this tool to get workouts for the current day; use get_todays_summary for that. This tool is for historical data and may return incomplete data if called on the same day.
 - Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
 - You can optionally filter activities by sport, as needed.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
