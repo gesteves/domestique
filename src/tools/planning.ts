@@ -14,6 +14,8 @@ import type {
   SyncTRRunsResult,
   SetWorkoutIntervalsInput,
   SetWorkoutIntervalsResponse,
+  UpdateActivityInput,
+  UpdateActivityResponse,
 } from '../types/index.js';
 import type { GetUpcomingWorkoutsInput } from './types.js';
 
@@ -417,6 +419,38 @@ export class PlanningTools {
     }
 
     return changes;
+  }
+
+  /**
+   * Update a completed activity's name and/or description in Intervals.icu.
+   */
+  async updateActivity(input: UpdateActivityInput): Promise<UpdateActivityResponse> {
+    const { activity_id, name, description } = input;
+
+    const updates: Record<string, unknown> = {};
+    const updatedFields: string[] = [];
+
+    if (name !== undefined) {
+      updates.name = name;
+      updatedFields.push('name');
+    }
+
+    if (description !== undefined) {
+      updates.description = description;
+      updatedFields.push('description');
+    }
+
+    if (updatedFields.length === 0) {
+      throw new Error('No fields provided to update. Specify at least one of: name, description');
+    }
+
+    await this.intervals.updateActivity(activity_id, updates);
+
+    return {
+      activity_id,
+      updated_fields: updatedFields,
+      intervals_icu_url: `https://intervals.icu/activities/${activity_id}`,
+    };
   }
 
   /**

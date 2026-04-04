@@ -2724,6 +2724,23 @@ export class IntervalsClient {
   }
 
   /**
+   * Update a completed activity's metadata (name, description).
+   * PUT /api/v1/activity/{id}
+   */
+  async updateActivity(
+    activityId: string,
+    updates: Record<string, unknown>
+  ): Promise<void> {
+    await this.putActivity<unknown>(
+      activityId,
+      '',
+      updates,
+      undefined,
+      { operation: 'update activity', resource: `activity ${activityId}` }
+    );
+  }
+
+  /**
    * Update intervals on a completed activity.
    * PUT /api/v1/activity/{id}/intervals?all={replaceAll}
    *

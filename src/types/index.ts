@@ -562,6 +562,30 @@ export interface SetWorkoutIntervalsResponse {
 }
 
 /**
+ * Input for updating a completed activity's metadata.
+ */
+export interface UpdateActivityInput {
+  /** Intervals.icu activity ID */
+  activity_id: string;
+  /** New name for the activity */
+  name?: string;
+  /** New description/notes for the activity */
+  description?: string;
+}
+
+/**
+ * Response from updating a completed activity.
+ */
+export interface UpdateActivityResponse {
+  /** Intervals.icu activity ID */
+  activity_id: string;
+  /** List of fields that were updated */
+  updated_fields: string[];
+  /** URL to view the activity in Intervals.icu */
+  intervals_icu_url: string;
+}
+
+/**
  * Upcoming race from the TrainerRoad calendar.
  * A race is detected when an all-day event exists alongside workout legs with the same name.
  */

@@ -914,6 +914,47 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
       )
     );
 
+    server.registerTool(
+      'update_activity',
+      {
+        title: 'Update Activity',
+        description: `Updates the name and/or description of a completed activity in Intervals.icu.
+
+<use-cases>
+- Renaming a completed workout to something more descriptive or memorable.
+- Adding or editing a description or notes on a completed workout.
+- Correcting the auto-generated name of a recorded activity.
+</use-cases>
+
+<instructions>
+Get the activity_id from:
+- get_workout_history (for past workouts)
+- get_todays_summary (for today's workouts)
+- get_workout_details (for a specific workout)
+Only provide the fields you want to update; omitted fields remain unchanged.
+</instructions>
+
+<notes>
+- This updates completed/recorded activities, not planned workouts on the calendar. To update planned workouts, use update_workout instead.
+- At least one of name or description must be provided.
+</notes>`,
+        inputSchema: {
+          activity_id: z.string().describe('Intervals.icu activity ID'),
+          name: z.string().optional().describe('New name for the activity'),
+          description: z.string().optional().describe('New description/notes for the activity'),
+        },
+        annotations: MODIFIES_EXTERNAL,
+      },
+      withDatedToolResponse(
+        'update_activity',
+        async (args: { activity_id: string; name?: string; description?: string }) =>
+          this.planningTools.updateActivity(args),
+        {
+          fieldDescriptions: {},
+        }
+      )
+    );
+
     // ============================================
     // Analysis Tools
     // ============================================
