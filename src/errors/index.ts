@@ -153,7 +153,8 @@ export class IntervalsApiError extends ApiError {
     category: ErrorCategory,
     isRetryable: boolean,
     context: ErrorContext,
-    statusCode?: number
+    statusCode?: number,
+    public readonly responseBody?: string
   ) {
     super(message, category, isRetryable, context, 'intervals', statusCode);
 
@@ -167,10 +168,11 @@ export class IntervalsApiError extends ApiError {
    */
   static fromHttpStatus(
     statusCode: number,
-    context: ErrorContext
+    context: ErrorContext,
+    responseBody?: string
   ): IntervalsApiError {
     const { category, isRetryable, message } = IntervalsApiError.categorizeStatus(statusCode, context);
-    return new IntervalsApiError(message, category, isRetryable, context, statusCode);
+    return new IntervalsApiError(message, category, isRetryable, context, statusCode, responseBody);
   }
 
   /**
@@ -263,7 +265,8 @@ export class TrainerRoadApiError extends ApiError {
     category: ErrorCategory,
     isRetryable: boolean,
     context: ErrorContext,
-    statusCode?: number
+    statusCode?: number,
+    public readonly responseBody?: string
   ) {
     super(message, category, isRetryable, context, 'trainerroad', statusCode);
 
@@ -277,7 +280,8 @@ export class TrainerRoadApiError extends ApiError {
    */
   static fromHttpStatus(
     statusCode: number,
-    context: ErrorContext
+    context: ErrorContext,
+    responseBody?: string
   ): TrainerRoadApiError {
     const isRetryable = statusCode >= 500 || statusCode === 429;
     let category: ErrorCategory;
@@ -307,7 +311,7 @@ export class TrainerRoadApiError extends ApiError {
         }
     }
 
-    return new TrainerRoadApiError(message, category, isRetryable, context, statusCode);
+    return new TrainerRoadApiError(message, category, isRetryable, context, statusCode, responseBody);
   }
 
   /**

@@ -97,6 +97,9 @@ For Whoop integration:
 For TrainerRoad integration:
 - `TRAINERROAD_CALENDAR_URL` - Private iCal feed URL
 
+For error reporting (optional):
+- `BUGSNAG_API_KEY` - Bugsnag API key for error reporting. When set, upstream API failures (Intervals.icu, Whoop, TrainerRoad) are reported to Bugsnag with full context including HTTP method, URL, status code, and response body.
+
 ### Whoop OAuth Setup
 
 Whoop uses OAuth 2.0, which requires a one-time authorization flow to obtain refresh tokens. The refresh tokens are single-use, so each time the server refreshes the access token, it receives a new refresh token that gets stored in Redis.

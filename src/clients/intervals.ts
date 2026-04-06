@@ -53,9 +53,37 @@ import {
   calculateTemperatureMetrics,
   parseTemperatureStreams,
 } from '../utils/temperature-metrics.js';
-import { IntervalsApiError } from '../errors/index.js';
+import { IntervalsApiError, type ErrorContext } from '../errors/index.js';
+import { logApiError } from '../utils/logger.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
+
+/**
+ * Read the response body text safely, returning undefined if it fails.
+ */
+async function readResponseBody(response: Response): Promise<string | undefined> {
+  try {
+    return await response.text();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Create an IntervalsApiError from a failed response, capturing the response body,
+ * and log the error with full context.
+ */
+async function createAndLogHttpError(
+  response: Response,
+  context: ErrorContext,
+  method: string,
+  url: string
+): Promise<IntervalsApiError> {
+  const responseBody = await readResponseBody(response);
+  const error = IntervalsApiError.fromHttpStatus(response.status, context, responseBody);
+  logApiError(error, { method, url, statusCode: response.status, responseBody });
+  return error;
+}
 
 // Athlete data from root /athlete/{id} endpoint
 // Note: /profile endpoint has nested { athlete: { ... } } structure, but root endpoint is flat
@@ -1109,10 +1137,12 @@ export class IntervalsClient {
       });
 
       if (!response.ok) {
-        throw IntervalsApiError.fromHttpStatus(response.status, {
-          ...errorContext,
-          parameters: params,
-        });
+        throw await createAndLogHttpError(
+          response,
+          { ...errorContext, parameters: params },
+          'GET',
+          url.toString()
+        );
       }
 
       return response.json() as Promise<T>;
@@ -1122,7 +1152,9 @@ export class IntervalsClient {
         throw error;
       }
       // Network or other errors
-      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      logApiError(networkError, { method: 'GET', url: url.toString() });
+      throw networkError;
     }
   }
 
@@ -1152,7 +1184,7 @@ export class IntervalsClient {
       });
 
       if (!response.ok) {
-        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+        throw await createAndLogHttpError(response, errorContext, 'GET', url.toString());
       }
 
       return response.json() as Promise<T>;
@@ -1162,7 +1194,9 @@ export class IntervalsClient {
         throw error;
       }
       // Network or other errors
-      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      logApiError(networkError, { method: 'GET', url: url.toString() });
+      throw networkError;
     }
   }
 
@@ -2520,7 +2554,7 @@ export class IntervalsClient {
       });
 
       if (!response.ok) {
-        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+        throw await createAndLogHttpError(response, errorContext, 'POST', url.toString());
       }
 
       return response.json() as Promise<T>;
@@ -2528,7 +2562,9 @@ export class IntervalsClient {
       if (error instanceof IntervalsApiError) {
         throw error;
       }
-      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      logApiError(networkError, { method: 'POST', url: url.toString() });
+      throw networkError;
     }
   }
 
@@ -2559,7 +2595,7 @@ export class IntervalsClient {
       });
 
       if (!response.ok) {
-        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+        throw await createAndLogHttpError(response, errorContext, 'PUT', url.toString());
       }
 
       return response.json() as Promise<T>;
@@ -2567,7 +2603,9 @@ export class IntervalsClient {
       if (error instanceof IntervalsApiError) {
         throw error;
       }
-      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      logApiError(networkError, { method: 'PUT', url: url.toString() });
+      throw networkError;
     }
   }
 
@@ -2595,13 +2633,15 @@ export class IntervalsClient {
       });
 
       if (!response.ok) {
-        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+        throw await createAndLogHttpError(response, errorContext, 'DELETE', url.toString());
       }
     } catch (error) {
       if (error instanceof IntervalsApiError) {
         throw error;
       }
-      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      logApiError(networkError, { method: 'DELETE', url: url.toString() });
+      throw networkError;
     }
   }
 
@@ -2641,7 +2681,7 @@ export class IntervalsClient {
       });
 
       if (!response.ok) {
-        throw IntervalsApiError.fromHttpStatus(response.status, errorContext);
+        throw await createAndLogHttpError(response, errorContext, 'PUT', url.toString());
       }
 
       return response.json() as Promise<T>;
@@ -2649,7 +2689,9 @@ export class IntervalsClient {
       if (error instanceof IntervalsApiError) {
         throw error;
       }
-      throw IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      logApiError(networkError, { method: 'PUT', url: url.toString() });
+      throw networkError;
     }
   }
 
