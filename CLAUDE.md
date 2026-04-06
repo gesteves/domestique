@@ -102,6 +102,9 @@ REDIS_URL=redis://redis:6379
 
 # TrainerRoad
 TRAINERROAD_CALENDAR_URL=  # Private iCal feed URL
+
+# Error Reporting
+BUGSNAG_API_KEY=            # Bugsnag API key for error reporting (optional)
 ```
 
 ## Testing

@@ -1,8 +1,12 @@
 import { validateEnvironment, getConfig } from './auth/middleware.js';
 import { startServer } from './server.js';
+import { initBugsnag } from './utils/logger.js';
 
 async function main() {
   try {
+    // Initialize error reporting
+    initBugsnag();
+
     // Validate environment variables before starting
     validateEnvironment();
 

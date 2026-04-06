@@ -31,6 +31,7 @@ import {
   paceCurveProgressHint,
 } from '../utils/hints/index.js';
 import { ApiError, DateParseError } from '../errors/index.js';
+import { logApiError, logUnexpectedError } from '../utils/logger.js';
 
 interface ResponseOptions<TResult = unknown> {
   fieldDescriptions: Record<string, string>;
@@ -66,7 +67,7 @@ interface ErrorResponse {
  * Build a structured error response for LLM consumption.
  * All errors are caught and formatted consistently.
  */
-function buildErrorResponse(error: unknown): ErrorResponse {
+function buildErrorResponse(error: unknown, toolName?: string): ErrorResponse {
   let errorDetails: ErrorDetails;
 
   // Handle DateParseError specifically for better date guidance
@@ -83,6 +84,8 @@ function buildErrorResponse(error: unknown): ErrorResponse {
     };
   } else if (error instanceof ApiError) {
     // Handle our unified ApiError and its subclasses
+    // Note: API errors are already logged at the client level with full context
+    // (response body, URL, status code). Here we just build the response.
     errorDetails = {
       error: true,
       message: error.message,
@@ -93,7 +96,8 @@ function buildErrorResponse(error: unknown): ErrorResponse {
       source: error.source,
     };
   } else {
-    // Handle unknown errors
+    // Handle unknown errors - these need logging since they weren't caught at the client level
+    logUnexpectedError(error, toolName);
     const message = error instanceof Error ? error.message : 'An unknown error occurred';
     errorDetails = {
       error: true,
@@ -144,7 +148,7 @@ function withToolResponse<TArgs, TResult>(
         hints,
       });
     } catch (error) {
-      return buildErrorResponse(error);
+      return buildErrorResponse(error, toolName);
     }
   };
 }

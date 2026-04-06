@@ -32,6 +32,7 @@ import {
   getRefreshTokenVersion,
 } from '../utils/redis.js';
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
+import { logApiError } from '../utils/logger.js';
 
 const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v2';
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
@@ -107,7 +108,8 @@ export class WhoopApiError extends ApiError {
     category: ErrorCategory,
     isRetryable: boolean,
     context: ErrorContext,
-    statusCode?: number
+    statusCode?: number,
+    public readonly responseBody?: string
   ) {
     super(message, category, isRetryable, context, 'whoop', statusCode);
 
@@ -121,10 +123,11 @@ export class WhoopApiError extends ApiError {
    */
   static fromHttpStatus(
     statusCode: number,
-    context: ErrorContext
+    context: ErrorContext,
+    responseBody?: string
   ): WhoopApiError {
     const { category, isRetryable, message } = WhoopApiError.categorizeStatus(statusCode, context);
-    return new WhoopApiError(message, category, isRetryable, context, statusCode);
+    return new WhoopApiError(message, category, isRetryable, context, statusCode, responseBody);
   }
 
   /**
@@ -673,7 +676,9 @@ export class WhoopClient {
         },
       });
     } catch (error) {
-      throw WhoopApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = WhoopApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      logApiError(networkError, { method: 'GET', url });
+      throw networkError;
     }
   }
 
@@ -730,8 +735,11 @@ export class WhoopClient {
       
       if (response.status === 401) {
         // Still 401 after refresh - something is wrong
-        console.error(`[Whoop] Still got 401 after token refresh on ${endpoint}`);
-        throw WhoopApiError.fromHttpStatus(response.status, fullErrorContext);
+        let responseBody: string | undefined;
+        try { responseBody = await response.text(); } catch { /* ignore */ }
+        const authError = WhoopApiError.fromHttpStatus(response.status, fullErrorContext, responseBody);
+        logApiError(authError, { method: 'GET', url: url.toString(), statusCode: 401, responseBody });
+        throw authError;
       }
     }
 
@@ -764,12 +772,19 @@ export class WhoopClient {
     }
 
     if (!response.ok) {
+      let responseBody: string | undefined;
+      try { responseBody = await response.text(); } catch { /* ignore */ }
+
       // If still rate limited after retries, include reset info in error
       if (response.status === 429) {
         const rateLimitInfo = parseRateLimitHeaders(response);
-        throw WhoopApiError.rateLimitError(fullErrorContext, rateLimitInfo?.resetInSeconds);
+        const rateLimitErr = WhoopApiError.rateLimitError(fullErrorContext, rateLimitInfo?.resetInSeconds);
+        logApiError(rateLimitErr, { method: 'GET', url: url.toString(), statusCode: 429, responseBody });
+        throw rateLimitErr;
       }
-      throw WhoopApiError.fromHttpStatus(response.status, fullErrorContext);
+      const httpError = WhoopApiError.fromHttpStatus(response.status, fullErrorContext, responseBody);
+      logApiError(httpError, { method: 'GET', url: url.toString(), statusCode: response.status, responseBody });
+      throw httpError;
     }
 
     return response.json() as Promise<T>;

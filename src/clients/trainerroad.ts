@@ -5,6 +5,7 @@ import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race } from '../t
 import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
+import { logApiError } from '../utils/logger.js';
 
 interface CalendarEvent {
   uid: string;
@@ -38,14 +39,29 @@ export class TrainerRoadClient {
     try {
       response = await fetch(this.config.calendarUrl);
     } catch (error) {
-      throw TrainerRoadApiError.networkError(
+      const networkError = TrainerRoadApiError.networkError(
         errorContext,
         error instanceof Error ? error : undefined
       );
+      logApiError(networkError, { method: 'GET', url: this.config.calendarUrl });
+      throw networkError;
     }
 
     if (!response.ok) {
-      throw TrainerRoadApiError.fromHttpStatus(response.status, errorContext);
+      let responseBody: string | undefined;
+      try {
+        responseBody = await response.text();
+      } catch {
+        // ignore
+      }
+      const httpError = TrainerRoadApiError.fromHttpStatus(response.status, errorContext, responseBody);
+      logApiError(httpError, {
+        method: 'GET',
+        url: this.config.calendarUrl,
+        statusCode: response.status,
+        responseBody,
+      });
+      throw httpError;
     }
 
     let icsData: string;
