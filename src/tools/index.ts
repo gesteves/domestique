@@ -668,11 +668,12 @@ Get the activity_id from:
         description: `Creates a structured swimming workout in Intervals.icu.
 
 <use-cases>
-- Creating a structured swimming workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
+- Creating a structured swimming workout in Intervals.icu.
 </use-cases>
 
 <instructions>
 - The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
+- The description parameter is plain text notes about the workout (not Intervals.icu syntax).
 </instructions>
 
 <notes>
@@ -683,7 +684,7 @@ Get the activity_id from:
         inputSchema: {
           scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
           name: z.string().describe('Workout name'),
-          description: z.string().optional().describe('Optional notes/description'),
+          description: z.string().optional().describe('Optional plain text notes about the workout'),
           workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
         },
         annotations: CREATES_EXTERNAL,
