@@ -196,7 +196,7 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(28);
+      expect(registeredHandlers.size).toBe(26);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_todays_summary')).toBe(true);
@@ -223,7 +223,6 @@ describe('Tool Response Wrapper', () => {
       expect(registeredHandlers.has('delete_workout')).toBe(true);
       expect(registeredHandlers.has('sync_trainerroad_runs')).toBe(true);
       // Cycling workout tools
-      expect(registeredHandlers.has('get_cycling_workout_syntax')).toBe(true);
       expect(registeredHandlers.has('create_cycling_workout')).toBe(true);
     });
 

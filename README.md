@@ -35,10 +35,8 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_upcoming_races` - Upcoming races from the TrainerRoad calendar (only triathlons for now)
 
 ### Workout Management
-- `get_run_workout_syntax` - Returns the Intervals.icu workout syntax documentation for creating structured running workouts
-- `create_run_workout` - Creates a structured running workout in Intervals.icu from a plain English description
-- `get_cycling_workout_syntax` - Returns the Intervals.icu workout syntax documentation for creating structured cycling workouts
-- `create_cycling_workout` - Creates a structured cycling workout in Intervals.icu from a plain English description
+- `create_run_workout` - Creates a structured running workout in Intervals.icu from a workout definition in Intervals.icu syntax
+- `create_cycling_workout` - Creates a structured cycling workout in Intervals.icu from a workout definition in Intervals.icu syntax
 - `update_workout` - Updates a Domestique-created workout in Intervals.icu
 - `delete_workout` - Deletes a Domestique-created workout from Intervals.icu
 - `sync_trainerroad_runs` - Syncs running workouts from TrainerRoad to Intervals.icu, creating new workouts, detecting changes, and cleaning up orphans
@@ -342,6 +340,6 @@ This server has been tested with Claude and ChatGPT. However, there are some com
 
 - **MCP prompts**: ChatGPT doesn't support [prompts](https://modelcontextprotocol.io/specification/2025-11-25/server/prompts), and Claude inserts them as .txt files rather than as regular prompts. The `daily_summary` prompt is provided but may not work as expected on all clients.
 
-- **MCP resources**: ChatGPT does not support [resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources); Claude does but doesn't seem to reliably use them while invoking tools. As an alternative, this server provides tools like `get_run_workout_syntax` and `get_cycling_workout_syntax` that return the resource contents directly.
+- **MCP resources**: ChatGPT does not support [resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources); Claude does but doesn't seem to reliably use them while invoking tools.
 
 - **`_meta` fields**: ChatGPT [provides](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) `_meta` fields in tool inputs, which could be used to identify that the request is coming from ChatGPT, and provides things like the location and locale of the user. Claude doesn't provide any hints.

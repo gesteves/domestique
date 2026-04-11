@@ -13,8 +13,6 @@ const CREATES_EXTERNAL: ToolAnnotations = { openWorldHint: true };
 const MODIFIES_EXTERNAL: ToolAnnotations = { openWorldHint: true, idempotentHint: true };
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
-import { RUN_WORKOUT_SYNTAX_RESOURCE } from '../resources/run-workout-syntax.js';
-import { CYCLING_WORKOUT_SYNTAX_RESOURCE } from '../resources/cycling-workout-syntax.js';
 import {
   combineFieldDescriptions,
   getFieldDescriptions,
@@ -587,83 +585,19 @@ Get the activity_id from:
     // ============================================
 
     server.registerTool(
-      'get_run_workout_syntax',
-      {
-        title: 'Run Workout Syntax',
-        description: `Returns the Intervals.icu workout syntax documentation for creating structured running workouts.
-
-<use-cases>
-- Learning the correct syntax before creating a run workout.
-- Reference when converting TrainerRoad RPE-based descriptions to structured workouts.
-</use-cases>
-
-<instructions>
-- You **MUST** call this tool before using create_run_workout to understand the syntax requirements.
-- The syntax **MUST** be followed exactly for workouts to sync correctly to Zwift/Garmin.
-</instructions>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withDatedToolResponse(
-        'get_run_workout_syntax',
-        async () => ({ syntax: RUN_WORKOUT_SYNTAX_RESOURCE }),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
-
-    server.registerTool(
-      'get_cycling_workout_syntax',
-      {
-        title: 'Cycling Workout Syntax',
-        description: `Returns the Intervals.icu workout syntax documentation for creating structured cycling workouts.
-
-<use-cases>
-- Learning the correct syntax before creating a cycling workout.
-- Reference when creating custom cycling workouts from plain-English descriptions.
-</use-cases>
-
-<instructions>
-- You **MUST** call this tool before using create_cycling_workout to understand the syntax requirements.
-- The syntax **MUST** be followed exactly for workouts to sync correctly to Zwift/Garmin.
-</instructions>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withDatedToolResponse(
-        'get_cycling_workout_syntax',
-        async () => ({ syntax: CYCLING_WORKOUT_SYNTAX_RESOURCE }),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
-
-    server.registerTool(
       'create_run_workout',
       {
         title: 'Create Run Workout',
         description: `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
 
 <use-cases>
-- Converting TrainerRoad RPE-based run descriptions to structured workouts.
-- Creating custom running structured workouts with specific paces.
+- Creating a structured running workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
 - Syncing run workouts from TrainerRoad to be executable on Zwift or Garmin.
 </use-cases>
 
 <instructions>
-1. You **MUST** fetch the user's running pace zones via the get_sports_settings tool.
-2. You **MUST** call the get_run_workout_syntax tool for syntax documentation.
-The workout you create **MUST** adhere strictly to that syntax for it to work correctly in Zwift and Garmin.
-3. If syncing a TrainerRoad run, parse the TrainerRoad workout description to identify:
-   - Warmup duration and intensity (RPE/effort level)
-   - Main set structure (repeats, intervals, recovery)
-   - Cooldown duration and intensity
-   - Convert the RPE/effort descriptions to absolute paces based on the user's pace zones.
-   - You **MUST** use absolute paces in the workout syntax, **NOT** pace zones or percentages of threshold pace.
-4. Generate the Intervals.icu syntax using the correct format. Again, you **MUST** adhere to the Intervals.icu syntax **EXACTLY**.
-5. If syncing a TrainerRoad run, include the trainerroad_uid, which enables orphan tracking.
+- The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
+- If syncing a TrainerRoad run, include the trainerroad_uid, which enables orphan tracking.
 </instructions>
 
 <notes>
@@ -697,15 +631,11 @@ The workout you create **MUST** adhere strictly to that syntax for it to work co
         description: `Creates a structured cycling workout in Intervals.icu that syncs to Zwift or Garmin.
 
 <use-cases>
-- Creating custom cycling structured workouts with specific paces based on a plain-english description provided by the user.
+- Creating a structured cycling workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
 </use-cases>
 
 <instructions>
-1. You **MUST** fetch the user's cycling power zones via the get_sports_settings tool.
-2. You **MUST** call the get_cycling_workout_syntax tool for syntax documentation.
-   - The workout you create **MUST** adhere strictly to that syntax for it to work correctly in Zwift and Garmin.
-3. Generate the Intervals.icu syntax using the correct format. Again, you **MUST** adhere to the Intervals.icu syntax **EXACTLY**.
-4. **DO NOT** use this to recreate TrainerRoad cycling workouts. **DO NOT** offer the user to do this. TrainerRoad cycling workout descriptions are too vague to be recreated using Intervals.icu syntax.
+- The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
 </instructions>
 
 <notes>

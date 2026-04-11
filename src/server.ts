@@ -4,8 +4,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { validateToken, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
-import { RUN_WORKOUT_SYNTAX_RESOURCE } from './resources/run-workout-syntax.js';
-import { CYCLING_WORKOUT_SYNTAX_RESOURCE } from './resources/cycling-workout-syntax.js';
 
 export interface ServerOptions {
   port: number;
@@ -204,55 +202,6 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
     // Register tools for this connection
     toolRegistry.registerTools(mcpServer);
-
-    // Register resources
-    mcpServer.resource(
-      'intervals-run-workout-syntax',
-      'intervals-run-workout-syntax://docs',
-      {
-        description: 'Documentation for creating structured running workouts in Intervals.icu format',
-        mimeType: 'text/markdown',
-        annotations: {
-          audience: ['assistant'],
-        },
-      },
-      async () => {
-        console.log('[MCP] Resource requested: intervals-run-workout-syntax');
-        return {
-          contents: [
-            {
-              uri: 'intervals-run-workout-syntax://docs',
-              mimeType: 'text/markdown',
-              text: RUN_WORKOUT_SYNTAX_RESOURCE,
-            },
-          ],
-        };
-      }
-    );
-
-    mcpServer.resource(
-      'intervals-cycling-workout-syntax',
-      'intervals-cycling-workout-syntax://docs',
-      {
-        description: 'Documentation for creating structured cycling workouts in Intervals.icu format',
-        mimeType: 'text/markdown',
-        annotations: {
-          audience: ['assistant'],
-        },
-      },
-      async () => {
-        console.log('[MCP] Resource requested: intervals-cycling-workout-syntax');
-        return {
-          contents: [
-            {
-              uri: 'intervals-cycling-workout-syntax://docs',
-              mimeType: 'text/markdown',
-              text: CYCLING_WORKOUT_SYNTAX_RESOURCE,
-            },
-          ],
-        };
-      }
-    );
 
     // Register prompts
     mcpServer.registerPrompt(

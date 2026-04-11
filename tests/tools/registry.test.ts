@@ -131,10 +131,9 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('sync_trainerroad_runs');
       expect(registeredTools).toContain('set_workout_intervals');
       // Cycling workout tools
-      expect(registeredTools).toContain('get_cycling_workout_syntax');
       expect(registeredTools).toContain('create_cycling_workout');
       expect(registeredTools).toContain('update_activity');
-      expect(registeredTools.length).toBe(28);
+      expect(registeredTools.length).toBe(26);
     });
 
     it('should call server.registerTool for each tool', () => {
@@ -144,7 +143,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(28);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(26);
     });
 
     it('should pass config object with title, description, and annotations to each tool', () => {
