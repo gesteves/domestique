@@ -662,6 +662,43 @@ Get the activity_id from:
     );
 
     server.registerTool(
+      'create_swimming_workout',
+      {
+        title: 'Create Swimming Workout',
+        description: `Creates a structured swimming workout in Intervals.icu.
+
+<use-cases>
+- Creating a structured swimming workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
+</use-cases>
+
+<instructions>
+- The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
+</instructions>
+
+<notes>
+- This creates the workout directly in Intervals.icu and will appear on the user's calendar.
+- The workout will be tagged with 'domestique' for tracking.
+- If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
+</notes>`,
+        inputSchema: {
+          scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
+          name: z.string().describe('Workout name'),
+          description: z.string().optional().describe('Optional notes/description'),
+          workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
+        },
+        annotations: CREATES_EXTERNAL,
+      },
+      withDatedToolResponse(
+        'create_swimming_workout',
+        async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
+          this.planningTools.createSwimmingWorkout(args),
+        {
+          fieldDescriptions: {},
+        }
+      )
+    );
+
+    server.registerTool(
       'delete_workout',
       {
         title: 'Delete Workout',

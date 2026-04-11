@@ -426,6 +426,20 @@ export interface CreateCyclingWorkoutInput {
 }
 
 /**
+ * Input for creating a swimming workout in Intervals.icu.
+ */
+export interface CreateSwimmingWorkoutInput {
+  /** Scheduled date in YYYY-MM-DD format or ISO datetime */
+  scheduled_for: string;
+  /** Workout name (e.g., "Threshold 10x100") */
+  name: string;
+  /** Optional description/notes */
+  description?: string;
+  /** Structured workout definition in Intervals.icu syntax */
+  workout_doc: string;
+}
+
+/**
  * Response from creating a workout.
  */
 export interface CreateWorkoutResponse {

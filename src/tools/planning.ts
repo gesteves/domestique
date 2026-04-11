@@ -8,6 +8,7 @@ import type {
   Race,
   CreateRunWorkoutInput,
   CreateCyclingWorkoutInput,
+  CreateSwimmingWorkoutInput,
   CreateWorkoutResponse,
   UpdateWorkoutInput,
   UpdateWorkoutResponse,
@@ -121,12 +122,20 @@ export class PlanningTools {
     return this.createWorkout({ ...input, type: 'Ride' });
   }
 
+  /**
+   * Create a structured swimming workout in Intervals.icu.
+   * The workout will be tagged with 'domestique' for tracking.
+   */
+  async createSwimmingWorkout(input: CreateSwimmingWorkoutInput): Promise<CreateWorkoutResponse> {
+    return this.createWorkout({ ...input, type: 'Swim' });
+  }
+
   private async createWorkout(params: {
     scheduled_for: string;
     name: string;
     description?: string;
     workout_doc: string;
-    type: 'Run' | 'Ride';
+    type: 'Run' | 'Ride' | 'Swim';
     external_id?: string;
   }): Promise<CreateWorkoutResponse> {
     const timezone = await this.intervals.getAthleteTimezone();

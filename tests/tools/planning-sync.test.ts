@@ -467,6 +467,233 @@ describe('PlanningTools sync operations', () => {
     });
   });
 
+  describe('createSwimmingWorkout', () => {
+    it('should create swimming workout with all required fields', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 300,
+        uid: 'uid-300',
+        name: 'Threshold 10x100',
+        start_date_local: '2024-12-16',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      const result = await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-16',
+        name: 'Threshold 10x100',
+        workout_doc: 'Warmup\n- 400m easy\n\nMain Set 10x\n- 100m Z4 Pace\n- 20s rest\n\nCooldown\n- 200m easy',
+      });
+
+      expect(result.id).toBe(300);
+      expect(result.uid).toBe('uid-300');
+      expect(result.name).toBe('Threshold 10x100');
+      expect(result.intervals_icu_url).toContain('2024-12-16');
+    });
+
+    it('should create swimming workout with optional description', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 301,
+        uid: 'uid-301',
+        name: 'Endurance Swim',
+        start_date_local: '2024-12-17',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      const result = await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-17',
+        name: 'Endurance Swim',
+        description: 'Focus on long steady sets',
+        workout_doc: 'Main Set\n- 2000m Z2 Pace',
+      });
+
+      expect(result.id).toBe(301);
+
+      // Verify createEvent was called with correct parameters
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Endurance Swim',
+          type: 'Swim',
+          category: 'WORKOUT',
+          tags: ['domestique'],
+        })
+      );
+    });
+
+    it('should put description before workout_doc', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 302,
+        uid: 'uid-302',
+        name: 'Ordered Swim',
+        start_date_local: '2024-12-22',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-22',
+        name: 'Ordered Swim',
+        description: 'Notes about the swim',
+        workout_doc: 'Warmup\n- 400m easy',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: 'Notes about the swim\n\nWarmup\n- 400m easy',
+        })
+      );
+    });
+
+    it('should add midnight time when only date is provided', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 303,
+        uid: 'uid-303',
+        name: 'Date Only Swim',
+        start_date_local: '2024-12-23T00:00:00',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-23',
+        name: 'Date Only Swim',
+        workout_doc: '- 1000m Z2 Pace',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date_local: '2024-12-23T00:00:00',
+        })
+      );
+    });
+
+    it('should preserve time when full datetime is provided', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 304,
+        uid: 'uid-304',
+        name: 'Datetime Swim',
+        start_date_local: '2024-12-24T06:00:00',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-24T06:00:00',
+        name: 'Datetime Swim',
+        workout_doc: '- 1500m Z3 Pace',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date_local: '2024-12-24T06:00:00',
+        })
+      );
+    });
+
+    it('should include domestique tag automatically', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 305,
+        uid: 'uid-305',
+        name: 'Tagged Swim',
+        start_date_local: '2024-12-18',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-18',
+        name: 'Tagged Swim',
+        workout_doc: '- 800m Z2 Pace',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tags: ['domestique'],
+        })
+      );
+    });
+
+    it('should use Swim as the workout type', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 306,
+        uid: 'uid-306',
+        name: 'Swim Type Test',
+        start_date_local: '2024-12-19',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-19',
+        name: 'Swim Type Test',
+        workout_doc: '- 500m Z3 Pace',
+      });
+
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'Swim',
+        })
+      );
+    });
+
+    it('should not include external_id', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 307,
+        uid: 'uid-307',
+        name: 'No External ID',
+        start_date_local: '2024-12-20',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-20',
+        name: 'No External ID',
+        workout_doc: '- 1000m Z2 Pace',
+      });
+
+      const callArgs = vi.mocked(mockIntervalsClient.createEvent).mock.calls[0][0];
+      expect(callArgs.external_id).toBeUndefined();
+    });
+
+    it('should handle API errors gracefully', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockRejectedValue(
+        new Error('API request failed: 500')
+      );
+
+      await expect(
+        tools.createSwimmingWorkout({
+          scheduled_for: '2024-12-20',
+          name: 'Failed Swim',
+          workout_doc: '- 400m Z1 Pace',
+        })
+      ).rejects.toThrow('API request failed');
+    });
+
+    it('should return correct response structure', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 308,
+        uid: 'uid-308',
+        name: 'Structure Test',
+        start_date_local: '2024-12-21',
+        type: 'Swim',
+        category: 'WORKOUT',
+      });
+
+      const result = await tools.createSwimmingWorkout({
+        scheduled_for: '2024-12-21',
+        name: 'Structure Test',
+        workout_doc: '- 600m Z2 Pace',
+      });
+
+      expect(result).toHaveProperty('id');
+      expect(result).toHaveProperty('uid');
+      expect(result).toHaveProperty('name');
+      expect(result).toHaveProperty('scheduled_for');
+      expect(result).toHaveProperty('intervals_icu_url');
+    });
+  });
+
   describe('deleteWorkout', () => {
     it('should delete workout with domestique tag successfully', async () => {
       vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
