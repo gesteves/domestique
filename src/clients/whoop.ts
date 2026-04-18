@@ -351,7 +351,7 @@ interface WhoopWorkout {
       zone_four_milli: number;
       zone_five_milli: number;
     };
-  };
+  } | null;
 }
 
 interface WhoopBodyMeasurementResponse {
@@ -1036,7 +1036,8 @@ export class WhoopClient {
       end: `${endBuffer}T23:59:59.999Z`,
     });
 
-    const normalized = await Promise.all(workouts.records.map((w) => this.normalizeWorkout(w)));
+    const scored = workouts.records.filter((w) => w.score !== null);
+    const normalized = await Promise.all(scored.map((w) => this.normalizeWorkout(w)));
     return normalized.filter((w) => isTimestampInLocalDateRange(w.start_time, startDate, endDate, timezone));
   }
 
@@ -1230,11 +1231,16 @@ export class WhoopClient {
       average_heart_rate: cycle.score.average_heart_rate,
       max_heart_rate: cycle.score.max_heart_rate,
       calories: Math.round(cycle.score.kilojoule / 4.184),
-      activities: await Promise.all(workouts.map((w) => this.normalizeWorkout(w))),
+      activities: await Promise.all(
+        workouts.filter((w) => w.score !== null).map((w) => this.normalizeWorkout(w))
+      ),
     };
   }
 
   private async normalizeWorkout(workout: WhoopWorkout): Promise<StrainActivity> {
+    // Callers must filter out unscored workouts (score: null) before calling this.
+    const score = workout.score!;
+
     // Use sport_name (sport_id is deprecated after 09/01/2025)
     const sportName =
       WHOOP_SPORT_NAME_MAP[workout.sport_name.toLowerCase()] ??
@@ -1252,20 +1258,20 @@ export class WhoopClient {
     const durationSeconds = Math.round((endMs - startMs) / 1000);
 
     // Distance in km for human-readable format
-    const distanceKm = workout.score.distance_meter
-      ? workout.score.distance_meter / 1000
+    const distanceKm = score.distance_meter
+      ? score.distance_meter / 1000
       : undefined;
 
     // Human-readable zone durations
     const zoneDurations: WhoopZoneDurations | undefined =
-      workout.score.zone_durations
+      score.zone_durations
         ? {
-            zone_0: formatDuration(workout.score.zone_durations.zone_zero_milli / 1000),
-            zone_1: formatDuration(workout.score.zone_durations.zone_one_milli / 1000),
-            zone_2: formatDuration(workout.score.zone_durations.zone_two_milli / 1000),
-            zone_3: formatDuration(workout.score.zone_durations.zone_three_milli / 1000),
-            zone_4: formatDuration(workout.score.zone_durations.zone_four_milli / 1000),
-            zone_5: formatDuration(workout.score.zone_durations.zone_five_milli / 1000),
+            zone_0: formatDuration(score.zone_durations.zone_zero_milli / 1000),
+            zone_1: formatDuration(score.zone_durations.zone_one_milli / 1000),
+            zone_2: formatDuration(score.zone_durations.zone_two_milli / 1000),
+            zone_3: formatDuration(score.zone_durations.zone_three_milli / 1000),
+            zone_4: formatDuration(score.zone_durations.zone_four_milli / 1000),
+            zone_5: formatDuration(score.zone_durations.zone_five_milli / 1000),
           }
         : undefined;
 
@@ -1275,13 +1281,13 @@ export class WhoopClient {
       start_time: formatToISO8601WithTimezone(workout.start, timezone),
       end_time: formatToISO8601WithTimezone(workout.end, timezone),
       duration: formatDuration(durationSeconds),
-      strain_score: workout.score.strain,
-      average_heart_rate: workout.score.average_heart_rate,
-      max_heart_rate: workout.score.max_heart_rate,
-      calories: Math.round(workout.score.kilojoule / 4.184),
+      strain_score: score.strain,
+      average_heart_rate: score.average_heart_rate,
+      max_heart_rate: score.max_heart_rate,
+      calories: Math.round(score.kilojoule / 4.184),
       distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
-      elevation_gain: workout.score.altitude_gain_meter !== undefined
-        ? `${Math.round(workout.score.altitude_gain_meter)} m`
+      elevation_gain: score.altitude_gain_meter !== undefined
+        ? `${Math.round(score.altitude_gain_meter)} m`
         : undefined,
       zone_durations: zoneDurations,
     };

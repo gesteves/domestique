@@ -867,6 +867,30 @@ describe('WhoopClient', () => {
       expect(result[0].elevation_gain).toBe('45 m');
       expect(result[0].zone_durations?.zone_3).toBe('0:20:00'); // 1200000 ms
     });
+
+    it('should skip workouts with null score (unscored/pending)', async () => {
+      const mixedWorkouts = {
+        records: [
+          {
+            ...mockWorkouts.records[0],
+            id: 2001,
+            score_state: 'PENDING_SCORE',
+            score: null,
+          },
+          mockWorkouts.records[0],
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mixedWorkouts),
+      });
+
+      const result = await client.getWorkouts('2024-12-15', '2024-12-15');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('1001');
+    });
   });
 
   describe('token refresh', () => {

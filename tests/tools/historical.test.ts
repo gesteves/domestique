@@ -603,12 +603,24 @@ describe('HistoricalTools', () => {
       compliance: 95,
     };
 
-    it('should fetch workout details for activity', async () => {
+    it('should fetch workout details for activity with matched Whoop data', async () => {
       vi.mocked(mockIntervalsClient.getActivity).mockResolvedValue(mockWorkoutDetails);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([
+        {
+          id: 'whoop-1',
+          start_time: '2024-12-10T10:01:00Z',
+          end_time: '2024-12-10T11:00:00Z',
+          activity_type: 'Cycling',
+          duration: '0:59:00',
+          strain_score: 12.5,
+          average_heart_rate: 145,
+          max_heart_rate: 175,
+          calories: 650,
+        },
+      ]);
 
       const result = await tools.getWorkoutDetails('i12345');
 
-      expect(result).toEqual(mockWorkoutDetails);
       expect(result.id).toBe('i12345');
       expect(result.pm_cp).toBe(250);
       expect(result.pm_w_prime).toBe(15000);
@@ -616,7 +628,9 @@ describe('HistoricalTools', () => {
       expect(result.interval_summary).toEqual(['2x 5m 300w', '3x 10m 250w']);
       expect(result.power_hr_z2).toBe(1.35);
       expect(result.compliance).toBe(95);
+      expect(result.whoop?.strain_score).toBe(12.5);
       expect(mockIntervalsClient.getActivity).toHaveBeenCalledWith('i12345');
+      expect(mockWhoopClient.getWorkouts).toHaveBeenCalledWith('2024-12-10', '2024-12-10');
     });
 
     it('should return workout details without optional fields', async () => {
@@ -628,6 +642,7 @@ describe('HistoricalTools', () => {
         source: 'intervals.icu',
       };
       vi.mocked(mockIntervalsClient.getActivity).mockResolvedValue(minimalWorkout);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       const result = await tools.getWorkoutDetails('i12346');
 
@@ -635,6 +650,17 @@ describe('HistoricalTools', () => {
       expect(result.pm_cp).toBeUndefined();
       expect(result.interval_summary).toBeUndefined();
       expect(result.compliance).toBeUndefined();
+      expect(result.whoop).toBeNull();
+    });
+
+    it('should return null whoop when Whoop is not configured', async () => {
+      const toolsNoWhoop = new HistoricalTools(mockIntervalsClient, null);
+      vi.mocked(mockIntervalsClient.getActivity).mockResolvedValue(mockWorkoutDetails);
+
+      const result = await toolsNoWhoop.getWorkoutDetails('i12345');
+
+      expect(result.whoop).toBeNull();
+      expect(mockWhoopClient.getWorkouts).not.toHaveBeenCalled();
     });
 
     it('should propagate errors from client', async () => {

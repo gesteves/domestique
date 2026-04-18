@@ -400,7 +400,7 @@ Get the activity_id from:
 
 <notes>
 - This returns more detailed data than what's included in get_workout_history results.
-- Includes athlete notes, detailed intervals, weather during the activity (if available), power zones, pace zones, heart rate zones, and heat zones
+- Includes athlete notes, detailed intervals, weather during the activity (if available), power zones, pace zones, heart rate zones, heat zones, and matched Whoop strain data (if available).
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions.
 </notes>`,
         inputSchema: {
@@ -412,7 +412,7 @@ Get the activity_id from:
         'get_workout_details',
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutDetails(args.activity_id),
         {
-          fieldDescriptions: combineFieldDescriptions('workout', 'workout_details'),
+          fieldDescriptions: combineFieldDescriptions('workout', 'workout_details', 'whoop'),
         }
       )
     );
