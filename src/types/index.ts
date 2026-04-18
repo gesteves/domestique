@@ -168,6 +168,9 @@ export interface NormalizedWorkout {
 
   // Workout compliance
   compliance?: number; // Workout compliance percentage (0-100) - how well the athlete followed the planned workout
+
+  // Weather (only included with skipExpensiveCalls: false and for outdoor activities)
+  weather_description?: string | null;
 }
 
 // Zone time entry for power zones

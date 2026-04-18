@@ -1999,6 +1999,17 @@ export class IntervalsClient {
       }
     }
 
+    // Fetch weather for outdoor activities only
+    // Skip if skipExpensiveCalls is true (for bulk operations like activity totals)
+    const isIndoor = activity.trainer === true ||
+      activity.type?.toLowerCase().includes('virtual') ||
+      activity.source?.toLowerCase() === 'zwift';
+    let weatherDescription: string | null | undefined;
+    if (!options?.skipExpensiveCalls && !isIndoor) {
+      const weatherResponse = await this.getActivityWeather(activity.id);
+      weatherDescription = weatherResponse.weather_description;
+    }
+
     // Get athlete timezone for formatting start_time
     const timezone = await this.getAthleteTimezone();
 
@@ -2094,9 +2105,7 @@ export class IntervalsClient {
 
       // Activity context flags
       // is_indoor: true if trainer flag is set, OR activity type contains "virtual", OR source is Zwift
-      is_indoor: activity.trainer === true ||
-        activity.type?.toLowerCase().includes('virtual') ||
-        activity.source?.toLowerCase() === 'zwift',
+      is_indoor: isIndoor,
       is_commute: activity.commute,
       is_race: activity.race,
 
@@ -2159,6 +2168,9 @@ export class IntervalsClient {
 
       // Workout compliance
       compliance: activity.compliance,
+
+      // Weather (only fetched for outdoor activities in single-activity requests)
+      weather_description: weatherDescription,
     };
   }
 

@@ -148,6 +148,9 @@ export const WORKOUT_DETAILS_FIELD_DESCRIPTIONS = {
 
   // Compliance
   compliance: 'Workout compliance percentage (0-100). Measures how closely the athlete followed a planned workout. 0 means no planned workout was matched.',
+
+  // Weather
+  weather_description: 'Weather summary for outdoor activities. Null if weather data is unavailable. Not included for indoor activities.',
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
