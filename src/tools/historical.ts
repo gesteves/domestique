@@ -1,5 +1,6 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
+import { LastFmClient } from '../clients/lastfm.js';
 import { parseDateStringInTimezone, parseDateRangeInTimezone } from '../utils/date-parser.js';
 import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
 import {
@@ -41,12 +42,13 @@ import type {
   GetRecoveryTrendsInput,
   GetActivityTotalsInput,
 } from './types.js';
-import type { HeatZone } from '../types/index.js';
+import type { HeatZone, PlayedSong } from '../types/index.js';
 
 export class HistoricalTools {
   constructor(
     private intervals: IntervalsClient,
-    private whoop: WhoopClient | null
+    private whoop: WhoopClient | null,
+    private lastfm: LastFmClient | null = null
   ) {}
 
   /**
@@ -258,6 +260,25 @@ export class HistoricalTools {
       heat_zones: heatMetrics.zones,
       max_heat_strain_index: heatMetrics.max_heat_strain_index,
       median_heat_strain_index: heatMetrics.median_heat_strain_index,
+    };
+  }
+
+  // ============================================
+  // Workout Music
+  // ============================================
+
+  /**
+   * Get songs scrobbled to Last.fm during a specific workout, in chronological order.
+   * Returns an empty array if Last.fm is not configured.
+   */
+  async getWorkoutMusic(activityId: string): Promise<{
+    activity_id: string;
+    played_songs: PlayedSong[];
+  }> {
+    const songs = await this.intervals.getActivityPlayedSongs(activityId);
+    return {
+      activity_id: activityId,
+      played_songs: songs,
     };
   }
 

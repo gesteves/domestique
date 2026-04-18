@@ -112,5 +112,12 @@ export function getConfig() {
           calendarUrl: process.env.TRAINERROAD_CALENDAR_URL,
         }
       : null,
+    lastfm:
+      process.env.LASTFM_USERNAME && process.env.LASTFM_API_KEY
+        ? {
+            username: process.env.LASTFM_USERNAME,
+            apiKey: process.env.LASTFM_API_KEY,
+          }
+        : null,
   };
 }

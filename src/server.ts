@@ -20,6 +20,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     intervals: config.intervals,
     whoop: config.whoop,
     trainerroad: config.trainerRoad,
+    lastfm: config.lastfm,
   });
 
   console.log('Tool registry created');

@@ -135,7 +135,8 @@ describe('ToolRegistry', () => {
       // Swimming workout tools
       expect(registeredTools).toContain('create_swimming_workout');
       expect(registeredTools).toContain('update_activity');
-      expect(registeredTools.length).toBe(27);
+      expect(registeredTools).toContain('get_workout_music');
+      expect(registeredTools.length).toBe(28);
     });
 
     it('should call server.registerTool for each tool', () => {
@@ -145,7 +146,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(27);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(28);
     });
 
     it('should pass config object with title, description, and annotations to each tool', () => {

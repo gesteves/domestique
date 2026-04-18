@@ -4,6 +4,7 @@ import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
+import { LastFmClient } from '../clients/lastfm.js';
 import { CurrentTools } from './current.js';
 
 // Common annotation presets for tool categories
@@ -160,6 +161,7 @@ export interface ToolsConfig {
     clientSecret: string;
   } | null;
   trainerroad?: { calendarUrl: string } | null;
+  lastfm?: { username: string; apiKey: string } | null;
 }
 
 export class ToolRegistry {
@@ -175,10 +177,19 @@ export class ToolRegistry {
     const trainerroadClient = config.trainerroad
       ? new TrainerRoadClient(config.trainerroad)
       : null;
+    const lastfmClient = config.lastfm ? new LastFmClient(config.lastfm) : null;
 
     // Connect Whoop client to Intervals.icu timezone for proper date filtering
     if (whoopClient) {
       whoopClient.setTimezoneGetter(() => intervalsClient.getAthleteTimezone());
+    }
+
+    // Connect Last.fm client to Intervals.icu so normalizeActivity can enrich workouts
+    // with played songs when skipExpensiveCalls is false.
+    if (lastfmClient) {
+      intervalsClient.setPlayedSongsGetter((startMs, endMs) =>
+        lastfmClient.getPlayedSongsDuring(startMs, endMs)
+      );
     }
 
     this.currentTools = new CurrentTools(
@@ -186,7 +197,7 @@ export class ToolRegistry {
       whoopClient,
       trainerroadClient
     );
-    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient);
+    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
   }
 
@@ -1087,6 +1098,35 @@ Get the activity_id from:
         async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
         {
           fieldDescriptions: getFieldDescriptions('heat_zones'),
+        }
+      )
+    );
+
+    server.registerTool(
+      'get_workout_music',
+      {
+        title: 'Workout Music',
+        description: `Fetches songs scrobbled to Last.fm during a specific workout, in chronological order.
+
+<use-cases>
+- Reviewing what music the user listened to during a workout.
+- Correlating music choices with workout intensity or perceived effort.
+</use-cases>
+
+<instructions>
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts).
+- Returns an empty array if Last.fm is not configured or no scrobbles fall within the activity's time window.
+</instructions>`,
+        inputSchema: {
+          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+        },
+        annotations: READ_ONLY,
+      },
+      withDatedToolResponse(
+        'get_workout_music',
+        async (args: { activity_id: string }) => this.historicalTools.getWorkoutMusic(args.activity_id),
+        {
+          fieldDescriptions: getFieldDescriptions('music'),
         }
       )
     );

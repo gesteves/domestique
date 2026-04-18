@@ -33,6 +33,7 @@ import type {
   WellnessTrends,
   ActivityType,
   ActivityIntervalInput,
+  PlayedSong,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
@@ -573,12 +574,26 @@ export class IntervalsClient {
   private cachedTimezone: string | null = null;
   private cachedSportSettings: IntervalsSportSettings[] | null = null;
   private cachedUnitPreferences: UnitPreferences | null = null;
+  private playedSongsGetter:
+    | ((startMs: number, endMs: number) => Promise<PlayedSong[]>)
+    | null = null;
 
   constructor(config: IntervalsConfig) {
     this.config = config;
     // Intervals.icu uses API key as password with "API_KEY" as username
     const credentials = Buffer.from(`API_KEY:${config.apiKey}`).toString('base64');
     this.authHeader = `Basic ${credentials}`;
+  }
+
+  /**
+   * Set a function that fetches played songs for a time range (ms since epoch).
+   * When set, normalizeActivity attaches the songs under `played_songs` for single-activity
+   * fetches (skipExpensiveCalls: false).
+   */
+  setPlayedSongsGetter(
+    getter: (startMs: number, endMs: number) => Promise<PlayedSong[]>
+  ): void {
+    this.playedSongsGetter = getter;
   }
 
   /**
@@ -1347,6 +1362,19 @@ export class IntervalsClient {
   }
 
   /**
+   * Get songs played during a specific activity from Last.fm.
+   * Returns [] if no Last.fm getter is configured.
+   */
+  async getActivityPlayedSongs(activityId: string): Promise<PlayedSong[]> {
+    if (!this.playedSongsGetter) {
+      return [];
+    }
+    const activity = await this.fetchActivity<IntervalsActivity>(activityId, '');
+    const { startMs, endMs } = computeActivityTimeRange(activity);
+    return this.playedSongsGetter(startMs, endMs);
+  }
+
+  /**
    * Get heat zones for a specific activity.
    * Returns null if heat strain data is not available.
    */
@@ -2010,6 +2038,20 @@ export class IntervalsClient {
       weatherDescription = weatherResponse.weather_description;
     }
 
+    // Fetch songs played during the activity from Last.fm (if configured)
+    // Skip if skipExpensiveCalls is true
+    let playedSongs: PlayedSong[] | undefined;
+    if (!options?.skipExpensiveCalls && this.playedSongsGetter) {
+      try {
+        const { startMs, endMs } = computeActivityTimeRange(activity);
+        const songs = await this.playedSongsGetter(startMs, endMs);
+        playedSongs = songs.length > 0 ? songs : undefined;
+      } catch (error) {
+        // Last.fm failures should never fail activity normalization
+        playedSongs = undefined;
+      }
+    }
+
     // Get athlete timezone for formatting start_time
     const timezone = await this.getAthleteTimezone();
 
@@ -2171,6 +2213,9 @@ export class IntervalsClient {
 
       // Weather (only fetched for outdoor activities in single-activity requests)
       weather_description: weatherDescription,
+
+      // Songs played during the activity (only fetched when Last.fm is configured)
+      played_songs: playedSongs,
     };
   }
 
@@ -2826,4 +2871,18 @@ export class IntervalsClient {
       { operation: 'update activity intervals', resource: `activity ${activityId}` }
     );
   }
+}
+
+/**
+ * Compute start/end time for an activity as milliseconds since epoch.
+ * Uses start_date (UTC) and moving_time (falling back to elapsed_time).
+ */
+function computeActivityTimeRange(activity: IntervalsActivity): {
+  startMs: number;
+  endMs: number;
+} {
+  const startMs = new Date(activity.start_date).getTime();
+  const durationSeconds = activity.moving_time ?? activity.elapsed_time ?? 0;
+  const endMs = startMs + durationSeconds * 1000;
+  return { startMs, endMs };
 }

@@ -809,6 +809,40 @@ describe('HistoricalTools', () => {
     });
   });
 
+  describe('getWorkoutMusic', () => {
+    it('returns played songs from the Intervals client', async () => {
+      const songs = [
+        {
+          name: 'Old Man',
+          played_at: '2024-12-10T10:01:00.000Z',
+          url: 'https://www.last.fm/music/Neil+Young/_/Old+Man',
+          album_name: 'Harvest',
+          artist_name: 'Neil Young',
+        },
+      ];
+      vi.mocked(mockIntervalsClient.getActivityPlayedSongs).mockResolvedValue(songs);
+
+      const result = await tools.getWorkoutMusic('i12345');
+
+      expect(result).toEqual({ activity_id: 'i12345', played_songs: songs });
+      expect(mockIntervalsClient.getActivityPlayedSongs).toHaveBeenCalledWith('i12345');
+    });
+
+    it('returns an empty array when no songs are available', async () => {
+      vi.mocked(mockIntervalsClient.getActivityPlayedSongs).mockResolvedValue([]);
+
+      const result = await tools.getWorkoutMusic('i12345');
+
+      expect(result).toEqual({ activity_id: 'i12345', played_songs: [] });
+    });
+
+    it('propagates errors from the Intervals client', async () => {
+      vi.mocked(mockIntervalsClient.getActivityPlayedSongs).mockRejectedValue(new Error('boom'));
+
+      await expect(tools.getWorkoutMusic('i12345')).rejects.toThrow('boom');
+    });
+  });
+
   describe('getPowerCurve', () => {
     const mockPowerCurveActivities: ActivityPowerCurve[] = [
       {

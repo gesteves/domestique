@@ -16,6 +16,7 @@ async function main() {
     console.log(`Intervals.icu: configured for athlete ${config.intervals.athleteId}`);
     console.log(`Whoop: ${config.whoop ? 'configured' : 'not configured'}`);
     console.log(`TrainerRoad: ${config.trainerRoad ? 'configured' : 'not configured'}`);
+    console.log(`Last.fm: ${config.lastfm ? 'configured' : 'not configured'}`);
 
     await startServer({ port: config.port });
   } catch (error) {

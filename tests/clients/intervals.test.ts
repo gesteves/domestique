@@ -2558,6 +2558,136 @@ describe('IntervalsClient', () => {
     });
   });
 
+  describe('played_songs enrichment', () => {
+    const mockProfile = { athlete: { id: 'i12345', timezone: 'UTC' } };
+
+    const mockActivity = {
+      id: 'i140000000',
+      start_date_local: '2026-04-18T10:00:00',
+      start_date: '2026-04-18T10:00:00Z',
+      type: 'Run',
+      name: 'Test Run',
+      moving_time: 3600, // 1 hour
+      distance: 10000,
+      trainer: true, // indoor to skip weather fetch
+    };
+
+    it('attaches played_songs from the getter in normalizeActivity', async () => {
+      const playedSongs = [
+        {
+          name: 'Old Man',
+          played_at: '2026-04-18T10:15:00.000Z',
+          url: 'https://www.last.fm/music/Neil+Young/_/Old+Man',
+          album_name: 'Harvest',
+          artist_name: 'Neil Young',
+        },
+      ];
+      const getter = vi.fn().mockResolvedValue(playedSongs);
+      client.setPlayedSongsGetter(getter);
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockActivity) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSportSettings) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // notes
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) }) // intervals streams
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+
+      const result = await client.getActivity('i140000000');
+
+      const expectedStartMs = new Date('2026-04-18T10:00:00Z').getTime();
+      const expectedEndMs = expectedStartMs + 3600 * 1000;
+      expect(getter).toHaveBeenCalledWith(expectedStartMs, expectedEndMs);
+      expect(result.played_songs).toEqual(playedSongs);
+    });
+
+    it('does not call the getter when skipExpensiveCalls is true', async () => {
+      const getter = vi.fn().mockResolvedValue([]);
+      client.setPlayedSongsGetter(getter);
+
+      const activities = [{ ...mockActivity, id: 'i140000001' }];
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(activities) })
+        .mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSportSettings) });
+
+      await client.getActivities('2026-04-18', '2026-04-18', undefined, { skipExpensiveCalls: true });
+
+      expect(getter).not.toHaveBeenCalled();
+    });
+
+    it('swallows getter errors without failing normalization', async () => {
+      const getter = vi.fn().mockRejectedValue(new Error('Last.fm down'));
+      client.setPlayedSongsGetter(getter);
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockActivity) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSportSettings) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ icu_intervals: [], icu_groups: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+
+      const result = await client.getActivity('i140000000');
+
+      expect(result.played_songs).toBeUndefined();
+      expect(result.id).toBe('i140000000');
+    });
+  });
+
+  describe('getActivityPlayedSongs', () => {
+    const mockActivity = {
+      id: 'i140000000',
+      start_date_local: '2026-04-18T10:00:00',
+      start_date: '2026-04-18T10:00:00Z',
+      type: 'Run',
+      name: 'Test Run',
+      moving_time: 1800,
+    };
+
+    it('returns [] when no getter is configured', async () => {
+      const result = await client.getActivityPlayedSongs('i140000000');
+      expect(result).toEqual([]);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('calls the getter with correct start/end ms', async () => {
+      const songs = [
+        {
+          name: 'Song',
+          played_at: '2026-04-18T10:15:00.000Z',
+          url: 'https://www.last.fm/x',
+          album_name: 'Album',
+          artist_name: 'Artist',
+        },
+      ];
+      const getter = vi.fn().mockResolvedValue(songs);
+      client.setPlayedSongsGetter(getter);
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockActivity) });
+
+      const result = await client.getActivityPlayedSongs('i140000000');
+
+      const expectedStartMs = new Date('2026-04-18T10:00:00Z').getTime();
+      const expectedEndMs = expectedStartMs + 1800 * 1000;
+      expect(getter).toHaveBeenCalledWith(expectedStartMs, expectedEndMs);
+      expect(result).toEqual(songs);
+    });
+
+    it('falls back to elapsed_time when moving_time is missing', async () => {
+      const activityWithoutMovingTime = { ...mockActivity, moving_time: undefined, elapsed_time: 2400 };
+      const getter = vi.fn().mockResolvedValue([]);
+      client.setPlayedSongsGetter(getter);
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(activityWithoutMovingTime) });
+
+      await client.getActivityPlayedSongs('i140000000');
+
+      const expectedStartMs = new Date('2026-04-18T10:00:00Z').getTime();
+      const expectedEndMs = expectedStartMs + 2400 * 1000;
+      expect(getter).toHaveBeenCalledWith(expectedStartMs, expectedEndMs);
+    });
+  });
+
   describe('getActivityIntervals with temperature metrics', () => {
     it('should include temperature metrics in intervals when temperature data is available', async () => {
       const mockIntervalsResponse = {

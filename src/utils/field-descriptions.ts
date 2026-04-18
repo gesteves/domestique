@@ -151,6 +151,9 @@ export const WORKOUT_DETAILS_FIELD_DESCRIPTIONS = {
 
   // Weather
   weather_description: 'Weather summary for outdoor activities. Null if weather data is unavailable. Not included for indoor activities.',
+
+  // Music
+  played_songs: 'Array of songs played (scrobbled to Last.fm) during the activity, in chronological order. Each entry contains: name (track title), played_at (when the song was scrobbled, in the user\'s local timezone), url (Last.fm track URL), album_name, and artist_name.',
 };
 
 export const WHOOP_FIELD_DESCRIPTIONS = {
@@ -396,6 +399,11 @@ export const HEAT_ZONES_FIELD_DESCRIPTIONS = {
   heat_zones: WORKOUT_FIELD_DESCRIPTIONS.heat_zones,
   max_heat_strain_index: WORKOUT_FIELD_DESCRIPTIONS.max_heat_strain_index,
   median_heat_strain_index: WORKOUT_FIELD_DESCRIPTIONS.median_heat_strain_index,
+};
+
+export const MUSIC_FIELD_DESCRIPTIONS = {
+  activity_id: 'Unique ID of the activity in Intervals.icu',
+  played_songs: WORKOUT_DETAILS_FIELD_DESCRIPTIONS.played_songs,
 };
 
 export const POWER_CURVE_FIELD_DESCRIPTIONS = {
@@ -685,6 +693,7 @@ type FieldCategory =
   | 'notes'
   | 'weather'
   | 'heat_zones'
+  | 'music'
   | 'power_curve'
   | 'pace_curve'
   | 'hr_curve'
@@ -732,6 +741,8 @@ export function getFieldDescriptions(category: FieldCategory): Record<string, st
       return WEATHER_FIELD_DESCRIPTIONS;
     case 'heat_zones':
       return HEAT_ZONES_FIELD_DESCRIPTIONS;
+    case 'music':
+      return MUSIC_FIELD_DESCRIPTIONS;
     case 'power_curve':
       return POWER_CURVE_FIELD_DESCRIPTIONS;
     case 'pace_curve':

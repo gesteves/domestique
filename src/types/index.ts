@@ -171,6 +171,20 @@ export interface NormalizedWorkout {
 
   // Weather (only included with skipExpensiveCalls: false and for outdoor activities)
   weather_description?: string | null;
+
+  // Music (only included with skipExpensiveCalls: false and when Last.fm is configured)
+  played_songs?: PlayedSong[];
+}
+
+/**
+ * A song played (scrobbled to Last.fm) during an activity.
+ */
+export interface PlayedSong {
+  name: string;
+  played_at: string; // ISO 8601 UTC; formatResponseDates converts to user's timezone
+  url: string;
+  album_name: string;
+  artist_name: string;
 }
 
 // Zone time entry for power zones

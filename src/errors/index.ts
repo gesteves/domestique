@@ -32,7 +32,7 @@ export interface ErrorContext {
 /**
  * Source of the error - which API or component caused it.
  */
-export type ErrorSource = 'intervals' | 'whoop' | 'trainerroad' | 'date_parser';
+export type ErrorSource = 'intervals' | 'whoop' | 'trainerroad' | 'lastfm' | 'date_parser';
 
 /**
  * Base error class for all API and tool errors.
@@ -336,6 +336,126 @@ export class TrainerRoadApiError extends ApiError {
       `I couldn't read the TrainerRoad calendar${errorDetail}. The calendar feed may be in an unexpected format.`,
       'validation',
       false,
+      context
+    );
+  }
+}
+
+/**
+ * Error thrown when Last.fm API calls fail.
+ */
+export class LastFmApiError extends ApiError {
+  public override readonly name = 'LastFmApiError';
+
+  constructor(
+    message: string,
+    category: ErrorCategory,
+    isRetryable: boolean,
+    context: ErrorContext,
+    statusCode?: number,
+    public readonly responseBody?: string
+  ) {
+    super(message, category, isRetryable, context, 'lastfm', statusCode);
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, LastFmApiError);
+    }
+  }
+
+  /**
+   * Create an error from an HTTP response status code.
+   */
+  static fromHttpStatus(
+    statusCode: number,
+    context: ErrorContext,
+    responseBody?: string
+  ): LastFmApiError {
+    const isRetryable = statusCode >= 500 || statusCode === 429;
+    let category: ErrorCategory;
+    let message: string;
+
+    switch (statusCode) {
+      case 400:
+        category = 'validation';
+        message = `The request to ${context.operation} was invalid. Please check the parameters.`;
+        break;
+      case 401:
+      case 403:
+        category = 'authentication';
+        message = 'Last.fm authentication failed. The API key may be invalid.';
+        break;
+      case 404:
+        category = 'not_found';
+        message = "I couldn't find the Last.fm user or resource. The username may be incorrect.";
+        break;
+      case 429:
+        category = 'rate_limit';
+        message = 'Last.fm is temporarily limiting requests. Please try again in a few seconds.';
+        break;
+      default:
+        if (statusCode >= 500) {
+          category = 'service_unavailable';
+          message = 'Last.fm is temporarily unavailable. Please try again shortly.';
+        } else {
+          category = 'internal';
+          message = `An unexpected error occurred with Last.fm (${statusCode}).`;
+        }
+    }
+
+    return new LastFmApiError(message, category, isRetryable, context, statusCode, responseBody);
+  }
+
+  /**
+   * Create an error from a Last.fm API error body.
+   * Last.fm returns HTTP 200 with { error: <code>, message: <string> } on failures.
+   * Error codes: https://www.last.fm/api/errorcodes
+   */
+  static fromApiErrorBody(
+    errorCode: number,
+    errorMessage: string,
+    context: ErrorContext
+  ): LastFmApiError {
+    let category: ErrorCategory;
+    let isRetryable = false;
+
+    switch (errorCode) {
+      case 6: // Invalid parameters
+        category = 'validation';
+        break;
+      case 10: // Invalid API key
+      case 26: // Suspended API key
+        category = 'authentication';
+        break;
+      case 29: // Rate limit exceeded
+        category = 'rate_limit';
+        isRetryable = true;
+        break;
+      case 11: // Service offline
+      case 16: // Service temporarily unavailable
+        category = 'service_unavailable';
+        isRetryable = true;
+        break;
+      default:
+        category = 'internal';
+    }
+
+    return new LastFmApiError(
+      `Last.fm API error (${errorCode}): ${errorMessage}`,
+      category,
+      isRetryable,
+      context
+    );
+  }
+
+  /**
+   * Create an error for network/connection issues.
+   */
+  static networkError(context: ErrorContext, originalError?: Error): LastFmApiError {
+    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
+    return new LastFmApiError(
+      `I'm having trouble connecting to Last.fm${errorDetail}. This is usually temporary. Please try again in a moment.`,
+      'network',
+      true,
       context
     );
   }
