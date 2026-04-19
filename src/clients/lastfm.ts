@@ -4,6 +4,12 @@ import { logApiError } from '../utils/logger.js';
 
 const LASTFM_API_BASE = 'https://ws.audioscrobbler.com/2.0/';
 
+/**
+ * Buffer added to each side of the workout window when querying Last.fm.
+ * Captures songs that bridge the workout's start or end boundary.
+ */
+const WINDOW_BUFFER_MS = 10 * 60 * 1000;
+
 export interface LastFmConfig {
   username: string;
   apiKey: string;
@@ -142,14 +148,27 @@ export class LastFmClient {
   /**
    * Fetch songs played during a time window (ms since epoch), returned in chronological order.
    * Drops "now playing" entries (which have no date).
+   *
+   * Expands the search by 10 minutes on each side of the workout to catch songs that
+   * bridge the workout's start or end boundary, then filters out songs that played
+   * entirely outside the workout window. Last.fm's scrobble timestamp is the track's
+   * start time, so a scrobble *after* the workout ended belongs to a song that
+   * started after the workout — it never overlapped and is removed.
    */
   async getPlayedSongsDuring(startMs: number, endMs: number): Promise<PlayedSong[]> {
-    const fromSec = Math.floor(startMs / 1000);
-    const toSec = Math.ceil(endMs / 1000);
+    const fromSec = Math.floor((startMs - WINDOW_BUFFER_MS) / 1000);
+    const toSec = Math.ceil((endMs + WINDOW_BUFFER_MS) / 1000);
     const tracks = await this.getRecentTracks(fromSec, toSec, 200);
     return tracks
       .filter((t) => t.date?.uts)
       .map(normalizeTrack)
+      .filter((song) => {
+        // Drop songs that started after the workout ended — they played entirely
+        // outside the workout window. Songs in the pre-buffer [start-10min, start)
+        // are kept because they likely bridged the workout's start.
+        const playedAtMs = new Date(song.played_at).getTime();
+        return playedAtMs <= endMs;
+      })
       .sort((a, b) => a.played_at.localeCompare(b.played_at));
   }
 }

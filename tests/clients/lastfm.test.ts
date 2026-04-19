@@ -151,16 +151,79 @@ describe('LastFmClient', () => {
       },
     };
 
-    it('converts Unix seconds for from/to when calling Last.fm', async () => {
-      mockFetch.mockResolvedValueOnce(createMockResponse(sampleResponse));
+    it('widens the query by 10 minutes on each side of the workout window', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ recenttracks: { track: [] } }));
 
-      // Oct 1 2026 12:00:00 UTC → 1791547200000 ms → 1791547200 s
-      // + 3600s = 1791550800
-      await client.getPlayedSongsDuring(1776530000500, 1776540000500);
+      const startMs = 1776530000500;
+      const endMs = 1776540000500;
+      const BUFFER_MS = 10 * 60 * 1000;
+      await client.getPlayedSongsDuring(startMs, endMs);
 
       const url = mockFetch.mock.calls[0][0] as string;
-      expect(url).toContain('from=1776530000'); // floor of 1776530000.5
-      expect(url).toContain('to=1776540001'); // ceil of 1776540000.5
+      // from = floor((start - 10min) / 1000); to = ceil((end + 10min) / 1000)
+      expect(url).toContain(`from=${Math.floor((startMs - BUFFER_MS) / 1000)}`);
+      expect(url).toContain(`to=${Math.ceil((endMs + BUFFER_MS) / 1000)}`);
+    });
+
+    it('keeps songs scrobbled in the pre-buffer (likely bridging workout start)', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000;
+      const preBufferUts = Math.floor((startMs - 180 * 1000) / 1000); // 3 min before start
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({
+          recenttracks: {
+            track: [
+              {
+                name: 'Pre-Buffer Song',
+                url: 'https://www.last.fm/music/x',
+                artist: { '#text': 'Artist' },
+                album: { '#text': 'Album' },
+                date: { uts: String(preBufferUts) },
+              },
+            ],
+          },
+        })
+      );
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Pre-Buffer Song');
+    });
+
+    it('drops songs scrobbled in the post-buffer (started after workout ended)', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000; // 1 hr workout
+      const duringUts = Math.floor((startMs + 1000) / 1000);
+      const postBufferUts = Math.floor((endMs + 120 * 1000) / 1000); // 2 min past end
+
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({
+          recenttracks: {
+            track: [
+              {
+                name: 'Post-Buffer Song',
+                url: 'https://www.last.fm/music/post',
+                artist: { '#text': 'A' },
+                album: { '#text': 'B' },
+                date: { uts: String(postBufferUts) },
+              },
+              {
+                name: 'During Workout',
+                url: 'https://www.last.fm/music/during',
+                artist: { '#text': 'C' },
+                album: { '#text': 'D' },
+                date: { uts: String(duringUts) },
+              },
+            ],
+          },
+        })
+      );
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('During Workout');
     });
 
     it('returns songs in chronological order', async () => {
