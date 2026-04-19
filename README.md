@@ -1,5 +1,6 @@
 # Domestique
 
+[![SafeSkill 83/100](https://img.shields.io/badge/SafeSkill-83%2F100_Passes%20with%20Notes-yellow)](https://safeskill.dev/scan/gesteves-domestique)
 A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com), and [TrainerRoad](https://www.trainerroad.com) to provide unified access to fitness data across all activities and sports.
 
 ## Features
