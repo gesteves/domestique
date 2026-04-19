@@ -1019,7 +1019,6 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
-- **ALWAYS** fetch this when analyzing a workout; it may include valuable subjective data from the user.
 - Get the activity_id from get_workout_history.
 - Make sure to fetch attachments and follow links left in the notes.
 - Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
@@ -1049,8 +1048,6 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
-- **ALWAYS** fetch this when analyzing an **OUTDOOR** workout; weather conditions can be an important factor in the user's performance.
-- **NEVER** fetch this when analyzing an **INDOOR** workout; weather conditions are irrelevant for indoor activities.
 - Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts)
 </instructions>`,
         inputSchema: {
