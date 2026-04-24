@@ -704,24 +704,23 @@ export class WhoopClient {
     };
 
     let response = await this.doFetch(url.toString(), fullErrorContext);
-    let rateLimitRetries = 0;
 
     // Handle 401 with token refresh
     if (response.status === 401) {
       console.log(`[Whoop] Got 401 on ${endpoint}, invalidating token and retrying...`);
-      
+
       // Invalidate the cached access token to force refresh
       await invalidateWhoopAccessToken();
-      
+
       // Reset in-memory token expiry to force refresh
       this.tokenExpiresAt = 0;
-      
+
       // Get a fresh token
       await this.ensureValidToken();
-      
+
       // Retry the request once
       response = await this.doFetch(url.toString(), fullErrorContext);
-      
+
       if (response.status === 401) {
         // Still 401 after refresh - something is wrong
         let responseBody: string | undefined;
@@ -732,17 +731,18 @@ export class WhoopClient {
       }
     }
 
-    // Handle 429 rate limit with retry
-    while (response.status === 429 && rateLimitRetries < MAX_RATE_LIMIT_RETRIES) {
-      rateLimitRetries++;
+    // Handle 429 rate limit with retry (up to MAX_RATE_LIMIT_RETRIES retries)
+    for (let attempt = 1; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+      if (response.status !== 429) break;
+
       const rateLimitInfo = parseRateLimitHeaders(response);
       const waitMs = rateLimitInfo
         ? (rateLimitInfo.resetInSeconds * 1000) + RATE_LIMIT_BUFFER_MS
-        : INITIAL_RETRY_DELAY_MS * Math.pow(2, rateLimitRetries);
+        : INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
 
       console.warn(
         `[Whoop] Rate limited (429) on ${endpoint}. ` +
-        `Retry ${rateLimitRetries}/${MAX_RATE_LIMIT_RETRIES}, waiting ${Math.round(waitMs / 1000)}s...`
+        `Retry ${attempt}/${MAX_RATE_LIMIT_RETRIES}, waiting ${Math.round(waitMs / 1000)}s...`
       );
 
       await sleep(waitMs);

@@ -87,23 +87,34 @@ export class TrainerRoadClient {
     const events: CalendarEvent[] = [];
 
     for (const [_, component] of Object.entries(parsed)) {
-      if (component?.type === 'VEVENT') {
-        const event = component as ical.VEvent;
-        if (event.start && event.summary) {
-          const summary = typeof event.summary === 'string' ? event.summary : event.summary.val;
-          const description = event.description == null
-            ? undefined
-            : typeof event.description === 'string' ? event.description : event.description.val;
-          events.push({
-            uid: event.uid || `trainerroad-${event.start.getTime()}`,
-            start: event.start,
-            end: event.end || event.start,
-            summary,
-            description,
-            dateType: event.datetype || 'date-time',
-          });
-        }
+      if (component?.type !== 'VEVENT') continue;
+
+      const event = component as ical.VEvent;
+      if (!event.start || !event.summary) {
+        console.warn(
+          `[TrainerRoad] Skipping VEVENT missing start or summary (uid=${event.uid ?? 'unknown'})`
+        );
+        continue;
       }
+      if (!(event.start instanceof Date)) {
+        console.warn(
+          `[TrainerRoad] Skipping VEVENT with non-Date start (uid=${event.uid ?? 'unknown'})`
+        );
+        continue;
+      }
+
+      const summary = typeof event.summary === 'string' ? event.summary : event.summary.val;
+      const description = event.description == null
+        ? undefined
+        : typeof event.description === 'string' ? event.description : event.description.val;
+      events.push({
+        uid: event.uid || `trainerroad-${event.start.getTime()}`,
+        start: event.start,
+        end: event.end || event.start,
+        summary,
+        description,
+        dateType: event.datetype || 'date-time',
+      });
     }
 
     return events;

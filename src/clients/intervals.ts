@@ -1251,11 +1251,10 @@ export class IntervalsClient {
    */
   async getActivity(activityId: string): Promise<NormalizedWorkout> {
     // Use fetchActivity which calls /activity/{id} endpoint (not /athlete/{id}/activities)
-    const activity = await this.fetchActivity<IntervalsActivity>(activityId, '');
-    // Ensure the activity has an ID (single activity endpoint may not include it in response)
-    if (!activity.id) {
-      activity.id = activityId;
-    }
+    const fetched = await this.fetchActivity<IntervalsActivity>(activityId, '');
+    // The single-activity endpoint may not include the ID in the response — patch it
+    // into a new object rather than mutating the API response.
+    const activity = fetched.id ? fetched : { ...fetched, id: activityId };
     // Always fetch full details for single activity requests (skipExpensiveCalls: false)
     return await this.normalizeActivity(activity, { skipExpensiveCalls: false });
   }
