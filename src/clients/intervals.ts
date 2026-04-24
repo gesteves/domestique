@@ -44,7 +44,7 @@ import {
   formatPace,
   isSwimmingActivity,
 } from '../utils/format-units.js';
-import { getTodayInTimezone } from '../utils/date-parser.js';
+import { getTodayInTimezone } from '../utils/tz.js';
 import { localStringToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
   calculateHeatMetrics,

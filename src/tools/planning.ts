@@ -1,7 +1,7 @@
 import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { parseDateStringInTimezone } from '../utils/date-parser.js';
+import { parseDateStringInTimezone } from '../utils/tz.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import type {
   PlannedWorkout,

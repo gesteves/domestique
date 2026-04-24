@@ -1,7 +1,7 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { LastFmClient } from '../clients/lastfm.js';
-import { parseDateStringInTimezone, parseDateRangeInTimezone } from '../utils/date-parser.js';
+import { parseDateStringInTimezone, parseDateRangeInTimezone } from '../utils/tz.js';
 import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
 import {
   parseDurationToHours,

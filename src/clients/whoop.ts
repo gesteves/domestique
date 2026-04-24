@@ -15,6 +15,11 @@ import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { formatDuration, formatDistance, isSwimmingActivity } from '../utils/format-units.js';
 import { formatToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
+  addDaysToYMD,
+  formatYMDInTimezone,
+  isTimestampInLocalDateRange,
+} from '../utils/tz.js';
+import {
   getRecoveryLevel,
   getRecoveryLevelDescription,
   getSleepPerformanceLevel,
@@ -237,22 +242,6 @@ export class WhoopApiError extends ApiError {
       429
     );
   }
-}
-
-/**
- * Check if a UTC timestamp falls within a local date range given the timezone.
- */
-function isTimestampInLocalDateRange(
-  utcTimestamp: string,
-  startDate: string,
-  endDate: string,
-  timezone: string
-): boolean {
-  // Format the UTC timestamp as a local date in the given timezone
-  const date = new Date(utcTimestamp);
-  const localDateStr = date.toLocaleDateString('en-CA', { timeZone: timezone }); // en-CA gives YYYY-MM-DD format
-
-  return localDateStr >= startDate && localDateStr <= endDate;
 }
 
 interface WhoopRecovery {
@@ -800,8 +789,8 @@ export class WhoopClient {
     const timezone = await this.getTimezone();
 
     // Fetch with a 1-day buffer to account for timezone differences
-    const startBuffer = this.subtractDays(startDate, 1);
-    const endBuffer = this.addDays(endDate, 1);
+    const startBuffer = addDaysToYMD(startDate, -1);
+    const endBuffer = addDaysToYMD(endDate, 1);
 
     // Fetch all three data sources
     const [cycles, sleeps, recoveries] = await Promise.all([
@@ -869,24 +858,6 @@ export class WhoopClient {
   }
 
   /**
-   * Add days to a date string
-   */
-  private addDays(dateStr: string, days: number): string {
-    const date = new Date(dateStr + 'T00:00:00Z');
-    date.setUTCDate(date.getUTCDate() + days);
-    return date.toISOString().split('T')[0];
-  }
-
-  /**
-   * Subtract days from a date string
-   */
-  private subtractDays(dateStr: string, days: number): string {
-    const date = new Date(dateStr + 'T00:00:00Z');
-    date.setUTCDate(date.getUTCDate() - days);
-    return date.toISOString().split('T')[0];
-  }
-
-  /**
    * Get today's recovery by finding the most recent scored cycle.
    * This follows Whoop's physiological day model rather than calendar dates.
    * Returns separate sleep and recovery objects.
@@ -941,7 +912,7 @@ export class WhoopClient {
    */
   async getTodayStrain(): Promise<StrainData | null> {
     const timezone = await this.getTimezone();
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+    const todayStr = formatYMDInTimezone(new Date(), timezone);
 
     // Get recent data without date parameters to get current cycle
     const [cycles, workouts] = await Promise.all([
@@ -974,11 +945,11 @@ export class WhoopClient {
    */
   async getStrainData(startDate: string, endDate: string): Promise<StrainData[]> {
     const timezone = await this.getTimezone();
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+    const todayStr = formatYMDInTimezone(new Date(), timezone);
 
     // Fetch with a 1-day buffer to account for timezone differences
-    const startBuffer = this.subtractDays(startDate, 1);
-    const endBuffer = this.addDays(endDate, 1);
+    const startBuffer = addDaysToYMD(startDate, -1);
+    const endBuffer = addDaysToYMD(endDate, 1);
 
     const [cycles, workouts] = await Promise.all([
       this.fetch<{ records: WhoopCycle[] }>('/cycle', {
@@ -995,7 +966,7 @@ export class WhoopClient {
     const cyclesWithDates = cycles.records.map((cycle) => {
       const cycleDate = !cycle.end
         ? todayStr
-        : new Date(cycle.end).toLocaleDateString('en-CA', { timeZone: timezone });
+        : formatYMDInTimezone(new Date(cycle.end), timezone);
       return { cycle, cycleDate };
     });
 
@@ -1028,8 +999,8 @@ export class WhoopClient {
     const timezone = await this.getTimezone();
 
     // Fetch with a 1-day buffer to account for timezone differences
-    const startBuffer = this.subtractDays(startDate, 1);
-    const endBuffer = this.addDays(endDate, 1);
+    const startBuffer = addDaysToYMD(startDate, -1);
+    const endBuffer = addDaysToYMD(endDate, 1);
 
     const workouts = await this.fetch<{ records: WhoopWorkout[] }>('/activity/workout', {
       start: `${startBuffer}T00:00:00.000Z`,

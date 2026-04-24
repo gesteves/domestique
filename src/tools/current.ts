@@ -1,8 +1,7 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { parseDateRangeInTimezone } from '../utils/date-parser.js';
-import { getTodayInTimezone } from '../utils/date-parser.js';
+import { parseDateRangeInTimezone, getTodayInTimezone } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
 import type {

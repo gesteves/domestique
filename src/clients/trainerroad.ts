@@ -206,7 +206,7 @@ export class TrainerRoadClient {
    */
   async getTodayWorkouts(timezone?: string): Promise<PlannedWorkout[]> {
     const today = timezone
-      ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+      ? formatInTimeZone(new Date(), timezone, 'yyyy-MM-dd')
       : new Date().toISOString().split('T')[0];
     return this.getPlannedWorkouts(today, today, timezone);
   }
@@ -236,7 +236,7 @@ export class TrainerRoadClient {
 
     // Get today's date
     const today = timezone
-      ? new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+      ? formatInTimeZone(new Date(), timezone, 'yyyy-MM-dd')
       : new Date().toISOString().split('T')[0];
 
     // Filter to events from today onwards
