@@ -14,6 +14,7 @@ vi.mock('../../src/clients/intervals.js', () => ({
       getActivityIntervals: vi.fn().mockResolvedValue({ activity_id: 'test', intervals: [], groups: [] }),
       getSportSettingsForSport: vi.fn().mockResolvedValue({ sport: 'cycling', settings: {} }),
       getUnitPreferences: vi.fn().mockResolvedValue({ system: 'metric', weight: 'kg', temperature: 'celsius' }),
+      setPlayedSongsGetter: vi.fn(),
     };
   }),
 }));
@@ -40,21 +41,43 @@ vi.mock('../../src/clients/trainerroad.js', () => ({
   }),
 }));
 
+vi.mock('../../src/clients/lastfm.js', () => ({
+  LastFmClient: vi.fn().mockImplementation(function() {
+    return {
+      getPlayedSongsDuring: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+const fullConfig = {
+  intervals: { apiKey: 'test', athleteId: 'test' },
+  whoop: {
+    accessToken: 'test',
+    refreshToken: 'test',
+    clientId: 'test',
+    clientSecret: 'test',
+  },
+  trainerroad: { calendarUrl: 'https://test.com' },
+  lastfm: { username: 'test', apiKey: 'test' },
+};
+
+function collectRegisteredTools(registry: ToolRegistry): string[] {
+  const names: string[] = [];
+  const mockServer = {
+    registerTool: vi.fn().mockImplementation((name: string) => {
+      names.push(name);
+    }),
+  };
+  registry.registerTools(mockServer as any);
+  return names;
+}
+
 describe('ToolRegistry', () => {
   let registry: ToolRegistry;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    registry = new ToolRegistry({
-      intervals: { apiKey: 'test', athleteId: 'test' },
-      whoop: {
-        accessToken: 'test',
-        refreshToken: 'test',
-        clientId: 'test',
-        clientSecret: 'test',
-      },
-      trainerroad: { calendarUrl: 'https://test.com' },
-    });
+    registry = new ToolRegistry(fullConfig);
   });
 
   describe('constructor', () => {
@@ -147,6 +170,56 @@ describe('ToolRegistry', () => {
       registry.registerTools(mockServer as any);
 
       expect(mockServer.registerTool).toHaveBeenCalledTimes(28);
+    });
+
+    it('skips Whoop-dependent tools when Whoop is not configured', () => {
+      const registryNoWhoop = new ToolRegistry({ ...fullConfig, whoop: null });
+      const names = collectRegisteredTools(registryNoWhoop);
+
+      expect(names).not.toContain('get_strain_history');
+      expect(names).not.toContain('get_recovery_trends');
+      // Tools that use Whoop only for optional enrichment stay registered
+      expect(names).toContain('get_todays_summary');
+      expect(names).toContain('get_workout_history');
+      expect(names.length).toBe(26);
+    });
+
+    it('skips TrainerRoad-dependent tools when TrainerRoad is not configured', () => {
+      const registryNoTr = new ToolRegistry({ ...fullConfig, trainerroad: null });
+      const names = collectRegisteredTools(registryNoTr);
+
+      expect(names).not.toContain('get_upcoming_races');
+      expect(names).not.toContain('sync_trainerroad_runs');
+      // Planning tools that only need Intervals stay registered
+      expect(names).toContain('get_upcoming_workouts');
+      expect(names).toContain('create_run_workout');
+      expect(names.length).toBe(26);
+    });
+
+    it('skips Last.fm-dependent tools when Last.fm is not configured', () => {
+      const registryNoLastfm = new ToolRegistry({ ...fullConfig, lastfm: null });
+      const names = collectRegisteredTools(registryNoLastfm);
+
+      expect(names).not.toContain('get_workout_music');
+      expect(names.length).toBe(27);
+    });
+
+    it('registers only Intervals-only tools when all optional clients are missing', () => {
+      const registryMinimal = new ToolRegistry({
+        intervals: fullConfig.intervals,
+        whoop: null,
+        trainerroad: null,
+        lastfm: null,
+      });
+      const names = collectRegisteredTools(registryMinimal);
+
+      expect(names).not.toContain('get_strain_history');
+      expect(names).not.toContain('get_recovery_trends');
+      expect(names).not.toContain('get_upcoming_races');
+      expect(names).not.toContain('sync_trainerroad_runs');
+      expect(names).not.toContain('get_workout_music');
+      // 28 - 5 skipped = 23
+      expect(names.length).toBe(23);
     });
 
     it('should pass config object with title, description, and annotations to each tool', () => {

@@ -183,6 +183,12 @@ export class ToolRegistry {
   private historicalTools: HistoricalTools;
   private planningTools: PlanningTools;
   private intervalsClient: IntervalsClient;
+  // Track optional client presence so registerTools can skip tools whose data
+  // source isn't connected — better to hide a tool than register one that
+  // returns empty results without explanation.
+  private readonly hasWhoop: boolean;
+  private readonly hasTrainerRoad: boolean;
+  private readonly hasLastFm: boolean;
 
   constructor(config: ToolsConfig) {
     const intervalsClient = new IntervalsClient(config.intervals);
@@ -192,6 +198,9 @@ export class ToolRegistry {
       ? new TrainerRoadClient(config.trainerroad)
       : null;
     const lastfmClient = config.lastfm ? new LastFmClient(config.lastfm) : null;
+    this.hasWhoop = whoopClient !== null;
+    this.hasTrainerRoad = trainerroadClient !== null;
+    this.hasLastFm = lastfmClient !== null;
 
     // Connect Whoop client to Intervals.icu timezone for proper date filtering
     if (whoopClient) {
@@ -345,10 +354,11 @@ export class ToolRegistry {
     });
 
     // Historical/Trends Tools
-    register({
-      name: 'get_strain_history',
-      title: 'Strain History',
-      description: `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
+    if (this.hasWhoop) {
+      register({
+        name: 'get_strain_history',
+        title: 'Strain History',
+        description: `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
 
 <use-cases>
 - Analyzing strain patterns over time to identify trends in training intensity.
@@ -360,16 +370,16 @@ export class ToolRegistry {
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
 - If you only need today's strain data, use get_todays_summary instead.
-- Returns empty array if Whoop is not configured.
 </notes>`,
-      inputSchema: {
-        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-        newest: z.string().optional().describe('End date (defaults to today)'),
-      },
-      annotations: READ_ONLY,
-      handler: async (args: { oldest: string; newest?: string }) => this.currentTools.getStrainHistory(args),
-      fieldDescriptions: getFieldDescriptions('whoop'),
-    });
+        inputSchema: {
+          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+          newest: z.string().optional().describe('End date (defaults to today)'),
+        },
+        annotations: READ_ONLY,
+        handler: async (args: { oldest: string; newest?: string }) => this.currentTools.getStrainHistory(args),
+        fieldDescriptions: getFieldDescriptions('whoop'),
+      });
+    }
 
     register({
       name: 'get_workout_history',
@@ -430,10 +440,11 @@ Get the activity_id from:
       fieldDescriptions: combineFieldDescriptions('workout', 'workout_details', 'whoop'),
     });
 
-    register({
-      name: 'get_recovery_trends',
-      title: 'Recovery Trends',
-      description: `Fetches Whoop recovery and sleep data over a date range.
+    if (this.hasWhoop) {
+      register({
+        name: 'get_recovery_trends',
+        title: 'Recovery Trends',
+        description: `Fetches Whoop recovery and sleep data over a date range.
 
 <use-cases>
 - Analyzing recovery patterns over time to identify trends in sleep and HRV.
@@ -446,16 +457,16 @@ Get the activity_id from:
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
 - If you only need today's recovery and sleep data, use get_todays_summary instead.
-- Returns empty array if Whoop is not configured.
 </notes>`,
-      inputSchema: {
-        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-        newest: z.string().optional().describe('End date (defaults to today)'),
-      },
-      annotations: READ_ONLY,
-      handler: async (args: { oldest: string; newest?: string }) => this.historicalTools.getRecoveryTrends(args),
-      fieldDescriptions: getFieldDescriptions('recovery'),
-    });
+        inputSchema: {
+          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+          newest: z.string().optional().describe('End date (defaults to today)'),
+        },
+        annotations: READ_ONLY,
+        handler: async (args: { oldest: string; newest?: string }) => this.historicalTools.getRecoveryTrends(args),
+        fieldDescriptions: getFieldDescriptions('recovery'),
+      });
+    }
 
     register({
       name: 'get_wellness_trends',
@@ -538,10 +549,11 @@ Get the activity_id from:
       hints: [trainerroadSyncHint],
     });
 
-    register({
-      name: 'get_upcoming_races',
-      title: 'Upcoming Races',
-      description: `Fetches upcoming races from the TrainerRoad calendar.
+    if (this.hasTrainerRoad) {
+      register({
+        name: 'get_upcoming_races',
+        title: 'Upcoming Races',
+        description: `Fetches upcoming races from the TrainerRoad calendar.
 
 <use-cases>
 - Viewing the user's upcoming race schedule.
@@ -552,11 +564,12 @@ Get the activity_id from:
 <instructions>
 - The description of the race may contain important details about the race, including if it's an A, B or C race; and details about the course.
 </instructions>`,
-      inputSchema: {},
-      annotations: READ_ONLY,
-      handler: async () => this.planningTools.getUpcomingRaces(),
-      fieldDescriptions: getFieldDescriptions('race'),
-    });
+        inputSchema: {},
+        annotations: READ_ONLY,
+        handler: async () => this.planningTools.getUpcomingRaces(),
+        fieldDescriptions: getFieldDescriptions('race'),
+      });
+    }
 
     // ============================================
     // Workout Sync Tools
@@ -722,10 +735,11 @@ Get the activity_id from:
       fieldDescriptions: {},
     });
 
-    register({
-      name: 'sync_trainerroad_runs',
-      title: 'Sync TrainerRoad Runs',
-      description: `Syncs TrainerRoad running workouts to Intervals.icu.
+    if (this.hasTrainerRoad) {
+      register({
+        name: 'sync_trainerroad_runs',
+        title: 'Sync TrainerRoad Runs',
+        description: `Syncs TrainerRoad running workouts to Intervals.icu.
 
 <use-cases>
 - Bulk syncing all TrainerRoad runs for a date range to Intervals.icu.
@@ -744,16 +758,17 @@ Get the activity_id from:
 - Created workouts are tagged with 'domestique' for tracking.
 - The runs_to_sync array contains TR runs that need to be converted and created.
 </notes>`,
-      inputSchema: {
-        oldest: z.string().optional().describe('Start date (defaults to today)'),
-        newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
-      },
-      // Can be destructive (deletes orphans), but also creates external resources
-      annotations: { openWorldHint: true, destructiveHint: true },
-      handler: async (args: { oldest?: string; newest?: string }) =>
-        this.planningTools.syncTRRuns(args),
-      fieldDescriptions: {},
-    });
+        inputSchema: {
+          oldest: z.string().optional().describe('Start date (defaults to today)'),
+          newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
+        },
+        // Can be destructive (deletes orphans), but also creates external resources
+        annotations: { openWorldHint: true, destructiveHint: true },
+        handler: async (args: { oldest?: string; newest?: string }) =>
+          this.planningTools.syncTRRuns(args),
+        fieldDescriptions: {},
+      });
+    }
 
     register({
       name: 'set_workout_intervals',
@@ -975,10 +990,11 @@ Get the activity_id from:
       fieldDescriptions: getFieldDescriptions('heat_zones'),
     });
 
-    register({
-      name: 'get_workout_music',
-      title: 'Workout Music',
-      description: `Fetches songs scrobbled to Last.fm during a specific workout, in chronological order.
+    if (this.hasLastFm) {
+      register({
+        name: 'get_workout_music',
+        title: 'Workout Music',
+        description: `Fetches songs scrobbled to Last.fm during a specific workout, in chronological order.
 
 <use-cases>
 - Reviewing what music the user listened to during a workout.
@@ -987,15 +1003,16 @@ Get the activity_id from:
 
 <instructions>
 - Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts).
-- Returns an empty array if Last.fm is not configured or no scrobbles fall within the activity's time window.
+- Returns an empty array if no scrobbles fall within the activity's time window.
 </instructions>`,
-      inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-      },
-      annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutMusic(args.activity_id),
-      fieldDescriptions: getFieldDescriptions('music'),
-    });
+        inputSchema: {
+          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+        },
+        annotations: READ_ONLY,
+        handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutMusic(args.activity_id),
+        fieldDescriptions: getFieldDescriptions('music'),
+      });
+    }
 
     // ============================================
     // Performance Curves
