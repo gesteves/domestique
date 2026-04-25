@@ -86,7 +86,7 @@ describe('HistoricalTools', () => {
 
       const result = await tools.getWorkoutHistory({
         oldest: '2024-12-01',
-        newest: '2024-12-15',
+        newest: '2024-12-14',
       });
 
       expect(result).toHaveLength(2);
@@ -97,7 +97,7 @@ describe('HistoricalTools', () => {
       expect(result[1].whoop).toBeNull();
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
-        '2024-12-15',
+        '2024-12-14',
         undefined,
         { skipExpensiveCalls: true }
       );
@@ -113,13 +113,13 @@ describe('HistoricalTools', () => {
 
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-11-15',
-        '2024-12-15',
+        '2024-12-14',
         undefined,
         { skipExpensiveCalls: true }
       );
     });
 
-    it('should default newest to today', async () => {
+    it('should default newest to yesterday', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
@@ -129,7 +129,7 @@ describe('HistoricalTools', () => {
 
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
-        '2024-12-15',
+        '2024-12-14',
         undefined,
         { skipExpensiveCalls: true }
       );
@@ -146,7 +146,7 @@ describe('HistoricalTools', () => {
 
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
-        '2024-12-15',
+        '2024-12-14',
         'cycling',
         { skipExpensiveCalls: true }
       );
@@ -163,6 +163,40 @@ describe('HistoricalTools', () => {
       expect(result).toHaveLength(2);
       expect(result[0].whoop).toBeNull();
       expect(result[1].whoop).toBeNull();
+    });
+
+    it('should reject oldest set to today (ISO)', async () => {
+      await expect(
+        tools.getWorkoutHistory({ oldest: '2024-12-15', newest: '2024-12-15' })
+      ).rejects.toThrow(/cannot be used for today's date \(2024-12-15\)/);
+      expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
+    });
+
+    it('should reject oldest set to today (natural language)', async () => {
+      await expect(
+        tools.getWorkoutHistory({ oldest: 'today', newest: '2024-12-14' })
+      ).rejects.toThrow(/cannot be used for today's date/);
+      expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
+    });
+
+    it('should reject newest set to today (ISO)', async () => {
+      await expect(
+        tools.getWorkoutHistory({ oldest: '2024-12-01', newest: '2024-12-15' })
+      ).rejects.toThrow(/cannot be used for today's date \(2024-12-15\)/);
+      expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
+    });
+
+    it('should reject newest set to today (natural language)', async () => {
+      await expect(
+        tools.getWorkoutHistory({ oldest: '2024-12-01', newest: 'today' })
+      ).rejects.toThrow(/cannot be used for today's date/);
+      expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
+    });
+
+    it('should suggest get_todays_summary in the error message', async () => {
+      await expect(
+        tools.getWorkoutHistory({ oldest: '2024-12-01', newest: 'today' })
+      ).rejects.toThrow(/get_todays_summary/);
     });
   });
 

@@ -1,7 +1,7 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { LastFmClient } from '../clients/lastfm.js';
-import { parseDateStringInTimezone, parseDateRangeInTimezone } from '../utils/tz.js';
+import { parseDateStringInTimezone, parseDateRangeInTimezone, getTodayInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
 import {
   parseDurationToHours,
@@ -59,7 +59,19 @@ export class HistoricalTools {
   ): Promise<WorkoutWithWhoop[]> {
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
-    const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
+    const today = getTodayInTimezone(timezone);
+    const startDate = parseDateStringInTimezone(params.oldest, timezone, 'oldest');
+    const endDate = params.newest
+      ? parseDateStringInTimezone(params.newest, timezone, 'newest')
+      : addDaysToYMD(today, -1);
+
+    if (startDate === today || endDate === today) {
+      throw new Error(
+        `get_workout_history cannot be used for today's date (${today}); ` +
+        `it returns only historical data and may be incomplete for the current day. ` +
+        `Use get_todays_summary for today's workouts.`
+      );
+    }
 
     // Fetch Intervals.icu activities
     // Use skipExpensiveCalls since historical queries can return many activities

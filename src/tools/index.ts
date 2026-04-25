@@ -389,23 +389,23 @@ export class ToolRegistry {
       description: `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
 
 <use-cases>
-- Analyzing training patterns and consistency over a specific time period.
+- Analyzing training patterns and consistency over a specific time period in the past.
 - Reviewing workout volume, intensity, and frequency for a date range.
 - Identifying specific workouts for detailed analysis via get_workout_intervals.
 - Correlating workout history with recovery trends to understand training impact.
 - Filtering workouts by sport to analyze sport-specific training patterns.
-- Understanding total time in zones for the period (power, pace, heart race, and/or heat zones).
+- Understanding total time in zones for the period (power, pace, heart rate, and/or heat zones).
 </use-cases>
 
 <notes>
-- **NEVER** use this tool to get workouts for the current day; use get_todays_summary for that. This tool is for historical data and may return incomplete data if called on the same day.
+- **NEVER** use this tool to get workouts for the current day; use get_todays_summary for that. This tool is for historical data, not the current day. Passing today's date as either oldest or newest will return an error.
 - Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
 - You can optionally filter activities by sport, as needed.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
       inputSchema: {
-        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-        newest: z.string().optional().describe('End date (defaults to today)'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago"). Cannot be today.'),
+        newest: z.string().optional().describe('End date (defaults to yesterday). Cannot be today.'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
       outputSchema: schemas.workoutHistoryOutputSchema,
