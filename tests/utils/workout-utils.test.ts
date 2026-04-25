@@ -236,7 +236,7 @@ describe('workout-utils', () => {
       expect(result[0].whoop?.strain_score).toBe(10.5);
     });
 
-    it('should gracefully handle Whoop fetch errors', async () => {
+    it('flags whoop_unavailable on each workout when Whoop fetch errors', async () => {
       const mockWhoop = new WhoopClient({
         accessToken: 'test',
         refreshToken: 'test',
@@ -245,11 +245,31 @@ describe('workout-utils', () => {
       });
       vi.mocked(mockWhoop.getWorkouts).mockRejectedValue(new Error('API Error'));
 
+      const workouts = [createWorkout(), createWorkout({ id: 'w2' })];
+      const result = await enrichWorkoutsWithWhoop(workouts, mockWhoop, '2024-12-15', '2024-12-15');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].whoop).toBeNull();
+      expect(result[0].whoop_unavailable).toBe(true);
+      expect(result[1].whoop).toBeNull();
+      expect(result[1].whoop_unavailable).toBe(true);
+    });
+
+    it('does not flag whoop_unavailable when fetch succeeds with no matches', async () => {
+      const mockWhoop = new WhoopClient({
+        accessToken: 'test',
+        refreshToken: 'test',
+        clientId: 'test',
+        clientSecret: 'test',
+      });
+      vi.mocked(mockWhoop.getWorkouts).mockResolvedValue([]);
+
       const workouts = [createWorkout()];
       const result = await enrichWorkoutsWithWhoop(workouts, mockWhoop, '2024-12-15', '2024-12-15');
 
       expect(result).toHaveLength(1);
       expect(result[0].whoop).toBeNull();
+      expect(result[0].whoop_unavailable).toBeUndefined();
     });
   });
 

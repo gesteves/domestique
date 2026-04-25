@@ -573,6 +573,7 @@ export class IntervalsClient {
   private authHeader: string;
   private cachedTimezone: string | null = null;
   private cachedSportSettings: IntervalsSportSettings[] | null = null;
+  private sportSettingsPromise: Promise<IntervalsSportSettings[]> | null = null;
   private cachedUnitPreferences: UnitPreferences | null = null;
   private playedSongsGetter:
     | ((startMs: number, endMs: number) => Promise<PlayedSong[]>)
@@ -616,15 +617,25 @@ export class IntervalsClient {
   }
 
   /**
-   * Get sport settings (cached after first fetch).
+   * Get sport settings, cached after first fetch. Uses single-flight to ensure
+   * concurrent callers (e.g. parallel normalizeActivity calls) share one HTTP request.
    */
   private async getSportSettings(): Promise<IntervalsSportSettings[]> {
     if (this.cachedSportSettings) {
       return this.cachedSportSettings;
     }
-
-    this.cachedSportSettings = await this.fetch<IntervalsSportSettings[]>('/sport-settings');
-    return this.cachedSportSettings;
+    if (this.sportSettingsPromise) {
+      return this.sportSettingsPromise;
+    }
+    this.sportSettingsPromise = this.fetch<IntervalsSportSettings[]>('/sport-settings')
+      .then((settings) => {
+        this.cachedSportSettings = settings;
+        return settings;
+      })
+      .finally(() => {
+        this.sportSettingsPromise = null;
+      });
+    return this.sportSettingsPromise;
   }
 
   /**
@@ -1237,10 +1248,8 @@ export class IntervalsClient {
       );
     }
 
-    // Pre-fetch sport settings to populate cache before parallel normalization
-    // This avoids a race condition where all normalizeActivity calls try to fetch at once
-    await this.getSportSettings();
-
+    // Concurrent normalizeActivity calls share a single in-flight sport-settings
+    // request via single-flight inside getSportSettings(); no pre-warm needed.
     return Promise.all(filtered.map((a) => this.normalizeActivity(a, options)));
   }
 

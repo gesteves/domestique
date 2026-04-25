@@ -2904,4 +2904,53 @@ describe('IntervalsClient', () => {
       expect(interval.end_ambient_temperature).toBe(-1.0);
     });
   });
+
+  describe('sport-settings single-flight', () => {
+    it('coalesces concurrent fetches into a single HTTP request', async () => {
+      // Two parallel getActivities calls overlap on the in-flight sport-settings fetch.
+      // The settings response is delayed so the second caller sees it pending.
+      const settingsUrls: string[] = [];
+
+      const mockActivity = {
+        id: 'i1',
+        start_date_local: '2024-12-15T10:00:00',
+        start_date: '2024-12-15T10:00:00Z',
+        type: 'Ride',
+        name: 'Test',
+        moving_time: 3600,
+        distance: 1000,
+      };
+
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/sport-settings')) {
+          settingsUrls.push(url);
+          return new Promise((resolve) =>
+            setTimeout(() => resolve({
+              ok: true,
+              json: () => Promise.resolve(mockSportSettings),
+            }), 10)
+          );
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([mockActivity]),
+        });
+      });
+
+      // Fire two concurrent calls before either resolves; each spawns parallel
+      // normalizeActivity calls that race to fetch sport-settings.
+      await Promise.all([
+        client.getActivities('2024-12-14', '2024-12-15', undefined, { skipExpensiveCalls: true }),
+        client.getActivities('2024-12-14', '2024-12-15', undefined, { skipExpensiveCalls: true }),
+      ]);
+
+      // Single-flight ensures one shared settings call across all concurrent normalizers.
+      expect(settingsUrls).toHaveLength(1);
+
+      // A subsequent call hits the resolved cache — still one settings fetch total.
+      await client.getActivities('2024-12-14', '2024-12-15', undefined, { skipExpensiveCalls: true });
+      expect(settingsUrls).toHaveLength(1);
+    });
+  });
 });

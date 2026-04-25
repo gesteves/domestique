@@ -213,9 +213,12 @@ export interface WhoopMatchedData {
 /**
  * Extended workout with optional matched Whoop data.
  * The whoop field is null when Whoop is not configured or no match found.
+ * When set, whoop_unavailable indicates the Whoop fetch failed for this date range —
+ * the absence of whoop data does not mean the user had no Whoop activity.
  */
 export interface WorkoutWithWhoop extends NormalizedWorkout {
   whoop: WhoopMatchedData | null;
+  whoop_unavailable?: boolean;
 }
 
 // ============================================

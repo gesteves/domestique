@@ -90,7 +90,10 @@ export function matchWhoopActivity(
 /**
  * Enrich workouts with matched Whoop activity data.
  * Fetches Whoop activities for the date range and matches them to workouts.
- * Gracefully handles Whoop fetch failures by continuing without Whoop data.
+ *
+ * On Whoop fetch failure, each returned workout is marked with `whoop_unavailable: true`
+ * so consumers (and the LLM) can distinguish "no Whoop match" from "Whoop fetch errored" —
+ * the latter is otherwise indistinguishable from a user with no Whoop activity.
  */
 export async function enrichWorkoutsWithWhoop(
   workouts: NormalizedWorkout[],
@@ -101,13 +104,13 @@ export async function enrichWorkoutsWithWhoop(
   if (!whoop) {
     return workouts.map((w) => ({ ...w, whoop: null }));
   }
-  let whoopActivities: StrainActivity[] = [];
   try {
-    whoopActivities = await whoop.getWorkouts(startDate, endDate);
+    const whoopActivities = await whoop.getWorkouts(startDate, endDate);
+    return workouts.map((w) => ({ ...w, whoop: matchWhoopActivity(w, whoopActivities) }));
   } catch (error) {
     console.error('Error fetching Whoop activities for matching:', error);
+    return workouts.map((w) => ({ ...w, whoop: null, whoop_unavailable: true }));
   }
-  return workouts.map((w) => ({ ...w, whoop: matchWhoopActivity(w, whoopActivities) }));
 }
 
 // ============================================
