@@ -55,36 +55,16 @@ import {
   parseTemperatureStreams,
 } from '../utils/temperature-metrics.js';
 import { IntervalsApiError, type ErrorContext } from '../errors/index.js';
-import { logApiError } from '../utils/logger.js';
+import { httpRequestJson, httpRequestVoid } from './http.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
-/**
- * Read the response body text safely, returning undefined if it fails.
- */
-async function readResponseBody(response: Response): Promise<string | undefined> {
-  try {
-    return await response.text();
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Create an IntervalsApiError from a failed response, capturing the response body,
- * and log the error with full context.
- */
-async function createAndLogHttpError(
-  response: Response,
-  context: ErrorContext,
-  method: string,
-  url: string
-): Promise<IntervalsApiError> {
-  const responseBody = await readResponseBody(response);
-  const error = IntervalsApiError.fromHttpStatus(response.status, context, responseBody);
-  logApiError(error, { method, url, statusCode: response.status, responseBody });
-  return error;
-}
+const intervalsHttpErrorBuilders = {
+  toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
+    IntervalsApiError.fromHttpStatus(status, context, body),
+  toNetworkError: (context: ErrorContext, err?: Error) =>
+    IntervalsApiError.networkError(context, err),
+};
 
 // Athlete data from root /athlete/{id} endpoint
 // Note: /profile endpoint has nested { athlete: { ... } } structure, but root endpoint is flat
@@ -1149,39 +1129,20 @@ export class IntervalsClient {
       });
     }
 
-    const errorContext = context ?? {
-      operation: `fetch ${endpoint}`,
-      resource: undefined,
+    const errorContext: ErrorContext = {
+      ...(context ?? { operation: `fetch ${endpoint}` }),
+      ...(params ? { parameters: params } : {}),
     };
 
-    try {
-      const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: this.authHeader,
-          Accept: 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw await createAndLogHttpError(
-          response,
-          { ...errorContext, parameters: params },
-          'GET',
-          url.toString()
-        );
-      }
-
-      return response.json() as Promise<T>;
-    } catch (error) {
-      // Re-throw if it's already our error type
-      if (error instanceof IntervalsApiError) {
-        throw error;
-      }
-      // Network or other errors
-      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
-      logApiError(networkError, { method: 'GET', url: url.toString() });
-      throw networkError;
-    }
+    return httpRequestJson<T>({
+      url: url.toString(),
+      headers: {
+        Authorization: this.authHeader,
+        Accept: 'application/json',
+      },
+      context: errorContext,
+      ...intervalsHttpErrorBuilders,
+    });
   }
 
   /**
@@ -1196,34 +1157,18 @@ export class IntervalsClient {
 
     const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
 
-    const errorContext = {
-      operation: context?.operation ?? `fetch activity ${endpoint}`,
-      resource: `activity ${activityId}`,
-    };
-
-    try {
-      const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: this.authHeader,
-          Accept: 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw await createAndLogHttpError(response, errorContext, 'GET', url.toString());
-      }
-
-      return response.json() as Promise<T>;
-    } catch (error) {
-      // Re-throw if it's already our error type
-      if (error instanceof IntervalsApiError) {
-        throw error;
-      }
-      // Network or other errors
-      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
-      logApiError(networkError, { method: 'GET', url: url.toString() });
-      throw networkError;
-    }
+    return httpRequestJson<T>({
+      url: url.toString(),
+      headers: {
+        Authorization: this.authHeader,
+        Accept: 'application/json',
+      },
+      context: {
+        operation: context?.operation ?? `fetch activity ${endpoint}`,
+        resource: `activity ${activityId}`,
+      },
+      ...intervalsHttpErrorBuilders,
+    });
   }
 
   /**
@@ -2601,36 +2546,18 @@ export class IntervalsClient {
     context?: { operation: string; resource?: string }
   ): Promise<T> {
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
-
-    const errorContext = context ?? {
-      operation: `post ${endpoint}`,
-      resource: undefined,
-    };
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers: {
-          Authorization: this.authHeader,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        throw await createAndLogHttpError(response, errorContext, 'POST', url.toString());
-      }
-
-      return response.json() as Promise<T>;
-    } catch (error) {
-      if (error instanceof IntervalsApiError) {
-        throw error;
-      }
-      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
-      logApiError(networkError, { method: 'POST', url: url.toString() });
-      throw networkError;
-    }
+    return httpRequestJson<T>({
+      url: url.toString(),
+      method: 'POST',
+      headers: {
+        Authorization: this.authHeader,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+      context: context ?? { operation: `post ${endpoint}` },
+      ...intervalsHttpErrorBuilders,
+    });
   }
 
   /**
@@ -2642,36 +2569,18 @@ export class IntervalsClient {
     context?: { operation: string; resource?: string }
   ): Promise<T> {
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
-
-    const errorContext = context ?? {
-      operation: `put ${endpoint}`,
-      resource: undefined,
-    };
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'PUT',
-        headers: {
-          Authorization: this.authHeader,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        throw await createAndLogHttpError(response, errorContext, 'PUT', url.toString());
-      }
-
-      return response.json() as Promise<T>;
-    } catch (error) {
-      if (error instanceof IntervalsApiError) {
-        throw error;
-      }
-      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
-      logApiError(networkError, { method: 'PUT', url: url.toString() });
-      throw networkError;
-    }
+    return httpRequestJson<T>({
+      url: url.toString(),
+      method: 'PUT',
+      headers: {
+        Authorization: this.authHeader,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+      context: context ?? { operation: `put ${endpoint}` },
+      ...intervalsHttpErrorBuilders,
+    });
   }
 
   /**
@@ -2682,32 +2591,16 @@ export class IntervalsClient {
     context?: { operation: string; resource?: string }
   ): Promise<void> {
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
-
-    const errorContext = context ?? {
-      operation: `delete ${endpoint}`,
-      resource: undefined,
-    };
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'DELETE',
-        headers: {
-          Authorization: this.authHeader,
-          Accept: 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw await createAndLogHttpError(response, errorContext, 'DELETE', url.toString());
-      }
-    } catch (error) {
-      if (error instanceof IntervalsApiError) {
-        throw error;
-      }
-      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
-      logApiError(networkError, { method: 'DELETE', url: url.toString() });
-      throw networkError;
-    }
+    return httpRequestVoid({
+      url: url.toString(),
+      method: 'DELETE',
+      headers: {
+        Authorization: this.authHeader,
+        Accept: 'application/json',
+      },
+      context: context ?? { operation: `delete ${endpoint}` },
+      ...intervalsHttpErrorBuilders,
+    });
   }
 
   /**
@@ -2729,35 +2622,21 @@ export class IntervalsClient {
       });
     }
 
-    const errorContext = context ?? {
-      operation: `put activity ${endpoint}`,
-      resource: `activity ${activityId}`,
-    };
-
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'PUT',
-        headers: {
-          Authorization: this.authHeader,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        throw await createAndLogHttpError(response, errorContext, 'PUT', url.toString());
-      }
-
-      return response.json() as Promise<T>;
-    } catch (error) {
-      if (error instanceof IntervalsApiError) {
-        throw error;
-      }
-      const networkError = IntervalsApiError.networkError(errorContext, error instanceof Error ? error : undefined);
-      logApiError(networkError, { method: 'PUT', url: url.toString() });
-      throw networkError;
-    }
+    return httpRequestJson<T>({
+      url: url.toString(),
+      method: 'PUT',
+      headers: {
+        Authorization: this.authHeader,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+      context: context ?? {
+        operation: `put activity ${endpoint}`,
+        resource: `activity ${activityId}`,
+      },
+      ...intervalsHttpErrorBuilders,
+    });
   }
 
   /**

@@ -1,6 +1,7 @@
 import type { PlayedSong } from '../types/index.js';
 import { LastFmApiError, type ErrorContext } from '../errors/index.js';
 import { logApiError } from '../utils/logger.js';
+import { httpRequestText } from './http.js';
 
 const LASTFM_API_BASE = 'https://ws.audioscrobbler.com/2.0/';
 
@@ -79,30 +80,12 @@ export class LastFmClient {
 
     console.log(`[Last.fm] Making API call to ${LASTFM_API_BASE}?method=user.getrecenttracks&user=${this.config.username}&from=${fromSec}&to=${toSec}&limit=${limit}`);
 
-    let response: Response;
-    try {
-      response = await fetch(url);
-    } catch (error) {
-      const err = LastFmApiError.networkError(
-        context,
-        error instanceof Error ? error : undefined
-      );
-      logApiError(err, { method: 'GET', url });
-      throw err;
-    }
-
-    const bodyText = await response.text();
-
-    if (!response.ok) {
-      const err = LastFmApiError.fromHttpStatus(response.status, context, bodyText);
-      logApiError(err, {
-        method: 'GET',
-        url,
-        statusCode: response.status,
-        responseBody: bodyText,
-      });
-      throw err;
-    }
+    const bodyText = await httpRequestText({
+      url,
+      context,
+      toHttpError: (status, ctx, body) => LastFmApiError.fromHttpStatus(status, ctx, body),
+      toNetworkError: (ctx, err) => LastFmApiError.networkError(ctx, err),
+    });
 
     let data: LastFmRecentTracksResponse;
     try {
@@ -113,13 +96,12 @@ export class LastFmClient {
         'internal',
         false,
         context,
-        response.status,
+        undefined,
         bodyText
       );
       logApiError(err, {
         method: 'GET',
         url,
-        statusCode: response.status,
         responseBody: bodyText,
       });
       throw err;
@@ -134,7 +116,6 @@ export class LastFmClient {
       logApiError(err, {
         method: 'GET',
         url,
-        statusCode: response.status,
         responseBody: bodyText,
       });
       throw err;

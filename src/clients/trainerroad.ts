@@ -5,7 +5,7 @@ import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race } from '../t
 import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
-import { logApiError } from '../utils/logger.js';
+import { httpRequestText } from './http.js';
 
 interface CalendarEvent {
   uid: string;
@@ -35,44 +35,12 @@ export class TrainerRoadClient {
       resource: 'TrainerRoad calendar',
     };
 
-    let response: Response;
-    try {
-      response = await fetch(this.config.calendarUrl);
-    } catch (error) {
-      const networkError = TrainerRoadApiError.networkError(
-        errorContext,
-        error instanceof Error ? error : undefined
-      );
-      logApiError(networkError, { method: 'GET', url: this.config.calendarUrl });
-      throw networkError;
-    }
-
-    if (!response.ok) {
-      let responseBody: string | undefined;
-      try {
-        responseBody = await response.text();
-      } catch {
-        // ignore
-      }
-      const httpError = TrainerRoadApiError.fromHttpStatus(response.status, errorContext, responseBody);
-      logApiError(httpError, {
-        method: 'GET',
-        url: this.config.calendarUrl,
-        statusCode: response.status,
-        responseBody,
-      });
-      throw httpError;
-    }
-
-    let icsData: string;
-    try {
-      icsData = await response.text();
-    } catch (error) {
-      throw TrainerRoadApiError.networkError(
-        errorContext,
-        error instanceof Error ? error : undefined
-      );
-    }
+    const icsData = await httpRequestText({
+      url: this.config.calendarUrl,
+      context: errorContext,
+      toHttpError: (status, ctx, body) => TrainerRoadApiError.fromHttpStatus(status, ctx, body),
+      toNetworkError: (ctx, err) => TrainerRoadApiError.networkError(ctx, err),
+    });
 
     let parsed: ical.CalendarResponse;
     try {
