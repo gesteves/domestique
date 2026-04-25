@@ -181,7 +181,7 @@ curl -X POST http://localhost:3000/mcp \
 
 When implementing MCP features, be aware of these compatibility differences between Claude and ChatGPT:
 
-1. **Tool responses**: ChatGPT uses `structuredContent` for JSON data and expects `content` for narration (e.g., "Here's your daily summary:"). Claude only uses `content`. For compatibility, `structuredContent` should have the tool response as JSON and `content` should have the stringified version of the same JSON.
+1. **Tool responses**: Every tool declares an `outputSchema` (Zod raw shape in `src/schemas/index.ts`). The handler's return value becomes `structuredContent` directly — no `{ response, field_descriptions }` envelope. The same payload is also serialized into a `content` text block for backwards compatibility with clients that only read `content`. Field descriptions live in `.describe()` calls inside the Zod schemas and are delivered to the client via `tools/list` in the JSON Schema, not embedded in every response. When adding a new tool, define its response shape in `src/schemas/index.ts` and pass it as `outputSchema` in `src/tools/index.ts`. Handlers must return a JSON object — for tools whose underlying logic returns an array (e.g., a list of strain entries), wrap it at the registration site, e.g. `{ strain: await this.currentTools.getStrainHistory(args) }`.
 
 2. **MCP resources**: ChatGPT does not support resources; Claude does but it can't seem to reliably access resources while calling tools. If any future resources are implemented, you must also implement tools that return the resource content directly as a fallback mechanism for compatibility.
 

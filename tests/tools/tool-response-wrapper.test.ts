@@ -87,33 +87,35 @@ describe('Tool Response Wrapper', () => {
   });
 
   describe('response format', () => {
-    it('should wrap response with structuredContent including field descriptions', async () => {
+    it('returns the handler payload as structuredContent (no envelope)', async () => {
       const handler = registeredHandlers.get('get_athlete_profile');
       expect(handler).toBeDefined();
 
       const result = (await handler!({})) as {
         content: Array<{ type: string; text: string }>;
-        structuredContent: { response: unknown; field_descriptions: Record<string, string> };
+        structuredContent: Record<string, unknown>;
       };
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      // Text content is serialized JSON
-      expect(result.content[0].text).toContain('"field_descriptions"');
-      // structuredContent has the parsed response
+      // structuredContent IS the response payload (the mocked athlete profile)
       expect(result.structuredContent).toBeDefined();
-      expect(result.structuredContent.response).toBeDefined();
-      expect(result.structuredContent.field_descriptions).toBeDefined();
+      expect(result.structuredContent.id).toBe('test');
+      // No leftover envelope keys
+      expect(result.structuredContent).not.toHaveProperty('response');
+      expect(result.structuredContent).not.toHaveProperty('field_descriptions');
     });
 
-    it('should include data in the response', async () => {
+    it('serializes structuredContent into the content text block (backwards-compat)', async () => {
       const handler = registeredHandlers.get('get_athlete_profile');
       expect(handler).toBeDefined();
 
-      const result = (await handler!({})) as { content: Array<{ type: string; text: string }> };
+      const result = (await handler!({})) as {
+        content: Array<{ type: string; text: string }>;
+        structuredContent: Record<string, unknown>;
+      };
 
-      // The response should be JSON-formatted
-      expect(result.content[0].text).toBeDefined();
+      expect(JSON.parse(result.content[0].text)).toEqual(result.structuredContent);
     });
   });
 
@@ -188,19 +190,20 @@ describe('Tool Response Wrapper', () => {
   });
 
   describe('structuredContent format', () => {
-    it('should return structuredContent with response and field_descriptions', async () => {
+    it('returns a plain JSON object with no envelope wrapper', async () => {
       const handler = registeredHandlers.get('get_athlete_profile');
       expect(handler).toBeDefined();
 
       const result = (await handler!({})) as {
         content: Array<{ type: string; text: string }>;
-        structuredContent: { response: unknown; field_descriptions: Record<string, string> };
+        structuredContent: Record<string, unknown>;
       };
 
-      // Verify structuredContent format
       expect(result.structuredContent).toBeDefined();
-      expect(result.structuredContent.response).toBeDefined();
-      expect(typeof result.structuredContent.field_descriptions).toBe('object');
+      // Per the 2025-11-25 MCP spec, when an outputSchema is declared the
+      // structuredContent must be the typed payload itself, not a wrapper.
+      expect(result.structuredContent).not.toHaveProperty('response');
+      expect(result.structuredContent).not.toHaveProperty('field_descriptions');
     });
   });
 

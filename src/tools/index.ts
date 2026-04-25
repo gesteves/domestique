@@ -14,10 +14,7 @@ const CREATES_EXTERNAL: ToolAnnotations = { openWorldHint: true };
 const MODIFIES_EXTERNAL: ToolAnnotations = { openWorldHint: true, idempotentHint: true };
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
-import {
-  combineFieldDescriptions,
-  getFieldDescriptions,
-} from '../utils/field-descriptions.js';
+import * as schemas from '../schemas/index.js';
 import { buildToolResponse, type ToolResponse } from '../utils/response-builder.js';
 import { formatResponseDates } from '../utils/date-formatting.js';
 import { type HintGenerator, generateHints } from '../utils/hints.js';
@@ -30,26 +27,27 @@ import {
   paceCurveProgressHint,
 } from '../utils/hints/index.js';
 import { ApiError, DateParseError } from '../errors/index.js';
-import { logApiError, logUnexpectedError } from '../utils/logger.js';
+import { logUnexpectedError } from '../utils/logger.js';
 
 interface ResponseOptions<TResult = unknown> {
-  fieldDescriptions: Record<string, string>;
-  /** Optional metadata for ChatGPT widgets (not visible to model) */
+  /** Optional metadata for ChatGPT widgets (surfaced via _meta, not visible to the model). */
   widgetMeta?: Record<string, unknown>;
-  /** Optional hint generators to provide actionable next steps */
+  /** Optional hint generators to provide actionable next steps. */
   hints?: HintGenerator<TResult>[];
 }
 
 /**
- * Self-contained definition of an MCP tool: metadata, input schema, handler, and
- * response shaping options. Passed to ToolRegistry.registerTool to remove the
- * boilerplate of wiring tool name + schema + handler + response wrapper four times.
+ * Self-contained definition of an MCP tool: metadata, schemas, handler, and
+ * response shaping options. The handler must return an object that conforms to
+ * outputSchema — that object becomes structuredContent in the tool response per
+ * the 2025-11-25 MCP spec.
  */
 interface ToolDef<TArgs, TResult> extends ResponseOptions<TResult> {
   name: string;
   title: string;
   description: string;
   inputSchema: z.ZodRawShape;
+  outputSchema: z.ZodRawShape;
   annotations: ToolAnnotations;
   handler: (args: TArgs) => Promise<TResult>;
 }
@@ -155,8 +153,7 @@ function withToolResponse<TArgs, TResult>(
       const hints = options.hints ? generateHints(formattedData as TResult, options.hints) : undefined;
 
       return await buildToolResponse({
-        data: formattedData,
-        fieldDescriptions: options.fieldDescriptions,
+        data: formattedData as Record<string, unknown>,
         widgetMeta: options.widgetMeta,
         hints,
       });
@@ -226,7 +223,7 @@ export class ToolRegistry {
 
   /**
    * Register a single tool, applying shared response/error scaffolding.
-   * Centralizes wiring of: tool name (used twice), input schema, response
+   * Centralizes wiring of: tool name (used twice), input/output schema, response
    * wrapper (date formatting, hints, error handling).
    */
   private registerTool<TArgs, TResult>(
@@ -238,7 +235,6 @@ export class ToolRegistry {
       def.name,
       def.handler,
       {
-        fieldDescriptions: def.fieldDescriptions,
         hints: def.hints,
         widgetMeta: def.widgetMeta,
       },
@@ -250,6 +246,7 @@ export class ToolRegistry {
         title: def.title,
         description: def.description,
         inputSchema: def.inputSchema,
+        outputSchema: def.outputSchema,
         annotations: def.annotations,
       },
       // The SDK expects args typed as the Zod shape's inferred output, but our
@@ -300,9 +297,9 @@ export class ToolRegistry {
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
       inputSchema: {},
+      outputSchema: schemas.todaysSummaryOutputSchema,
       annotations: READ_ONLY,
       handler: async () => this.currentTools.getTodaysSummary(),
-      fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
       hints: [dailySummarySyncHint, ...dailySummaryHints],
     });
 
@@ -325,9 +322,9 @@ export class ToolRegistry {
 - If you don't know the user's preferred units, you **MUST** call this tool before responding to the user, so you can get their preferences.
 </instructions>`,
       inputSchema: {},
+      outputSchema: schemas.athleteProfileOutputSchema,
       annotations: READ_ONLY,
       handler: async () => this.currentTools.getAthleteProfile(),
-      fieldDescriptions: getFieldDescriptions('athlete_profile'),
     });
 
     register({
@@ -348,9 +345,12 @@ export class ToolRegistry {
       inputSchema: {
         sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
       },
+      outputSchema: schemas.sportSettingsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
-      fieldDescriptions: getFieldDescriptions('sport_settings'),
+      handler: async (args: { sport: 'cycling' | 'running' | 'swimming' }) => {
+        const result = await this.currentTools.getSportSettings(args.sport);
+        return result ?? { sport: args.sport, types: [], settings: {} };
+      },
     });
 
     // Historical/Trends Tools
@@ -375,9 +375,11 @@ export class ToolRegistry {
           oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
           newest: z.string().optional().describe('End date (defaults to today)'),
         },
+        outputSchema: schemas.strainHistoryOutputSchema,
         annotations: READ_ONLY,
-        handler: async (args: { oldest: string; newest?: string }) => this.currentTools.getStrainHistory(args),
-        fieldDescriptions: getFieldDescriptions('whoop'),
+        handler: async (args: { oldest: string; newest?: string }) => ({
+          strain: await this.currentTools.getStrainHistory(args),
+        }),
       });
     }
 
@@ -406,9 +408,11 @@ export class ToolRegistry {
         newest: z.string().optional().describe('End date (defaults to today)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
+      outputSchema: schemas.workoutHistoryOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
-      fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
+      handler: async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => ({
+        workouts: await this.historicalTools.getWorkoutHistory(args),
+      }),
       hints: workoutHistoryHints,
     });
 
@@ -435,9 +439,11 @@ Get the activity_id from:
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
+      outputSchema: schemas.workoutDetailsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutDetails(args.activity_id),
-      fieldDescriptions: combineFieldDescriptions('workout', 'workout_details', 'whoop'),
+      handler: async (args: { activity_id: string }) => ({
+        workout: await this.historicalTools.getWorkoutDetails(args.activity_id),
+      }),
     });
 
     if (this.hasWhoop) {
@@ -462,9 +468,10 @@ Get the activity_id from:
           oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
           newest: z.string().optional().describe('End date (defaults to today)'),
         },
+        outputSchema: schemas.recoveryTrendsOutputSchema,
         annotations: READ_ONLY,
-        handler: async (args: { oldest: string; newest?: string }) => this.historicalTools.getRecoveryTrends(args),
-        fieldDescriptions: getFieldDescriptions('recovery'),
+        handler: async (args: { oldest: string; newest?: string }) =>
+          this.historicalTools.getRecoveryTrends(args),
       });
     }
 
@@ -488,9 +495,10 @@ Get the activity_id from:
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
       },
+      outputSchema: schemas.wellnessTrendsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { oldest: string; newest?: string }) => this.historicalTools.getWellnessTrends(args),
-      fieldDescriptions: getFieldDescriptions('wellness'),
+      handler: async (args: { oldest: string; newest?: string }) =>
+        this.historicalTools.getWellnessTrends(args),
     });
 
     register({
@@ -515,9 +523,10 @@ Get the activity_id from:
         newest: z.string().optional().describe('End date (defaults to today)'),
         sports: z.array(z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength'])).optional().describe('Filter to specific sports. If blank, returns all sports.'),
       },
+      outputSchema: schemas.activityTotalsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { oldest: string; newest?: string; sports?: ('cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength')[] }) => this.historicalTools.getActivityTotals(args),
-      fieldDescriptions: getFieldDescriptions('activity_totals'),
+      handler: async (args: { oldest: string; newest?: string; sports?: ('cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength')[] }) =>
+        this.historicalTools.getActivityTotals(args),
     });
 
     // Planning Tools
@@ -543,9 +552,10 @@ Get the activity_id from:
         newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
+      outputSchema: schemas.upcomingWorkoutsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts(args),
-      fieldDescriptions: getFieldDescriptions('planned'),
+      handler: async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) =>
+        this.planningTools.getUpcomingWorkouts(args),
       hints: [trainerroadSyncHint],
     });
 
@@ -565,9 +575,11 @@ Get the activity_id from:
 - The description of the race may contain important details about the race, including if it's an A, B or C race; and details about the course.
 </instructions>`,
         inputSchema: {},
+        outputSchema: schemas.upcomingRacesOutputSchema,
         annotations: READ_ONLY,
-        handler: async () => this.planningTools.getUpcomingRaces(),
-        fieldDescriptions: getFieldDescriptions('race'),
+        handler: async () => ({
+          races: await this.planningTools.getUpcomingRaces(),
+        }),
       });
     }
 
@@ -602,10 +614,10 @@ Get the activity_id from:
         workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
         trainerroad_uid: z.string().optional().describe('TrainerRoad workout UID for tracking'),
       },
+      outputSchema: schemas.createWorkoutOutputSchema,
       annotations: CREATES_EXTERNAL,
       handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
         this.planningTools.createRunWorkout(args),
-      fieldDescriptions: {},
     });
 
     register({
@@ -632,10 +644,10 @@ Get the activity_id from:
         description: z.string().optional().describe('Optional notes/description'),
         workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
       },
+      outputSchema: schemas.createWorkoutOutputSchema,
       annotations: CREATES_EXTERNAL,
       handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
         this.planningTools.createCyclingWorkout(args),
-      fieldDescriptions: {},
     });
 
     register({
@@ -663,10 +675,10 @@ Get the activity_id from:
         description: z.string().optional().describe('Optional plain text notes about the workout'),
         workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
       },
+      outputSchema: schemas.createWorkoutOutputSchema,
       annotations: CREATES_EXTERNAL,
       handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
         this.planningTools.createSwimmingWorkout(args),
-      fieldDescriptions: {},
     });
 
     register({
@@ -693,10 +705,10 @@ Get the activity_id from:
       inputSchema: {
         event_id: z.string().describe('Intervals.icu event ID to delete'),
       },
+      outputSchema: schemas.deleteWorkoutOutputSchema,
       annotations: DESTRUCTIVE,
       handler: async (args: { event_id: string }) =>
         this.planningTools.deleteWorkout(args.event_id),
-      fieldDescriptions: {},
     });
 
     register({
@@ -729,10 +741,10 @@ Get the activity_id from:
         scheduled_for: z.string().optional().describe('New date (YYYY-MM-DD) or datetime'),
         type: z.string().optional().describe('New event type (e.g., "Run", "Ride")'),
       },
+      outputSchema: schemas.updateWorkoutOutputSchema,
       annotations: MODIFIES_EXTERNAL,
       handler: async (args: { event_id: string; name?: string; description?: string; workout_doc?: string; scheduled_for?: string; type?: string }) =>
         this.planningTools.updateWorkout(args),
-      fieldDescriptions: {},
     });
 
     if (this.hasTrainerRoad) {
@@ -762,11 +774,11 @@ Get the activity_id from:
           oldest: z.string().optional().describe('Start date (defaults to today)'),
           newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
         },
+        outputSchema: schemas.syncTrainerRoadRunsOutputSchema,
         // Can be destructive (deletes orphans), but also creates external resources
         annotations: { openWorldHint: true, destructiveHint: true },
         handler: async (args: { oldest?: string; newest?: string }) =>
           this.planningTools.syncTRRuns(args),
-        fieldDescriptions: {},
       });
     }
 
@@ -816,6 +828,7 @@ Get the activity_id from:
           .optional()
           .describe('Whether to replace all existing intervals (true, default) or merge with existing (false)'),
       },
+      outputSchema: schemas.setWorkoutIntervalsOutputSchema,
       annotations: MODIFIES_EXTERNAL,
       handler: async (args: {
         activity_id: string;
@@ -827,7 +840,6 @@ Get the activity_id from:
         }>;
         replace_existing_intervals?: boolean;
       }) => this.planningTools.setWorkoutIntervals(args),
-      fieldDescriptions: getFieldDescriptions('set_workout_intervals'),
     });
 
     register({
@@ -858,10 +870,10 @@ Only provide the fields you want to update; omitted fields remain unchanged.
         name: z.string().optional().describe('New name for the activity'),
         description: z.string().optional().describe('New description/notes for the activity'),
       },
+      outputSchema: schemas.updateActivityOutputSchema,
       annotations: MODIFIES_EXTERNAL,
       handler: async (args: { activity_id: string; name?: string; description?: string }) =>
         this.planningTools.updateActivity(args),
-      fieldDescriptions: {},
     });
 
     // ============================================
@@ -887,9 +899,10 @@ Only provide the fields you want to update; omitted fields remain unchanged.
           .default(42)
           .describe('Number of days of history to analyze (default: 42, max: 365)'),
       },
+      outputSchema: schemas.trainingLoadTrendsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
-      fieldDescriptions: getFieldDescriptions('fitness'),
+      handler: async (args: { days?: number }) =>
+        this.historicalTools.getTrainingLoadTrends(args.days),
     });
 
     register({
@@ -914,9 +927,10 @@ Get the activity_id from:
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
+      outputSchema: schemas.workoutIntervalsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
-      fieldDescriptions: getFieldDescriptions('intervals'),
+      handler: async (args: { activity_id: string }) =>
+        this.historicalTools.getWorkoutIntervals(args.activity_id),
     });
 
     register({
@@ -937,9 +951,10 @@ Get the activity_id from:
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
+      outputSchema: schemas.workoutNotesOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
-      fieldDescriptions: getFieldDescriptions('notes'),
+      handler: async (args: { activity_id: string }) =>
+        this.historicalTools.getWorkoutNotes(args.activity_id),
     });
 
     register({
@@ -957,9 +972,10 @@ Get the activity_id from:
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
+      outputSchema: schemas.workoutWeatherOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
-      fieldDescriptions: getFieldDescriptions('weather'),
+      handler: async (args: { activity_id: string }) =>
+        this.historicalTools.getWorkoutWeather(args.activity_id),
     });
 
     register({
@@ -985,9 +1001,10 @@ Get the activity_id from:
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
+      outputSchema: schemas.workoutHeatZonesOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
-      fieldDescriptions: getFieldDescriptions('heat_zones'),
+      handler: async (args: { activity_id: string }) =>
+        this.historicalTools.getWorkoutHeatZones(args.activity_id),
     });
 
     if (this.hasLastFm) {
@@ -1008,9 +1025,10 @@ Get the activity_id from:
         inputSchema: {
           activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
         },
+        outputSchema: schemas.workoutMusicOutputSchema,
         annotations: READ_ONLY,
-        handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutMusic(args.activity_id),
-        fieldDescriptions: getFieldDescriptions('music'),
+        handler: async (args: { activity_id: string }) =>
+          this.historicalTools.getWorkoutMusic(args.activity_id),
       });
     }
 
@@ -1046,10 +1064,10 @@ Get the activity_id from:
         compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
         compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
+      outputSchema: schemas.powerCurveOutputSchema,
       annotations: READ_ONLY,
       handler: async (args: { oldest: string; newest?: string; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
         this.historicalTools.getPowerCurve(args),
-      fieldDescriptions: getFieldDescriptions('power_curve'),
       hints: [powerCurveProgressHint],
     });
 
@@ -1087,10 +1105,10 @@ Get the activity_id from:
         compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
         compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
+      outputSchema: schemas.paceCurveOutputSchema,
       annotations: READ_ONLY,
       handler: async (args: { oldest: string; newest?: string; sport: 'running' | 'swimming'; distances?: number[]; gap?: boolean; compare_to_oldest?: string; compare_to_newest?: string }) =>
         this.historicalTools.getPaceCurve(args),
-      fieldDescriptions: getFieldDescriptions('pace_curve'),
       hints: [paceCurveProgressHint],
     });
 
@@ -1123,10 +1141,10 @@ Get the activity_id from:
         compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
         compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
+      outputSchema: schemas.hrCurveOutputSchema,
       annotations: READ_ONLY,
       handler: async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming'; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
         this.historicalTools.getHRCurve(args),
-      fieldDescriptions: getFieldDescriptions('hr_curve'),
     });
   }
 }
