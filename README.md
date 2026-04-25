@@ -214,6 +214,30 @@ Tool responses will now include:
 
 This feature is automatically disabled in production (when `NODE_ENV` is not `development`) or when `ANTHROPIC_API_KEY` is not set.
 
+### MCP Request Logging
+
+To inspect incoming JSON-RPC requests on the `/mcp` endpoint — including the method, tool name (for `tools/call`), and any client-supplied `_meta` field — set:
+
+```bash
+LOG_MCP_REQUESTS=true
+```
+
+This is useful for seeing what different MCP clients send in `_meta`. ChatGPT [documents its `_meta` payload](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) (location, locale, etc.); Claude's is undocumented.
+
+Each request is logged as a single line prefixed with `[MCP Request]`, e.g.:
+
+```
+[MCP Request] {
+  "method": "tools/call",
+  "id": 7,
+  "tool": "get_todays_summary",
+  "arguments": {},
+  "meta": { ... }
+}
+```
+
+Disabled by default. Restart the server after changing the value.
+
 ## Local Development
 
 ### Using Docker Compose (recommended)

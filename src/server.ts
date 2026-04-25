@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { validateToken, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
+import { logMcpRequest, isMcpRequestLoggingEnabled } from './utils/request-logger.js';
 
 export interface ServerOptions {
   port: number;
@@ -24,6 +25,10 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
   });
 
   console.log('Tool registry created');
+
+  if (isMcpRequestLoggingEnabled()) {
+    console.log('[MCP Request] Logging enabled (LOG_MCP_REQUESTS=true)');
+  }
 
   // Store active transports and servers by sessionId
   const sessions: Record<string, { transport: StreamableHTTPServerTransport; server: McpServer }> = {};
@@ -164,6 +169,10 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
   // MCP endpoint - handles all Streamable HTTP requests
   app.all('/mcp', validateToken, async (req: Request, res: Response) => {
+    // Optional: log incoming JSON-RPC request (tool calls, initialize, etc.)
+    // including any client-supplied `_meta` field. Controlled by LOG_MCP_REQUESTS.
+    logMcpRequest(req.body);
+
     // Check for existing session
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
