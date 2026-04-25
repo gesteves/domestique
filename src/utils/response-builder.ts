@@ -6,8 +6,12 @@
  * handler's return value BE structuredContent — no envelope, no wrapper.
  *
  * - `structuredContent` is the typed data payload (validates against outputSchema).
- * - `content` carries a serialized JSON copy for backwards compatibility, plus
- *   any actionable hints the tool wants to surface to the model as narration.
+ *   Tools that produce contextual hints declare an optional `hints: string[]`
+ *   field in their schema; we inject the hints there so they reach modern
+ *   clients that only forward structuredContent to the model.
+ * - `content` carries a serialized JSON copy of structuredContent for
+ *   backwards-compat with clients that don't read structuredContent. Pure JSON
+ *   — no narration mixed in.
  * - `_meta` carries out-of-band metadata not meant for the model: dev-mode
  *   token counts, ChatGPT widget data, etc. Clients are not required to forward
  *   `_meta` to the model.
@@ -49,7 +53,11 @@ export interface ResponseBuilderOptions {
   data: Record<string, unknown>;
   /** Optional metadata for ChatGPT widgets. Surfaced via _meta, not visible to the model. */
   widgetMeta?: Record<string, unknown>;
-  /** Optional hints providing actionable next steps. Surfaced as narration in content. */
+  /**
+   * Optional actionable next-step suggestions. Injected into structuredContent
+   * as `hints`. The corresponding tool's outputSchema must declare `hints`
+   * for validation to pass.
+   */
   hints?: string[];
 }
 
@@ -70,21 +78,13 @@ export async function buildToolResponse(options: ResponseBuilderOptions): Promis
   const { data, widgetMeta, hints } = options;
 
   const cleanedData = removeNullFields(data);
-  const jsonText = JSON.stringify(cleanedData, null, 2);
-
-  // Compose narration: hints first (so the model sees them prominently), then
-  // the serialized JSON for backwards compatibility with clients that read
-  // content rather than structuredContent.
-  const narrationParts: string[] = [];
-  if (hints && hints.length > 0) {
-    narrationParts.push(hints.map((h) => `- ${h}`).join('\n'));
-  }
-  narrationParts.push(jsonText);
-  const narration = narrationParts.join('\n\n');
+  const payload: Record<string, unknown> =
+    hints && hints.length > 0 ? { ...cleanedData, hints } : cleanedData;
+  const jsonText = JSON.stringify(payload, null, 2);
 
   const response: ToolResponse = {
-    content: [{ type: 'text', text: narration }],
-    structuredContent: cleanedData,
+    content: [{ type: 'text', text: jsonText }],
+    structuredContent: payload,
   };
 
   // Build _meta from optional sources. Skip the field entirely if empty.

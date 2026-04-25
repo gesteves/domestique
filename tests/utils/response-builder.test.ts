@@ -43,7 +43,7 @@ describe('response-builder', () => {
       expect(result.structuredContent).toEqual({ present: 'yes' });
     });
 
-    it('serializes structuredContent into the content text block (formatted JSON)', async () => {
+    it('serializes structuredContent into the content text block (formatted JSON, no narration)', async () => {
       const data = { value: 123 };
 
       const result = await buildToolResponse({ data });
@@ -52,19 +52,26 @@ describe('response-builder', () => {
       expect(JSON.parse(result.content[0].text)).toEqual(data);
     });
 
-    it('prepends hints to the content narration when provided', async () => {
+    it('injects hints into structuredContent under hints (and into the serialized content copy)', async () => {
       const data = { value: 123 };
       const hints = ['Try X next', 'Or Y'];
 
       const result = await buildToolResponse({ data, hints });
 
-      const text = result.content[0].text;
-      expect(text).toContain('- Try X next');
-      expect(text).toContain('- Or Y');
-      // JSON should still be present after the hints
-      expect(text).toContain('"value": 123');
-      // Hints should NOT pollute structuredContent
+      // structuredContent carries the hints alongside the data
+      expect(result.structuredContent).toEqual({ value: 123, hints: hints });
+
+      // content is a pure JSON copy of structuredContent (no extra narration)
+      expect(JSON.parse(result.content[0].text)).toEqual(result.structuredContent);
+    });
+
+    it('does not add hints when no hints are provided', async () => {
+      const data = { value: 123 };
+
+      const result = await buildToolResponse({ data });
+
       expect(result.structuredContent).toEqual(data);
+      expect(result.structuredContent).not.toHaveProperty('hints');
     });
 
     it('does not include _debug in production mode', async () => {

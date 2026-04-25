@@ -14,6 +14,22 @@
 
 import { z } from 'zod';
 
+/**
+ * Optional actionable next-step suggestions emitted by the response builder
+ * when a tool's hint generators fire. Schemas that opt in include this field
+ * so the validator accepts the injected `hints` array. Hints reach the model
+ * via structuredContent; clients that only read `content` see them in the
+ * serialized JSON copy.
+ *
+ * Avoid underscore prefixes here — some MCP clients (e.g. MCP Inspector) treat
+ * `_*` properties as protocol-private and filter them out of schema validation,
+ * which would cause the injected hints to look like an extra property.
+ */
+const hintsField = z
+  .array(z.string())
+  .optional()
+  .describe('Actionable next-step suggestions based on the data. Read these and consider following them when relevant.');
+
 // ============================================
 // Heat zones summary (always included; previously appended dynamically)
 // ============================================
@@ -670,6 +686,7 @@ export const strainHistoryOutputSchema = {
 
 export const workoutHistoryOutputSchema = {
   workouts: z.array(WorkoutZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available'),
+  hints: hintsField,
 } as const;
 
 export const recoveryTrendsOutputSchema = {
@@ -716,6 +733,7 @@ export const activityTotalsOutputSchema = {
 
 export const upcomingWorkoutsOutputSchema = {
   workouts: z.array(PlannedWorkoutZ).describe('Planned workouts and fitness activities for the requested future range, from both TrainerRoad and Intervals.icu'),
+  hints: hintsField,
 } as const;
 
 export const upcomingRacesOutputSchema = {
@@ -774,6 +792,7 @@ export const powerCurveOutputSchema = {
     previous_activity_count: z.number().optional().describe('Number of activities in comparison period'),
     changes: z.array(PowerCurveComparisonZ).optional().describe('Changes at each duration between periods'),
   }).passthrough().optional().describe('Comparison data vs a previous period (only present when compare_to_* params used)'),
+  hints: hintsField,
 } as const;
 
 export const paceCurveOutputSchema = {
@@ -790,6 +809,7 @@ export const paceCurveOutputSchema = {
     previous_activity_count: z.number().optional(),
     changes: z.array(PaceCurveComparisonZ).optional(),
   }).passthrough().optional().describe('Comparison data vs a previous period'),
+  hints: hintsField,
 } as const;
 
 export const hrCurveOutputSchema = {
@@ -828,6 +848,7 @@ export const todaysSummaryOutputSchema = {
   workouts_completed: z.number().optional().describe('Number of workouts completed today'),
   tss_planned: z.number().optional().describe('Total expected TSS from planned workouts'),
   tss_completed: z.number().optional().describe('Total TSS from completed workouts'),
+  hints: hintsField,
 } as const;
 
 // ============================================
