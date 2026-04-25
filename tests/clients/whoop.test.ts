@@ -71,7 +71,7 @@ describe('WhoopClient', () => {
   beforeEach(() => {
     client = new WhoopClient(defaultConfig);
     // Set token expiry to far in the future to avoid refresh
-    (client as any).tokenExpiresAt = Date.now() + 3600000;
+    (client as any).tokens.tokenExpiresAt = Date.now() + 3600000;
     vi.stubGlobal('fetch', mockFetch);
 
     // Reset redis mocks
@@ -901,7 +901,7 @@ describe('WhoopClient', () => {
       });
 
       // Reset token to force checking Redis
-      (client as any).tokenExpiresAt = 0;
+      (client as any).tokens.tokenExpiresAt = 0;
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -917,7 +917,7 @@ describe('WhoopClient', () => {
 
     it('should refresh token and store in Redis', async () => {
       // Force token expiry
-      (client as any).tokenExpiresAt = 0;
+      (client as any).tokens.tokenExpiresAt = 0;
       vi.mocked(getWhoopAccessToken).mockResolvedValue(null);
       vi.mocked(getWhoopRefreshToken).mockResolvedValue({
         token: 'stored-refresh-token',
@@ -949,7 +949,7 @@ describe('WhoopClient', () => {
 
     it('should throw error when token refresh fails', async () => {
       // Force token expiry by setting tokenExpiresAt to past
-      (client as any).tokenExpiresAt = 0;
+      (client as any).tokens.tokenExpiresAt = 0;
       vi.mocked(getWhoopAccessToken).mockResolvedValue(null);
 
       mockFetch.mockResolvedValueOnce({
@@ -1053,7 +1053,7 @@ describe('WhoopClient', () => {
     it('should acquire and release lock during token refresh', async () => {
       // Create a fresh client to avoid interference from other tests
       const freshClient = new WhoopClient(defaultConfig);
-      (freshClient as any).tokenExpiresAt = 0;
+      (freshClient as any).tokens.tokenExpiresAt = 0;
       
       // Reset mocks
       mockFetch.mockReset();
@@ -1082,7 +1082,7 @@ describe('WhoopClient', () => {
     it('should skip refresh if fresh token appears after acquiring lock', async () => {
       // Create a fresh client to avoid interference from other tests
       const freshClient = new WhoopClient(defaultConfig);
-      (freshClient as any).tokenExpiresAt = 0;
+      (freshClient as any).tokens.tokenExpiresAt = 0;
       
       // Reset mocks
       mockFetch.mockReset();
@@ -1110,6 +1110,92 @@ describe('WhoopClient', () => {
     });
   });
 
+  describe('refresh token rotation safety', () => {
+    it('mirrors the rotated refresh token from Redis into the in-memory cache', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+
+      mockFetch.mockReset();
+      vi.mocked(getWhoopAccessToken).mockResolvedValue({
+        token: 'redis-access-token',
+        expiresAt: Date.now() + 3600000,
+      });
+      vi.mocked(getWhoopRefreshToken).mockResolvedValue({
+        token: 'rotated-refresh-token',
+        version: 2,
+        updatedAt: Date.now(),
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ records: [] }),
+      });
+
+      await freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      // ensureValidToken should have synced both access AND refresh tokens from Redis
+      expect((freshClient as any).tokens.accessToken).toBe('redis-access-token');
+      expect((freshClient as any).tokens.refreshToken).toBe('rotated-refresh-token');
+    });
+
+    it('refuses to refresh with in-memory token after a previous rotation when Redis is empty', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+
+      // Simulate this process having already rotated tokens once.
+      (freshClient as any).hasRotated = true;
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+
+      // Redis returns nothing — neither access nor refresh.
+      vi.mocked(getWhoopAccessToken).mockResolvedValue(null);
+      vi.mocked(getWhoopRefreshToken).mockResolvedValue(null);
+      vi.mocked(acquireRefreshLock).mockResolvedValue(true);
+
+      mockFetch.mockReset();
+
+      // The OAuth fetch must NOT happen — we should bail before calling Whoop with a stale token.
+      await expect(
+        freshClient.getWorkouts('2024-12-15', '2024-12-15')
+      ).rejects.toThrow();
+
+      const oauthCalls = mockFetch.mock.calls.filter(([url]) =>
+        typeof url === 'string' && url.includes('oauth')
+      );
+      expect(oauthCalls).toHaveLength(0);
+    });
+
+    it('still bootstraps from config refresh token when Redis is empty and no rotation has occurred', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+      // hasRotated stays false — first refresh ever.
+
+      vi.mocked(getWhoopAccessToken).mockResolvedValue(null);
+      vi.mocked(getWhoopRefreshToken).mockResolvedValue(null);
+      vi.mocked(acquireRefreshLock).mockResolvedValue(true);
+
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'bootstrapped-access',
+            refresh_token: 'bootstrapped-refresh',
+            expires_in: 3600,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [] }),
+        });
+
+      await freshClient.getWorkouts('2024-12-15', '2024-12-15');
+
+      // Refresh succeeded using the config token; rotation flag flips on.
+      expect((freshClient as any).hasRotated).toBe(true);
+      expect((freshClient as any).tokens.accessToken).toBe('bootstrapped-access');
+      expect((freshClient as any).tokens.refreshToken).toBe('bootstrapped-refresh');
+    });
+  });
+
   describe('rate limiting', () => {
     beforeEach(() => {
       // Ensure clean state for rate limiting tests
@@ -1126,7 +1212,7 @@ describe('WhoopClient', () => {
     it('should retry on 429 using X-RateLimit-Reset header', async () => {
       // Create a fresh client for this test to avoid interference
       const freshClient = new WhoopClient(defaultConfig);
-      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+      (freshClient as any).tokens.tokenExpiresAt = Date.now() + 3600000;
 
       // Set up mocks before using fake timers
       mockFetch
@@ -1157,7 +1243,7 @@ describe('WhoopClient', () => {
 
     it('should throw error after max rate limit retries', async () => {
       const freshClient = new WhoopClient(defaultConfig);
-      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+      (freshClient as any).tokens.tokenExpiresAt = Date.now() + 3600000;
 
       // All requests return 429
       mockFetch
@@ -1204,7 +1290,7 @@ describe('WhoopClient', () => {
 
     it('should include reset time in error message when available', async () => {
       const freshClient = new WhoopClient(defaultConfig);
-      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+      (freshClient as any).tokens.tokenExpiresAt = Date.now() + 3600000;
 
       // Request returns 429 with reset header
       mockFetch
@@ -1266,7 +1352,7 @@ describe('WhoopClient', () => {
 
     it('should handle 429 without rate limit headers', async () => {
       const freshClient = new WhoopClient(defaultConfig);
-      (freshClient as any).tokenExpiresAt = Date.now() + 3600000;
+      (freshClient as any).tokens.tokenExpiresAt = Date.now() + 3600000;
 
       // 429 without headers - should use exponential backoff
       mockFetch
