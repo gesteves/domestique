@@ -13,6 +13,7 @@ import type {
   TodaysStrainResponse,
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
+  TodaysWorkoutsResponse,
   Race,
 } from '../types/index.js';
 import { filterWhoopDuplicateFields } from '../types/index.js';
@@ -142,6 +143,42 @@ export class CurrentTools {
     return {
       current_time: currentDateTime,
       workouts: merged,
+    };
+  }
+
+  /**
+   * Get today's workouts — both completed (with full per-activity details) and planned.
+   * A leaner alternative to getTodaysSummary that only returns workout data.
+   */
+  async getTodaysWorkouts(): Promise<TodaysWorkoutsResponse> {
+    const timezone = await this.intervals.getAthleteTimezone();
+    const currentDateTime = getCurrentTimeInTimezone(timezone);
+
+    const [completedResponse, plannedResponse] = await Promise.all([
+      this.getTodaysCompletedWorkouts().catch((e) => {
+        console.error('Error fetching completed workouts for todays workouts:', e);
+        return { current_time: currentDateTime, workouts: [] } as TodaysCompletedWorkoutsResponse;
+      }),
+      this.getTodaysPlannedWorkouts().catch((e) => {
+        console.error('Error fetching planned workouts for todays workouts:', e);
+        return { current_time: currentDateTime, workouts: [] } as TodaysPlannedWorkoutsResponse;
+      }),
+    ]);
+
+    const completed = completedResponse.workouts;
+    const planned = plannedResponse.workouts;
+
+    const tssCompleted = completed.reduce((sum, w) => sum + (w.tss || 0), 0);
+    const tssPlanned = planned.reduce((sum, w) => sum + (w.expected_tss || 0), 0);
+
+    return {
+      current_time: currentDateTime,
+      completed_workouts: completed,
+      planned_workouts: planned,
+      workouts_completed: completed.length,
+      workouts_planned: planned.length,
+      tss_completed: Math.round(tssCompleted),
+      tss_planned: Math.round(tssPlanned),
     };
   }
 

@@ -7,6 +7,7 @@ import type { HintGenerator } from '../hints.js';
 import type {
   PlannedWorkout,
   TodaysPlannedWorkoutsResponse,
+  TodaysWorkoutsResponse,
   DailySummary,
   WorkoutWithWhoop,
 } from '../../types/index.js';
@@ -99,4 +100,38 @@ export const workoutHistoryHint: HintGenerator<WorkoutHistoryResponse | WorkoutW
  */
 export const workoutHistoryHints: HintGenerator<WorkoutHistoryResponse | WorkoutWithWhoop[]>[] = [
   workoutHistoryHint,
+];
+
+/**
+ * Hint for syncing TR runs to ICU from today's workouts response.
+ */
+export const todaysWorkoutsSyncHint: HintGenerator<TodaysWorkoutsResponse> = (data) => {
+  const unsyncedRuns = findUnsyncedTRRuns(data.planned_workouts);
+  if (unsyncedRuns.length === 0) return undefined;
+
+  return (
+    `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
+    `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
+    `or create_run_workout tools. First fetch the user's running pace zones via get_sports_settings.`
+  );
+};
+
+/**
+ * Hint for drilling into completed workouts from today's workouts response.
+ */
+export const todaysWorkoutsDetailsHint: HintGenerator<TodaysWorkoutsResponse> = (data) => {
+  if (data.completed_workouts.length === 0) return undefined;
+
+  const workoutIds = data.completed_workouts.map((w) => w.id).join(', ');
+  return [
+    `For specific data only, use get_workout_intervals, get_workout_notes, or get_workout_weather with activity_id. Available IDs: ${workoutIds}`,
+  ];
+};
+
+/**
+ * Combined hint generators for today's workouts.
+ */
+export const todaysWorkoutsHints: HintGenerator<TodaysWorkoutsResponse>[] = [
+  todaysWorkoutsSyncHint,
+  todaysWorkoutsDetailsHint,
 ];

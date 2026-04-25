@@ -23,6 +23,7 @@ import {
   dailySummarySyncHint,
   workoutHistoryHints,
   dailySummaryHints,
+  todaysWorkoutsHints,
   powerCurveProgressHint,
   paceCurveProgressHint,
 } from '../utils/hints/index.js';
@@ -303,6 +304,37 @@ export class ToolRegistry {
       hints: [dailySummarySyncHint, ...dailySummaryHints],
     });
 
+    register({
+      name: 'get_todays_workouts',
+      title: "Today's Workouts",
+      description: `Fetches today's workouts only — both completed (with full per-activity details) and planned. A leaner alternative to get_todays_summary when you only need workout data and don't need recovery, sleep, strain, fitness, wellness, or race information.
+
+**Includes:**
+- All workouts and fitness activities completed so far today, with full details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data
+- All workouts and fitness activities scheduled for today (from both TrainerRoad and Intervals.icu)
+
+<use-cases>
+- Quickly checking what the user has done and has planned for today without the overhead of recovery/wellness data.
+- Reviewing completed workouts with full detail in a single call (no need to follow up with get_workout_details).
+- Viewing today's planned workouts to assess remaining training load.
+</use-cases>
+
+<instructions>
+- Use this tool when the user only asks about today's workouts (completed or planned) and not about recovery, sleep, strain, or fitness metrics. For a complete daily snapshot, use get_todays_summary instead.
+- Workouts (completed and scheduled) can change over the course of the day; call this tool again as the day progresses rather than relying on a previous call's results.
+</instructions>
+
+<notes>
+- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
+</notes>`,
+      inputSchema: {},
+      outputSchema: schemas.todaysWorkoutsOutputSchema,
+      annotations: READ_ONLY,
+      handler: async () => this.currentTools.getTodaysWorkouts(),
+      hints: todaysWorkoutsHints,
+    });
+
     // Profile and Settings (needed early for context)
     register({
       name: 'get_athlete_profile',
@@ -428,7 +460,7 @@ export class ToolRegistry {
 <instructions>
 Get the activity_id from:
 - get_workout_history (for past workouts)
-- get_todays_summary (for today's workouts)
+- get_todays_summary or get_todays_workouts (for today's workouts)
 </instructions>
 
 <notes>
@@ -695,7 +727,7 @@ Get the activity_id from:
 <instructions>
 - Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
 - Use this to remove incorrect workouts before recreating with fixes.
-- Get the event_id from get_upcoming_workouts or get_todays_summary.
+- Get the event_id from get_upcoming_workouts, get_todays_summary, or get_todays_workouts.
 </instructions>
 
 <notes>
@@ -724,7 +756,7 @@ Get the activity_id from:
 
 <instructions>
 - Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
-- Get the event_id from get_upcoming_workouts or get_todays_summary.
+- Get the event_id from get_upcoming_workouts, get_todays_summary, or get_todays_workouts.
 - Only provide the fields you want to update; omitted fields remain unchanged.
 </instructions>
 
@@ -856,7 +888,7 @@ Get the activity_id from:
 <instructions>
 Get the activity_id from:
 - get_workout_history (for past workouts)
-- get_todays_summary (for today's workouts)
+- get_todays_summary or get_todays_workouts (for today's workouts)
 - get_workout_details (for a specific workout)
 Only provide the fields you want to update; omitted fields remain unchanged.
 </instructions>
@@ -922,7 +954,7 @@ Only provide the fields you want to update; omitted fields remain unchanged.
 <instructions>
 Get the activity_id from:
 - get_workout_history (for past workouts)
-- get_todays_summary (for today's workouts)
+- get_todays_workouts (for today's workouts)
 </instructions>`,
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
@@ -967,7 +999,7 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts)
+- For past workouts, get the activity_id from get_workout_history. For today's workouts, get the activity_id from get_todays_summary or get_todays_workouts.
 </instructions>`,
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
@@ -990,7 +1022,7 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts)
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary or get_todays_workouts (for today's workouts).
 - Returns null if heat strain data is not available for this activity.
 </instructions>
 
@@ -1019,7 +1051,7 @@ Get the activity_id from:
 </use-cases>
 
 <instructions>
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts).
+- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary or get_todays_workouts (for today's workouts).
 - Returns an empty array if no scrobbles fall within the activity's time window.
 </instructions>`,
         inputSchema: {

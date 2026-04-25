@@ -1172,6 +1172,28 @@ export interface TodaysPlannedWorkoutsResponse {
   workouts: PlannedWorkout[];
 }
 
+/**
+ * Today's combined completed and planned workouts.
+ * Returned by get_todays_workouts tool — a leaner alternative to get_todays_summary
+ * that only returns workout data.
+ */
+export interface TodaysWorkoutsResponse {
+  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
+  current_time: string;
+  /** Completed workouts from Intervals.icu with full details and matched Whoop data */
+  completed_workouts: WorkoutWithWhoop[];
+  /** Planned workouts from TrainerRoad and Intervals.icu */
+  planned_workouts: PlannedWorkout[];
+  /** Number of workouts completed today */
+  workouts_completed: number;
+  /** Number of workouts planned for today */
+  workouts_planned: number;
+  /** Total TSS from completed workouts */
+  tss_completed: number;
+  /** Total expected TSS from planned workouts */
+  tss_planned: number;
+}
+
 // ============================================
 // Performance Curves
 // ============================================

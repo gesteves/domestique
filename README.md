@@ -18,6 +18,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Today's Data
 - `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), and today's race, if any.
+- `get_todays_workouts` - Today's completed (with full per-activity details) and planned workouts only. A leaner alternative to `get_todays_summary` when only workout data is needed.
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location

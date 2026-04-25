@@ -209,11 +209,12 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(28);
+      expect(registeredHandlers.size).toBe(29);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_workout_music')).toBe(true);
       expect(registeredHandlers.has('get_todays_summary')).toBe(true);
+      expect(registeredHandlers.has('get_todays_workouts')).toBe(true);
       expect(registeredHandlers.has('get_athlete_profile')).toBe(true);
       expect(registeredHandlers.has('get_sports_settings')).toBe(true);
       expect(registeredHandlers.has('get_strain_history')).toBe(true);

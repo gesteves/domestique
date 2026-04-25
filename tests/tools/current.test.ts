@@ -454,6 +454,182 @@ describe('CurrentTools', () => {
     });
   });
 
+  describe('getTodaysWorkouts', () => {
+    beforeEach(() => {
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
+    });
+
+    const mockCompletedWorkouts: NormalizedWorkout[] = [
+      {
+        id: '1',
+        start_time: '2024-12-15T10:00:00+00:00',
+        activity_type: 'Cycling',
+        duration: '1:00:00',
+        tss: 85,
+        source: 'intervals.icu',
+      },
+    ];
+
+    const mockWhoopActivities: StrainActivity[] = [
+      {
+        id: 'whoop-1',
+        start_time: '2024-12-15T10:01:00Z',
+        end_time: '2024-12-15T11:00:00Z',
+        activity_type: 'Cycling',
+        duration: '0:59:00',
+        strain_score: 12.5,
+        average_heart_rate: 145,
+        max_heart_rate: 175,
+        calories: 650,
+      },
+    ];
+
+    const mockPlannedTr: PlannedWorkout[] = [
+      {
+        id: 'tr-1',
+        scheduled_for: '2024-12-15T18:00:00Z',
+        name: 'Sweet Spot Base',
+        expected_tss: 88,
+        source: 'trainerroad',
+      },
+    ];
+
+    const mockPlannedIcu: PlannedWorkout[] = [
+      {
+        id: 'int-1',
+        scheduled_for: '2024-12-15T19:00:00Z',
+        name: 'Easy Run',
+        expected_tss: 35,
+        source: 'intervals.icu',
+      },
+    ];
+
+    it('should return both completed and planned workouts with TSS totals and current_time', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockCompletedWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue(mockWhoopActivities);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(mockPlannedIcu);
+
+      const result = await tools.getTodaysWorkouts();
+
+      expect(result.completed_workouts).toHaveLength(1);
+      expect(result.completed_workouts[0].whoop?.strain_score).toBe(12.5);
+      expect(result.planned_workouts).toHaveLength(2);
+      expect(result.workouts_completed).toBe(1);
+      expect(result.workouts_planned).toBe(2);
+      expect(result.tss_completed).toBe(85);
+      expect(result.tss_planned).toBe(123); // 88 + 35
+      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+
+      vi.useRealTimers();
+    });
+
+    it('should fetch completed workouts with full data (skipExpensiveCalls not set)', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      await tools.getTodaysWorkouts();
+
+      // The 4th argument (options) should not be passed (or should not have skipExpensiveCalls: true)
+      // so per-activity expensive calls (heat zones, notes, weather) are included.
+      const callArgs = vi.mocked(mockIntervalsClient.getActivities).mock.calls[0];
+      const options = callArgs[3];
+      expect(options?.skipExpensiveCalls).not.toBe(true);
+    });
+
+    it('should return empty arrays and zero totals when no workouts today', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getTodaysWorkouts();
+
+      expect(result.completed_workouts).toEqual([]);
+      expect(result.planned_workouts).toEqual([]);
+      expect(result.workouts_completed).toBe(0);
+      expect(result.workouts_planned).toBe(0);
+      expect(result.tss_completed).toBe(0);
+      expect(result.tss_planned).toBe(0);
+      expect(result.current_time).toBeTruthy();
+    });
+
+    it('should work without Whoop client (workouts have whoop: null)', async () => {
+      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockCompletedWorkouts);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await toolsWithoutWhoop.getTodaysWorkouts();
+
+      expect(result.completed_workouts).toHaveLength(1);
+      expect(result.completed_workouts[0].whoop).toBeNull();
+      expect(result.planned_workouts).toHaveLength(1);
+    });
+
+    it('should work without TrainerRoad client (planned only from Intervals)', async () => {
+      const toolsWithoutTr = new CurrentTools(mockIntervalsClient, mockWhoopClient, null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(mockPlannedIcu);
+
+      const result = await toolsWithoutTr.getTodaysWorkouts();
+
+      expect(result.planned_workouts).toHaveLength(1);
+      expect(result.planned_workouts[0].source).toBe('intervals.icu');
+      expect(result.workouts_planned).toBe(1);
+      expect(result.tss_planned).toBe(35);
+    });
+
+    it('should handle errors in completed workouts gracefully', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockRejectedValue(new Error('Intervals down'));
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getTodaysWorkouts();
+
+      expect(result.completed_workouts).toEqual([]);
+      expect(result.planned_workouts).toHaveLength(1);
+    });
+
+    it('should handle errors in planned workouts gracefully', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockCompletedWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockRejectedValue(new Error('TR down'));
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockRejectedValue(new Error('ICU down'));
+
+      const result = await tools.getTodaysWorkouts();
+
+      expect(result.completed_workouts).toHaveLength(1);
+      expect(result.planned_workouts).toEqual([]);
+    });
+
+    it('should round TSS totals', async () => {
+      const completedWithFractional: NormalizedWorkout[] = [
+        { ...mockCompletedWorkouts[0], tss: 85.4 },
+        { ...mockCompletedWorkouts[0], id: '2', tss: 30.7 },
+      ];
+      const plannedWithFractional: PlannedWorkout[] = [
+        { ...mockPlannedTr[0], expected_tss: 50.6 },
+      ];
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(completedWithFractional);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(plannedWithFractional);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await tools.getTodaysWorkouts();
+
+      expect(result.tss_completed).toBe(116); // round(85.4 + 30.7) = round(116.1) = 116
+      expect(result.tss_planned).toBe(51); // round(50.6) = 51
+    });
+  });
+
   describe('getTodaysSummary', () => {
     const mockSleep: WhoopSleepData = {
       sleep_summary: {

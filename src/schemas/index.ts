@@ -851,6 +851,17 @@ export const todaysSummaryOutputSchema = {
   hints: hintsField,
 } as const;
 
+export const todaysWorkoutsOutputSchema = {
+  current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
+  completed_workouts: z.array(WorkoutZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
+  planned_workouts: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
+  workouts_completed: z.number().optional().describe('Number of workouts completed today'),
+  workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
+  tss_completed: z.number().optional().describe('Total TSS from completed workouts'),
+  tss_planned: z.number().optional().describe('Total expected TSS from planned workouts'),
+  hints: hintsField,
+} as const;
+
 // ============================================
 // Workout management responses
 // ============================================
