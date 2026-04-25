@@ -19,6 +19,7 @@ import {
   formatYMDInTimezone,
   isTimestampInLocalDateRange,
 } from '../utils/tz.js';
+import { memoize } from '../utils/memo.js';
 import {
   getRecoveryLevel,
   getRecoveryLevelDescription,
@@ -384,7 +385,21 @@ export class WhoopClient {
   private hasRotated: boolean = false;
   private timezoneGetter: (() => Promise<string>) | null = null;
   private refreshPromise: Promise<void> | null = null;
-  private bodyMeasurementsCache: WhoopBodyMeasurements | null = null;
+
+  // Body measurements rarely change; memoize for the session with single-flight.
+  private fetchBodyMeasurementsCached = memoize(async () => {
+    const response = await this.fetch<WhoopBodyMeasurementResponse>(
+      '/user/measurement/body',
+      undefined,
+      { operation: 'get body measurements' }
+    );
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+    return {
+      height_meter: round2(response.height_meter),
+      weight_kilogram: round2(response.weight_kilogram),
+      max_heart_rate: response.max_heart_rate,
+    };
+  });
 
   constructor(config: WhoopConfig) {
     this.config = config;
@@ -1070,30 +1085,12 @@ export class WhoopClient {
 
   /**
    * Get body measurements from Whoop.
-   * Caches the result for the session duration since these rarely change.
+   * Cached for the session duration since these rarely change. Returns null on error
+   * (fetch retries on the next call rather than caching null).
    */
   async getBodyMeasurements(): Promise<WhoopBodyMeasurements | null> {
-    // Return cached value if available
-    if (this.bodyMeasurementsCache) {
-      return this.bodyMeasurementsCache;
-    }
-
     try {
-      const response = await this.fetch<WhoopBodyMeasurementResponse>(
-        '/user/measurement/body',
-        undefined,
-        { operation: 'get body measurements' }
-      );
-
-      const round2 = (value: number) => Math.round(value * 100) / 100;
-
-      this.bodyMeasurementsCache = {
-        height_meter: round2(response.height_meter),
-        weight_kilogram: round2(response.weight_kilogram),
-        max_heart_rate: response.max_heart_rate,
-      };
-
-      return this.bodyMeasurementsCache;
+      return await this.fetchBodyMeasurementsCached();
     } catch (error) {
       console.error('Error fetching body measurements:', error);
       return null;

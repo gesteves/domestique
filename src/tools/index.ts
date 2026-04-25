@@ -40,6 +40,20 @@ interface ResponseOptions<TResult = unknown> {
   hints?: HintGenerator<TResult>[];
 }
 
+/**
+ * Self-contained definition of an MCP tool: metadata, input schema, handler, and
+ * response shaping options. Passed to ToolRegistry.registerTool to remove the
+ * boilerplate of wiring tool name + schema + handler + response wrapper four times.
+ */
+interface ToolDef<TArgs, TResult> extends ResponseOptions<TResult> {
+  name: string;
+  title: string;
+  description: string;
+  inputSchema: z.ZodRawShape;
+  annotations: ToolAnnotations;
+  handler: (args: TArgs) => Promise<TResult>;
+}
+
 interface ErrorDetails {
   error: true;
   message: string;
@@ -202,23 +216,52 @@ export class ToolRegistry {
   }
 
   /**
+   * Register a single tool, applying shared response/error scaffolding.
+   * Centralizes wiring of: tool name (used twice), input schema, response
+   * wrapper (date formatting, hints, error handling).
+   */
+  private registerTool<TArgs, TResult>(
+    server: McpServer,
+    getTimezone: () => Promise<string>,
+    def: ToolDef<TArgs, TResult>
+  ): void {
+    const wrapped = withToolResponse(
+      def.name,
+      def.handler,
+      {
+        fieldDescriptions: def.fieldDescriptions,
+        hints: def.hints,
+        widgetMeta: def.widgetMeta,
+      },
+      getTimezone
+    );
+    server.registerTool(
+      def.name,
+      {
+        title: def.title,
+        description: def.description,
+        inputSchema: def.inputSchema,
+        annotations: def.annotations,
+      },
+      // The SDK expects args typed as the Zod shape's inferred output, but our
+      // generic TArgs comes from the handler's explicit annotation. The runtime
+      // shapes match by construction; TS can't prove it at this boundary.
+      wrapped as Parameters<typeof server.registerTool>[2]
+    );
+  }
+
+  /**
    * Register all tools with the MCP server
    */
   registerTools(server: McpServer): void {
     const getTimezone = () => this.intervalsClient.getAthleteTimezone();
-
-    // Helper that wraps withToolResponse with the timezone getter for date formatting
-    const withDatedToolResponse = <TArgs, TResult>(
-      toolName: string,
-      handler: (args: TArgs) => Promise<TResult>,
-      options: ResponseOptions<TResult>
-    ) => withToolResponse(toolName, handler, options, getTimezone);
+    const register = <TArgs, TResult>(def: ToolDef<TArgs, TResult>): void =>
+      this.registerTool(server, getTimezone, def);
     // Today's Summary (most likely to be called first)
-    server.registerTool(
-      'get_todays_summary',
-      {
-        title: "Today's Summary",
-        description: `Fetches a complete snapshot of the user's current status today in a single call. This is the tool to call to get all of "today's" data.
+    register({
+      name: 'get_todays_summary',
+      title: "Today's Summary",
+      description: `Fetches a complete snapshot of the user's current status today in a single call. This is the tool to call to get all of "today's" data.
 
 **Includes:**
 - Whoop recovery, sleep performance, and strain (including HRV, sleep stages, and strain score)
@@ -247,25 +290,18 @@ export class ToolRegistry {
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withDatedToolResponse(
-        'get_todays_summary',
-        async () => this.currentTools.getTodaysSummary(),
-        {
-          fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
-          hints: [dailySummarySyncHint, ...dailySummaryHints],
-        }
-      )
-    );
+      inputSchema: {},
+      annotations: READ_ONLY,
+      handler: async () => this.currentTools.getTodaysSummary(),
+      fieldDescriptions: combineFieldDescriptions('daily_summary', 'sleep', 'recovery', 'body_measurements', 'whoop', 'workout', 'planned', 'fitness', 'wellness'),
+      hints: [dailySummarySyncHint, ...dailySummaryHints],
+    });
 
     // Profile and Settings (needed early for context)
-    server.registerTool(
-      'get_athlete_profile',
-      {
-        title: 'Athlete Profile',
-        description: `Returns the athlete's profile from Intervals.icu including:
+    register({
+      name: 'get_athlete_profile',
+      title: 'Athlete Profile',
+      description: `Returns the athlete's profile from Intervals.icu including:
   - Athlete info: name, location, timezone, gender, date of birth, and age.
   - The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
 
@@ -279,23 +315,16 @@ export class ToolRegistry {
 - You **MUST** use the user's preferred units in all responses.
 - If you don't know the user's preferred units, you **MUST** call this tool before responding to the user, so you can get their preferences.
 </instructions>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withDatedToolResponse(
-        'get_athlete_profile',
-        async () => this.currentTools.getAthleteProfile(),
-        {
-          fieldDescriptions: getFieldDescriptions('athlete_profile'),
-        }
-      )
-    );
+      inputSchema: {},
+      annotations: READ_ONLY,
+      handler: async () => this.currentTools.getAthleteProfile(),
+      fieldDescriptions: getFieldDescriptions('athlete_profile'),
+    });
 
-    server.registerTool(
-      'get_sports_settings',
-      {
-        title: 'Sport Settings',
-        description: `Fetches settings from Intervals.icu for a single sport, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
+    register({
+      name: 'get_sports_settings',
+      title: 'Sport Settings',
+      description: `Fetches settings from Intervals.icu for a single sport, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
 
 <use-cases>
 - Understanding the user's current FTP, power zones, or pace zones for interpreting workout data.
@@ -307,26 +336,19 @@ export class ToolRegistry {
 <notes>
 - This returns the athlete's **current** zones, which may not match the zones in historical workouts.
 </notes>`,
-        inputSchema: {
-          sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
       },
-      withDatedToolResponse(
-        'get_sports_settings',
-        async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
-        {
-          fieldDescriptions: getFieldDescriptions('sport_settings'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { sport: 'cycling' | 'running' | 'swimming' }) => this.currentTools.getSportSettings(args.sport),
+      fieldDescriptions: getFieldDescriptions('sport_settings'),
+    });
 
     // Historical/Trends Tools
-    server.registerTool(
-      'get_strain_history',
-      {
-        title: 'Strain History',
-        description: `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
+    register({
+      name: 'get_strain_history',
+      title: 'Strain History',
+      description: `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
 
 <use-cases>
 - Analyzing strain patterns over time to identify trends in training intensity.
@@ -340,26 +362,19 @@ export class ToolRegistry {
 - If you only need today's strain data, use get_todays_summary instead.
 - Returns empty array if Whoop is not configured.
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
       },
-      withDatedToolResponse(
-        'get_strain_history',
-        async (args: { oldest: string; newest?: string }) => this.currentTools.getStrainHistory(args),
-        {
-          fieldDescriptions: getFieldDescriptions('whoop'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string }) => this.currentTools.getStrainHistory(args),
+      fieldDescriptions: getFieldDescriptions('whoop'),
+    });
 
-    server.registerTool(
-      'get_workout_history',
-      {
-        title: 'Workout History',
-        description: `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
+    register({
+      name: 'get_workout_history',
+      title: 'Workout History',
+      description: `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
 
 <use-cases>
 - Analyzing training patterns and consistency over a specific time period.
@@ -376,28 +391,21 @@ export class ToolRegistry {
 - You can optionally filter activities by sport, as needed.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-          sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
+        sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
-      withDatedToolResponse(
-        'get_workout_history',
-        async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
-        {
-          fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
-          hints: workoutHistoryHints,
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.historicalTools.getWorkoutHistory(args),
+      fieldDescriptions: combineFieldDescriptions('workout', 'whoop'),
+      hints: workoutHistoryHints,
+    });
 
-    server.registerTool(
-      'get_workout_details',
-      {
-        title: 'Workout Details',
-        description: `Fetches the details of a single completed workout by its activity ID.
+    register({
+      name: 'get_workout_details',
+      title: 'Workout Details',
+      description: `Fetches the details of a single completed workout by its activity ID.
 
 <use-cases>
 - Getting all available metrics for a specific workout in one call
@@ -414,25 +422,18 @@ Get the activity_id from:
 - Includes athlete notes, detailed intervals, weather during the activity (if available), power zones, pace zones, heart rate zones, heat zones, and matched Whoop strain data (if available).
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions.
 </notes>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      withDatedToolResponse(
-        'get_workout_details',
-        async (args: { activity_id: string }) => this.historicalTools.getWorkoutDetails(args.activity_id),
-        {
-          fieldDescriptions: combineFieldDescriptions('workout', 'workout_details', 'whoop'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutDetails(args.activity_id),
+      fieldDescriptions: combineFieldDescriptions('workout', 'workout_details', 'whoop'),
+    });
 
-    server.registerTool(
-      'get_recovery_trends',
-      {
-        title: 'Recovery Trends',
-        description: `Fetches Whoop recovery and sleep data over a date range.
+    register({
+      name: 'get_recovery_trends',
+      title: 'Recovery Trends',
+      description: `Fetches Whoop recovery and sleep data over a date range.
 
 <use-cases>
 - Analyzing recovery patterns over time to identify trends in sleep and HRV.
@@ -447,26 +448,19 @@ Get the activity_id from:
 - If you only need today's recovery and sleep data, use get_todays_summary instead.
 - Returns empty array if Whoop is not configured.
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
       },
-      withDatedToolResponse(
-        'get_recovery_trends',
-        async (args: { oldest: string; newest?: string }) => this.historicalTools.getRecoveryTrends(args),
-        {
-          fieldDescriptions: getFieldDescriptions('recovery'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string }) => this.historicalTools.getRecoveryTrends(args),
+      fieldDescriptions: getFieldDescriptions('recovery'),
+    });
 
-    server.registerTool(
-      'get_wellness_trends',
-      {
-        title: 'Wellness Trends',
-        description: `Fetches wellness data over a date range from Intervals.icu.
+    register({
+      name: 'get_wellness_trends',
+      title: 'Wellness Trends',
+      description: `Fetches wellness data over a date range from Intervals.icu.
 
 <use-cases>
 - Tracking weight trends over time to monitor body composition changes.
@@ -479,26 +473,19 @@ Get the activity_id from:
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
 - Only returns days on which wellness data was recorded.
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
       },
-      withDatedToolResponse(
-        'get_wellness_trends',
-        async (args: { oldest: string; newest?: string }) => this.historicalTools.getWellnessTrends(args),
-        {
-          fieldDescriptions: getFieldDescriptions('wellness'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string }) => this.historicalTools.getWellnessTrends(args),
+      fieldDescriptions: getFieldDescriptions('wellness'),
+    });
 
-    server.registerTool(
-      'get_activity_totals',
-      {
-        title: 'Activity Totals',
-        description: `Fetches aggregated activity totals over a date range, including duration, distance, training load, calories, and zone distributions.
+    register({
+      name: 'get_activity_totals',
+      title: 'Activity Totals',
+      description: `Fetches aggregated activity totals over a date range, including duration, distance, training load, calories, and zone distributions.
 
 <use-cases>
 - Summarizing training volume and load over a specific period (e.g., last year, last 90 days).
@@ -512,28 +499,21 @@ Get the activity_id from:
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("365 days ago", "last year", etc.)
 - Zone names come from the athlete's sport settings (e.g., "Recovery", "Endurance", "Tempo", "Sweet Spot").
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-          sports: z.array(z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength'])).optional().describe('Filter to specific sports. If blank, returns all sports.'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
+        sports: z.array(z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength'])).optional().describe('Filter to specific sports. If blank, returns all sports.'),
       },
-      withDatedToolResponse(
-        'get_activity_totals',
-        async (args: { oldest: string; newest?: string; sports?: ('cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength')[] }) => this.historicalTools.getActivityTotals(args),
-        {
-          fieldDescriptions: getFieldDescriptions('activity_totals'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string; sports?: ('cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength')[] }) => this.historicalTools.getActivityTotals(args),
+      fieldDescriptions: getFieldDescriptions('activity_totals'),
+    });
 
     // Planning Tools
-    server.registerTool(
-      'get_upcoming_workouts',
-      {
-        title: 'Upcoming Workouts',
-        description: `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter.
+    register({
+      name: 'get_upcoming_workouts',
+      title: 'Upcoming Workouts',
+      description: `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter.
 
 <use-cases>
 - Viewing the user's training schedule for the upcoming week or month.
@@ -547,28 +527,21 @@ Get the activity_id from:
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("today", "tomorrow", "next Monday", etc.)
 - Scheduled workouts in a given day may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
 </notes>`,
-        inputSchema: {
-          oldest: z.string().optional().describe('Start date (defaults to today; e.g., "2024-01-01", "tomorrow")'),
-          newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
-          sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().optional().describe('Start date (defaults to today; e.g., "2024-01-01", "tomorrow")'),
+        newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
+        sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
       },
-      withDatedToolResponse(
-        'get_upcoming_workouts',
-        async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts(args),
-        {
-          fieldDescriptions: getFieldDescriptions('planned'),
-          hints: [trainerroadSyncHint],
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) => this.planningTools.getUpcomingWorkouts(args),
+      fieldDescriptions: getFieldDescriptions('planned'),
+      hints: [trainerroadSyncHint],
+    });
 
-    server.registerTool(
-      'get_upcoming_races',
-      {
-        title: 'Upcoming Races',
-        description: `Fetches upcoming races from the TrainerRoad calendar.
+    register({
+      name: 'get_upcoming_races',
+      title: 'Upcoming Races',
+      description: `Fetches upcoming races from the TrainerRoad calendar.
 
 <use-cases>
 - Viewing the user's upcoming race schedule.
@@ -579,27 +552,20 @@ Get the activity_id from:
 <instructions>
 - The description of the race may contain important details about the race, including if it's an A, B or C race; and details about the course.
 </instructions>`,
-        inputSchema: {},
-        annotations: READ_ONLY,
-      },
-      withDatedToolResponse(
-        'get_upcoming_races',
-        async () => this.planningTools.getUpcomingRaces(),
-        {
-          fieldDescriptions: getFieldDescriptions('race'),
-        }
-      )
-    );
+      inputSchema: {},
+      annotations: READ_ONLY,
+      handler: async () => this.planningTools.getUpcomingRaces(),
+      fieldDescriptions: getFieldDescriptions('race'),
+    });
 
     // ============================================
     // Workout Sync Tools
     // ============================================
 
-    server.registerTool(
-      'create_run_workout',
-      {
-        title: 'Create Run Workout',
-        description: `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
+    register({
+      name: 'create_run_workout',
+      title: 'Create Run Workout',
+      description: `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
 
 <use-cases>
 - Creating a structured running workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
@@ -616,30 +582,23 @@ Get the activity_id from:
 - The workout will be tagged with 'domestique' for tracking.
 - If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
 </notes>`,
-        inputSchema: {
-          scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
-          name: z.string().describe('Workout name'),
-          description: z.string().optional().describe('Optional notes/description'),
-          workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
-          trainerroad_uid: z.string().optional().describe('TrainerRoad workout UID for tracking'),
-        },
-        annotations: CREATES_EXTERNAL,
+      inputSchema: {
+        scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
+        name: z.string().describe('Workout name'),
+        description: z.string().optional().describe('Optional notes/description'),
+        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
+        trainerroad_uid: z.string().optional().describe('TrainerRoad workout UID for tracking'),
       },
-      withDatedToolResponse(
-        'create_run_workout',
-        async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
-          this.planningTools.createRunWorkout(args),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
+      annotations: CREATES_EXTERNAL,
+      handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
+        this.planningTools.createRunWorkout(args),
+      fieldDescriptions: {},
+    });
 
-    server.registerTool(
-      'create_cycling_workout',
-      {
-        title: 'Create Cycling Workout',
-        description: `Creates a structured cycling workout in Intervals.icu that syncs to Zwift or Garmin.
+    register({
+      name: 'create_cycling_workout',
+      title: 'Create Cycling Workout',
+      description: `Creates a structured cycling workout in Intervals.icu that syncs to Zwift or Garmin.
 
 <use-cases>
 - Creating a structured cycling workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
@@ -654,29 +613,22 @@ Get the activity_id from:
 - The workout will be tagged with 'domestique' for tracking.
 - If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
 </notes>`,
-        inputSchema: {
-          scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
-          name: z.string().describe('Workout name'),
-          description: z.string().optional().describe('Optional notes/description'),
-          workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
-        },
-        annotations: CREATES_EXTERNAL,
+      inputSchema: {
+        scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
+        name: z.string().describe('Workout name'),
+        description: z.string().optional().describe('Optional notes/description'),
+        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
       },
-      withDatedToolResponse(
-        'create_cycling_workout',
-        async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
-          this.planningTools.createCyclingWorkout(args),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
+      annotations: CREATES_EXTERNAL,
+      handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
+        this.planningTools.createCyclingWorkout(args),
+      fieldDescriptions: {},
+    });
 
-    server.registerTool(
-      'create_swimming_workout',
-      {
-        title: 'Create Swimming Workout',
-        description: `Creates a structured swimming workout in Intervals.icu.
+    register({
+      name: 'create_swimming_workout',
+      title: 'Create Swimming Workout',
+      description: `Creates a structured swimming workout in Intervals.icu.
 
 <use-cases>
 - Creating a structured swimming workout in Intervals.icu.
@@ -692,29 +644,22 @@ Get the activity_id from:
 - The workout will be tagged with 'domestique' for tracking.
 - If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
 </notes>`,
-        inputSchema: {
-          scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
-          name: z.string().describe('Workout name'),
-          description: z.string().optional().describe('Optional plain text notes about the workout'),
-          workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
-        },
-        annotations: CREATES_EXTERNAL,
+      inputSchema: {
+        scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
+        name: z.string().describe('Workout name'),
+        description: z.string().optional().describe('Optional plain text notes about the workout'),
+        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
       },
-      withDatedToolResponse(
-        'create_swimming_workout',
-        async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
-          this.planningTools.createSwimmingWorkout(args),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
+      annotations: CREATES_EXTERNAL,
+      handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
+        this.planningTools.createSwimmingWorkout(args),
+      fieldDescriptions: {},
+    });
 
-    server.registerTool(
-      'delete_workout',
-      {
-        title: 'Delete Workout',
-        description: `Deletes a Domestique-created workout from Intervals.icu.
+    register({
+      name: 'delete_workout',
+      title: 'Delete Workout',
+      description: `Deletes a Domestique-created workout from Intervals.icu.
 
 <use-cases>
 - Removing orphaned workouts when TrainerRoad plans change.
@@ -732,26 +677,19 @@ Get the activity_id from:
 - This permanently deletes the workout from Intervals.icu.
 - Cannot delete workouts not created by Domestique.
 </notes>`,
-        inputSchema: {
-          event_id: z.string().describe('Intervals.icu event ID to delete'),
-        },
-        annotations: DESTRUCTIVE,
+      inputSchema: {
+        event_id: z.string().describe('Intervals.icu event ID to delete'),
       },
-      withDatedToolResponse(
-        'delete_workout',
-        async (args: { event_id: string }) =>
-          this.planningTools.deleteWorkout(args.event_id),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
+      annotations: DESTRUCTIVE,
+      handler: async (args: { event_id: string }) =>
+        this.planningTools.deleteWorkout(args.event_id),
+      fieldDescriptions: {},
+    });
 
-    server.registerTool(
-      'update_workout',
-      {
-        title: 'Update Workout',
-        description: `Updates a Domestique-created workout in Intervals.icu.
+    register({
+      name: 'update_workout',
+      title: 'Update Workout',
+      description: `Updates a Domestique-created workout in Intervals.icu.
 
 <use-cases>
 - Modifying the name or description of a synced workout.
@@ -770,31 +708,24 @@ Get the activity_id from:
 - Changing the type (e.g., Run to Ride) without updating workout_doc may result in invalid syntax.
 - Cannot update workouts not created by Domestique.
 </notes>`,
-        inputSchema: {
-          event_id: z.string().describe('Intervals.icu event ID to update'),
-          name: z.string().optional().describe('New workout name'),
-          description: z.string().optional().describe('New description/notes'),
-          workout_doc: z.string().optional().describe('New structured workout in Intervals.icu syntax'),
-          scheduled_for: z.string().optional().describe('New date (YYYY-MM-DD) or datetime'),
-          type: z.string().optional().describe('New event type (e.g., "Run", "Ride")'),
-        },
-        annotations: MODIFIES_EXTERNAL,
+      inputSchema: {
+        event_id: z.string().describe('Intervals.icu event ID to update'),
+        name: z.string().optional().describe('New workout name'),
+        description: z.string().optional().describe('New description/notes'),
+        workout_doc: z.string().optional().describe('New structured workout in Intervals.icu syntax'),
+        scheduled_for: z.string().optional().describe('New date (YYYY-MM-DD) or datetime'),
+        type: z.string().optional().describe('New event type (e.g., "Run", "Ride")'),
       },
-      withDatedToolResponse(
-        'update_workout',
-        async (args: { event_id: string; name?: string; description?: string; workout_doc?: string; scheduled_for?: string; type?: string }) =>
-          this.planningTools.updateWorkout(args),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
+      annotations: MODIFIES_EXTERNAL,
+      handler: async (args: { event_id: string; name?: string; description?: string; workout_doc?: string; scheduled_for?: string; type?: string }) =>
+        this.planningTools.updateWorkout(args),
+      fieldDescriptions: {},
+    });
 
-    server.registerTool(
-      'sync_trainerroad_runs',
-      {
-        title: 'Sync TrainerRoad Runs',
-        description: `Syncs TrainerRoad running workouts to Intervals.icu.
+    register({
+      name: 'sync_trainerroad_runs',
+      title: 'Sync TrainerRoad Runs',
+      description: `Syncs TrainerRoad running workouts to Intervals.icu.
 
 <use-cases>
 - Bulk syncing all TrainerRoad runs for a date range to Intervals.icu.
@@ -813,28 +744,21 @@ Get the activity_id from:
 - Created workouts are tagged with 'domestique' for tracking.
 - The runs_to_sync array contains TR runs that need to be converted and created.
 </notes>`,
-        inputSchema: {
-          oldest: z.string().optional().describe('Start date (defaults to today)'),
-          newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
-        },
-        // Can be destructive (deletes orphans), but also creates external resources
-        annotations: { openWorldHint: true, destructiveHint: true },
+      inputSchema: {
+        oldest: z.string().optional().describe('Start date (defaults to today)'),
+        newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
       },
-      withDatedToolResponse(
-        'sync_trainerroad_runs',
-        async (args: { oldest?: string; newest?: string }) =>
-          this.planningTools.syncTRRuns(args),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
+      // Can be destructive (deletes orphans), but also creates external resources
+      annotations: { openWorldHint: true, destructiveHint: true },
+      handler: async (args: { oldest?: string; newest?: string }) =>
+        this.planningTools.syncTRRuns(args),
+      fieldDescriptions: {},
+    });
 
-    server.registerTool(
-      'set_workout_intervals',
-      {
-        title: 'Set Workout Intervals',
-        description: `Sets intervals on a completed activity in Intervals.icu.
+    register({
+      name: 'set_workout_intervals',
+      title: 'Set Workout Intervals',
+      description: `Sets intervals on a completed activity in Intervals.icu.
 
 <use-cases>
 - Matching completed workout intervals to a TrainerRoad workout structure.
@@ -860,48 +784,41 @@ Get the activity_id from:
 - Times are in seconds from the start of the activity.
 - Use the workout's power_zones (not current athlete sport settings) for type inference, as FTP may have changed since the workout.
 </notes>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID'),
-          intervals: z
-            .array(
-              z.object({
-                start_time: z.number().describe('Start time in seconds from activity start'),
-                end_time: z.number().describe('End time in seconds from activity start'),
-                type: z.enum(['WORK', 'RECOVERY']).describe('Interval type based on power zone'),
-                label: z.string().optional().describe('Optional interval label (e.g., "Warmup", "Interval 1")'),
-              })
-            )
-            .describe('Array of intervals to set on the activity'),
-          replace_existing_intervals: z
-            .boolean()
-            .optional()
-            .describe('Whether to replace all existing intervals (true, default) or merge with existing (false)'),
-        },
-        annotations: MODIFIES_EXTERNAL,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID'),
+        intervals: z
+          .array(
+            z.object({
+              start_time: z.number().describe('Start time in seconds from activity start'),
+              end_time: z.number().describe('End time in seconds from activity start'),
+              type: z.enum(['WORK', 'RECOVERY']).describe('Interval type based on power zone'),
+              label: z.string().optional().describe('Optional interval label (e.g., "Warmup", "Interval 1")'),
+            })
+          )
+          .describe('Array of intervals to set on the activity'),
+        replace_existing_intervals: z
+          .boolean()
+          .optional()
+          .describe('Whether to replace all existing intervals (true, default) or merge with existing (false)'),
       },
-      withDatedToolResponse(
-        'set_workout_intervals',
-        async (args: {
-          activity_id: string;
-          intervals: Array<{
-            start_time: number;
-            end_time: number;
-            type: 'WORK' | 'RECOVERY';
-            label?: string;
-          }>;
-          replace_existing_intervals?: boolean;
-        }) => this.planningTools.setWorkoutIntervals(args),
-        {
-          fieldDescriptions: getFieldDescriptions('set_workout_intervals'),
-        }
-      )
-    );
+      annotations: MODIFIES_EXTERNAL,
+      handler: async (args: {
+        activity_id: string;
+        intervals: Array<{
+          start_time: number;
+          end_time: number;
+          type: 'WORK' | 'RECOVERY';
+          label?: string;
+        }>;
+        replace_existing_intervals?: boolean;
+      }) => this.planningTools.setWorkoutIntervals(args),
+      fieldDescriptions: getFieldDescriptions('set_workout_intervals'),
+    });
 
-    server.registerTool(
-      'update_activity',
-      {
-        title: 'Update Activity',
-        description: `Updates the name and/or description of a completed activity in Intervals.icu.
+    register({
+      name: 'update_activity',
+      title: 'Update Activity',
+      description: `Updates the name and/or description of a completed activity in Intervals.icu.
 
 <use-cases>
 - Renaming a completed workout to something more descriptive or memorable.
@@ -921,32 +838,25 @@ Only provide the fields you want to update; omitted fields remain unchanged.
 - This updates completed/recorded activities, not planned workouts on the calendar. To update planned workouts, use update_workout instead.
 - At least one of name or description must be provided.
 </notes>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID'),
-          name: z.string().optional().describe('New name for the activity'),
-          description: z.string().optional().describe('New description/notes for the activity'),
-        },
-        annotations: MODIFIES_EXTERNAL,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID'),
+        name: z.string().optional().describe('New name for the activity'),
+        description: z.string().optional().describe('New description/notes for the activity'),
       },
-      withDatedToolResponse(
-        'update_activity',
-        async (args: { activity_id: string; name?: string; description?: string }) =>
-          this.planningTools.updateActivity(args),
-        {
-          fieldDescriptions: {},
-        }
-      )
-    );
+      annotations: MODIFIES_EXTERNAL,
+      handler: async (args: { activity_id: string; name?: string; description?: string }) =>
+        this.planningTools.updateActivity(args),
+      fieldDescriptions: {},
+    });
 
     // ============================================
     // Analysis Tools
     // ============================================
 
-    server.registerTool(
-      'get_training_load_trends',
-      {
-        title: 'Training Load Trends',
-        description: `Returns training load metrics, including CTL, ATL, TSB, ramp rate, and ACWR, over a specified period of time.
+    register({
+      name: 'get_training_load_trends',
+      title: 'Training Load Trends',
+      description: `Returns training load metrics, including CTL, ATL, TSB, ramp rate, and ACWR, over a specified period of time.
 
 <use-cases>
 - Assessing fitness (CTL), fatigue (ATL), and form (TSB) trends over time.
@@ -955,29 +865,22 @@ Only provide the fields you want to update; omitted fields remain unchanged.
 - Understanding how training load has evolved and its impact on performance.
 - Correlating training load with recovery trends to optimize training balance.
 </use-cases>`,
-        inputSchema: {
-          days: z
-            .number()
-            .optional()
-            .default(42)
-            .describe('Number of days of history to analyze (default: 42, max: 365)'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        days: z
+          .number()
+          .optional()
+          .default(42)
+          .describe('Number of days of history to analyze (default: 42, max: 365)'),
       },
-      withDatedToolResponse(
-        'get_training_load_trends',
-        async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
-        {
-          fieldDescriptions: getFieldDescriptions('fitness'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { days?: number }) => this.historicalTools.getTrainingLoadTrends(args.days),
+      fieldDescriptions: getFieldDescriptions('fitness'),
+    });
 
-    server.registerTool(
-      'get_workout_intervals',
-      {
-        title: 'Workout Intervals',
-        description: `Fetches a detailed interval breakdown for a specific workout.
+    register({
+      name: 'get_workout_intervals',
+      title: 'Workout Intervals',
+      description: `Fetches a detailed interval breakdown for a specific workout.
 
 <use-cases>
 - Analyzing the structure and intensity of interval-based workouts.
@@ -993,25 +896,18 @@ Get the activity_id from:
 - get_workout_history (for past workouts)
 - get_todays_summary (for today's workouts)
 </instructions>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      withDatedToolResponse(
-        'get_workout_intervals',
-        async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
-        {
-          fieldDescriptions: getFieldDescriptions('intervals'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutIntervals(args.activity_id),
+      fieldDescriptions: getFieldDescriptions('intervals'),
+    });
 
-    server.registerTool(
-      'get_workout_notes',
-      {
-        title: 'Workout Notes',
-        description: `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
+    register({
+      name: 'get_workout_notes',
+      title: 'Workout Notes',
+      description: `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
 
 <use-cases>
 - Understanding how the user may have subjectively felt during a workout, and anything else not captured by objective fitness metrics.
@@ -1023,25 +919,18 @@ Get the activity_id from:
 - Make sure to fetch attachments and follow links left in the notes.
 - Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
 </instructions>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      withDatedToolResponse(
-        'get_workout_notes',
-        async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
-        {
-          fieldDescriptions: getFieldDescriptions('notes'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutNotes(args.activity_id),
+      fieldDescriptions: getFieldDescriptions('notes'),
+    });
 
-    server.registerTool(
-      'get_workout_weather',
-      {
-        title: 'Workout Weather',
-        description: `Fetches the weather conditions during a given outdoor workout.
+    register({
+      name: 'get_workout_weather',
+      title: 'Workout Weather',
+      description: `Fetches the weather conditions during a given outdoor workout.
 
 <use-cases>
 - Understanding how weather conditions may or may not have impacted the user's performance during outdoor workouts or fitness activities.
@@ -1050,25 +939,18 @@ Get the activity_id from:
 <instructions>
 - Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts)
 </instructions>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      withDatedToolResponse(
-        'get_workout_weather',
-        async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
-        {
-          fieldDescriptions: getFieldDescriptions('weather'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutWeather(args.activity_id),
+      fieldDescriptions: getFieldDescriptions('weather'),
+    });
 
-    server.registerTool(
-      'get_workout_heat_zones',
-      {
-        title: 'Workout Heat Zones',
-        description: `Fetches heat zone data for a specific workout, showing time spent in each heat strain zone.
+    register({
+      name: 'get_workout_heat_zones',
+      title: 'Workout Heat Zones',
+      description: `Fetches heat zone data for a specific workout, showing time spent in each heat strain zone.
 
 <use-cases>
 - Understanding how heat stress affected the user during a workout.
@@ -1085,25 +967,18 @@ Get the activity_id from:
 - Heat zones are based on the Heat Strain Index (HSI) metric recorded with a CORE body temperature sensor.
 - Heat strain data may not be available for every activity.
 </notes>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      withDatedToolResponse(
-        'get_workout_heat_zones',
-        async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
-        {
-          fieldDescriptions: getFieldDescriptions('heat_zones'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutHeatZones(args.activity_id),
+      fieldDescriptions: getFieldDescriptions('heat_zones'),
+    });
 
-    server.registerTool(
-      'get_workout_music',
-      {
-        title: 'Workout Music',
-        description: `Fetches songs scrobbled to Last.fm during a specific workout, in chronological order.
+    register({
+      name: 'get_workout_music',
+      title: 'Workout Music',
+      description: `Fetches songs scrobbled to Last.fm during a specific workout, in chronological order.
 
 <use-cases>
 - Reviewing what music the user listened to during a workout.
@@ -1114,29 +989,22 @@ Get the activity_id from:
 - Get the activity_id from get_workout_history (for past workouts) or get_todays_summary (for today's workouts).
 - Returns an empty array if Last.fm is not configured or no scrobbles fall within the activity's time window.
 </instructions>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
-      withDatedToolResponse(
-        'get_workout_music',
-        async (args: { activity_id: string }) => this.historicalTools.getWorkoutMusic(args.activity_id),
-        {
-          fieldDescriptions: getFieldDescriptions('music'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { activity_id: string }) => this.historicalTools.getWorkoutMusic(args.activity_id),
+      fieldDescriptions: getFieldDescriptions('music'),
+    });
 
     // ============================================
     // Performance Curves
     // ============================================
 
-    server.registerTool(
-      'get_power_curve',
-      {
-        title: 'Power Curve',
-        description: `Fetches cycling power curves showing best power output at various durations for a given date range.
+    register({
+      name: 'get_power_curve',
+      title: 'Power Curve',
+      description: `Fetches cycling power curves showing best power output at various durations for a given date range.
 
 <use-cases>
 - Analyzing power output capabilities across different durations (sprint, VO2 max, threshold, endurance).
@@ -1154,31 +1022,24 @@ Get the activity_id from:
 <notes>
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-          durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200, 7200])'),
-          compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
-          compare_to_newest: z.string().optional().describe('Comparison period end date'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
+        durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200, 7200])'),
+        compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
+        compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
-      withDatedToolResponse(
-        'get_power_curve',
-        async (args: { oldest: string; newest?: string; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
-          this.historicalTools.getPowerCurve(args),
-        {
-          fieldDescriptions: getFieldDescriptions('power_curve'),
-          hints: [powerCurveProgressHint],
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
+        this.historicalTools.getPowerCurve(args),
+      fieldDescriptions: getFieldDescriptions('power_curve'),
+      hints: [powerCurveProgressHint],
+    });
 
-    server.registerTool(
-      'get_pace_curve',
-      {
-        title: 'Pace Curve',
-        description: `Fetches pace curves for swimming or running, showing best times at various distances for a given date range.
+    register({
+      name: 'get_pace_curve',
+      title: 'Pace Curve',
+      description: `Fetches pace curves for swimming or running, showing best times at various distances for a given date range.
 
 <use-cases>
 - Analyzing pace capabilities across different distances (sprint, middle distance, endurance).
@@ -1200,33 +1061,26 @@ Get the activity_id from:
 <notes>
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-          sport: z.enum(['running', 'swimming']).describe('Sport to analyze'),
-          distances: z.array(z.number()).optional().describe('Custom distances in meters (e.g., [400, 1000, 5000])'),
-          gap: z.boolean().optional().describe('Use gradient-adjusted pace for running (normalizes for hills)'),
-          compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
-          compare_to_newest: z.string().optional().describe('Comparison period end date'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
+        sport: z.enum(['running', 'swimming']).describe('Sport to analyze'),
+        distances: z.array(z.number()).optional().describe('Custom distances in meters (e.g., [400, 1000, 5000])'),
+        gap: z.boolean().optional().describe('Use gradient-adjusted pace for running (normalizes for hills)'),
+        compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
+        compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
-      withDatedToolResponse(
-        'get_pace_curve',
-        async (args: { oldest: string; newest?: string; sport: 'running' | 'swimming'; distances?: number[]; gap?: boolean; compare_to_oldest?: string; compare_to_newest?: string }) =>
-          this.historicalTools.getPaceCurve(args),
-        {
-          fieldDescriptions: getFieldDescriptions('pace_curve'),
-          hints: [paceCurveProgressHint],
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string; sport: 'running' | 'swimming'; distances?: number[]; gap?: boolean; compare_to_oldest?: string; compare_to_newest?: string }) =>
+        this.historicalTools.getPaceCurve(args),
+      fieldDescriptions: getFieldDescriptions('pace_curve'),
+      hints: [paceCurveProgressHint],
+    });
 
-    server.registerTool(
-      'get_hr_curve',
-      {
-        title: 'Heart Rate Curve',
-        description: `Fetches HR curves showing maximum sustained heart rate at various durations for a given date range.
+    register({
+      name: 'get_hr_curve',
+      title: 'Heart Rate Curve',
+      description: `Fetches HR curves showing maximum sustained heart rate at various durations for a given date range.
 
 <use-cases>
 - Analyzing maximum heart rate capabilities across different durations.
@@ -1244,24 +1098,18 @@ Get the activity_id from:
 <notes>
 - All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
 </notes>`,
-        inputSchema: {
-          oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
-          newest: z.string().optional().describe('End date (defaults to today)'),
-          sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport (omit for all sports)'),
-          durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200])'),
-          compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
-          compare_to_newest: z.string().optional().describe('Comparison period end date'),
-        },
-        annotations: READ_ONLY,
+      inputSchema: {
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
+        sport: z.enum(['cycling', 'running', 'swimming']).optional().describe('Filter by sport (omit for all sports)'),
+        durations: z.array(z.number()).optional().describe('Custom durations in seconds (e.g., [5, 60, 300, 1200])'),
+        compare_to_oldest: z.string().optional().describe('Comparison period start date (e.g., "2024-01-01", "90 days ago")'),
+        compare_to_newest: z.string().optional().describe('Comparison period end date'),
       },
-      withDatedToolResponse(
-        'get_hr_curve',
-        async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming'; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
-          this.historicalTools.getHRCurve(args),
-        {
-          fieldDescriptions: getFieldDescriptions('hr_curve'),
-        }
-      )
-    );
+      annotations: READ_ONLY,
+      handler: async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming'; durations?: number[]; compare_to_oldest?: string; compare_to_newest?: string }) =>
+        this.historicalTools.getHRCurve(args),
+      fieldDescriptions: getFieldDescriptions('hr_curve'),
+    });
   }
 }

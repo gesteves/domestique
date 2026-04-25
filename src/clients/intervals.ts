@@ -56,6 +56,7 @@ import {
 } from '../utils/temperature-metrics.js';
 import { IntervalsApiError, type ErrorContext } from '../errors/index.js';
 import { httpRequestJson, httpRequestVoid } from './http.js';
+import { memoize } from '../utils/memo.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
@@ -551,13 +552,27 @@ interface RawHRCurvesResponse {
 export class IntervalsClient {
   private config: IntervalsConfig;
   private authHeader: string;
-  private cachedTimezone: string | null = null;
-  private cachedSportSettings: IntervalsSportSettings[] | null = null;
-  private sportSettingsPromise: Promise<IntervalsSportSettings[]> | null = null;
-  private cachedUnitPreferences: UnitPreferences | null = null;
   private playedSongsGetter:
     | ((startMs: number, endMs: number) => Promise<PlayedSong[]>)
     | null = null;
+
+  // Session-lifetime memoized fetchers. Each gives single-flight + cache-on-success
+  // for endpoints that return effectively-constant profile/settings data.
+  private fetchTimezone = memoize(async () => {
+    const profile = await this.fetch<IntervalsAthleteProfile>('/profile');
+    return profile.athlete.timezone ?? 'UTC';
+  });
+  private fetchSportSettingsCached = memoize(() =>
+    this.fetch<IntervalsSportSettings[]>('/sport-settings')
+  );
+  private fetchUnitPreferencesCached = memoize(async () => {
+    const athlete = await this.fetch<IntervalsAthleteData>('');
+    return this.computeUnitPreferences(
+      athlete.measurement_preference,
+      athlete.weight_pref_lb,
+      athlete.fahrenheit
+    );
+  });
 
   constructor(config: IntervalsConfig) {
     this.config = config;
@@ -579,17 +594,12 @@ export class IntervalsClient {
 
   /**
    * Get the athlete's timezone from their profile.
-   * Result is cached after first fetch.
+   * Cached after first successful fetch; defaults to UTC on error (and retries
+   * on the next call rather than caching the fallback).
    */
   async getAthleteTimezone(): Promise<string> {
-    if (this.cachedTimezone) {
-      return this.cachedTimezone;
-    }
-
     try {
-      const profile = await this.fetch<IntervalsAthleteProfile>('/profile');
-      this.cachedTimezone = profile.athlete.timezone ?? 'UTC';
-      return this.cachedTimezone;
+      return await this.fetchTimezone();
     } catch (error) {
       console.error('Error fetching athlete timezone, defaulting to UTC:', error);
       return 'UTC';
@@ -597,25 +607,11 @@ export class IntervalsClient {
   }
 
   /**
-   * Get sport settings, cached after first fetch. Uses single-flight to ensure
-   * concurrent callers (e.g. parallel normalizeActivity calls) share one HTTP request.
+   * Get sport settings. Cached and single-flighted via memoize so concurrent
+   * normalizeActivity calls share one HTTP request.
    */
-  private async getSportSettings(): Promise<IntervalsSportSettings[]> {
-    if (this.cachedSportSettings) {
-      return this.cachedSportSettings;
-    }
-    if (this.sportSettingsPromise) {
-      return this.sportSettingsPromise;
-    }
-    this.sportSettingsPromise = this.fetch<IntervalsSportSettings[]>('/sport-settings')
-      .then((settings) => {
-        this.cachedSportSettings = settings;
-        return settings;
-      })
-      .finally(() => {
-        this.sportSettingsPromise = null;
-      });
-    return this.sportSettingsPromise;
+  private getSportSettings(): Promise<IntervalsSportSettings[]> {
+    return this.fetchSportSettingsCached();
   }
 
   /**
@@ -666,22 +662,11 @@ export class IntervalsClient {
 
   /**
    * Get the athlete's unit preferences.
-   * Result is cached after first fetch.
-   * Uses root athlete endpoint which has unit preference fields.
+   * Cached and single-flighted via memoize. Uses root athlete endpoint which
+   * has the unit preference fields (the /profile endpoint does not).
    */
-  async getUnitPreferences(): Promise<UnitPreferences> {
-    if (this.cachedUnitPreferences) {
-      return this.cachedUnitPreferences;
-    }
-
-    // Use root endpoint (empty string) which has unit preference fields
-    const athlete = await this.fetch<IntervalsAthleteData>('');
-    this.cachedUnitPreferences = this.computeUnitPreferences(
-      athlete.measurement_preference,
-      athlete.weight_pref_lb,
-      athlete.fahrenheit
-    );
-    return this.cachedUnitPreferences;
+  getUnitPreferences(): Promise<UnitPreferences> {
+    return this.fetchUnitPreferencesCached();
   }
 
   /**
@@ -693,13 +678,11 @@ export class IntervalsClient {
     // Use root endpoint (empty string) which has all fields including DOB and unit prefs
     const athlete = await this.fetch<IntervalsAthleteData>('');
 
-    // Compute and cache unit preferences
     const unitPreferences = this.computeUnitPreferences(
       athlete.measurement_preference,
       athlete.weight_pref_lb,
       athlete.fahrenheit
     );
-    this.cachedUnitPreferences = unitPreferences;
 
     // Calculate age if date of birth is set
     const age = this.calculateAge(athlete.icu_date_of_birth);
