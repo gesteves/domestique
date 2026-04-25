@@ -198,7 +198,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     // For new sessions (initialization), create a new server and transport
     const mcpServer = new McpServer(
       { name: 'domestique', version: '1.0.0' },
-      { capabilities: { tools: { listChanged: true }, resources: {}, prompts: {} } }
+      { capabilities: { tools: { listChanged: true }, prompts: {} } }
     );
 
     // Register tools for this connection
