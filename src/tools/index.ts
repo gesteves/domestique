@@ -7,11 +7,34 @@ import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { LastFmClient } from '../clients/lastfm.js';
 import { CurrentTools } from './current.js';
 
-// Common annotation presets for tool categories
-const READ_ONLY: ToolAnnotations = { readOnlyHint: true };
-const DESTRUCTIVE: ToolAnnotations = { destructiveHint: true, openWorldHint: true };
-const CREATES_EXTERNAL: ToolAnnotations = { openWorldHint: true };
-const MODIFIES_EXTERNAL: ToolAnnotations = { openWorldHint: true, idempotentHint: true };
+// Common annotation presets for tool categories. All four hints are set
+// explicitly on every preset so MCP clients (e.g. MCP Inspector) don't fall
+// back to spec defaults — the spec defaults destructiveHint=true and
+// openWorldHint=true, which would mislabel read-only tools.
+const READ_ONLY: ToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+const DESTRUCTIVE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+const CREATES_EXTERNAL: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true,
+};
+const MODIFIES_EXTERNAL: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: true,
+};
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
 import * as schemas from '../schemas/index.js';
@@ -808,7 +831,7 @@ Get the activity_id from:
         },
         outputSchema: schemas.syncTrainerRoadRunsOutputSchema,
         // Can be destructive (deletes orphans), but also creates external resources
-        annotations: { openWorldHint: true, destructiveHint: true },
+        annotations: DESTRUCTIVE,
         handler: async (args: { oldest?: string; newest?: string }) =>
           this.planningTools.syncTRRuns(args),
       });
