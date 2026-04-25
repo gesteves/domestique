@@ -68,8 +68,7 @@ export class HistoricalTools {
     if (startDate === today || endDate === today) {
       throw new Error(
         `get_workout_history cannot be used for today's date (${today}); ` +
-        `it returns only historical data and may be incomplete for the current day. ` +
-        `Use get_todays_summary for today's workouts.`
+        `use get_todays_summary for today's workouts.`
       );
     }
 
