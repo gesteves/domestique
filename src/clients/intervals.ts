@@ -365,6 +365,11 @@ interface IntervalsEvent {
   duration?: number;
   tags?: string[];
   external_id?: string;
+  // Intervals.icu parses structured workout syntax out of `description` into
+  // this field. `workout_doc.description` is the prose-only prefix.
+  workout_doc?: {
+    description?: string;
+  };
 }
 
 /**

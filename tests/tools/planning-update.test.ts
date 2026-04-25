@@ -97,7 +97,7 @@ describe('PlanningTools updateWorkout', () => {
       expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
         '124',
         expect.objectContaining({
-          description: 'New workout notes\n\n',
+          description: 'New workout notes',
           tags: ['domestique'],
         })
       );
@@ -172,6 +172,153 @@ describe('PlanningTools updateWorkout', () => {
         '126',
         expect.objectContaining({
           description: 'RPE based intervals\n\nMain Set 3x\n- 5m Z3 Pace',
+        })
+      );
+    });
+
+    it('preserves existing workout_doc when only description is updated', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
+        id: 140,
+        uid: 'uid-140',
+        name: 'Preserve Doc Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        description: 'Old description\n\nWarmup\n- 10m Z2 Pace\n\nMain Set 5x\n- 3m Z4 Pace',
+        workout_doc: { description: 'Old description' },
+        tags: ['domestique'],
+      });
+
+      vi.mocked(mockIntervalsClient.updateEvent).mockResolvedValue({
+        id: 140,
+        uid: 'uid-140',
+        name: 'Preserve Doc Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        tags: ['domestique'],
+      });
+
+      await tools.updateWorkout({
+        event_id: '140',
+        description: 'New description',
+      });
+
+      expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
+        '140',
+        expect.objectContaining({
+          description: 'New description\n\nWarmup\n- 10m Z2 Pace\n\nMain Set 5x\n- 3m Z4 Pace',
+        })
+      );
+    });
+
+    it('preserves multi-paragraph description when only workout_doc is updated', async () => {
+      // The prose half of an existing description can itself contain blank
+      // lines, so a naive `split on first \n\n` would corrupt it. Using
+      // workout_doc.description as the boundary handles this correctly.
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
+        id: 141,
+        uid: 'uid-141',
+        name: 'Preserve Description Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        description: 'First paragraph.\n\nSecond paragraph with details.\n\nWarmup\n- 10m Z2 Pace\n\nMain Set 5x\n- 3m Z4 Pace',
+        workout_doc: { description: 'First paragraph.\n\nSecond paragraph with details.' },
+        tags: ['domestique'],
+      });
+
+      vi.mocked(mockIntervalsClient.updateEvent).mockResolvedValue({
+        id: 141,
+        uid: 'uid-141',
+        name: 'Preserve Description Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        tags: ['domestique'],
+      });
+
+      await tools.updateWorkout({
+        event_id: '141',
+        workout_doc: 'Cooldown\n- 5m Z1 Pace',
+      });
+
+      expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
+        '141',
+        expect.objectContaining({
+          description: 'First paragraph.\n\nSecond paragraph with details.\n\nCooldown\n- 5m Z1 Pace',
+        })
+      );
+    });
+
+    it('treats existing description as workout_doc only when no parsed prose exists', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
+        id: 142,
+        uid: 'uid-142',
+        name: 'No Prose Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        description: 'Warmup\n- 10m Z2 Pace\n\nMain Set 5x\n- 3m Z4 Pace',
+        workout_doc: {},
+        tags: ['domestique'],
+      });
+
+      vi.mocked(mockIntervalsClient.updateEvent).mockResolvedValue({
+        id: 142,
+        uid: 'uid-142',
+        name: 'No Prose Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        tags: ['domestique'],
+      });
+
+      await tools.updateWorkout({
+        event_id: '142',
+        description: 'New notes',
+      });
+
+      expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
+        '142',
+        expect.objectContaining({
+          description: 'New notes\n\nWarmup\n- 10m Z2 Pace\n\nMain Set 5x\n- 3m Z4 Pace',
+        })
+      );
+    });
+
+    it('clears description when explicitly set to empty string while preserving workout_doc', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
+        id: 143,
+        uid: 'uid-143',
+        name: 'Clear Description Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        description: 'Old description\n\nWarmup\n- 10m Z2 Pace',
+        workout_doc: { description: 'Old description' },
+        tags: ['domestique'],
+      });
+
+      vi.mocked(mockIntervalsClient.updateEvent).mockResolvedValue({
+        id: 143,
+        uid: 'uid-143',
+        name: 'Clear Description Test',
+        start_date_local: '2024-12-19T09:00:00',
+        type: 'Run',
+        category: 'WORKOUT',
+        tags: ['domestique'],
+      });
+
+      await tools.updateWorkout({
+        event_id: '143',
+        description: '',
+      });
+
+      expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
+        '143',
+        expect.objectContaining({
+          description: 'Warmup\n- 10m Z2 Pace',
         })
       );
     });

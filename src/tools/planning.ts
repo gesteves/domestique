@@ -225,13 +225,25 @@ export class PlanningTools {
       updatedFields.push('name');
     }
 
-    // Handle description + workout_doc combination
+    // Handle description + workout_doc combination.
+    // Both are stored concatenated as `${description}\n\n${workout_doc}` in
+    // Intervals.icu's single `description` field. When only one is provided,
+    // we recover the other so the omitted half isn't wiped. Intervals.icu
+    // exposes the parsed prose half as `workout_doc.description`, so we use
+    // that as a reliable boundary instead of guessing.
     if (description !== undefined || workout_doc !== undefined) {
-      const newDescription = description ?? '';
-      const newWorkoutDoc = workout_doc ?? '';
-      updatePayload.description = newDescription
+      const existingCombined = existingEvent.description ?? '';
+      const existingDescription = existingEvent.workout_doc?.description ?? '';
+      const prefix = existingDescription ? `${existingDescription}\n\n` : '';
+      const existingWorkoutDoc = existingCombined.startsWith(prefix)
+        ? existingCombined.slice(prefix.length)
+        : existingCombined;
+
+      const newDescription = description ?? existingDescription;
+      const newWorkoutDoc = workout_doc ?? existingWorkoutDoc;
+      updatePayload.description = newDescription && newWorkoutDoc
         ? `${newDescription}\n\n${newWorkoutDoc}`
-        : newWorkoutDoc;
+        : newDescription || newWorkoutDoc;
       if (description !== undefined) updatedFields.push('description');
       if (workout_doc !== undefined) updatedFields.push('workout_doc');
     }
