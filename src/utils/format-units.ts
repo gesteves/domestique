@@ -322,3 +322,44 @@ export function formatBP(systolic: number, diastolic: number): string {
 export function withUnit(value: number, unit: string, decimals = 0): string {
   return `${value.toFixed(decimals)} ${unit}`;
 }
+
+const RPE_LABELS: Record<number, string> = {
+  1: 'Nothing at all',
+  2: 'Very easy',
+  3: 'Easy',
+  4: 'Comfortable',
+  5: 'Slightly challenging',
+  6: 'Difficult',
+  7: 'Hard',
+  8: 'Very hard',
+  9: 'Extremely hard',
+  10: 'Max effort',
+};
+
+const FEEL_LABELS: Record<number, string> = {
+  1: 'Strong',
+  2: 'Good',
+  3: 'Normal',
+  4: 'Poor',
+  5: 'Weak',
+};
+
+/**
+ * Format an RPE value (1–10) as "[number] - label".
+ * Returns undefined for values outside 1–10.
+ */
+export function formatRpe(value: number): string | undefined {
+  const n = Math.round(value);
+  const label = RPE_LABELS[n];
+  return label ? `${n} - ${label}` : undefined;
+}
+
+/**
+ * Format a Feel value (1–5; 1=Strong, 5=Weak) as "[number] - label".
+ * Returns undefined for values outside 1–5.
+ */
+export function formatFeel(value: number): string | undefined {
+  const n = Math.round(value);
+  const label = FEEL_LABELS[n];
+  return label ? `${n} - ${label}` : undefined;
+}

@@ -23,6 +23,8 @@ import {
   isYardPool,
   formatPoolLength,
   formatStrokeLength,
+  formatRpe,
+  formatFeel,
 } from '../../src/utils/format-units.js';
 
 describe('format-units', () => {
@@ -382,6 +384,53 @@ describe('format-units', () => {
     it('honors decimal precision', () => {
       expect(withUnit(1.234, 'mmol/L', 2)).toBe('1.23 mmol/L');
       expect(withUnit(1.236, 'mmol/L', 2)).toBe('1.24 mmol/L');
+    });
+  });
+
+  describe('formatRpe', () => {
+    it('maps every value 1-10 to its label', () => {
+      expect(formatRpe(1)).toBe('1 - Nothing at all');
+      expect(formatRpe(2)).toBe('2 - Very easy');
+      expect(formatRpe(3)).toBe('3 - Easy');
+      expect(formatRpe(4)).toBe('4 - Comfortable');
+      expect(formatRpe(5)).toBe('5 - Slightly challenging');
+      expect(formatRpe(6)).toBe('6 - Difficult');
+      expect(formatRpe(7)).toBe('7 - Hard');
+      expect(formatRpe(8)).toBe('8 - Very hard');
+      expect(formatRpe(9)).toBe('9 - Extremely hard');
+      expect(formatRpe(10)).toBe('10 - Max effort');
+    });
+
+    it('rounds fractional values to the nearest integer', () => {
+      expect(formatRpe(7.4)).toBe('7 - Hard');
+      expect(formatRpe(7.6)).toBe('8 - Very hard');
+    });
+
+    it('returns undefined for out-of-range values', () => {
+      expect(formatRpe(0)).toBeUndefined();
+      expect(formatRpe(11)).toBeUndefined();
+      expect(formatRpe(-1)).toBeUndefined();
+    });
+  });
+
+  describe('formatFeel', () => {
+    it('maps every value 1-5 to its label', () => {
+      expect(formatFeel(1)).toBe('1 - Strong');
+      expect(formatFeel(2)).toBe('2 - Good');
+      expect(formatFeel(3)).toBe('3 - Normal');
+      expect(formatFeel(4)).toBe('4 - Poor');
+      expect(formatFeel(5)).toBe('5 - Weak');
+    });
+
+    it('rounds fractional values to the nearest integer', () => {
+      expect(formatFeel(2.4)).toBe('2 - Good');
+      expect(formatFeel(2.6)).toBe('3 - Normal');
+    });
+
+    it('returns undefined for out-of-range values', () => {
+      expect(formatFeel(0)).toBeUndefined();
+      expect(formatFeel(6)).toBeUndefined();
+      expect(formatFeel(-1)).toBeUndefined();
     });
   });
 });

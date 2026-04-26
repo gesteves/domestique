@@ -60,6 +60,8 @@ import {
   withUnit,
   formatPoolLength,
   formatStrokeLength,
+  formatRpe,
+  formatFeel,
 } from '../utils/format-units.js';
 import { getTodayInTimezone } from '../utils/tz.js';
 import { localStringToISO8601WithTimezone } from '../utils/date-formatting.js';
@@ -2117,8 +2119,11 @@ export class IntervalsClient {
 
       // Training load & feel
       load: activity.icu_training_load,
-      rpe: this.pickHighestRpe(activity.rpe, activity.icu_rpe),
-      feel: activity.feel,
+      rpe: (() => {
+        const v = this.pickHighestRpe(activity.rpe, activity.icu_rpe);
+        return v != null ? formatRpe(v) : undefined;
+      })(),
+      feel: activity.feel != null ? formatFeel(activity.feel) : undefined,
 
       // HR metrics
       hrrc: activity.hrrc,

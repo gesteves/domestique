@@ -59,8 +59,8 @@ export interface NormalizedWorkout {
 
   // Training load & subjective feel
   load?: number;
-  rpe?: number; // Rate of Perceived Exertion (1-10)
-  feel?: number; // How athlete felt (1-5)
+  rpe?: string; // e.g., "7 - Hard"
+  feel?: string; // e.g., "2 - Good"
 
   // Sweetspot
   ss_score?: number;

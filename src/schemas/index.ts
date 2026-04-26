@@ -250,8 +250,8 @@ const WorkoutZ = z.object({
   coasting_time: z.string().optional().describe('Total time spent coasting'),
   coasting_percentage: z.string().optional().describe('Share of ride time spent coasting'),
 
-  rpe: z.number().optional().describe('Rate of Perceived Exertion (1-10)'),
-  feel: z.number().optional().describe('How the athlete felt (1-5; 1=strong, 5=weak)'),
+  rpe: z.string().optional().describe('Rate of Perceived Exertion (1=Nothing at all, 2=Very easy, 3=Easy, 4=Comfortable, 5=Slightly challenging, 6=Difficult, 7=Hard, 8=Very hard, 9=Extremely hard, 10=Max effort)'),
+  feel: z.string().optional().describe('How the athlete felt (1=Strong, 2=Good, 3=Normal, 4=Poor, 5=Weak)'),
 
   ctl_at_activity: z.number().optional().describe('CTL (fitness) at time of activity'),
   atl_at_activity: z.number().optional().describe('ATL (fatigue) at time of activity'),
