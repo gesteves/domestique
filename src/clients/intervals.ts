@@ -58,6 +58,8 @@ import {
   formatVO2max,
   formatBP,
   withUnit,
+  formatPoolLength,
+  formatStrokeLength,
 } from '../utils/format-units.js';
 import { getTodayInTimezone } from '../utils/tz.js';
 import { localStringToISO8601WithTimezone } from '../utils/date-formatting.js';
@@ -307,6 +309,10 @@ interface IntervalsActivity {
 
   // Compliance (from single activity endpoint)
   compliance?: number; // Workout compliance percentage (0-100)
+
+  // Swim-specific (from single activity endpoint)
+  pool_length?: number; // Pool length in meters (e.g., 22.86 for a 25yd pool)
+  lengths?: number; // Number of pool lengths swum
 }
 
 interface IntervalsWellness {
@@ -1218,13 +1224,17 @@ export class IntervalsClient {
 
   /**
    * Get intervals for a specific activity.
+   *
    * Pass `activityType` so cadence values use the correct unit (rpm for cycling,
-   * spm for running/swimming). When omitted (e.g., the standalone
-   * `get_workout_intervals` tool), the activity is fetched once to look it up.
+   * spm for running/swimming) and `poolLengthM` so swim interval distances pick
+   * the right unit (yards for SCY/LCY pools, meters otherwise). When either is
+   * omitted (e.g., the standalone `get_workout_intervals` tool), the activity
+   * is fetched once to look them up.
    */
   async getActivityIntervals(
     activityId: string,
-    activityType?: string
+    activityType?: string,
+    poolLengthM?: number
   ): Promise<WorkoutIntervalsResponse> {
     const response = await this.fetchActivity<IntervalsActivityIntervalsResponse>(
       activityId,
@@ -1250,21 +1260,28 @@ export class IntervalsClient {
       // Heat strain or temperature data may not be available for this activity
     }
 
+    // Only fetch the activity when the caller didn't tell us the type.
+    // If the caller passed `activityType` but no `poolLengthM`, we trust them —
+    // most non-swim activities have no pool length, and the standalone
+    // `get_workout_intervals` tool is the only path that needs the lookup.
     let resolvedActivityType = activityType ?? '';
+    let resolvedPoolLength = poolLengthM;
     if (!resolvedActivityType) {
       try {
         const activity = await this.fetchActivity<IntervalsActivity>(activityId, '');
         resolvedActivityType = activity.type ?? '';
+        if (resolvedPoolLength === undefined) resolvedPoolLength = activity.pool_length ?? undefined;
       } catch (error) {
-        // If we can't resolve the type, cadence will default to rpm.
+        // If we can't resolve the activity, cadence defaults to rpm and swim
+        // distances default to meters.
       }
     }
 
     const intervals = (response.icu_intervals || []).map((i) =>
-      this.normalizeInterval(i, resolvedActivityType, heatStreamData, tempStreamData)
+      this.normalizeInterval(i, resolvedActivityType, resolvedPoolLength, heatStreamData, tempStreamData)
     );
     const groups = (response.icu_groups || []).map((g) =>
-      this.normalizeIntervalGroup(g, resolvedActivityType)
+      this.normalizeIntervalGroup(g, resolvedActivityType, resolvedPoolLength)
     );
 
     return {
@@ -1432,12 +1449,14 @@ export class IntervalsClient {
   private normalizeInterval(
     raw: IntervalsRawInterval,
     activityType: string,
+    poolLengthM: number | undefined,
     heatStreamData: { time: number[]; heat_strain_index: number[] } | null = null,
     tempStreamData: { time: number[]; temp: number[] } | null = null
   ): WorkoutInterval {
     const distanceKm = raw.distance ? raw.distance / 1000 : undefined;
     const speedKph = raw.average_speed ? raw.average_speed * 3.6 : undefined;
     const elevationGain = raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined;
+    const isSwim = isSwimmingActivity(activityType);
 
     // Calculate heat metrics for this interval if heat data is available
     let heatMetrics:
@@ -1555,7 +1574,7 @@ export class IntervalsClient {
       group_id: raw.group_id,
       start_seconds: raw.start_time,
       duration: formatDuration(raw.moving_time),
-      distance: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
+      distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim, poolLengthM) : undefined,
 
       // Power
       average_power: raw.average_watts != null ? formatPower(raw.average_watts) : undefined,
@@ -1577,7 +1596,9 @@ export class IntervalsClient {
       average_cadence:
         raw.average_cadence != null ? formatCadence(raw.average_cadence, activityType) : undefined,
       stride_length:
-        raw.average_stride != null ? formatHeight(raw.average_stride) : undefined,
+        raw.average_stride != null
+          ? (isSwim ? formatStrokeLength(raw.average_stride, poolLengthM) : formatHeight(raw.average_stride))
+          : undefined,
 
       // Speed (m/s → km/h)
       average_speed: speedKph != null ? formatSpeed(speedKph) : undefined,
@@ -1603,10 +1624,15 @@ export class IntervalsClient {
   /**
    * Normalize an interval group from the API
    */
-  private normalizeIntervalGroup(raw: IntervalsRawGroup, activityType: string): IntervalGroup {
+  private normalizeIntervalGroup(
+    raw: IntervalsRawGroup,
+    activityType: string,
+    poolLengthM: number | undefined
+  ): IntervalGroup {
     const speedKph = raw.average_speed ? raw.average_speed * 3.6 : undefined;
     const distanceKm = raw.distance ? raw.distance / 1000 : undefined;
     const elevationGain = raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined;
+    const isSwim = isSwimmingActivity(activityType);
 
     return {
       id: raw.id,
@@ -1616,7 +1642,7 @@ export class IntervalsClient {
       average_cadence:
         raw.average_cadence != null ? formatCadence(raw.average_cadence, activityType) : undefined,
       average_speed: speedKph != null ? formatSpeed(speedKph) : undefined,
-      distance: distanceKm != null ? formatDistance(distanceKm, false) : undefined,
+      distance: distanceKm != null ? formatDistance(distanceKm, isSwim, poolLengthM) : undefined,
       duration: raw.moving_time != null ? formatDuration(raw.moving_time) : undefined,
       elevation_gain: elevationGain != null ? formatLength(elevationGain) : undefined,
     };
@@ -1908,6 +1934,10 @@ export class IntervalsClient {
     // Convert GAP from sec/m to sec/km if available
     const gapSecPerKm = activity.gap ? activity.gap * 1000 : undefined;
 
+    // Pool length (in meters) drives the unit choice for swim distances:
+    // SCY/LCY pools (≈22.86m or ≈45.72m) emit yards, SCM/LCM and unknown emit meters.
+    const poolLengthM = activity.pool_length ?? undefined;
+
     // Determine if this is a swimming activity for unit formatting
     const isSwim = activity.type ? isSwimmingActivity(activity.type) : false;
 
@@ -1993,7 +2023,7 @@ export class IntervalsClient {
     let intervalGroups: IntervalGroup[] | undefined;
     if (!options?.skipExpensiveCalls) {
       try {
-        const intervalsResponse = await this.getActivityIntervals(activity.id, activity.type);
+        const intervalsResponse = await this.getActivityIntervals(activity.id, activity.type, poolLengthM);
         intervals = intervalsResponse.intervals.length > 0 ? intervalsResponse.intervals : undefined;
         intervalGroups = intervalsResponse.groups.length > 0 ? intervalsResponse.groups : undefined;
       } catch (error) {
@@ -2047,7 +2077,7 @@ export class IntervalsClient {
       name: activity.name,
       description: activity.description,
       duration: formatDuration(durationSeconds),
-      distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
+      distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim, poolLengthM) : undefined,
       tss: activity.icu_training_load,
       // Handle both API field naming conventions (icu_ prefixed and non-prefixed)
       normalized_power: normalizedPowerVal != null ? formatPower(normalizedPowerVal) : undefined,
@@ -2158,8 +2188,15 @@ export class IntervalsClient {
         tempMetrics?.end_ambient_temperature != null ? formatTemperature(tempMetrics.end_ambient_temperature) : undefined,
 
       // Running/pace metrics
-      average_stride: activity.average_stride != null ? formatHeight(activity.average_stride) : undefined,
+      // For swims the value is per-stroke distance; the unit follows the pool.
+      average_stride: activity.average_stride != null
+        ? (isSwim ? formatStrokeLength(activity.average_stride, poolLengthM) : formatHeight(activity.average_stride))
+        : undefined,
       gap: gapSecPerKm != null ? formatPace(gapSecPerKm, isSwim) : undefined,
+
+      // Swimming metrics (only present for pool swims)
+      pool_length: poolLengthM != null ? formatPoolLength(poolLengthM) : undefined,
+      lengths: activity.lengths,
 
       // Altitude
       average_altitude: activity.average_altitude != null ? formatLength(activity.average_altitude) : undefined,

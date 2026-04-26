@@ -20,6 +20,9 @@ import {
   formatVO2max,
   formatBP,
   withUnit,
+  isYardPool,
+  formatPoolLength,
+  formatStrokeLength,
 } from '../../src/utils/format-units.js';
 
 describe('format-units', () => {
@@ -78,6 +81,22 @@ describe('format-units', () => {
       // Note: 5.55 rounds to 5.5 due to floating-point precision (5.55 is actually 5.5499... in binary)
       expect(formatDistance(5.55, false)).toBe('5.5 km');
       expect(formatDistance(5.56, false)).toBe('5.6 km');
+    });
+
+    it('formats swim distances in yards when the pool is SCY (25yd ≈ 22.86 m)', () => {
+      expect(formatDistance(1.8288, true, 22.86)).toBe('2000 yd'); // 80×25yd workout
+      expect(formatDistance(0.0457, true, 22.86)).toBe('50 yd'); // 50yd interval
+    });
+
+    it('formats swim distances in yards when the pool is LCY (50yd ≈ 45.72 m)', () => {
+      expect(formatDistance(0.0914, true, 45.72)).toBe('100 yd');
+      expect(formatDistance(1.8288, true, 45.72)).toBe('2000 yd');
+    });
+
+    it('formats swim distances in meters for SCM (25 m), LCM (50 m), and open water', () => {
+      expect(formatDistance(0.05, true, 25)).toBe('50 m');
+      expect(formatDistance(0.1, true, 50)).toBe('100 m');
+      expect(formatDistance(0.182707, true, undefined)).toBe('183 m'); // open water
     });
   });
 
@@ -313,6 +332,44 @@ describe('format-units', () => {
     it('formats blood pressure as systolic/diastolic mmHg', () => {
       expect(formatBP(120, 80)).toBe('120/80 mmHg');
       expect(formatBP(119.6, 79.4)).toBe('120/79 mmHg');
+    });
+  });
+
+  describe('isYardPool', () => {
+    it('returns true for SCY (25yd ≈ 22.86 m) and LCY (50yd ≈ 45.72 m)', () => {
+      expect(isYardPool(22.86)).toBe(true);
+      expect(isYardPool(22.85)).toBe(true); // sensor noise tolerance
+      expect(isYardPool(45.72)).toBe(true);
+    });
+
+    it('returns false for metric pools and unknown lengths', () => {
+      expect(isYardPool(25)).toBe(false);
+      expect(isYardPool(50)).toBe(false);
+      expect(isYardPool(33)).toBe(false); // some odd pool
+      expect(isYardPool(undefined)).toBe(false);
+      expect(isYardPool(null)).toBe(false);
+    });
+  });
+
+  describe('formatPoolLength', () => {
+    it('rounds yard pools to whole yards', () => {
+      expect(formatPoolLength(22.86)).toBe('25 yd');
+      expect(formatPoolLength(45.72)).toBe('50 yd');
+    });
+
+    it('rounds metric pools to whole meters', () => {
+      expect(formatPoolLength(25)).toBe('25 m');
+      expect(formatPoolLength(50)).toBe('50 m');
+      expect(formatPoolLength(33.33)).toBe('33 m');
+    });
+  });
+
+  describe('formatStrokeLength', () => {
+    it('keeps two decimals and follows pool unit', () => {
+      expect(formatStrokeLength(1.42, undefined)).toBe('1.42 m');
+      expect(formatStrokeLength(1.42, 25)).toBe('1.42 m');
+      expect(formatStrokeLength(0.91, 22.86)).toBe('1.00 yd'); // 0.91 m ≈ 1 yd
+      expect(formatStrokeLength(0.5, 45.72)).toBe('0.55 yd');
     });
   });
 

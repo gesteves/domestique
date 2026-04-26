@@ -20,15 +20,64 @@ export function formatDuration(seconds: number): string {
 
 /**
  * Format distance to human-readable string.
+ *
+ * For swims, the unit follows the pool: yards for SCY (25yd / 22.86 m) and LCY
+ * (50yd / 45.72 m) pools, meters otherwise. Open water and unknown pool sizes
+ * default to meters. The user's broader metric/imperial preference is not
+ * consulted — this is a pool-convention choice, not a unit-system choice.
+ *
  * @param km Distance in kilometers
- * @param isSwim Whether this is a swimming activity (uses meters)
- * @returns Formatted string like "42.5 km" or "2500 m"
+ * @param isSwim Whether this is a swimming activity (per-stroke / per-length distances)
+ * @param poolLengthM Pool length in meters (only consulted when isSwim is true)
+ * @returns Formatted string like "42.5 km", "2500 m", or "2000 yd"
  */
-export function formatDistance(km: number, isSwim: boolean): string {
+export function formatDistance(km: number, isSwim: boolean, poolLengthM?: number): string {
   if (isSwim) {
-    return `${Math.round(km * 1000)} m`;
+    const meters = km * 1000;
+    if (isYardPool(poolLengthM)) {
+      return `${Math.round(meters * METERS_TO_YARDS)} yd`;
+    }
+    return `${Math.round(meters)} m`;
   }
   return `${km.toFixed(1)} km`;
+}
+
+const METERS_TO_YARDS = 1.0936133;
+
+/**
+ * Detect whether a pool length corresponds to a yards-based pool — 25yd
+ * (22.86 m) or 50yd (45.72 m). Allows ±0.1 m tolerance for sensor/source noise.
+ *
+ * Pool unit is fixed by the pool itself (SCY vs SCM/LCM), not by the athlete's
+ * unit preference, so this is a property of the data not the user.
+ */
+export function isYardPool(poolLengthM: number | undefined | null): boolean {
+  if (poolLengthM == null) return false;
+  return Math.abs(poolLengthM - 22.86) < 0.1 || Math.abs(poolLengthM - 45.72) < 0.1;
+}
+
+/**
+ * Format a pool length, picking the unit from the length itself (yards for
+ * SCY / LCY pools, meters otherwise).
+ */
+export function formatPoolLength(poolLengthM: number): string {
+  if (isYardPool(poolLengthM)) {
+    return `${Math.round(poolLengthM * METERS_TO_YARDS)} yd`;
+  }
+  return `${Math.round(poolLengthM)} m`;
+}
+
+/**
+ * Format a swim stroke length (per-stroke distance) using pool-aware units.
+ * @param meters Per-stroke distance in meters (as reported by the watch)
+ * @param poolLengthM Pool length in meters (or undefined for open water)
+ * @returns Formatted string like "1.42 m" or "1.55 yd"
+ */
+export function formatStrokeLength(meters: number, poolLengthM: number | undefined | null): string {
+  if (isYardPool(poolLengthM)) {
+    return `${(meters * METERS_TO_YARDS).toFixed(2)} yd`;
+  }
+  return `${meters.toFixed(2)} m`;
 }
 
 /**
