@@ -194,16 +194,16 @@ describe('WhoopClient', () => {
       // Date
       expect(result[0].date).toBe('2024-12-15');
       // Recovery metrics (nested under recovery)
-      expect(result[0].recovery.recovery_score).toBe(85);
-      expect(result[0].recovery.hrv_rmssd).toBe(65);
-      expect(result[0].recovery.resting_heart_rate).toBe(55);
-      expect(result[0].recovery.spo2_percentage).toBe(96.5);
-      expect(result[0].recovery.skin_temp_celsius).toBe(33.2);
+      expect(result[0].recovery.recovery_score).toBe('85%');
+      expect(result[0].recovery.hrv_rmssd).toBe('65 ms');
+      expect(result[0].recovery.resting_heart_rate).toBe('55 bpm');
+      expect(result[0].recovery.spo2).toBe('96.5%');
+      expect(result[0].recovery.skin_temp).toBe('33.2 °C');
       expect(result[0].recovery.recovery_level).toBe('SUFFICIENT');
       // Sleep performance metrics (nested under sleep)
-      expect(result[0].sleep.sleep_performance_percentage).toBe(95);
-      expect(result[0].sleep.sleep_consistency_percentage).toBe(88);
-      expect(result[0].sleep.sleep_efficiency_percentage).toBe(92.3);
+      expect(result[0].sleep.sleep_performance).toBe('95%');
+      expect(result[0].sleep.sleep_consistency).toBe('88%');
+      expect(result[0].sleep.sleep_efficiency).toBe('92%');
       // Sleep summary (nested)
       expect(result[0].sleep.sleep_summary.total_in_bed_time).toBe('8:00:00'); // 28800000 ms
       expect(result[0].sleep.sleep_summary.total_awake_time).toBe('0:30:00'); // 1800000 ms
@@ -216,7 +216,7 @@ describe('WhoopClient', () => {
       // Sleep needed (nested)
       expect(result[0].sleep.sleep_needed.baseline).toBe('8:00:00'); // 28800000 ms
       expect(result[0].sleep.sleep_needed.need_from_recent_strain).toBe('0:30:00'); // 1800000 ms
-      expect(result[0].sleep.respiratory_rate).toBe(15.5);
+      expect(result[0].sleep.respiratory_rate).toBe('15.5 breaths/min');
       // Sleep start/end times (converted to ISO 8601 in user's timezone with offset, which defaults to UTC in tests)
       expect(result[0].sleep.sleep_start).toBeDefined();
       expect(result[0].sleep.sleep_end).toBeDefined();
@@ -338,7 +338,7 @@ describe('WhoopClient', () => {
       const nap = result[0].sleep.naps![0];
       expect(nap.nap_summary.total_in_bed_time).toBe('0:30:00'); // 30 minutes
       expect(nap.nap_summary.total_slow_wave_sleep_time).toBe('0:15:00'); // 15 minutes
-      expect(nap.respiratory_rate).toBe(16.5);
+      expect(nap.respiratory_rate).toBe('16.5 breaths/min');
       expect(nap.nap_start).toBeDefined();
       expect(nap.nap_end).toBeDefined();
     });
@@ -476,8 +476,8 @@ describe('WhoopClient', () => {
       const result = await client.getTodayRecovery();
 
       // Returns { sleep, recovery } object
-      expect(result.recovery?.recovery_score).toBe(75);
-      expect(result.sleep?.sleep_performance_percentage).toBe(95);
+      expect(result.recovery?.recovery_score).toBe('75%');
+      expect(result.sleep?.sleep_performance).toBe('95%');
       expect(result.sleep?.sleep_summary.total_in_bed_time).toBe('8:00:00');
       // Verify sleep start/end times are populated
       expect(result.sleep?.sleep_start).toBeDefined();
@@ -616,7 +616,7 @@ describe('WhoopClient', () => {
       // Verify nap data
       const nap = result.sleep!.naps![0];
       expect(nap.nap_summary.total_in_bed_time).toBe('0:25:00'); // 25 minutes
-      expect(nap.respiratory_rate).toBe(15.2);
+      expect(nap.respiratory_rate).toBe('15.2 breaths/min');
       expect(nap.nap_start).toBeDefined();
       expect(nap.nap_end).toBeDefined();
     });
@@ -862,7 +862,7 @@ describe('WhoopClient', () => {
       expect(result[0].id).toBe('1001');
       expect(result[0].activity_type).toBe('Running');
       expect(result[0].strain_score).toBe(10.2);
-      expect(result[0].average_heart_rate).toBe(145);
+      expect(result[0].average_heart_rate).toBe('145 bpm');
       expect(result[0].distance).toBe('8.5 km');
       expect(result[0].elevation_gain).toBe('45 m');
       expect(result[0].zone_durations?.zone_3).toBe('0:20:00'); // 1200000 ms

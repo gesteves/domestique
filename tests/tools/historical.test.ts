@@ -223,14 +223,14 @@ describe('HistoricalTools', () => {
             need_from_recent_strain: '0:15:00',
             need_from_recent_nap: '0:00:00',
           },
-          sleep_performance_percentage: 85,
+          sleep_performance: '85%',
           sleep_performance_level: 'OPTIMAL',
           sleep_performance_level_description: 'Optimal sleep',
         },
         recovery: {
-          recovery_score: 80,
-          hrv_rmssd: 60,
-          resting_heart_rate: 52,
+          recovery_score: '80%',
+          hrv_rmssd: '60 ms',
+          resting_heart_rate: '52 bpm',
           recovery_level: 'SUFFICIENT',
           recovery_level_description: 'Sufficient recovery',
         },
@@ -256,14 +256,14 @@ describe('HistoricalTools', () => {
             need_from_recent_strain: '0:10:00',
             need_from_recent_nap: '0:00:00',
           },
-          sleep_performance_percentage: 75,
+          sleep_performance: '75%',
           sleep_performance_level: 'SUFFICIENT',
           sleep_performance_level_description: 'Sufficient sleep',
         },
         recovery: {
-          recovery_score: 70,
-          hrv_rmssd: 55,
-          resting_heart_rate: 54,
+          recovery_score: '70%',
+          hrv_rmssd: '55 ms',
+          resting_heart_rate: '54 bpm',
           recovery_level: 'ADEQUATE',
           recovery_level_description: 'Adequate recovery',
         },
@@ -289,14 +289,14 @@ describe('HistoricalTools', () => {
             need_from_recent_strain: '0:15:00',
             need_from_recent_nap: '0:00:00',
           },
-          sleep_performance_percentage: 95,
+          sleep_performance: '95%',
           sleep_performance_level: 'OPTIMAL',
           sleep_performance_level_description: 'Optimal sleep',
         },
         recovery: {
-          recovery_score: 90,
-          hrv_rmssd: 70,
-          resting_heart_rate: 50,
+          recovery_score: '90%',
+          hrv_rmssd: '70 ms',
+          resting_heart_rate: '50 bpm',
           recovery_level: 'SUFFICIENT',
           recovery_level_description: 'Sufficient recovery',
         },
@@ -312,11 +312,11 @@ describe('HistoricalTools', () => {
       });
 
       expect(result.data).toEqual(mockRecoveries);
-      expect(result.summary.avg_recovery).toBe(80); // (80 + 70 + 90) / 3
-      expect(result.summary.avg_hrv).toBeCloseTo(61.7, 1); // (60 + 55 + 70) / 3
-      expect(result.summary.avg_sleep_hours).toBeCloseTo(7.8, 1); // (8 + 7 + 8.5) / 3 based on total_in_bed_time
-      expect(result.summary.min_recovery).toBe(70);
-      expect(result.summary.max_recovery).toBe(90);
+      expect(result.summary.avg_recovery).toBe('80%'); // (80 + 70 + 90) / 3
+      expect(result.summary.avg_hrv).toBe('62 ms'); // (60 + 55 + 70) / 3
+      expect(result.summary.avg_sleep).toBe('7:48:00'); // (8 + 7 + 8.5) / 3 hrs, rounded to 7.8
+      expect(result.summary.min_recovery).toBe('70%');
+      expect(result.summary.max_recovery).toBe('90%');
     });
 
     it('should return empty summary when no Whoop client', async () => {
@@ -327,7 +327,7 @@ describe('HistoricalTools', () => {
       });
 
       expect(result.data).toEqual([]);
-      expect(result.summary.avg_recovery).toBe(0);
+      expect(result.summary.avg_recovery).toBeUndefined();
     });
 
     it('should handle empty recovery data', async () => {
@@ -338,9 +338,9 @@ describe('HistoricalTools', () => {
       });
 
       expect(result.data).toEqual([]);
-      expect(result.summary.avg_recovery).toBe(0);
-      expect(result.summary.min_recovery).toBe(0);
-      expect(result.summary.max_recovery).toBe(0);
+      expect(result.summary.avg_recovery).toBeUndefined();
+      expect(result.summary.min_recovery).toBeUndefined();
+      expect(result.summary.max_recovery).toBeUndefined();
     });
   });
 
@@ -911,9 +911,9 @@ describe('HistoricalTools', () => {
       expect(result.sport).toBe('cycling');
       expect(result.activity_count).toBe(1);
       expect(result.summary.best_5s).toBeDefined();
-      expect(result.summary.best_5s?.watts).toBe(900);
-      expect(result.summary.best_20min?.watts).toBe(300);
-      expect(result.summary.estimated_ftp).toBe(285); // 300 * 0.95
+      expect(result.summary.best_5s?.power).toBe('900 W');
+      expect(result.summary.best_20min?.power).toBe('300 W');
+      expect(result.summary.estimated_ftp).toBe('285 W'); // 300 * 0.95
     });
 
     it('should parse natural language dates', async () => {
@@ -1154,8 +1154,8 @@ describe('HistoricalTools', () => {
 
       expect(result.period_start).toBe('2024-12-01');
       expect(result.sport).toBeNull(); // No sport filter
-      expect(result.summary.max_5s?.bpm).toBe(190);
-      expect(result.summary.max_20min?.bpm).toBe(165);
+      expect(result.summary.max_5s?.hr).toBe('190 bpm');
+      expect(result.summary.max_20min?.hr).toBe('165 bpm');
     });
 
     it('should filter by sport', async () => {
@@ -1204,7 +1204,7 @@ describe('HistoricalTools', () => {
       });
 
       expect(result.comparison).toBeDefined();
-      expect(result.comparison?.changes[0].change_bpm).toBe(5); // 190 - 185
+      expect(result.comparison?.changes[0].change_hr).toBe('5 bpm'); // 190 - 185
     });
 
     it('should handle empty activities', async () => {
@@ -1258,18 +1258,18 @@ describe('HistoricalTools', () => {
         elevation_gain: '800 m',
         tss: 120,
         calories: 1200,
-        work_kj: 1500,
+        work: '1500 kJ',
         coasting_time: '0:15:00',
         source: 'intervals.icu',
         hr_zones: [
-          { name: 'Recovery', low_bpm: 0, high_bpm: 120, time_in_zone: '0:30:00' },
-          { name: 'Endurance', low_bpm: 120, high_bpm: 145, time_in_zone: '1:00:00' },
-          { name: 'Tempo', low_bpm: 145, high_bpm: 160, time_in_zone: '0:30:00' },
+          { name: 'Recovery', low_hr: '0 bpm', high_hr: '120 bpm', time_in_zone: '0:30:00' },
+          { name: 'Endurance', low_hr: '120 bpm', high_hr: '145 bpm', time_in_zone: '1:00:00' },
+          { name: 'Tempo', low_hr: '145 bpm', high_hr: '160 bpm', time_in_zone: '0:30:00' },
         ],
         power_zones: [
-          { name: 'Recovery', low_percent: 0, high_percent: 55, low_watts: 0, high_watts: 140, time_in_zone: '0:20:00' },
-          { name: 'Endurance', low_percent: 55, high_percent: 75, low_watts: 140, high_watts: 190, time_in_zone: '1:10:00' },
-          { name: 'Tempo', low_percent: 75, high_percent: 90, low_watts: 190, high_watts: 230, time_in_zone: '0:30:00' },
+          { name: 'Recovery', low_pct: '0%', high_pct: '55%', low_power: '0 W', high_power: '140 W', time_in_zone: '0:20:00' },
+          { name: 'Endurance', low_pct: '55%', high_pct: '75%', low_power: '140 W', high_power: '190 W', time_in_zone: '1:10:00' },
+          { name: 'Tempo', low_pct: '75%', high_pct: '90%', low_power: '190 W', high_power: '230 W', time_in_zone: '0:30:00' },
         ],
       },
       {
@@ -1281,15 +1281,15 @@ describe('HistoricalTools', () => {
         elevation_gain: '100 m',
         tss: 60,
         calories: 500,
-        work_kj: 0,
+        work: '0 kJ',
         source: 'intervals.icu',
         hr_zones: [
-          { name: 'Recovery', low_bpm: 0, high_bpm: 130, time_in_zone: '0:10:00' },
-          { name: 'Endurance', low_bpm: 130, high_bpm: 155, time_in_zone: '0:35:00' },
+          { name: 'Recovery', low_hr: '0 bpm', high_hr: '130 bpm', time_in_zone: '0:10:00' },
+          { name: 'Endurance', low_hr: '130 bpm', high_hr: '155 bpm', time_in_zone: '0:35:00' },
         ],
         pace_zones: [
-          { name: 'Recovery', low_percent: 0, high_percent: 75, slow_pace: '6:00/km', fast_pace: '5:20/km', time_in_zone: '0:15:00' },
-          { name: 'Endurance', low_percent: 75, high_percent: 90, slow_pace: '5:20/km', fast_pace: '4:40/km', time_in_zone: '0:30:00' },
+          { name: 'Recovery', low_pct: '0%', high_pct: '75%', slow_pace: '6:00/km', fast_pace: '5:20/km', time_in_zone: '0:15:00' },
+          { name: 'Endurance', low_pct: '75%', high_pct: '90%', slow_pace: '5:20/km', fast_pace: '4:40/km', time_in_zone: '0:30:00' },
         ],
       },
       {
@@ -1301,18 +1301,18 @@ describe('HistoricalTools', () => {
         elevation_gain: '600 m',
         tss: 90,
         calories: 900,
-        work_kj: 1100,
+        work: '1100 kJ',
         coasting_time: '0:10:00',
         source: 'intervals.icu',
         hr_zones: [
-          { name: 'Recovery', low_bpm: 0, high_bpm: 120, time_in_zone: '0:20:00' },
-          { name: 'Endurance', low_bpm: 120, high_bpm: 145, time_in_zone: '0:50:00' },
-          { name: 'Tempo', low_bpm: 145, high_bpm: 160, time_in_zone: '0:20:00' },
+          { name: 'Recovery', low_hr: '0 bpm', high_hr: '120 bpm', time_in_zone: '0:20:00' },
+          { name: 'Endurance', low_hr: '120 bpm', high_hr: '145 bpm', time_in_zone: '0:50:00' },
+          { name: 'Tempo', low_hr: '145 bpm', high_hr: '160 bpm', time_in_zone: '0:20:00' },
         ],
         power_zones: [
-          { name: 'Recovery', low_percent: 0, high_percent: 55, low_watts: 0, high_watts: 140, time_in_zone: '0:15:00' },
-          { name: 'Endurance', low_percent: 55, high_percent: 75, low_watts: 140, high_watts: 190, time_in_zone: '0:55:00' },
-          { name: 'Tempo', low_percent: 75, high_percent: 90, low_watts: 190, high_watts: 230, time_in_zone: '0:20:00' },
+          { name: 'Recovery', low_pct: '0%', high_pct: '55%', low_power: '0 W', high_power: '140 W', time_in_zone: '0:15:00' },
+          { name: 'Endurance', low_pct: '55%', high_pct: '75%', low_power: '140 W', high_power: '190 W', time_in_zone: '0:55:00' },
+          { name: 'Tempo', low_pct: '75%', high_pct: '90%', low_power: '190 W', high_power: '230 W', time_in_zone: '0:20:00' },
         ],
       },
     ];
@@ -1338,7 +1338,8 @@ describe('HistoricalTools', () => {
       expect(result.totals.climbing).toBe('1500 m'); // 800 + 100 + 600
       expect(result.totals.load).toBe(270); // 120 + 60 + 90
       expect(result.totals.kcal).toBe(2600); // 1200 + 500 + 900
-      expect(result.totals.work).toBe('2600 kJ'); // 1500 + 0 + 1100
+      // Mock activities use the new `work: "X kJ"` field shape
+      expect(result.totals.work).toBe('2600 kJ');
       expect(result.totals.coasting).toBe('0:25:00'); // 0:15 + 0:10
 
       // Check HR zones are aggregated
@@ -1440,7 +1441,7 @@ describe('HistoricalTools', () => {
       const recoveryZone = cyclingPowerZones!.find((z) => z.name === 'Recovery');
       expect(recoveryZone).toBeDefined();
       expect(recoveryZone!.time).toBe('0:35:00');
-      expect(recoveryZone!.percentage).toBeCloseTo(16.7, 0);
+      expect(recoveryZone!.percentage).toBe('16.7%');
 
       // Check running pace zones
       const runningPaceZones = result.by_sport.running.zones.pace;

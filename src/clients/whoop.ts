@@ -12,7 +12,19 @@ import type {
   WhoopRecoveryTrendEntry,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
-import { formatDuration, formatDistance, isSwimmingActivity } from '../utils/format-units.js';
+import {
+  formatDuration,
+  formatDistance,
+  isSwimmingActivity,
+  formatHR,
+  formatHeight,
+  formatWeight,
+  formatPercent,
+  formatHRV,
+  formatTemperature,
+  formatLength,
+  withUnit,
+} from '../utils/format-units.js';
 import { formatToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
   addDaysToYMD,
@@ -387,17 +399,16 @@ export class WhoopClient {
   private refreshPromise: Promise<void> | null = null;
 
   // Body measurements rarely change; memoize for the session with single-flight.
-  private fetchBodyMeasurementsCached = memoize(async () => {
+  private fetchBodyMeasurementsCached = memoize(async (): Promise<WhoopBodyMeasurements> => {
     const response = await this.fetch<WhoopBodyMeasurementResponse>(
       '/user/measurement/body',
       undefined,
       { operation: 'get body measurements' }
     );
-    const round2 = (value: number) => Math.round(value * 100) / 100;
     return {
-      height_meter: round2(response.height_meter),
-      weight_kilogram: round2(response.weight_kilogram),
-      max_heart_rate: response.max_heart_rate,
+      height: formatHeight(response.height_meter),
+      weight: formatWeight(response.weight_kilogram),
+      max_heart_rate: formatHR(response.max_heart_rate),
     };
   });
 
@@ -1101,11 +1112,6 @@ export class WhoopClient {
   // Normalization Helpers
   // ============================================
 
-  /** Helper to round to 2 decimal places */
-  private round2(value: number | undefined): number | undefined {
-    return value !== undefined ? Math.round(value * 100) / 100 : undefined;
-  }
-
   /**
    * Convert a UTC timestamp to ISO 8601 format in a specific timezone.
    * Returns format: YYYY-MM-DDTHH:mm:ss±HH:mm
@@ -1164,7 +1170,7 @@ export class WhoopClient {
    */
   private async normalizeSleep(sleep: WhoopSleep): Promise<WhoopSleepData> {
     const sleepScore = sleep.score;
-    const sleepPerfPct = this.round2(sleepScore.sleep_performance_percentage) ?? 0;
+    const sleepPerfPct = sleepScore.sleep_performance_percentage ?? 0;
     const sleepPerformanceLevel = getSleepPerformanceLevel(sleepPerfPct);
 
     // Convert start/end times to ISO 8601 format in user's timezone
@@ -1175,10 +1181,19 @@ export class WhoopClient {
     return {
       sleep_summary: this.normalizeSleepSummary(sleepScore.stage_summary),
       sleep_needed: this.normalizeSleepNeeded(sleepScore.sleep_needed),
-      respiratory_rate: this.round2(sleepScore.respiratory_rate),
-      sleep_performance_percentage: sleepPerfPct,
-      sleep_consistency_percentage: this.round2(sleepScore.sleep_consistency_percentage),
-      sleep_efficiency_percentage: this.round2(sleepScore.sleep_efficiency_percentage),
+      respiratory_rate:
+        sleepScore.respiratory_rate !== undefined
+          ? withUnit(sleepScore.respiratory_rate, 'breaths/min', 1)
+          : undefined,
+      sleep_performance: formatPercent(sleepPerfPct),
+      sleep_consistency:
+        sleepScore.sleep_consistency_percentage !== undefined
+          ? formatPercent(sleepScore.sleep_consistency_percentage)
+          : undefined,
+      sleep_efficiency:
+        sleepScore.sleep_efficiency_percentage !== undefined
+          ? formatPercent(sleepScore.sleep_efficiency_percentage)
+          : undefined,
       sleep_performance_level: sleepPerformanceLevel,
       sleep_performance_level_description: getSleepPerformanceLevelDescription(sleepPerformanceLevel),
       sleep_start,
@@ -1200,7 +1215,10 @@ export class WhoopClient {
 
     return {
       nap_summary: this.normalizeSleepSummary(napScore.stage_summary),
-      respiratory_rate: this.round2(napScore.respiratory_rate),
+      respiratory_rate:
+        napScore.respiratory_rate !== undefined
+          ? withUnit(napScore.respiratory_rate, 'breaths/min', 1)
+          : undefined,
       nap_start,
       nap_end,
     };
@@ -1213,13 +1231,19 @@ export class WhoopClient {
     const recoveryLevel = getRecoveryLevel(recovery.score.recovery_score);
 
     return {
-      recovery_score: recovery.score.recovery_score,
+      recovery_score: formatPercent(recovery.score.recovery_score),
       recovery_level: recoveryLevel,
       recovery_level_description: getRecoveryLevelDescription(recoveryLevel),
-      hrv_rmssd: this.round2(recovery.score.hrv_rmssd_milli)!,
-      resting_heart_rate: recovery.score.resting_heart_rate,
-      spo2_percentage: this.round2(recovery.score.spo2_percentage),
-      skin_temp_celsius: this.round2(recovery.score.skin_temp_celsius),
+      hrv_rmssd: formatHRV(recovery.score.hrv_rmssd_milli),
+      resting_heart_rate: formatHR(recovery.score.resting_heart_rate),
+      spo2:
+        recovery.score.spo2_percentage !== undefined
+          ? formatPercent(recovery.score.spo2_percentage, 1)
+          : undefined,
+      skin_temp:
+        recovery.score.skin_temp_celsius !== undefined
+          ? formatTemperature(recovery.score.skin_temp_celsius)
+          : undefined,
     };
   }
 
@@ -1252,8 +1276,14 @@ export class WhoopClient {
       strain_score: cycle.score.strain,
       strain_level: strainLevel,
       strain_level_description: getStrainLevelDescription(strainLevel),
-      average_heart_rate: cycle.score.average_heart_rate,
-      max_heart_rate: cycle.score.max_heart_rate,
+      average_heart_rate:
+        cycle.score.average_heart_rate !== undefined
+          ? formatHR(cycle.score.average_heart_rate)
+          : undefined,
+      max_heart_rate:
+        cycle.score.max_heart_rate !== undefined
+          ? formatHR(cycle.score.max_heart_rate)
+          : undefined,
       calories: Math.round(cycle.score.kilojoule / 4.184),
       activities: await Promise.all(
         workouts.filter((w) => w.score !== null).map((w) => this.normalizeWorkout(w))
@@ -1306,13 +1336,14 @@ export class WhoopClient {
       end_time: formatToISO8601WithTimezone(workout.end, timezone),
       duration: formatDuration(durationSeconds),
       strain_score: score.strain,
-      average_heart_rate: score.average_heart_rate,
-      max_heart_rate: score.max_heart_rate,
+      average_heart_rate:
+        score.average_heart_rate !== undefined ? formatHR(score.average_heart_rate) : undefined,
+      max_heart_rate:
+        score.max_heart_rate !== undefined ? formatHR(score.max_heart_rate) : undefined,
       calories: Math.round(score.kilojoule / 4.184),
       distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
-      elevation_gain: score.altitude_gain_meter !== undefined
-        ? `${Math.round(score.altitude_gain_meter)} m`
-        : undefined,
+      elevation_gain:
+        score.altitude_gain_meter !== undefined ? formatLength(score.altitude_gain_meter) : undefined,
       zone_durations: zoneDurations,
     };
   }

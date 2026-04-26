@@ -8,6 +8,12 @@ import {
   parseDurationToSeconds,
   formatLargeDuration,
   formatDurationLabel,
+  formatPercent,
+  formatHRV,
+  formatDuration,
+  formatPower,
+  formatHR,
+  withUnit,
 } from '../utils/format-units.js';
 import type {
   TrainingLoadTrends,
@@ -92,24 +98,15 @@ export class HistoricalTools {
   ): Promise<{
     data: WhoopRecoveryTrendEntry[];
     summary: {
-      avg_recovery: number;
-      avg_hrv: number;
-      avg_sleep_hours: number;
-      min_recovery: number;
-      max_recovery: number;
+      avg_recovery?: string;
+      avg_hrv?: string;
+      avg_sleep?: string;
+      min_recovery?: string;
+      max_recovery?: string;
     };
   }> {
     if (!this.whoop) {
-      return {
-        data: [],
-        summary: {
-          avg_recovery: 0,
-          avg_hrv: 0,
-          avg_sleep_hours: 0,
-          min_recovery: 0,
-          max_recovery: 0,
-        },
-      };
+      return { data: [], summary: {} };
     }
 
     // Use athlete's timezone for date parsing
@@ -125,33 +122,27 @@ export class HistoricalTools {
   }
 
   private calculateRecoverySummary(data: WhoopRecoveryTrendEntry[]): {
-    avg_recovery: number;
-    avg_hrv: number;
-    avg_sleep_hours: number;
-    min_recovery: number;
-    max_recovery: number;
+    avg_recovery?: string;
+    avg_hrv?: string;
+    avg_sleep?: string;
+    min_recovery?: string;
+    max_recovery?: string;
   } {
     if (data.length === 0) {
-      return {
-        avg_recovery: 0,
-        avg_hrv: 0,
-        avg_sleep_hours: 0,
-        min_recovery: 0,
-        max_recovery: 0,
-      };
+      return {};
     }
 
-    const recoveryScores = data.map((d) => d.recovery.recovery_score);
-    const hrvValues = data.map((d) => d.recovery.hrv_rmssd);
-    // Calculate sleep hours from total_in_bed_time in sleep_summary
+    // Parse the formatted strings back to numbers for aggregation, then re-format.
+    const recoveryScores = data.map((d) => parseFloat(d.recovery.recovery_score));
+    const hrvValues = data.map((d) => parseFloat(d.recovery.hrv_rmssd));
     const sleepHours = data.map((d) => parseDurationToHours(d.sleep.sleep_summary.total_in_bed_time));
 
     return {
-      avg_recovery: this.average(recoveryScores),
-      avg_hrv: this.average(hrvValues),
-      avg_sleep_hours: this.average(sleepHours),
-      min_recovery: Math.min(...recoveryScores),
-      max_recovery: Math.max(...recoveryScores),
+      avg_recovery: formatPercent(this.average(recoveryScores)),
+      avg_hrv: formatHRV(this.average(hrvValues)),
+      avg_sleep: formatDuration(this.average(sleepHours) * 3600),
+      min_recovery: formatPercent(Math.min(...recoveryScores)),
+      max_recovery: formatPercent(Math.max(...recoveryScores)),
     };
   }
 
@@ -413,11 +404,17 @@ export class HistoricalTools {
         continue;
       }
 
-      let best: PowerBest | null = null;
+      type Candidate = {
+        watts: number;
+        watts_per_kg: number;
+        activity_id: string;
+        date: string;
+      };
+      let bestCandidate: Candidate | null = null;
       for (const activity of activities) {
         const point = activity.curve[idx];
-        if (point && point.watts > 0 && (!best || point.watts > best.watts)) {
-          best = {
+        if (point && point.watts > 0 && (!bestCandidate || point.watts > bestCandidate.watts)) {
+          bestCandidate = {
             watts: point.watts,
             watts_per_kg: point.watts_per_kg,
             activity_id: activity.activity_id,
@@ -425,12 +422,20 @@ export class HistoricalTools {
           };
         }
       }
-      bests[key as keyof PowerCurveSummary] = best;
+      bests[key as keyof PowerCurveSummary] = bestCandidate
+        ? {
+            power: formatPower(bestCandidate.watts),
+            power_to_weight: withUnit(bestCandidate.watts_per_kg, 'W/kg', 1),
+            activity_id: bestCandidate.activity_id,
+            date: bestCandidate.date,
+          }
+        : null;
     }
 
-    // Estimate FTP as 95% of best 20min power
+    // Estimate FTP as 95% of best 20min power. Read from the parsed numeric value
+    // we kept on the candidate side; PowerBest.power is a formatted string.
     const best20min = bests.best_20min as PowerBest | null;
-    const estimatedFtp = best20min ? Math.round(best20min.watts * 0.95) : null;
+    const estimatedFtp = best20min ? formatPower(parseFloat(best20min.power) * 0.95) : null;
 
     return {
       best_5s: bests.best_5s ?? null,
@@ -470,18 +475,20 @@ export class HistoricalTools {
 
       if (!currentBest || !previousBest) continue;
 
-      const changeWatts = currentBest.watts - previousBest.watts;
+      const currentWatts = parseFloat(currentBest.power);
+      const previousWatts = parseFloat(previousBest.power);
+      const changeWatts = currentWatts - previousWatts;
       const changePercent =
-        previousBest.watts > 0
-          ? Math.round((changeWatts / previousBest.watts) * 1000) / 10
+        previousWatts > 0
+          ? Math.round((changeWatts / previousWatts) * 1000) / 10
           : 0;
 
       comparisons.push({
         duration_label: key.replace('best_', ''),
-        current_watts: currentBest.watts,
-        previous_watts: previousBest.watts,
-        change_watts: changeWatts,
-        change_percent: changePercent,
+        current_power: formatPower(currentWatts),
+        previous_power: formatPower(previousWatts),
+        change_power: formatPower(changeWatts),
+        change_percent: formatPercent(changePercent, 1),
         improved: changeWatts > 0,
       });
     }
@@ -656,7 +663,7 @@ export class HistoricalTools {
         current_seconds: currentBest.time_seconds,
         previous_seconds: previousBest.time_seconds,
         change_seconds: changeSeconds,
-        change_percent: changePercent,
+        change_percent: formatPercent(changePercent, 1),
         improved: changeSeconds < 0, // Faster is better for pace
       });
     }
@@ -756,18 +763,25 @@ export class HistoricalTools {
         continue;
       }
 
-      let best: HRBest | null = null;
+      type Candidate = { bpm: number; activity_id: string; date: string };
+      let bestCandidate: Candidate | null = null;
       for (const activity of activities) {
         const point = activity.curve[idx];
-        if (point && point.bpm > 0 && (!best || point.bpm > best.bpm)) {
-          best = {
+        if (point && point.bpm > 0 && (!bestCandidate || point.bpm > bestCandidate.bpm)) {
+          bestCandidate = {
             bpm: point.bpm,
             activity_id: activity.activity_id,
             date: activity.date,
           };
         }
       }
-      bests[key as keyof HRCurveSummary] = best;
+      bests[key as keyof HRCurveSummary] = bestCandidate
+        ? {
+            hr: formatHR(bestCandidate.bpm),
+            activity_id: bestCandidate.activity_id,
+            date: bestCandidate.date,
+          }
+        : null;
     }
 
     return {
@@ -806,18 +820,20 @@ export class HistoricalTools {
 
       if (!currentBest || !previousBest) continue;
 
-      const changeBpm = currentBest.bpm - previousBest.bpm;
+      const currentBpm = parseFloat(currentBest.hr);
+      const previousBpm = parseFloat(previousBest.hr);
+      const changeBpm = currentBpm - previousBpm;
       const changePercent =
-        previousBest.bpm > 0
-          ? Math.round((changeBpm / previousBest.bpm) * 1000) / 10
+        previousBpm > 0
+          ? Math.round((changeBpm / previousBpm) * 1000) / 10
           : 0;
 
       comparisons.push({
         duration_label: key.replace('max_', ''),
-        current_bpm: currentBest.bpm,
-        previous_bpm: previousBest.bpm,
-        change_bpm: changeBpm,
-        change_percent: changePercent,
+        current_hr: formatHR(currentBpm),
+        previous_hr: formatHR(previousBpm),
+        change_hr: formatHR(changeBpm),
+        change_percent: formatPercent(changePercent, 1),
       });
     }
 
@@ -946,8 +962,8 @@ export class HistoricalTools {
         kcal += activity.calories;
       }
 
-      if (activity.work_kj) {
-        workKj += activity.work_kj;
+      if (activity.work) {
+        workKj += parseFloat(activity.work);
       }
 
       if (activity.coasting_time) {
@@ -1094,7 +1110,7 @@ export class HistoricalTools {
       .map(([name, seconds]) => ({
         name,
         time: formatLargeDuration(seconds),
-        percentage: totalSeconds > 0 ? Math.round((seconds / totalSeconds) * 1000) / 10 : 0,
+        percentage: formatPercent(totalSeconds > 0 ? (seconds / totalSeconds) * 100 : 0, 1),
       }))
       .sort((a, b) => {
         // Sort by zone order

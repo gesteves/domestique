@@ -44,7 +44,7 @@ export const powerCurveProgressHint: HintGenerator<PowerCurvesResponse> = (data)
     );
   }
 
-  const improvements = data.comparison.changes.filter((c) => c.improved && c.change_percent >= 3);
+  const improvements = data.comparison.changes.filter((c) => c.improved && parseFloat(c.change_percent) >= 3);
   if (improvements.length > 0) {
     return (
       `Significant power improvements detected. Use get_sports_settings with sport='cycling' to check ` +
@@ -67,7 +67,7 @@ export const paceCurveProgressHint: HintGenerator<PaceCurvesResponse> = (data) =
     );
   }
 
-  const improvements = data.comparison.changes.filter((c) => c.improved && c.change_percent >= 3);
+  const improvements = data.comparison.changes.filter((c) => c.improved && parseFloat(c.change_percent) >= 3);
   if (improvements.length > 0) {
     return (
       `Significant pace improvements detected. Use get_sports_settings with sport='running' to check ` +

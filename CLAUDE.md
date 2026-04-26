@@ -167,6 +167,15 @@ curl -X POST http://localhost:3000/mcp \
 - JSDoc comments for public APIs
 - No default exports (use named exports)
 
+### Unit conventions
+
+Tool responses standardize on **unit-in-value** strings for every unit-bearing field. Two rules:
+
+1. **Values carry the unit.** Emit `weight: "75.9 kg"`, `max_hr: "165 bpm"`, `average_power: "220 W"`, `recovery_score: "82%"` — not `weight_kilogram: 75.9` or `max_hr: 165`. Field names should describe the metric (`max_hr`, `weight`, `average_power`), not the unit. Use the helpers in `src/utils/format-units.ts` (`formatPower`, `formatHR`, `formatWeight`, `formatHeight`, `formatPercent`, `formatTemperature`, `formatLength`, `formatEnergy`, `formatEnergyKJ`, `formatCadence`, `formatMass`, `formatHRV`, `formatVO2max`, `formatBP`, plus `withUnit` for one-offs).
+2. **Field descriptions in `.describe()` must NOT name units.** Describe what the field is (`'Average heart rate'`, `'Functional Threshold Power'`), not the unit it's in. The unit lives in the value. This keeps schemas valid when server-side unit formatting becomes user-preference-aware in a future change — descriptions don't need a second sweep.
+
+Bare numerics are reserved for unitless scores (TSS, CTL/ATL/TSB, intensity factor, RPE 1-10, scale-based wellness fields like `mood`/`fatigue` 1-4) and counts (`activities`, `lengths`, `steps`).
+
 ## Important Notes
 
 1. **Whoop uses OAuth** - Tokens stored in Redis, refreshed automatically. Initial setup requires running `npm run whoop:auth` interactively.

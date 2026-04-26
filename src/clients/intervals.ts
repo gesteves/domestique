@@ -43,6 +43,21 @@ import {
   formatSpeed,
   formatPace,
   isSwimmingActivity,
+  formatPower,
+  formatHR,
+  formatPercent,
+  formatTemperature,
+  formatWeight,
+  formatHeight,
+  formatLength,
+  formatEnergy,
+  formatEnergyKJ,
+  formatCadence,
+  formatMass,
+  formatHRV,
+  formatVO2max,
+  formatBP,
+  withUnit,
 } from '../utils/format-units.js';
 import { getTodayInTimezone } from '../utils/tz.js';
 import { localStringToISO8601WithTimezone } from '../utils/date-formatting.js';
@@ -783,24 +798,24 @@ export class IntervalsClient {
 
     // FTP
     if (settings.ftp) {
-      result.ftp = settings.ftp;
+      result.ftp = formatPower(settings.ftp);
       // Only include indoor_ftp if different
       if (settings.indoor_ftp && settings.indoor_ftp !== settings.ftp) {
-        result.indoor_ftp = settings.indoor_ftp;
+        result.indoor_ftp = formatPower(settings.indoor_ftp);
       }
     }
 
-    // Sweet spot
+    // Sweet spot (% of FTP)
     if (settings.sweet_spot_min !== undefined) {
-      result.sweet_spot_min = settings.sweet_spot_min;
+      result.sweet_spot_min = formatPercent(settings.sweet_spot_min);
     }
     if (settings.sweet_spot_max !== undefined) {
-      result.sweet_spot_max = settings.sweet_spot_max;
+      result.sweet_spot_max = formatPercent(settings.sweet_spot_max);
     }
 
     // Heart rate thresholds
-    if (settings.lthr) result.lthr = settings.lthr;
-    if (settings.max_hr) result.max_hr = settings.max_hr;
+    if (settings.lthr) result.lthr = formatHR(settings.lthr);
+    if (settings.max_hr) result.max_hr = formatHR(settings.max_hr);
 
     // HR zones
     if (settings.hr_zones && settings.hr_zone_names) {
@@ -869,8 +884,8 @@ export class IntervalsClient {
 
       result.push({
         name: names[i],
-        low_bpm: low,
-        high_bpm: high,
+        low_hr: formatHR(low),
+        high_hr: high !== null ? formatHR(high) : null,
       });
     }
 
@@ -894,10 +909,10 @@ export class IntervalsClient {
 
       result.push({
         name: names[i],
-        low_percent: lowPercent,
-        high_percent: highPercent,
-        low_watts: Math.round((lowPercent / 100) * ftp),
-        high_watts: highPercent ? Math.round((highPercent / 100) * ftp) : null,
+        low_pct: formatPercent(lowPercent),
+        high_pct: highPercent !== null ? formatPercent(highPercent) : null,
+        low_power: formatPower((lowPercent / 100) * ftp),
+        high_power: highPercent ? formatPower((highPercent / 100) * ftp) : null,
       });
     }
 
@@ -937,8 +952,8 @@ export class IntervalsClient {
 
       result.push({
         name: names[i],
-        low_percent: lowPercent,
-        high_percent: highPercent,
+        low_pct: formatPercent(lowPercent),
+        high_pct: highPercent !== null ? formatPercent(highPercent) : null,
         slow_pace: slowPaceValue ? this.formatPaceValue(slowPaceValue, paceUnits) : null,
         fast_pace: fastPaceValue ? this.formatPaceValue(fastPaceValue, paceUnits) : null,
       });
@@ -1058,10 +1073,10 @@ export class IntervalsClient {
       if (sweetSpotSeconds && sweetSpotSeconds > 0 && sweetSpotMin !== undefined && sweetSpotMax !== undefined) {
         zones.push({
           name: 'Sweet Spot',
-          low_percent: sweetSpotMin,
-          high_percent: sweetSpotMax,
-          low_watts: Math.round((sweetSpotMin / 100) * ftp),
-          high_watts: Math.round((sweetSpotMax / 100) * ftp),
+          low_pct: formatPercent(sweetSpotMin),
+          high_pct: formatPercent(sweetSpotMax),
+          low_power: formatPower((sweetSpotMin / 100) * ftp),
+          high_power: formatPower((sweetSpotMax / 100) * ftp),
           time_in_zone: formatDuration(sweetSpotSeconds),
         });
       }
@@ -1202,9 +1217,15 @@ export class IntervalsClient {
   }
 
   /**
-   * Get intervals for a specific activity
+   * Get intervals for a specific activity.
+   * Pass `activityType` so cadence values use the correct unit (rpm for cycling,
+   * spm for running/swimming). When omitted (e.g., the standalone
+   * `get_workout_intervals` tool), the activity is fetched once to look it up.
    */
-  async getActivityIntervals(activityId: string): Promise<WorkoutIntervalsResponse> {
+  async getActivityIntervals(
+    activityId: string,
+    activityType?: string
+  ): Promise<WorkoutIntervalsResponse> {
     const response = await this.fetchActivity<IntervalsActivityIntervalsResponse>(
       activityId,
       '/intervals'
@@ -1229,11 +1250,21 @@ export class IntervalsClient {
       // Heat strain or temperature data may not be available for this activity
     }
 
+    let resolvedActivityType = activityType ?? '';
+    if (!resolvedActivityType) {
+      try {
+        const activity = await this.fetchActivity<IntervalsActivity>(activityId, '');
+        resolvedActivityType = activity.type ?? '';
+      } catch (error) {
+        // If we can't resolve the type, cadence will default to rpm.
+      }
+    }
+
     const intervals = (response.icu_intervals || []).map((i) =>
-      this.normalizeInterval(i, heatStreamData, tempStreamData)
+      this.normalizeInterval(i, resolvedActivityType, heatStreamData, tempStreamData)
     );
     const groups = (response.icu_groups || []).map((g) =>
-      this.normalizeIntervalGroup(g)
+      this.normalizeIntervalGroup(g, resolvedActivityType)
     );
 
     return {
@@ -1400,6 +1431,7 @@ export class IntervalsClient {
    */
   private normalizeInterval(
     raw: IntervalsRawInterval,
+    activityType: string,
     heatStreamData: { time: number[]; heat_strain_index: number[] } | null = null,
     tempStreamData: { time: number[]; temp: number[] } | null = null
   ): WorkoutInterval {
@@ -1465,11 +1497,11 @@ export class IntervalsClient {
     // Calculate temperature metrics for this interval if temperature data is available
     let tempMetrics:
       | {
-          min_ambient_temperature: number;
-          max_ambient_temperature: number;
-          median_ambient_temperature: number;
-          start_ambient_temperature: number;
-          end_ambient_temperature: number;
+          min_ambient_temperature: string;
+          max_ambient_temperature: string;
+          median_ambient_temperature: string;
+          start_ambient_temperature: string;
+          end_ambient_temperature: string;
         }
       | undefined;
 
@@ -1508,11 +1540,11 @@ export class IntervalsClient {
           : sorted[mid];
 
         tempMetrics = {
-          min_ambient_temperature: Math.round(minTemp * 10) / 10,
-          max_ambient_temperature: Math.round(maxTemp * 10) / 10,
-          median_ambient_temperature: Math.round(medianTemp * 10) / 10,
-          start_ambient_temperature: startTemp !== undefined ? Math.round(startTemp * 10) / 10 : 0,
-          end_ambient_temperature: endTemp !== undefined ? Math.round(endTemp * 10) / 10 : 0,
+          min_ambient_temperature: formatTemperature(minTemp),
+          max_ambient_temperature: formatTemperature(maxTemp),
+          median_ambient_temperature: formatTemperature(medianTemp),
+          start_ambient_temperature: formatTemperature(startTemp ?? 0),
+          end_ambient_temperature: formatTemperature(endTemp ?? 0),
         };
       }
     }
@@ -1526,34 +1558,39 @@ export class IntervalsClient {
       distance: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
 
       // Power
-      average_watts: raw.average_watts,
-      max_watts: raw.max_watts,
-      normalized_power: raw.weighted_average_watts,
-      watts_per_kg: raw.average_watts_kg,
+      average_power: raw.average_watts != null ? formatPower(raw.average_watts) : undefined,
+      max_power: raw.max_watts != null ? formatPower(raw.max_watts) : undefined,
+      normalized_power:
+        raw.weighted_average_watts != null ? formatPower(raw.weighted_average_watts) : undefined,
+      power_to_weight:
+        raw.average_watts_kg != null ? withUnit(raw.average_watts_kg, 'W/kg', 1) : undefined,
       power_zone: raw.zone,
       intensity_factor: raw.intensity ? raw.intensity / 100 : undefined,
       interval_tss: raw.training_load ? Math.round(raw.training_load * 10) / 10 : undefined,
 
       // Heart rate
-      average_hr: raw.average_heartrate ? Math.round(raw.average_heartrate) : undefined,
-      max_hr: raw.max_heartrate ? Math.round(raw.max_heartrate) : undefined,
-      hr_decoupling: raw.decoupling,
+      average_hr: raw.average_heartrate ? formatHR(raw.average_heartrate) : undefined,
+      max_hr: raw.max_heartrate ? formatHR(raw.max_heartrate) : undefined,
+      hr_decoupling: raw.decoupling != null ? formatPercent(raw.decoupling, 1) : undefined,
 
       // Cadence/stride
-      average_cadence: raw.average_cadence ? Math.round(raw.average_cadence) : undefined,
-      stride_length_m: raw.average_stride,
+      average_cadence:
+        raw.average_cadence != null ? formatCadence(raw.average_cadence, activityType) : undefined,
+      stride_length:
+        raw.average_stride != null ? formatHeight(raw.average_stride) : undefined,
 
       // Speed (m/s → km/h)
-      average_speed: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
+      average_speed: speedKph != null ? formatSpeed(speedKph) : undefined,
 
       // Elevation
-      elevation_gain: elevationGain !== undefined ? `${elevationGain} m` : undefined,
-      average_gradient: raw.average_gradient !== undefined ? `${(raw.average_gradient * 100).toFixed(1)}%` : undefined,
+      elevation_gain: elevationGain != null ? formatLength(elevationGain) : undefined,
+      average_gradient: raw.average_gradient != null ? `${(raw.average_gradient * 100).toFixed(1)}%` : undefined,
 
       // W'bal
-      wbal_start_j: raw.wbal_start,
-      wbal_end_j: raw.wbal_end,
-      joules_above_ftp: raw.joules_above_ftp,
+      wbal_start: raw.wbal_start != null ? formatEnergy(raw.wbal_start) : undefined,
+      wbal_end: raw.wbal_end != null ? formatEnergy(raw.wbal_end) : undefined,
+      energy_above_ftp:
+        raw.joules_above_ftp != null ? formatEnergy(raw.joules_above_ftp) : undefined,
 
       // Heat metrics (only if heat data available for this interval)
       ...heatMetrics,
@@ -1566,7 +1603,7 @@ export class IntervalsClient {
   /**
    * Normalize an interval group from the API
    */
-  private normalizeIntervalGroup(raw: IntervalsRawGroup): IntervalGroup {
+  private normalizeIntervalGroup(raw: IntervalsRawGroup, activityType: string): IntervalGroup {
     const speedKph = raw.average_speed ? raw.average_speed * 3.6 : undefined;
     const distanceKm = raw.distance ? raw.distance / 1000 : undefined;
     const elevationGain = raw.total_elevation_gain ? Math.round(raw.total_elevation_gain) : undefined;
@@ -1574,13 +1611,14 @@ export class IntervalsClient {
     return {
       id: raw.id,
       count: raw.count,
-      average_watts: raw.average_watts,
-      average_hr: raw.average_heartrate ? Math.round(raw.average_heartrate) : undefined,
-      average_cadence: raw.average_cadence ? Math.round(raw.average_cadence) : undefined,
-      average_speed: speedKph !== undefined ? formatSpeed(speedKph) : undefined,
-      distance: distanceKm !== undefined ? formatDistance(distanceKm, false) : undefined,
-      duration: raw.moving_time !== undefined ? formatDuration(raw.moving_time) : undefined,
-      elevation_gain: elevationGain !== undefined ? `${elevationGain} m` : undefined,
+      average_power: raw.average_watts != null ? formatPower(raw.average_watts) : undefined,
+      average_hr: raw.average_heartrate ? formatHR(raw.average_heartrate) : undefined,
+      average_cadence:
+        raw.average_cadence != null ? formatCadence(raw.average_cadence, activityType) : undefined,
+      average_speed: speedKph != null ? formatSpeed(speedKph) : undefined,
+      distance: distanceKm != null ? formatDistance(distanceKm, false) : undefined,
+      duration: raw.moving_time != null ? formatDuration(raw.moving_time) : undefined,
+      elevation_gain: elevationGain != null ? formatLength(elevationGain) : undefined,
     };
   }
 
@@ -1660,18 +1698,18 @@ export class IntervalsClient {
 
     // Weight
     if (data.weight != null) {
-      result.weight = `${data.weight} kg`;
+      result.weight = formatWeight(data.weight);
     }
 
     // Heart rate and HRV
     if (data.restingHR != null) {
-      result.resting_hr = data.restingHR;
+      result.resting_hr = formatHR(data.restingHR);
     }
     if (data.hrv != null) {
-      result.hrv = data.hrv;
+      result.hrv = formatHRV(data.hrv);
     }
     if (data.hrvSDNN != null) {
-      result.hrv_sdnn = data.hrvSDNN;
+      result.hrv_sdnn = formatHRV(data.hrvSDNN);
     }
 
     // Menstrual cycle
@@ -1698,7 +1736,7 @@ export class IntervalsClient {
       result.sleep_quality = data.sleepQuality;
     }
     if (data.avgSleepingHR != null) {
-      result.avg_sleeping_hr = data.avgSleepingHR;
+      result.avg_sleeping_hr = formatHR(data.avgSleepingHR);
     }
 
     // Subjective metrics (1-4 scale)
@@ -1726,19 +1764,16 @@ export class IntervalsClient {
 
     // Vitals
     if (data.spO2 != null) {
-      result.spo2 = data.spO2;
+      result.spo2 = formatPercent(data.spO2, 1);
     }
     if (data.systolic != null && data.diastolic != null) {
-      result.blood_pressure = {
-        systolic: data.systolic,
-        diastolic: data.diastolic,
-      };
+      result.blood_pressure = formatBP(data.systolic, data.diastolic);
     }
     if (data.hydrationVolume != null) {
-      result.hydration_volume = data.hydrationVolume;
+      result.hydration_volume = withUnit(data.hydrationVolume, 'ml');
     }
     if (data.respiration != null) {
-      result.respiration = data.respiration;
+      result.respiration = withUnit(data.respiration, 'breaths/min', 1);
     }
 
     // Readiness and body composition
@@ -1749,19 +1784,19 @@ export class IntervalsClient {
       result.baevsky_si = data.baevskySI;
     }
     if (data.bloodGlucose != null) {
-      result.blood_glucose = data.bloodGlucose;
+      result.blood_glucose = withUnit(data.bloodGlucose, 'mg/dL');
     }
     if (data.lactate != null) {
-      result.lactate = data.lactate;
+      result.lactate = withUnit(data.lactate, 'mmol/L', 1);
     }
     if (data.bodyFat != null) {
-      result.body_fat = data.bodyFat;
+      result.body_fat = formatPercent(data.bodyFat, 1);
     }
     if (data.abdomen != null) {
-      result.abdomen = data.abdomen;
+      result.abdomen = withUnit(data.abdomen, 'cm', 1);
     }
     if (data.vo2max != null) {
-      result.vo2max = data.vo2max;
+      result.vo2max = formatVO2max(data.vo2max);
     }
 
     // Activity and notes
@@ -1958,7 +1993,7 @@ export class IntervalsClient {
     let intervalGroups: IntervalGroup[] | undefined;
     if (!options?.skipExpensiveCalls) {
       try {
-        const intervalsResponse = await this.getActivityIntervals(activity.id);
+        const intervalsResponse = await this.getActivityIntervals(activity.id, activity.type);
         intervals = intervalsResponse.intervals.length > 0 ? intervalsResponse.intervals : undefined;
         intervalGroups = intervalsResponse.groups.length > 0 ? intervalsResponse.groups : undefined;
       } catch (error) {
@@ -1996,6 +2031,15 @@ export class IntervalsClient {
     // Get athlete timezone for formatting start_time
     const timezone = await this.getAthleteTimezone();
 
+    const activityType = activity.type ?? '';
+    const normalizedPowerVal = activity.icu_weighted_avg_watts ?? activity.weighted_avg_watts;
+    const averagePowerVal = activity.icu_average_watts ?? activity.average_watts;
+    const variabilityIndex = activity.icu_variability_index ?? activity.variability_index;
+    const efficiencyFactor = activity.icu_efficiency_factor ?? activity.efficiency_factor;
+    const ctlAtActivity = activity.icu_ctl ?? activity.ctl;
+    const atlAtActivity = activity.icu_atl ?? activity.atl;
+    const joulesTotal = activity.icu_joules ?? activity.joules;
+
     return {
       id: activity.id,
       start_time: localStringToISO8601WithTimezone(activity.start_date_local, timezone),
@@ -2006,13 +2050,13 @@ export class IntervalsClient {
       distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
       tss: activity.icu_training_load,
       // Handle both API field naming conventions (icu_ prefixed and non-prefixed)
-      normalized_power: activity.icu_weighted_avg_watts ?? activity.weighted_avg_watts,
-      average_power: activity.icu_average_watts ?? activity.average_watts,
-      average_heart_rate: activity.average_heartrate,
-      max_heart_rate: activity.max_heartrate,
+      normalized_power: normalizedPowerVal != null ? formatPower(normalizedPowerVal) : undefined,
+      average_power: averagePowerVal != null ? formatPower(averagePowerVal) : undefined,
+      average_heart_rate: activity.average_heartrate != null ? formatHR(activity.average_heartrate) : undefined,
+      max_heart_rate: activity.max_heartrate != null ? formatHR(activity.max_heartrate) : undefined,
       intensity_factor: activity.icu_intensity,
-      elevation_gain: activity.total_elevation_gain !== undefined
-        ? `${Math.round(activity.total_elevation_gain)} m`
+      elevation_gain: activity.total_elevation_gain != null
+        ? formatLength(activity.total_elevation_gain)
         : undefined,
       calories: activity.calories,
       source: 'intervals.icu',
@@ -2032,14 +2076,14 @@ export class IntervalsClient {
         : undefined,
 
       // Speed metrics
-      average_speed: avgSpeedKph !== undefined ? formatSpeed(avgSpeedKph) : undefined,
-      max_speed: maxSpeedKph !== undefined ? formatSpeed(maxSpeedKph) : undefined,
+      average_speed: avgSpeedKph != null ? formatSpeed(avgSpeedKph) : undefined,
+      max_speed: maxSpeedKph != null ? formatSpeed(maxSpeedKph) : undefined,
 
       // Coasting
-      coasting_time: activity.coasting_time !== undefined
+      coasting_time: activity.coasting_time != null
         ? formatDuration(activity.coasting_time)
         : undefined,
-      coasting_percentage: coastingPercentage,
+      coasting_percentage: coastingPercentage != null ? formatPercent(coastingPercentage, 1) : undefined,
 
       // Training load & feel
       load: activity.icu_training_load,
@@ -2051,40 +2095,36 @@ export class IntervalsClient {
       trimp: activity.trimp,
 
       // Power efficiency (handle both API field naming conventions)
-      variability_index: activity.icu_variability_index ?? activity.variability_index,
+      variability_index: variabilityIndex,
       power_hr_ratio: activity.decoupling,
-      efficiency_factor: activity.icu_efficiency_factor ?? activity.efficiency_factor,
+      efficiency_factor: efficiencyFactor,
 
       // Fitness snapshot (handle both API field naming conventions)
-      ctl_at_activity: activity.icu_ctl ?? activity.ctl,
-      atl_at_activity: activity.icu_atl ?? activity.atl,
-      tsb_at_activity: (() => {
-        const ctl = activity.icu_ctl ?? activity.ctl;
-        const atl = activity.icu_atl ?? activity.atl;
-        return ctl !== undefined && atl !== undefined ? ctl - atl : undefined;
-      })(),
+      ctl_at_activity: ctlAtActivity,
+      atl_at_activity: atlAtActivity,
+      tsb_at_activity:
+        ctlAtActivity !== undefined && atlAtActivity !== undefined ? ctlAtActivity - atlAtActivity : undefined,
 
       // Cadence
-      average_cadence: activity.average_cadence,
-      max_cadence: activity.max_cadence,
+      average_cadence:
+        activity.average_cadence != null ? formatCadence(activity.average_cadence, activityType) : undefined,
+      max_cadence:
+        activity.max_cadence != null ? formatCadence(activity.max_cadence, activityType) : undefined,
 
       // Thresholds
-      ftp: activity.icu_ftp,
-      eftp: activity.icu_eftp,
-      activity_eftp: activity.icu_pm_ftp,
-      lthr: activity.lthr,
+      ftp: activity.icu_ftp != null ? formatPower(activity.icu_ftp) : undefined,
+      eftp: activity.icu_eftp != null ? formatPower(activity.icu_eftp) : undefined,
+      activity_eftp: activity.icu_pm_ftp != null ? formatPower(activity.icu_pm_ftp) : undefined,
+      lthr: activity.lthr != null ? formatHR(activity.lthr) : undefined,
 
       // Energy (handle both API field naming conventions)
-      work_kj: (() => {
-        const joules = activity.icu_joules ?? activity.joules;
-        return joules ? joules / 1000 : undefined;
-      })(),
-      cho_used_g: activity.carbs_used,
-      cho_intake_g: activity.carbs_ingested,
+      work: joulesTotal != null ? formatEnergyKJ(joulesTotal / 1000) : undefined,
+      cho_used: activity.carbs_used != null ? formatMass(activity.carbs_used) : undefined,
+      cho_intake: activity.carbs_ingested != null ? formatMass(activity.carbs_ingested) : undefined,
 
       // Athlete metrics at time of activity
-      weight: activity.icu_weight != null ? `${activity.icu_weight} kg` : undefined,
-      resting_hr: activity.icu_resting_hr,
+      weight: activity.icu_weight != null ? formatWeight(activity.icu_weight) : undefined,
+      resting_hr: activity.icu_resting_hr != null ? formatHR(activity.icu_resting_hr) : undefined,
 
       // Activity context flags
       // is_indoor: true if trainer flag is set, OR activity type contains "virtual", OR source is Zwift
@@ -2106,20 +2146,25 @@ export class IntervalsClient {
       median_heat_strain_index: heatMetrics?.median_heat_strain_index,
 
       // Temperature metrics
-      min_ambient_temperature: tempMetrics?.min_ambient_temperature,
-      max_ambient_temperature: tempMetrics?.max_ambient_temperature,
-      median_ambient_temperature: tempMetrics?.median_ambient_temperature,
-      start_ambient_temperature: tempMetrics?.start_ambient_temperature,
-      end_ambient_temperature: tempMetrics?.end_ambient_temperature,
+      min_ambient_temperature:
+        tempMetrics?.min_ambient_temperature != null ? formatTemperature(tempMetrics.min_ambient_temperature) : undefined,
+      max_ambient_temperature:
+        tempMetrics?.max_ambient_temperature != null ? formatTemperature(tempMetrics.max_ambient_temperature) : undefined,
+      median_ambient_temperature:
+        tempMetrics?.median_ambient_temperature != null ? formatTemperature(tempMetrics.median_ambient_temperature) : undefined,
+      start_ambient_temperature:
+        tempMetrics?.start_ambient_temperature != null ? formatTemperature(tempMetrics.start_ambient_temperature) : undefined,
+      end_ambient_temperature:
+        tempMetrics?.end_ambient_temperature != null ? formatTemperature(tempMetrics.end_ambient_temperature) : undefined,
 
       // Running/pace metrics
-      average_stride_m: activity.average_stride,
-      gap: gapSecPerKm !== undefined ? formatPace(gapSecPerKm, isSwim) : undefined,
+      average_stride: activity.average_stride != null ? formatHeight(activity.average_stride) : undefined,
+      gap: gapSecPerKm != null ? formatPace(gapSecPerKm, isSwim) : undefined,
 
       // Altitude
-      average_altitude_m: activity.average_altitude,
-      min_altitude_m: activity.min_altitude,
-      max_altitude_m: activity.max_altitude,
+      average_altitude: activity.average_altitude != null ? formatLength(activity.average_altitude) : undefined,
+      min_altitude: activity.min_altitude != null ? formatLength(activity.min_altitude) : undefined,
+      max_altitude: activity.max_altitude != null ? formatLength(activity.max_altitude) : undefined,
 
       // Session metrics
       session_rpe: activity.session_rpe,
@@ -2133,8 +2178,9 @@ export class IntervalsClient {
       interval_groups: intervalGroups,
 
       // Rolling fitness estimates
-      rolling_ftp: activity.icu_rolling_ftp,
-      rolling_ftp_delta: activity.icu_rolling_ftp_delta,
+      rolling_ftp: activity.icu_rolling_ftp != null ? formatPower(activity.icu_rolling_ftp) : undefined,
+      rolling_ftp_delta:
+        activity.icu_rolling_ftp_delta != null ? formatPower(activity.icu_rolling_ftp_delta) : undefined,
 
       // Interval summary
       interval_summary: activity.interval_summary,
@@ -2146,11 +2192,13 @@ export class IntervalsClient {
 
       // Z2 aerobic metrics
       power_hr_z2: activity.icu_power_hr_z2,
-      power_hr_z2_mins: activity.icu_power_hr_z2_mins,
-      cadence_z2: activity.icu_cadence_z2,
+      power_hr_z2_mins:
+        activity.icu_power_hr_z2_mins != null ? withUnit(activity.icu_power_hr_z2_mins, 'min', 1) : undefined,
+      cadence_z2:
+        activity.icu_cadence_z2 != null ? formatCadence(activity.icu_cadence_z2, activityType) : undefined,
 
       // Workout compliance
-      compliance: activity.compliance,
+      compliance: activity.compliance != null ? formatPercent(activity.compliance) : undefined,
 
       // Weather (only fetched for outdoor activities in single-activity requests)
       weather_description: weatherDescription,

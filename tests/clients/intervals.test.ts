@@ -474,17 +474,17 @@ describe('IntervalsClient', () => {
       expect(result[0].hr_zones).toHaveLength(7);
       expect(result[0].hr_zones?.[0]).toMatchObject({
         name: 'Z1',
-        low_bpm: expect.any(Number),
-        high_bpm: expect.any(Number),
+        low_hr: expect.any(String),
+        high_hr: expect.any(String),
       });
 
       // power_zones should be normalized zone objects with names, percentages, and watts
       expect(result[0].power_zones).toBeDefined();
       expect(result[0].power_zones?.[0]).toMatchObject({
         name: expect.any(String),
-        low_percent: expect.any(Number),
-        high_percent: expect.any(Number),
-        low_watts: expect.any(Number),
+        low_pct: expect.any(String),
+        high_pct: expect.any(String),
+        low_power: expect.any(String),
       });
     });
 
@@ -518,9 +518,9 @@ describe('IntervalsClient', () => {
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
-      expect(result[0].lthr).toBe(165);
+      expect(result[0].lthr).toBe('165 bpm');
       expect(result[0].weight).toBe('74.5 kg');
-      expect(result[0].resting_hr).toBe(52);
+      expect(result[0].resting_hr).toBe('52 bpm');
     });
 
     it('should include power, efficiency, fitness, and energy metrics from list endpoint (non-prefixed fields)', async () => {
@@ -537,8 +537,8 @@ describe('IntervalsClient', () => {
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
       // Power metrics (from non-prefixed fields in list endpoint)
-      expect(result[0].normalized_power).toBe(183);
-      expect(result[0].average_power).toBe(181);
+      expect(result[0].normalized_power).toBe('183 W');
+      expect(result[0].average_power).toBe('181 W');
 
       // Efficiency metrics
       expect(result[0].variability_index).toBeCloseTo(1.011, 2);
@@ -550,7 +550,7 @@ describe('IntervalsClient', () => {
       expect(result[0].tsb_at_activity).toBeCloseTo(14.21, 1);
 
       // Energy
-      expect(result[0].work_kj).toBeCloseTo(1307.3, 1);
+      expect(result[0].work).toBe('1307 kJ');
     });
 
     it('should include altitude data', async () => {
@@ -566,9 +566,9 @@ describe('IntervalsClient', () => {
 
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
-      expect(result[0].average_altitude_m).toBeCloseTo(25.93, 2);
-      expect(result[0].min_altitude_m).toBe(10.4);
-      expect(result[0].max_altitude_m).toBe(120.8);
+      expect(result[0].average_altitude).toBe('26 m');
+      expect(result[0].min_altitude).toBe('10 m');
+      expect(result[0].max_altitude).toBe('121 m');
     });
 
     it('should filter by sport when specified', async () => {
@@ -772,8 +772,8 @@ describe('IntervalsClient', () => {
       const result = await client.getActivity('i113796426');
 
       // Power metrics (from icu_ prefixed fields)
-      expect(result.normalized_power).toBe(186);
-      expect(result.average_power).toBe(184);
+      expect(result.normalized_power).toBe('186 W');
+      expect(result.average_power).toBe('184 W');
 
       // Efficiency metrics
       expect(result.variability_index).toBeCloseTo(1.011, 2);
@@ -785,12 +785,12 @@ describe('IntervalsClient', () => {
       expect(result.tsb_at_activity).toBeCloseTo(4.43, 1);
 
       // Energy (from icu_ prefixed fields)
-      expect(result.work_kj).toBeCloseTo(669.2, 1);
+      expect(result.work).toBe('669 kJ');
 
       // Athlete metrics
-      expect(result.lthr).toBe(172);
+      expect(result.lthr).toBe('172 bpm');
       expect(result.weight).toBe('74.8 kg');
-      expect(result.resting_hr).toBe(52);
+      expect(result.resting_hr).toBe('52 bpm');
 
       // is_indoor should be true since source is 'ZWIFT'
       expect(result.is_indoor).toBe(true);
@@ -994,8 +994,8 @@ describe('IntervalsClient', () => {
 
       expect(result).not.toBeNull();
       expect(result?.weight).toBeUndefined();
-      expect(result?.resting_hr).toBe(52);
-      expect(result?.hrv).toBe(38.5);
+      expect(result?.resting_hr).toBe('52 bpm');
+      expect(result?.hrv).toBe('39 ms');
       expect(result?.sleep_duration).toBe('8h');
       expect(result?.sleep_quality).toBe(1);
       expect(result?.soreness).toBe(2);
@@ -1045,13 +1045,13 @@ describe('IntervalsClient', () => {
 
       expect(result).not.toBeNull();
       expect(result?.weight).toBe('74.5 kg');
-      expect(result?.resting_hr).toBe(51);
-      expect(result?.hrv).toBe(35.47);
-      expect(result?.hrv_sdnn).toBe(45.2);
+      expect(result?.resting_hr).toBe('51 bpm');
+      expect(result?.hrv).toBe('35 ms');
+      expect(result?.hrv_sdnn).toBe('45 ms');
       expect(result?.sleep_duration).toBe('8h 10m');
       expect(result?.sleep_score).toBe(87);
       expect(result?.sleep_quality).toBe(1);
-      expect(result?.avg_sleeping_hr).toBe(48);
+      expect(result?.avg_sleeping_hr).toBe('48 bpm');
       expect(result?.soreness).toBe(1);
       expect(result?.fatigue).toBe(2);
       expect(result?.stress).toBe(1);
@@ -1059,12 +1059,12 @@ describe('IntervalsClient', () => {
       expect(result?.motivation).toBe(2);
       expect(result?.injury).toBe(1);
       expect(result?.hydration).toBe(2);
-      expect(result?.spo2).toBe(98);
-      expect(result?.blood_pressure).toEqual({ systolic: 120, diastolic: 80 });
-      expect(result?.hydration_volume).toBe(2500);
-      expect(result?.respiration).toBe(16.73);
+      expect(result?.spo2).toBe('98.0%');
+      expect(result?.blood_pressure).toBe('120/80 mmHg');
+      expect(result?.hydration_volume).toBe('2500 ml');
+      expect(result?.respiration).toBe('16.7 breaths/min');
       expect(result?.readiness).toBe(60);
-      expect(result?.vo2max).toBe(54);
+      expect(result?.vo2max).toBe('54.0 mL/kg/min');
       expect(result?.steps).toBe(8500);
       expect(result?.comments).toBe('Feeling good today');
     });
@@ -1131,8 +1131,8 @@ describe('IntervalsClient', () => {
       expect(result.data).toHaveLength(2);
       expect(result.data[0].date).toBe('2024-12-13');
       expect(result.data[0].weight).toBe('74.5 kg');
-      expect(result.data[0].resting_hr).toBe(52);
-      expect(result.data[0].hrv).toBe(38.5);
+      expect(result.data[0].resting_hr).toBe('52 bpm');
+      expect(result.data[0].hrv).toBe('39 ms');
       expect(result.data[0].sleep_duration).toBe('7h 30m');
       expect(result.data[0].sleep_score).toBe(85);
       expect(result.data[0].sleep_quality).toBe(1);
@@ -1194,8 +1194,8 @@ describe('IntervalsClient', () => {
       expect(result.data[0].weight).toBe('74.5 kg');
       expect(result.data[1].date).toBe('2024-12-14');
       expect(result.data[1].weight).toBeUndefined();
-      expect(result.data[1].resting_hr).toBe(52);
-      expect(result.data[1].hrv).toBe(40.2);
+      expect(result.data[1].resting_hr).toBe('52 bpm');
+      expect(result.data[1].hrv).toBe('40 ms');
     });
   });
 
@@ -1702,10 +1702,10 @@ describe('IntervalsClient', () => {
 
       const result = await client.getSportSettingsForSport('cycling');
 
-      expect(result?.settings.ftp).toBe(280);
-      expect(result?.settings.indoor_ftp).toBe(290);
-      expect(result?.settings.lthr).toBe(165);
-      expect(result?.settings.max_hr).toBe(190);
+      expect(result?.settings.ftp).toBe('280 W');
+      expect(result?.settings.indoor_ftp).toBe('290 W');
+      expect(result?.settings.lthr).toBe('165 bpm');
+      expect(result?.settings.max_hr).toBe('190 bpm');
       expect(result?.settings.hr_zones).toBeDefined();
       expect(result?.settings.power_zones).toBeDefined();
     });
@@ -2748,20 +2748,19 @@ describe('IntervalsClient', () => {
       // First interval (100-200 seconds) should have temperature metrics
       // Data points at times 100, 120, 150, 180, 200 with temps 19.0, 20.0, 21.0, 22.0, 23.0
       const interval1 = result.intervals[0];
-      expect(interval1.min_ambient_temperature).toBe(19.0);
-      expect(interval1.max_ambient_temperature).toBe(23.0);
-      expect(interval1.median_ambient_temperature).toBe(21.0); // Median of [19, 20, 21, 22, 23] = 21.0
-      expect(interval1.start_ambient_temperature).toBe(19.0);
-      expect(interval1.end_ambient_temperature).toBe(23.0);
+      expect(interval1.min_ambient_temperature).toBe('19.0 °C');
+      expect(interval1.max_ambient_temperature).toBe('23.0 °C');
+      expect(interval1.median_ambient_temperature).toBe('21.0 °C');
+      expect(interval1.start_ambient_temperature).toBe('19.0 °C');
+      expect(interval1.end_ambient_temperature).toBe('23.0 °C');
 
       // Second interval (200-300 seconds) should have temperature metrics
-      // Data points at times 200, 250, 300 with temps 23.0, 22.5, 22.0
       const interval2 = result.intervals[1];
-      expect(interval2.min_ambient_temperature).toBe(22.0);
-      expect(interval2.max_ambient_temperature).toBe(23.0);
-      expect(interval2.median_ambient_temperature).toBe(22.5); // Median of [23.0, 22.5, 22.0] sorted = [22.0, 22.5, 23.0] = 22.5
-      expect(interval2.start_ambient_temperature).toBe(23.0);
-      expect(interval2.end_ambient_temperature).toBe(22.0);
+      expect(interval2.min_ambient_temperature).toBe('22.0 °C');
+      expect(interval2.max_ambient_temperature).toBe('23.0 °C');
+      expect(interval2.median_ambient_temperature).toBe('22.5 °C');
+      expect(interval2.start_ambient_temperature).toBe('23.0 °C');
+      expect(interval2.end_ambient_temperature).toBe('22.0 °C');
     });
 
     it('should not include temperature metrics when temperature data is unavailable', async () => {
@@ -2898,10 +2897,10 @@ describe('IntervalsClient', () => {
       const result = await client.getActivityIntervals('i113367711');
 
       const interval = result.intervals[0];
-      expect(interval.min_ambient_temperature).toBe(-2.0);
-      expect(interval.max_ambient_temperature).toBe(-1.0);
-      expect(interval.start_ambient_temperature).toBe(-2.0);
-      expect(interval.end_ambient_temperature).toBe(-1.0);
+      expect(interval.min_ambient_temperature).toBe('-2.0 °C');
+      expect(interval.max_ambient_temperature).toBe('-1.0 °C');
+      expect(interval.start_ambient_temperature).toBe('-2.0 °C');
+      expect(interval.end_ambient_temperature).toBe('-1.0 °C');
     });
   });
 

@@ -127,3 +127,149 @@ export function formatDurationLabel(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   return `${hours}hr`;
 }
+
+/**
+ * Format power in watts.
+ * @param watts Power in watts
+ * @returns Formatted string like "220 W"
+ */
+export function formatPower(watts: number): string {
+  return `${Math.round(watts)} W`;
+}
+
+/**
+ * Format heart rate in beats per minute.
+ * @param bpm Heart rate in BPM
+ * @returns Formatted string like "165 bpm"
+ */
+export function formatHR(bpm: number): string {
+  return `${Math.round(bpm)} bpm`;
+}
+
+/**
+ * Format a percentage value.
+ * @param value Numeric percentage (e.g., 82 for 82%)
+ * @param decimals Number of decimals to keep (default 0)
+ * @returns Formatted string like "82%" or "82.5%"
+ */
+export function formatPercent(value: number, decimals = 0): string {
+  return `${value.toFixed(decimals)}%`;
+}
+
+/**
+ * Format a temperature in Celsius.
+ * @param celsius Temperature in degrees Celsius
+ * @returns Formatted string like "18.0 °C"
+ */
+export function formatTemperature(celsius: number): string {
+  return `${celsius.toFixed(1)} °C`;
+}
+
+/**
+ * Format body weight in kilograms.
+ * @param kg Weight in kilograms
+ * @returns Formatted string like "75.9 kg"
+ */
+export function formatWeight(kg: number): string {
+  return `${kg.toFixed(1)} kg`;
+}
+
+/**
+ * Format a height (or stride length) in meters with two decimals.
+ * @param m Length in meters
+ * @returns Formatted string like "1.71 m"
+ */
+export function formatHeight(m: number): string {
+  return `${m.toFixed(2)} m`;
+}
+
+/**
+ * Format a length in meters as a whole number — for altitude, pool length, etc.
+ * @param m Length in meters
+ * @returns Formatted string like "1234 m"
+ */
+export function formatLength(m: number): string {
+  return `${Math.round(m)} m`;
+}
+
+/**
+ * Format energy in joules.
+ * @param joules Energy in joules
+ * @returns Formatted string like "12345 J"
+ */
+export function formatEnergy(joules: number): string {
+  return `${Math.round(joules)} J`;
+}
+
+/**
+ * Format energy already expressed in kilojoules.
+ * @param kj Energy in kilojoules
+ * @returns Formatted string like "1234 kJ"
+ */
+export function formatEnergyKJ(kj: number): string {
+  return `${Math.round(kj)} kJ`;
+}
+
+/**
+ * Format cadence with sport-aware units. Running and swimming use steps/strokes
+ * per minute (`spm`); cycling and other activities use revolutions per minute (`rpm`).
+ * @param value Cadence value (rounded to whole number)
+ * @param sport Activity type (e.g., "Running", "Cycling", "Swim")
+ * @returns Formatted string like "88 rpm" or "180 spm"
+ */
+export function formatCadence(value: number, sport: string): string {
+  const lower = sport.toLowerCase();
+  const isStepLike = lower.includes('run') || lower.includes('walk') || lower.includes('swim');
+  const unit = isStepLike ? 'spm' : 'rpm';
+  return `${Math.round(value)} ${unit}`;
+}
+
+/**
+ * Format mass in grams.
+ * @param grams Mass in grams
+ * @returns Formatted string like "180 g"
+ */
+export function formatMass(grams: number): string {
+  return `${Math.round(grams)} g`;
+}
+
+/**
+ * Format an HRV value in milliseconds.
+ * @param ms HRV in milliseconds
+ * @returns Formatted string like "55 ms"
+ */
+export function formatHRV(ms: number): string {
+  return `${Math.round(ms)} ms`;
+}
+
+/**
+ * Format an estimated VO2max value.
+ * @param value VO2max in mL/kg/min
+ * @returns Formatted string like "55.0 mL/kg/min"
+ */
+export function formatVO2max(value: number): string {
+  return `${value.toFixed(1)} mL/kg/min`;
+}
+
+/**
+ * Format a blood pressure reading.
+ * @param systolic Systolic pressure
+ * @param diastolic Diastolic pressure
+ * @returns Formatted string like "120/80 mmHg"
+ */
+export function formatBP(systolic: number, diastolic: number): string {
+  return `${Math.round(systolic)}/${Math.round(diastolic)} mmHg`;
+}
+
+/**
+ * Generic helper that suffixes a unit to a numeric value.
+ * Use for one-off units (mg/dL, mmol/L, breaths/min, ml, cm, ...) that don't
+ * warrant a dedicated helper.
+ * @param value Numeric value
+ * @param unit Unit suffix (e.g., "mg/dL")
+ * @param decimals Decimals to keep (default 0)
+ * @returns Formatted string like "95 mg/dL"
+ */
+export function withUnit(value: number, unit: string, decimals = 0): string {
+  return `${value.toFixed(decimals)} ${unit}`;
+}

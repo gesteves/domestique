@@ -5,6 +5,21 @@ import {
   formatSpeed,
   formatPace,
   isSwimmingActivity,
+  formatPower,
+  formatHR,
+  formatPercent,
+  formatTemperature,
+  formatWeight,
+  formatHeight,
+  formatLength,
+  formatEnergy,
+  formatEnergyKJ,
+  formatCadence,
+  formatMass,
+  formatHRV,
+  formatVO2max,
+  formatBP,
+  withUnit,
 } from '../../src/utils/format-units.js';
 
 describe('format-units', () => {
@@ -161,6 +176,155 @@ describe('format-units', () => {
       expect(isSwimmingActivity('')).toBe(false);
       expect(isSwimmingActivity('LapSwimming')).toBe(true);
       expect(isSwimmingActivity('IndoorSwimming')).toBe(true);
+    });
+  });
+
+  describe('formatPower', () => {
+    it('rounds to whole watts', () => {
+      expect(formatPower(220)).toBe('220 W');
+      expect(formatPower(220.4)).toBe('220 W');
+      expect(formatPower(220.6)).toBe('221 W');
+      expect(formatPower(0)).toBe('0 W');
+    });
+  });
+
+  describe('formatHR', () => {
+    it('rounds to whole bpm', () => {
+      expect(formatHR(165)).toBe('165 bpm');
+      expect(formatHR(165.4)).toBe('165 bpm');
+      expect(formatHR(165.6)).toBe('166 bpm');
+    });
+  });
+
+  describe('formatPercent', () => {
+    it('formats whole percentages by default', () => {
+      expect(formatPercent(82)).toBe('82%');
+      expect(formatPercent(82.4)).toBe('82%');
+      expect(formatPercent(82.6)).toBe('83%');
+    });
+
+    it('honors decimal precision when requested', () => {
+      expect(formatPercent(82.5, 1)).toBe('82.5%');
+      expect(formatPercent(0.123, 2)).toBe('0.12%');
+    });
+  });
+
+  describe('formatTemperature', () => {
+    it('keeps one decimal of precision', () => {
+      expect(formatTemperature(18)).toBe('18.0 °C');
+      expect(formatTemperature(24.36)).toBe('24.4 °C');
+      expect(formatTemperature(-2.5)).toBe('-2.5 °C');
+    });
+  });
+
+  describe('formatWeight', () => {
+    it('keeps one decimal', () => {
+      expect(formatWeight(75.9)).toBe('75.9 kg');
+      expect(formatWeight(75)).toBe('75.0 kg');
+      expect(formatWeight(75.95)).toBe('76.0 kg');
+    });
+  });
+
+  describe('formatHeight', () => {
+    it('keeps two decimals', () => {
+      expect(formatHeight(1.71)).toBe('1.71 m');
+      expect(formatHeight(1.7)).toBe('1.70 m');
+      expect(formatHeight(1.715)).toBe('1.72 m');
+    });
+  });
+
+  describe('formatLength', () => {
+    it('rounds to whole meters', () => {
+      expect(formatLength(1234)).toBe('1234 m');
+      expect(formatLength(25)).toBe('25 m');
+      expect(formatLength(1234.6)).toBe('1235 m');
+    });
+  });
+
+  describe('formatEnergy', () => {
+    it('rounds to whole joules', () => {
+      expect(formatEnergy(12345)).toBe('12345 J');
+      expect(formatEnergy(12345.6)).toBe('12346 J');
+    });
+  });
+
+  describe('formatEnergyKJ', () => {
+    it('rounds to whole kilojoules', () => {
+      expect(formatEnergyKJ(1234)).toBe('1234 kJ');
+      expect(formatEnergyKJ(1234.6)).toBe('1235 kJ');
+    });
+  });
+
+  describe('formatCadence', () => {
+    it('uses rpm for cycling', () => {
+      expect(formatCadence(88, 'Cycling')).toBe('88 rpm');
+      expect(formatCadence(88, 'Ride')).toBe('88 rpm');
+      expect(formatCadence(88, 'VirtualRide')).toBe('88 rpm');
+    });
+
+    it('uses spm for running', () => {
+      expect(formatCadence(180, 'Running')).toBe('180 spm');
+      expect(formatCadence(180, 'Run')).toBe('180 spm');
+      expect(formatCadence(180, 'TrailRun')).toBe('180 spm');
+    });
+
+    it('uses spm for swimming', () => {
+      expect(formatCadence(60, 'Swim')).toBe('60 spm');
+      expect(formatCadence(60, 'Swimming')).toBe('60 spm');
+      expect(formatCadence(60, 'OpenWaterSwim')).toBe('60 spm');
+    });
+
+    it('uses spm for walking', () => {
+      expect(formatCadence(120, 'Walk')).toBe('120 spm');
+    });
+
+    it('rounds to whole numbers', () => {
+      expect(formatCadence(87.6, 'Cycling')).toBe('88 rpm');
+      expect(formatCadence(179.4, 'Running')).toBe('179 spm');
+    });
+
+    it('defaults to rpm for unknown sports', () => {
+      expect(formatCadence(80, 'Yoga')).toBe('80 rpm');
+    });
+  });
+
+  describe('formatMass', () => {
+    it('rounds to whole grams', () => {
+      expect(formatMass(180)).toBe('180 g');
+      expect(formatMass(180.6)).toBe('181 g');
+    });
+  });
+
+  describe('formatHRV', () => {
+    it('rounds to whole milliseconds', () => {
+      expect(formatHRV(55)).toBe('55 ms');
+      expect(formatHRV(54.6)).toBe('55 ms');
+    });
+  });
+
+  describe('formatVO2max', () => {
+    it('keeps one decimal', () => {
+      expect(formatVO2max(55)).toBe('55.0 mL/kg/min');
+      expect(formatVO2max(54.36)).toBe('54.4 mL/kg/min');
+    });
+  });
+
+  describe('formatBP', () => {
+    it('formats blood pressure as systolic/diastolic mmHg', () => {
+      expect(formatBP(120, 80)).toBe('120/80 mmHg');
+      expect(formatBP(119.6, 79.4)).toBe('120/79 mmHg');
+    });
+  });
+
+  describe('withUnit', () => {
+    it('formats with default zero decimals', () => {
+      expect(withUnit(95, 'mg/dL')).toBe('95 mg/dL');
+      expect(withUnit(95.6, 'mg/dL')).toBe('96 mg/dL');
+    });
+
+    it('honors decimal precision', () => {
+      expect(withUnit(1.234, 'mmol/L', 2)).toBe('1.23 mmol/L');
+      expect(withUnit(1.236, 'mmol/L', 2)).toBe('1.24 mmol/L');
     });
   });
 });

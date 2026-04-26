@@ -16,15 +16,15 @@ export interface NormalizedWorkout {
   activity_type?: ActivityType; // Optional for unavailable workouts (e.g., Strava-only)
   name?: string;
   description?: string;
-  duration?: string; // Human-readable duration, e.g., "1:30:00"
-  distance?: string; // Human-readable distance, e.g., "45.2 km" or "2500 m" for swimming
+  duration?: string; // e.g., "1:30:00"
+  distance?: string; // e.g., "45.2 km" or "2500 m" for swimming
   tss?: number;
-  normalized_power?: number;
-  average_power?: number;
-  average_heart_rate?: number;
-  max_heart_rate?: number;
+  normalized_power?: string; // e.g., "220 W"
+  average_power?: string;
+  average_heart_rate?: string; // e.g., "165 bpm"
+  max_heart_rate?: string;
   intensity_factor?: number;
-  elevation_gain?: string; // Human-readable, e.g., "500 m"
+  elevation_gain?: string; // e.g., "500 m"
   calories?: number;
   source: 'intervals.icu' | 'whoop' | 'trainerroad' | 'strava';
 
@@ -50,12 +50,12 @@ export interface NormalizedWorkout {
   unavailable_reason?: string; // Human-readable reason why the workout is unavailable
 
   // Speed metrics
-  average_speed?: string; // Human-readable speed, e.g., "32.5 km/h"
-  max_speed?: string; // Human-readable max speed, e.g., "55.2 km/h"
+  average_speed?: string; // e.g., "32.5 km/h"
+  max_speed?: string;
 
   // Coasting metrics
-  coasting_time?: string; // Human-readable, e.g., "0:05:30"
-  coasting_percentage?: number;
+  coasting_time?: string; // e.g., "0:05:30"
+  coasting_percentage?: string; // e.g., "23%"
 
   // Training load & subjective feel
   load?: number;
@@ -80,25 +80,25 @@ export interface NormalizedWorkout {
   tsb_at_activity?: number;
 
   // Cadence
-  average_cadence?: number;
-  max_cadence?: number;
+  average_cadence?: string; // e.g., "88 rpm" or "180 spm"
+  max_cadence?: string;
 
   // Threshold values used for activity
-  ftp?: number;
-  eftp?: number;
-  activity_eftp?: number; // eFTP derived from this activity
-  w_prime?: number; // Anaerobic work capacity
-  pmax?: number; // Maximum power
-  lthr?: number; // Lactate threshold heart rate at time of activity
+  ftp?: string; // e.g., "250 W"
+  eftp?: string;
+  activity_eftp?: string;
+  w_prime?: string; // e.g., "18000 J"
+  pmax?: string;
+  lthr?: string; // e.g., "165 bpm"
 
   // Energy expenditure
-  work_kj?: number;
-  cho_used_g?: number; // Carbohydrates used
-  cho_intake_g?: number; // Carbohydrates consumed
+  work?: string; // e.g., "1234 kJ"
+  cho_used?: string; // e.g., "180 g"
+  cho_intake?: string;
 
   // Athlete metrics at time of activity
-  weight?: string; // Human-readable, e.g., "74.5 kg"
-  resting_hr?: number; // Resting heart rate at time of activity
+  weight?: string; // e.g., "74.5 kg"
+  resting_hr?: string; // e.g., "52 bpm"
 
   // Activity context flags
   is_indoor?: boolean; // trainer/indoor workout
@@ -106,7 +106,7 @@ export interface NormalizedWorkout {
   is_race?: boolean;
 
   // Threshold pace for this activity
-  threshold_pace?: string; // Human-readable, e.g., "4:00/km"
+  threshold_pace?: string; // e.g., "4:00/km"
 
   // Zone thresholds used for this activity (normalized with names and time in zone)
   hr_zones?: HRZone[];
@@ -118,25 +118,25 @@ export interface NormalizedWorkout {
   max_heat_strain_index?: number; // Maximum heat strain index during the activity
   median_heat_strain_index?: number; // Median heat strain index during the activity
 
-  // Ambient temperature metrics (Celsius)
-  min_ambient_temperature?: number;
-  max_ambient_temperature?: number;
-  median_ambient_temperature?: number;
-  start_ambient_temperature?: number;
-  end_ambient_temperature?: number;
+  // Ambient temperature metrics
+  min_ambient_temperature?: string; // e.g., "18.0 °C"
+  max_ambient_temperature?: string;
+  median_ambient_temperature?: string;
+  start_ambient_temperature?: string;
+  end_ambient_temperature?: string;
 
   // Running/pace metrics
-  average_stride_m?: number; // meters per stride
+  average_stride?: string; // e.g., "1.42 m"
   gap?: string; // Gradient adjusted pace, e.g., "4:30/km"
 
   // Swimming metrics
-  pool_length?: number; // Pool length in meters
+  pool_length?: string; // e.g., "25 m"
   lengths?: number; // Number of lengths swam
 
   // Altitude
-  average_altitude_m?: number;
-  min_altitude_m?: number;
-  max_altitude_m?: number;
+  average_altitude?: string; // e.g., "1234 m"
+  min_altitude?: string;
+  max_altitude?: string;
 
   // Session metrics
   session_rpe?: number; // RPE × duration
@@ -150,8 +150,8 @@ export interface NormalizedWorkout {
   interval_groups?: IntervalGroup[]; // Grouped intervals (e.g., "4x 5m @ 200w")
 
   // Rolling fitness estimates
-  rolling_ftp?: number; // Rolling FTP estimate
-  rolling_ftp_delta?: number; // Change from rolling FTP
+  rolling_ftp?: string;
+  rolling_ftp_delta?: string;
 
   // Interval summary (human-readable summary of intervals)
   interval_summary?: string[]; // e.g., ["2x 5m 133w", "3x 10m 202w"]
@@ -163,11 +163,11 @@ export interface NormalizedWorkout {
 
   // Z2 aerobic metrics
   power_hr_z2?: number; // Power/HR ratio in Z2 (aerobic efficiency)
-  power_hr_z2_mins?: number; // Minutes in Z2 for this calculation
-  cadence_z2?: number; // Average cadence in Z2
+  power_hr_z2_mins?: string; // e.g., "12.4 min"
+  cadence_z2?: string; // e.g., "88 rpm"
 
   // Workout compliance
-  compliance?: number; // Workout compliance percentage (0-100) - how well the athlete followed the planned workout
+  compliance?: string; // e.g., "92%" — "0%" means no planned workout was matched
 
   // Weather (only included with skipExpensiveCalls: false and for outdoor activities)
   weather_description?: string | null;
@@ -202,11 +202,11 @@ export interface ZoneTime {
  */
 export interface WhoopMatchedData {
   strain_score: number;
-  average_heart_rate?: number;
-  max_heart_rate?: number;
+  average_heart_rate?: string; // e.g., "165 bpm"
+  max_heart_rate?: string;
   calories?: number;
-  distance?: string; // Human-readable, e.g., "45.2 km"
-  elevation_gain?: string; // Human-readable, e.g., "500 m"
+  distance?: string; // e.g., "45.2 km"
+  elevation_gain?: string; // e.g., "500 m"
   zone_durations?: WhoopZoneDurations;
 }
 
@@ -226,16 +226,16 @@ export interface WorkoutWithWhoop extends NormalizedWorkout {
 // ============================================
 
 /**
- * Body measurements from Whoop API.
- * All values in metric units as returned by Whoop.
+ * Body measurements from Whoop API. Server emits metric units; the LLM
+ * converts to imperial via athlete unit_preferences when needed.
  */
 export interface WhoopBodyMeasurements {
-  /** Height in meters, rounded to 2 decimals */
-  height_meter: number;
-  /** Weight in kilograms, rounded to 2 decimals */
-  weight_kilogram: number;
-  /** Maximum heart rate in BPM */
-  max_heart_rate: number;
+  /** Height (e.g., "1.71 m") */
+  height: string;
+  /** Weight (e.g., "75.9 kg") */
+  weight: string;
+  /** Maximum heart rate (e.g., "190 bpm") */
+  max_heart_rate: string;
 }
 
 /**
@@ -288,8 +288,8 @@ export interface WhoopSleepNeeded {
 export interface WhoopNapData {
   /** Nap summary with stage breakdown */
   nap_summary: WhoopSleepSummary;
-  /** Respiratory rate in breaths per minute, rounded to 2 decimals */
-  respiratory_rate?: number;
+  /** Respiratory rate (e.g., "16 breaths/min") */
+  respiratory_rate?: string;
   /** The approximate time the nap started, in the user's local timezone */
   nap_start: string;
   /** The approximate time the nap ended, in the user's local timezone */
@@ -304,14 +304,14 @@ export interface WhoopSleepData {
   sleep_summary: WhoopSleepSummary;
   /** Sleep need breakdown */
   sleep_needed: WhoopSleepNeeded;
-  /** Respiratory rate in breaths per minute, rounded to 2 decimals */
-  respiratory_rate?: number;
-  /** Sleep performance vs. sleep need (0-100%), rounded to 2 decimals */
-  sleep_performance_percentage: number;
-  /** Sleep consistency score (0-100%), rounded to 2 decimals */
-  sleep_consistency_percentage?: number;
-  /** Sleep efficiency percentage (0-100%), rounded to 2 decimals */
-  sleep_efficiency_percentage?: number;
+  /** Respiratory rate (e.g., "16 breaths/min") */
+  respiratory_rate?: string;
+  /** Sleep performance vs. sleep need (e.g., "92%") */
+  sleep_performance: string;
+  /** Sleep consistency score (e.g., "85%") */
+  sleep_consistency?: string;
+  /** Sleep efficiency (e.g., "92%") */
+  sleep_efficiency?: string;
   /** Sleep performance level: OPTIMAL (≥85%), SUFFICIENT (70-85%), POOR (<70%) */
   sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR';
   /** Human-readable sleep performance description from Whoop */
@@ -328,20 +328,20 @@ export interface WhoopSleepData {
  * Whoop recovery data (separated from sleep).
  */
 export interface WhoopRecoveryData {
-  /** Recovery score (0-100%) */
-  recovery_score: number;
+  /** Recovery score (e.g., "82%") */
+  recovery_score: string;
   /** Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%) */
   recovery_level: 'SUFFICIENT' | 'ADEQUATE' | 'LOW';
   /** Human-readable description from Whoop */
   recovery_level_description: string;
-  /** Heart Rate Variability in milliseconds (RMSSD), rounded to 2 decimals */
-  hrv_rmssd: number;
-  /** Resting heart rate in BPM */
-  resting_heart_rate: number;
-  /** Blood oxygen saturation (0-100%), rounded to 2 decimals */
-  spo2_percentage?: number;
-  /** Skin temperature in Celsius, rounded to 2 decimals */
-  skin_temp_celsius?: number;
+  /** Heart Rate Variability — RMSSD (e.g., "55 ms") */
+  hrv_rmssd: string;
+  /** Resting heart rate (e.g., "52 bpm") */
+  resting_heart_rate: string;
+  /** Blood oxygen saturation (e.g., "98%") */
+  spo2?: string;
+  /** Skin temperature (e.g., "32.4 °C") */
+  skin_temp?: string;
 }
 
 /**
@@ -362,8 +362,8 @@ export interface StrainData {
   strain_level: 'LIGHT' | 'MODERATE' | 'HIGH' | 'ALL_OUT';
   /** Human-readable description from Whoop */
   strain_level_description: string;
-  average_heart_rate?: number;
-  max_heart_rate?: number;
+  average_heart_rate?: string;
+  max_heart_rate?: string;
   calories?: number;
   activities: StrainActivity[];
 }
@@ -383,13 +383,13 @@ export interface StrainActivity {
   activity_type: ActivityType;
   start_time: string; // ISO 8601 (YYYY-MM-DDTHH:mm:ss±HH:mm) in user's local timezone
   end_time: string; // ISO 8601 (YYYY-MM-DDTHH:mm:ss±HH:mm) in user's local timezone
-  duration: string; // Human-readable, e.g., "1:30:00"
+  duration: string; // e.g., "1:30:00"
   strain_score: number;
-  average_heart_rate?: number;
-  max_heart_rate?: number;
+  average_heart_rate?: string;
+  max_heart_rate?: string;
   calories?: number;
-  distance?: string; // Human-readable, e.g., "45.2 km"
-  elevation_gain?: string; // Human-readable, e.g., "500 m"
+  distance?: string; // e.g., "45.2 km"
+  elevation_gain?: string; // e.g., "500 m"
   zone_durations?: WhoopZoneDurations;
 }
 
@@ -699,31 +699,31 @@ export interface UnitPreferences {
 // Heart rate zone with name and range
 export interface HRZone {
   name: string;
-  low_bpm: number;
-  high_bpm: number | null; // null for highest zone (unbounded)
-  time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
+  low_hr: string; // e.g., "120 bpm"
+  high_hr: string | null; // null for highest zone (unbounded)
+  time_in_zone?: string; // e.g., "1:49:44" (only for completed workouts)
 }
 
 // Power zone with name, percentages, and absolute values
 export interface PowerZone {
   name: string;
-  low_percent: number;
-  high_percent: number | null; // null for highest zone (unbounded)
-  low_watts: number;
-  high_watts: number | null;
-  time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
+  low_pct: string; // e.g., "55%" of FTP
+  high_pct: string | null; // null for highest zone (unbounded)
+  low_power: string; // e.g., "150 W"
+  high_power: string | null;
+  time_in_zone?: string; // e.g., "1:49:44" (only for completed workouts)
 }
 
 // Pace zone with name, percentages, and human-readable format
-// Note: low_percent corresponds to slow pace, high_percent to fast pace
+// Note: low_pct corresponds to slow pace, high_pct to fast pace
 // (higher % = faster = less time per unit distance)
 export interface PaceZone {
   name: string;
-  low_percent: number;
-  high_percent: number | null;
+  low_pct: string;
+  high_pct: string | null;
   slow_pace: string | null; // e.g., "5:30/km" or null if unbounded
   fast_pace: string | null; // e.g., "4:30/km" or null if unbounded
-  time_in_zone?: string; // Human-readable duration, e.g., "1:49:44" (only for completed workouts)
+  time_in_zone?: string; // e.g., "1:49:44" (only for completed workouts)
 }
 
 // Heat zone with name and heat strain index range
@@ -739,14 +739,14 @@ export interface SportSettings {
   types: string[]; // Activity types this applies to (e.g., ["Ride", "VirtualRide"])
 
   // Power thresholds
-  ftp?: number;
-  indoor_ftp?: number; // Only included if different from ftp
-  sweet_spot_min?: number; // Sweet spot lower bound (% of FTP)
-  sweet_spot_max?: number; // Sweet spot upper bound (% of FTP)
+  ftp?: string; // e.g., "250 W"
+  indoor_ftp?: string; // Only included if different from ftp
+  sweet_spot_min?: string; // e.g., "88%" of FTP
+  sweet_spot_max?: string;
 
   // Heart rate thresholds
-  lthr?: number;
-  max_hr?: number;
+  lthr?: string; // e.g., "165 bpm"
+  max_hr?: string;
 
   // HR zones (merged with names)
   hr_zones?: HRZone[];
@@ -837,12 +837,12 @@ export interface TrainingLoadTrends {
  * Base wellness fields shared between daily summary and trends.
  */
 interface WellnessFields {
-  weight?: string; // Weight with unit, e.g., "74.8 kg"
+  weight?: string; // e.g., "74.8 kg"
 
   // Heart rate and HRV
-  resting_hr?: number;
-  hrv?: number; // rMSSD in milliseconds
-  hrv_sdnn?: number; // SDNN in milliseconds
+  resting_hr?: string; // e.g., "52 bpm"
+  hrv?: string; // e.g., "55 ms" (rMSSD)
+  hrv_sdnn?: string; // SDNN
 
   // Menstrual cycle
   menstrual_phase?: string;
@@ -852,10 +852,10 @@ interface WellnessFields {
   kcal_consumed?: number;
 
   // Sleep
-  sleep_duration?: string; // Human-readable, e.g., "8h 10m"
+  sleep_duration?: string; // e.g., "8h 10m"
   sleep_score?: number;
   sleep_quality?: number; // 1=GREAT, 2=GOOD, 3=AVG, 4=POOR
-  avg_sleeping_hr?: number;
+  avg_sleeping_hr?: string;
 
   // Subjective metrics (1-4 scale)
   soreness?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
@@ -867,19 +867,19 @@ interface WellnessFields {
   hydration?: number; // 1=GOOD, 2=OK, 3=POOR, 4=BAD
 
   // Vitals
-  spo2?: number;
-  blood_pressure?: { systolic: number; diastolic: number };
-  hydration_volume?: number;
-  respiration?: number;
+  spo2?: string; // e.g., "98%"
+  blood_pressure?: string; // e.g., "120/80 mmHg"
+  hydration_volume?: string; // e.g., "500 ml"
+  respiration?: string; // e.g., "16 breaths/min"
 
   // Readiness and body composition
   readiness?: number;
   baevsky_si?: number;
-  blood_glucose?: number;
-  lactate?: number;
-  body_fat?: number;
-  abdomen?: number;
-  vo2max?: number;
+  blood_glucose?: string; // e.g., "95 mg/dL"
+  lactate?: string; // e.g., "1.2 mmol/L"
+  body_fat?: string; // e.g., "18.5%"
+  abdomen?: string; // e.g., "82 cm"
+  vo2max?: string; // e.g., "55.0 mL/kg/min"
 
   // Activity and notes
   steps?: number;
@@ -974,38 +974,38 @@ export interface WorkoutInterval {
   label?: string;
   group_id?: string;
   start_seconds: number; // Position marker - kept as number
-  duration: string; // Human-readable, e.g., "0:00:56"
-  distance?: string; // Human-readable, e.g., "1.2 km"
+  duration: string; // e.g., "0:00:56"
+  distance?: string; // e.g., "1.2 km"
 
   // Power metrics
-  average_watts?: number;
-  max_watts?: number;
-  normalized_power?: number;
-  watts_per_kg?: number;
+  average_power?: string; // e.g., "220 W"
+  max_power?: string;
+  normalized_power?: string;
+  power_to_weight?: string; // e.g., "3.1 W/kg"
   power_zone?: number;
   intensity_factor?: number;
   interval_tss?: number;
 
   // Heart rate
-  average_hr?: number;
-  max_hr?: number;
-  hr_decoupling?: number;
+  average_hr?: string; // e.g., "165 bpm"
+  max_hr?: string;
+  hr_decoupling?: string; // e.g., "5%"
 
   // Cadence/stride
-  average_cadence?: number;
-  stride_length_m?: number;
+  average_cadence?: string; // e.g., "88 rpm" or "180 spm"
+  stride_length?: string; // e.g., "1.42 m"
 
   // Speed
-  average_speed?: string; // Human-readable, e.g., "32.5 km/h"
+  average_speed?: string; // e.g., "32.5 km/h"
 
   // Elevation
-  elevation_gain?: string; // Human-readable, e.g., "45 m"
-  average_gradient?: string; // Human-readable, e.g., "1.9%"
+  elevation_gain?: string; // e.g., "45 m"
+  average_gradient?: string; // e.g., "1.9%"
 
   // W'bal (anaerobic capacity)
-  wbal_start_j?: number;
-  wbal_end_j?: number;
-  joules_above_ftp?: number;
+  wbal_start?: string; // e.g., "12500 J"
+  wbal_end?: string;
+  energy_above_ftp?: string;
 
   // Heat metrics (only present if heat strain data available)
   min_heat_strain_index?: number;
@@ -1014,24 +1014,24 @@ export interface WorkoutInterval {
   start_heat_strain_index?: number;
   end_heat_strain_index?: number;
 
-  // Ambient temperature metrics (Celsius)
-  min_ambient_temperature?: number;
-  max_ambient_temperature?: number;
-  median_ambient_temperature?: number;
-  start_ambient_temperature?: number;
-  end_ambient_temperature?: number;
+  // Ambient temperature metrics
+  min_ambient_temperature?: string; // e.g., "18.0 °C"
+  max_ambient_temperature?: string;
+  median_ambient_temperature?: string;
+  start_ambient_temperature?: string;
+  end_ambient_temperature?: string;
 }
 
 export interface IntervalGroup {
   id: string; // e.g., "56s@314w91rpm" - human-readable summary
   count: number;
-  average_watts?: number;
-  average_hr?: number;
-  average_cadence?: number;
-  average_speed?: string; // Human-readable, e.g., "32.5 km/h"
-  distance?: string; // Human-readable, e.g., "1.2 km"
-  duration?: string; // Human-readable, e.g., "0:00:56"
-  elevation_gain?: string; // Human-readable, e.g., "45 m"
+  average_power?: string;
+  average_hr?: string;
+  average_cadence?: string;
+  average_speed?: string; // e.g., "32.5 km/h"
+  distance?: string; // e.g., "1.2 km"
+  duration?: string; // e.g., "0:00:56"
+  elevation_gain?: string; // e.g., "45 m"
 }
 
 export interface WorkoutIntervalsResponse {
@@ -1216,8 +1216,8 @@ export interface ActivityPowerCurve {
 
 // Best value at a specific duration
 export interface PowerBest {
-  watts: number;
-  watts_per_kg: number;
+  power: string; // e.g., "320 W"
+  power_to_weight: string; // e.g., "4.2 W/kg"
   activity_id: string;
   date: string;
 }
@@ -1231,16 +1231,16 @@ export interface PowerCurveSummary {
   best_20min: PowerBest | null;
   best_60min: PowerBest | null;
   best_2hr: PowerBest | null;
-  estimated_ftp: number | null; // 95% of best 20min
+  estimated_ftp: string | null; // 95% of best 20min, e.g., "260 W"
 }
 
 // Comparison between two periods for power curves
 export interface PowerCurveComparison {
   duration_label: string;
-  current_watts: number;
-  previous_watts: number;
-  change_watts: number;
-  change_percent: number;
+  current_power: string;
+  previous_power: string;
+  change_power: string;
+  change_percent: string;
   improved: boolean;
 }
 
@@ -1309,7 +1309,7 @@ export interface PaceCurveComparison {
   current_seconds: number;
   previous_seconds: number;
   change_seconds: number;
-  change_percent: number;
+  change_percent: string; // e.g., "-3.5%"
   improved: boolean; // For pace, improved = faster = lower time
 }
 
@@ -1347,7 +1347,7 @@ export interface ActivityHRCurve {
 
 // Best value at a specific duration
 export interface HRBest {
-  bpm: number;
+  hr: string; // e.g., "180 bpm"
   activity_id: string;
   date: string;
 }
@@ -1366,10 +1366,10 @@ export interface HRCurveSummary {
 // Comparison between two periods for HR curves
 export interface HRCurveComparison {
   duration_label: string;
-  current_bpm: number;
-  previous_bpm: number;
-  change_bpm: number;
-  change_percent: number;
+  current_hr: string;
+  previous_hr: string;
+  change_hr: string;
+  change_percent: string;
 }
 
 // Full HR curves response
@@ -1401,8 +1401,8 @@ export interface ZoneTotalEntry {
   name: string;
   /** Total time spent in this zone (e.g., "282:38:00") */
   time: string;
-  /** Percentage of total time in this zone */
-  percentage: number;
+  /** Share of total time in this zone (e.g., "23%") */
+  percentage: string;
 }
 
 /**
