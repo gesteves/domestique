@@ -2580,6 +2580,7 @@ describe('IntervalsClient', () => {
           url: 'https://www.last.fm/music/Neil+Young/_/Old+Man',
           album_name: 'Harvest',
           artist_name: 'Neil Young',
+          loved: 'No' as const,
         },
       ];
       const getter = vi.fn().mockResolvedValue(playedSongs);
@@ -2658,6 +2659,7 @@ describe('IntervalsClient', () => {
           url: 'https://www.last.fm/x',
           album_name: 'Album',
           artist_name: 'Artist',
+          loved: 'No' as const,
         },
       ];
       const getter = vi.fn().mockResolvedValue(songs);

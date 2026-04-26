@@ -185,6 +185,7 @@ export interface PlayedSong {
   url: string;
   album_name: string;
   artist_name: string;
+  loved: 'Yes' | 'No';
 }
 
 // Zone time entry for power zones

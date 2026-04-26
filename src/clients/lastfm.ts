@@ -38,6 +38,7 @@ export interface LastFmTrack {
   artist?: LastFmArtist;
   album?: LastFmAlbum;
   date?: LastFmDate;
+  loved?: string;
   '@attr'?: { nowplaying?: string };
 }
 
@@ -75,10 +76,11 @@ export class LastFmClient {
       limit: String(limit),
       from: String(fromSec),
       to: String(toSec),
+      extended: '1',
     });
     const url = `${LASTFM_API_BASE}?${params.toString()}`;
 
-    console.log(`[Last.fm] Making API call to ${LASTFM_API_BASE}?method=user.getrecenttracks&user=${this.config.username}&from=${fromSec}&to=${toSec}&limit=${limit}`);
+    console.log(`[Last.fm] Making API call to ${LASTFM_API_BASE}?method=user.getrecenttracks&user=${this.config.username}&from=${fromSec}&to=${toSec}&limit=${limit}&extended=1`);
 
     const bodyText = await httpRequestText({
       url,
@@ -162,5 +164,6 @@ function normalizeTrack(track: LastFmTrack): PlayedSong {
     url: track.url,
     album_name: track.album?.['#text'] ?? '',
     artist_name: track.artist?.['#text'] ?? track.artist?.name ?? '',
+    loved: track.loved === '1' ? 'Yes' : 'No',
   };
 }

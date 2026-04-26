@@ -47,6 +47,7 @@ describe('LastFmClient', () => {
       expect(url).toContain('limit=200');
       expect(url).toContain('from=1776530000');
       expect(url).toContain('to=1776540000');
+      expect(url).toContain('extended=1');
     });
 
     it('wraps a single track object into an array', async () => {
@@ -131,6 +132,7 @@ describe('LastFmClient', () => {
             artist: { mbid: '75167b8b', '#text': 'Neil Young' },
             album: { '#text': 'Harvest (50th Anniversary Edition)' },
             date: { uts: '1776535049', '#text': '18 Apr 2026, 18:00' },
+            loved: '1',
           },
           {
             name: 'Crawling - One More Light Live',
@@ -138,6 +140,7 @@ describe('LastFmClient', () => {
             artist: { mbid: 'f59c5520', '#text': 'Linkin Park' },
             album: { '#text': 'One More Light Live' },
             date: { uts: '1776535045', '#text': '18 Apr 2026, 17:57' },
+            loved: '0',
           },
           {
             // "Now playing" track — no date, has @attr.nowplaying
@@ -255,6 +258,39 @@ describe('LastFmClient', () => {
       expect(neil!.album_name).toBe('Harvest (50th Anniversary Edition)');
       expect(neil!.url).toBe('https://www.last.fm/music/Neil+Young/_/Old+Man');
       expect(neil!.played_at).toBe(new Date(1776535049 * 1000).toISOString());
+    });
+
+    it('normalizes loved=1 to "Yes" and loved=0 to "No"', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse(sampleResponse));
+
+      const result = await client.getPlayedSongsDuring(0, 9999999999999);
+      const loved = result.find((s) => s.name === 'Old Man');
+      const notLoved = result.find((s) => s.name === 'Crawling - One More Light Live');
+
+      expect(loved!.loved).toBe('Yes');
+      expect(notLoved!.loved).toBe('No');
+    });
+
+    it('defaults loved to "No" when the field is missing', async () => {
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({
+          recenttracks: {
+            track: [
+              {
+                name: 'No Loved Field',
+                url: 'https://www.last.fm/x',
+                artist: { '#text': 'Artist' },
+                album: { '#text': 'Album' },
+                date: { uts: '1776535049' },
+              },
+            ],
+          },
+        })
+      );
+
+      const result = await client.getPlayedSongsDuring(0, 9999999999999);
+
+      expect(result[0].loved).toBe('No');
     });
 
     it('handles empty album text', async () => {
