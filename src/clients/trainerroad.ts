@@ -429,6 +429,11 @@ export class TrainerRoadClient {
    * Uses normalizeActivityType for consistent mapping, defaults to Cycling
    */
   private detectSport(name: string, description?: string): ActivityType {
+    // "Endless Pool" workouts are swims, but the name contains no swim keywords.
+    if (/\bendless pool\b/i.test(name)) {
+      return 'Swimming';
+    }
+
     // Try normalizing the full workout name first (in case it's an exact match)
     const normalized = normalizeActivityType(name);
     if (normalized !== 'Other') {

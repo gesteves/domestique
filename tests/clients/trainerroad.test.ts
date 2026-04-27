@@ -317,6 +317,74 @@ END:VCALENDAR`;
       // "Brundage" contains "run" but should NOT be classified as Running
       expect(result[0].sport).toBe('Cycling');
     });
+
+    it('should detect Swim sport for "Endless Pool" workouts', async () => {
+      const endlessPoolIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:endless-pool@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:0:30 - Endless Pool
+DESCRIPTION:Endless Pool
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(endlessPoolIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result[0].sport).toBe('Swimming');
+      expect(result[0].name).toBe('Endless Pool');
+    });
+
+    it('should detect Swim sport for "Endless Pool" workouts case-insensitively', async () => {
+      const endlessPoolIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:endless-pool-case@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:0:45 - ENDLESS POOL Session
+DESCRIPTION:Some unrelated description
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(endlessPoolIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result[0].sport).toBe('Swimming');
+    });
+
+    it('should not match "Endless Pool" from description alone', async () => {
+      const descriptionOnlyIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:endless-pool-desc@trainerroad.com
+DTSTART;VALUE=DATE:20241216
+DTEND;VALUE=DATE:20241217
+SUMMARY:1:30 - Brundage +2
+DESCRIPTION:TSS 95, IF 0.75. Workout to do in the Endless Pool sometime.
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(descriptionOnlyIcs),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      // "Endless Pool" appears only in description, not in name → should remain Cycling
+      expect(result[0].sport).toBe('Cycling');
+    });
   });
 
   describe('duration formatting', () => {
