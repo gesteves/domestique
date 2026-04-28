@@ -2,6 +2,7 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { GoogleWeatherClient } from '../clients/google-weather.js';
+import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
 import { parseDateRangeInTimezone, getTodayInTimezone } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
@@ -28,7 +29,8 @@ export class CurrentTools {
     private intervals: IntervalsClient,
     private whoop: WhoopClient | null,
     private trainerroad: TrainerRoadClient | null,
-    private googleWeather: GoogleWeatherClient | null = null
+    private googleWeather: GoogleWeatherClient | null = null,
+    private googleAirQuality: GoogleAirQualityClient | null = null
   ) {}
 
   /**
@@ -37,10 +39,11 @@ export class CurrentTools {
    * is not configured or there are no enabled locations. Per-location failures
    * are logged and skipped — one bad location doesn't suppress the others.
    *
-   * For each location we issue the three Google Weather calls (current
-   * conditions, hourly forecast, public alerts) in parallel and let any one of
-   * them fail independently — a missing alerts feed shouldn't suppress the
-   * forecast itself.
+   * For each location we issue the Google Weather calls (current conditions,
+   * hourly forecast, public alerts) plus Google Air Quality calls (current
+   * AQI, hourly AQI) in parallel and let any one of them fail independently
+   * — a missing alerts feed or AQI dataset shouldn't suppress the forecast
+   * itself.
    */
   private async buildForecasts(timezone: string, now: Date): Promise<LocationForecast[]> {
     if (!this.googleWeather) return [];
@@ -54,10 +57,15 @@ export class CurrentTools {
     }
 
     const gw = this.googleWeather;
+    const aq = this.googleAirQuality;
+    // 24h covers the "rest of today" hourly window the weather forecast
+    // surfaces; the AQ API computes the window from its own "now."
+    const aqHours = 24;
+
     const results = await Promise.all(
       locations.map(async (loc) => {
         try {
-          const [current, hourly, alerts] = await Promise.all([
+          const [current, hourly, alerts, currentAq, hourlyAq] = await Promise.all([
             gw.getCurrentConditions(loc.latitude, loc.longitude).catch((e) => {
               console.error(`Error fetching current conditions for "${loc.label}":`, e);
               return undefined;
@@ -70,6 +78,20 @@ export class CurrentTools {
               console.error(`Error fetching weather alerts for "${loc.label}":`, e);
               return undefined;
             }),
+            aq
+              ? aq.getCurrentAirQuality(loc.latitude, loc.longitude).catch((e) => {
+                  console.error(`Error fetching current air quality for "${loc.label}":`, e);
+                  return undefined;
+                })
+              : Promise.resolve(undefined),
+            aq
+              ? aq
+                  .getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHours)
+                  .catch((e) => {
+                    console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
+                    return undefined;
+                  })
+              : Promise.resolve(undefined),
           ]);
           return assembleLocationForecast(
             loc.location,
@@ -79,7 +101,9 @@ export class CurrentTools {
             hourly,
             alerts,
             timezone,
-            now
+            now,
+            currentAq,
+            hourlyAq
           );
         } catch (e) {
           console.error(`Error fetching forecast for "${loc.label}":`, e);

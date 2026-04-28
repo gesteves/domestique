@@ -103,8 +103,8 @@ REDIS_URL=redis://redis:6379
 # TrainerRoad
 TRAINERROAD_CALENDAR_URL=  # Private iCal feed URL
 
-# Google Weather API (required to enable forecasts)
-GOOGLE_API_KEY=             # Google Cloud API key (used for Weather API and other Google services)
+# Google APIs (Weather API + Air Quality API; same key, both must be enabled on the GCP project)
+GOOGLE_API_KEY=             # Google Cloud API key (used for Weather API, Air Quality API, and other Google services)
 
 # Error Reporting
 BUGSNAG_API_KEY=            # Bugsnag API key for error reporting (optional)

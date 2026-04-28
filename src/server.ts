@@ -23,6 +23,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     trainerroad: config.trainerRoad,
     lastfm: config.lastfm,
     googleWeather: config.googleWeather,
+    googleAirQuality: config.googleAirQuality,
   });
 
   console.log('Tool registry created');

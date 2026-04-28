@@ -124,5 +124,10 @@ export function getConfig() {
           apiKey: process.env.GOOGLE_API_KEY,
         }
       : null,
+    googleAirQuality: process.env.GOOGLE_API_KEY
+      ? {
+          apiKey: process.env.GOOGLE_API_KEY,
+        }
+      : null,
   };
 }

@@ -11,6 +11,10 @@ import type {
   GoogleHourlyForecastResponse,
   GoogleWeatherAlertsResponse,
 } from '../../src/clients/google-weather.js';
+import type {
+  GoogleAirQualityHourlyResponse,
+  GoogleCurrentAirQualityResponse,
+} from '../../src/clients/google-air-quality.js';
 
 describe('transformCurrentConditions', () => {
   it('formats every value-with-unit field from Google into our flat shape', () => {
@@ -317,6 +321,149 @@ describe('assembleLocationForecast', () => {
       current_weather: null,
       hourly_forecast: [],
       alerts: [],
+    });
+  });
+
+  describe('air quality integration', () => {
+    const currentAq: GoogleCurrentAirQualityResponse = {
+      dateTime: '2026-04-28T14:49:34Z',
+      regionCode: 'us',
+      indexes: [
+        {
+          code: 'usa_epa',
+          displayName: 'AQI (US)',
+          aqi: 41,
+          category: 'Good air quality',
+          dominantPollutant: 'pm25',
+        },
+      ],
+    };
+
+    const hourlyAq: GoogleAirQualityHourlyResponse = {
+      hourlyForecasts: [
+        // Matches the in-progress weather hour
+        {
+          dateTime: '2026-04-28T14:00:00Z',
+          indexes: [
+            {
+              code: 'usa_epa',
+              displayName: 'AQI (US)',
+              aqi: 38,
+              category: 'Good air quality',
+              dominantPollutant: 'pm25',
+            },
+          ],
+        },
+        // Matches the future weather hour
+        {
+          dateTime: '2026-04-28T20:00:00Z',
+          indexes: [
+            {
+              code: 'usa_epa',
+              displayName: 'AQI (US)',
+              aqi: 55,
+              category: 'Moderate air quality',
+              dominantPollutant: 'o3',
+            },
+          ],
+        },
+        // Hour with no matching weather hour — should be silently dropped
+        {
+          dateTime: '2026-04-28T23:00:00Z',
+          indexes: [{ code: 'usa_epa', aqi: 60 }],
+        },
+      ],
+    };
+
+    it('attaches AQI to current_weather and to matching hourly entries', () => {
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        currentAq,
+        hourlyAq
+      );
+
+      expect(result.current_weather?.air_quality).toEqual({
+        aqi: 41,
+        category: 'Good air quality',
+        dominant_pollutant: 'pm25',
+        index_display_name: 'AQI (US)',
+      });
+
+      expect(result.hourly_forecast.map((h) => h.air_quality?.aqi)).toEqual([38, 55]);
+      expect(result.hourly_forecast[1].air_quality?.dominant_pollutant).toBe('o3');
+    });
+
+    it('omits air_quality when no AQI data is provided', () => {
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now
+      );
+      expect(result.current_weather?.air_quality).toBeUndefined();
+      for (const h of result.hourly_forecast) {
+        expect(h.air_quality).toBeUndefined();
+      }
+    });
+
+    it("omits air_quality on hours without a matching AQI entry but keeps the rest", () => {
+      // Only an entry for the in-progress hour; the future hour has no match.
+      const partial: GoogleAirQualityHourlyResponse = {
+        hourlyForecasts: [
+          {
+            dateTime: '2026-04-28T14:00:00Z',
+            indexes: [{ code: 'usa_epa', aqi: 38 }],
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        currentAq,
+        partial
+      );
+      expect(result.hourly_forecast[0].air_quality?.aqi).toBe(38);
+      expect(result.hourly_forecast[1].air_quality).toBeUndefined();
+    });
+
+    it('skips a uaqi entry and picks the local index when both are returned', () => {
+      const mixed: GoogleCurrentAirQualityResponse = {
+        indexes: [
+          { code: 'uaqi', aqi: 89 },
+          { code: 'usa_epa', aqi: 41, displayName: 'AQI (US)' },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        mixed,
+        undefined
+      );
+      expect(result.current_weather?.air_quality?.aqi).toBe(41);
+      expect(result.current_weather?.air_quality?.index_display_name).toBe('AQI (US)');
     });
   });
 });

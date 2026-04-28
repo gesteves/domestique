@@ -1128,6 +1128,23 @@ export interface WeatherLocation {
 }
 
 /**
+ * Air-quality index attached to a CurrentWeather or HourlyForecast entry.
+ * Sourced from Google's Air Quality API. We always request the local index
+ * (e.g., US EPA, DEFRA); `index_display_name` identifies which scale the
+ * AQI value is on, since "AQI 41" alone is ambiguous across jurisdictions.
+ */
+export interface AirQuality {
+  /** Numeric index value on the local AQI scale */
+  aqi: number;
+  /** Category label for the AQI band (e.g., "Good air quality") */
+  category?: string;
+  /** Lower-case pollutant code that drives the AQI value (e.g., "pm25", "o3") */
+  dominant_pollutant?: string;
+  /** Human-readable name for the AQI scale (e.g., "AQI (US)") */
+  index_display_name?: string;
+}
+
+/**
  * Slimmed-down current-conditions block. Times stay as ISO strings so
  * formatResponseDates renders them in the athlete's timezone.
  */
@@ -1152,6 +1169,7 @@ export interface CurrentWeather {
   wind_direction?: string;
   wind_speed?: string;
   wind_gust?: string;
+  air_quality?: AirQuality;
 }
 
 /**
@@ -1179,6 +1197,7 @@ export interface HourlyForecast {
   wind_direction?: string;
   wind_speed?: string;
   wind_gust?: string;
+  air_quality?: AirQuality;
 }
 
 /**

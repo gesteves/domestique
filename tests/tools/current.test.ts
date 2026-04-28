@@ -4,6 +4,7 @@ import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
 import { GoogleWeatherClient } from '../../src/clients/google-weather.js';
+import { GoogleAirQualityClient } from '../../src/clients/google-air-quality.js';
 import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
@@ -11,6 +12,7 @@ vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
 vi.mock('../../src/clients/trainerroad.js');
 vi.mock('../../src/clients/google-weather.js');
+vi.mock('../../src/clients/google-air-quality.js');
 
 describe('CurrentTools', () => {
   let tools: CurrentTools;
@@ -1116,6 +1118,7 @@ describe('CurrentTools', () => {
 
   describe('weather forecast', () => {
     let mockGoogleWeatherClient: GoogleWeatherClient;
+    let mockGoogleAirQualityClient: GoogleAirQualityClient;
 
     // Sample Google Weather responses for the three calls. Athlete is in America/Boise.
     const sampleCurrent = {
@@ -1156,6 +1159,7 @@ describe('CurrentTools', () => {
 
     beforeEach(() => {
       mockGoogleWeatherClient = new GoogleWeatherClient({ apiKey: 'k' });
+      mockGoogleAirQualityClient = new GoogleAirQualityClient({ apiKey: 'k' });
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-04-28T14:49:34Z'));
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Boise');
@@ -1306,6 +1310,116 @@ describe('CurrentTools', () => {
       // tools (the suite-level instance) is constructed without Google Weather
       const result = await tools.getTodaysSummary();
       expect(result.forecast).toEqual([]);
+    });
+
+    it('attaches AQI from the Google Air Quality client when configured', async () => {
+      const toolsWithAirQuality = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        mockGoogleAirQualityClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGoogleAirQualityClient.getCurrentAirQuality).mockResolvedValue({
+        indexes: [
+          {
+            code: 'usa_epa',
+            displayName: 'AQI (US)',
+            aqi: 41,
+            category: 'Good air quality',
+            dominantPollutant: 'pm25',
+          },
+        ],
+      });
+      vi.mocked(mockGoogleAirQualityClient.getHourlyAirQualityForecast).mockResolvedValue({
+        hourlyForecasts: [
+          {
+            dateTime: '2026-04-28T20:00:00Z',
+            indexes: [
+              {
+                code: 'usa_epa',
+                displayName: 'AQI (US)',
+                aqi: 55,
+                category: 'Moderate air quality',
+                dominantPollutant: 'o3',
+              },
+            ],
+          },
+        ],
+      });
+
+      const result = await toolsWithAirQuality.getTodaysForecast();
+
+      expect(mockGoogleAirQualityClient.getCurrentAirQuality).toHaveBeenCalledWith(43.65, -110.71);
+      expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).toHaveBeenCalledWith(
+        43.65,
+        -110.71,
+        24
+      );
+
+      const fc = result.forecasts[0];
+      expect(fc.current_weather?.air_quality?.aqi).toBe(41);
+      expect(fc.current_weather?.air_quality?.dominant_pollutant).toBe('pm25');
+      expect(fc.current_weather?.air_quality?.index_display_name).toBe('AQI (US)');
+      expect(fc.hourly_forecast).toHaveLength(1);
+      expect(fc.hourly_forecast[0].air_quality?.aqi).toBe(55);
+      expect(fc.hourly_forecast[0].air_quality?.dominant_pollutant).toBe('o3');
+    });
+
+    it('keeps the forecast when Air Quality calls fail', async () => {
+      const toolsWithAirQuality = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        mockGoogleAirQualityClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGoogleAirQualityClient.getCurrentAirQuality).mockRejectedValue(new Error('boom'));
+      vi.mocked(mockGoogleAirQualityClient.getHourlyAirQualityForecast).mockRejectedValue(new Error('boom'));
+
+      const result = await toolsWithAirQuality.getTodaysForecast();
+      const fc = result.forecasts[0];
+      expect(fc.location).toBe('Moose,Wyoming,US');
+      expect(fc.current_weather?.air_quality).toBeUndefined();
+      expect(fc.hourly_forecast[0].air_quality).toBeUndefined();
+      // Weather data is still present
+      expect(fc.current_weather?.temperature).toBe('4.1 °C');
+    });
+
+    it('does not call the Air Quality client when it is not configured', async () => {
+      const toolsWeatherOnly = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        null
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+
+      const result = await toolsWeatherOnly.getTodaysForecast();
+      expect(mockGoogleAirQualityClient.getCurrentAirQuality).not.toHaveBeenCalled();
+      expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).not.toHaveBeenCalled();
+      expect(result.forecasts[0].current_weather?.air_quality).toBeUndefined();
     });
   });
 });

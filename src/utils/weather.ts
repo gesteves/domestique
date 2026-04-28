@@ -12,6 +12,13 @@ import type {
   GoogleWind,
 } from '../clients/google-weather.js';
 import type {
+  GoogleAirQualityHourlyEntry,
+  GoogleAirQualityHourlyResponse,
+  GoogleAirQualityIndex,
+  GoogleCurrentAirQualityResponse,
+} from '../clients/google-air-quality.js';
+import type {
+  AirQuality,
   CurrentWeather,
   HourlyForecast,
   WeatherAlert,
@@ -159,11 +166,65 @@ function getConditionText(weatherCondition: { description?: { text?: string } } 
 }
 
 /**
+ * Build our slimmed AirQuality block from a Google AQI index entry. Returns
+ * undefined when the index is missing an aqi value.
+ */
+function buildAirQuality(index: GoogleAirQualityIndex | undefined): AirQuality | undefined {
+  if (!index || index.aqi === undefined || index.aqi === null) return undefined;
+  return {
+    aqi: index.aqi,
+    category: index.category,
+    dominant_pollutant: index.dominantPollutant,
+    index_display_name: index.displayName,
+  };
+}
+
+/**
+ * Pick the local AQI index from the response. We always request
+ * `universalAqi: false` + `LOCAL_AQI`, so in practice there's exactly one
+ * entry; defensively skip `uaqi` if it ever shows up.
+ */
+function pickLocalIndex(indexes: GoogleAirQualityIndex[] | undefined): GoogleAirQualityIndex | undefined {
+  if (!indexes || indexes.length === 0) return undefined;
+  return indexes.find((i) => i.code !== 'uaqi') ?? indexes[0];
+}
+
+function airQualityFromCurrent(
+  airQuality: GoogleCurrentAirQualityResponse | undefined
+): AirQuality | undefined {
+  if (!airQuality) return undefined;
+  return buildAirQuality(pickLocalIndex(airQuality.indexes));
+}
+
+function airQualityFromHourly(entry: GoogleAirQualityHourlyEntry | undefined): AirQuality | undefined {
+  if (!entry) return undefined;
+  return buildAirQuality(pickLocalIndex(entry.indexes));
+}
+
+/**
+ * Index hourly air-quality entries by their `dateTime` so each weather hour
+ * can find a matching entry by `interval.startTime` in O(1). Both APIs emit
+ * top-of-hour ISO timestamps, so direct string equality is reliable.
+ */
+function indexHourlyAirQuality(
+  hourly: GoogleAirQualityHourlyResponse | undefined
+): Map<string, GoogleAirQualityHourlyEntry> {
+  const map = new Map<string, GoogleAirQualityHourlyEntry>();
+  if (!hourly?.hourlyForecasts) return map;
+  for (const entry of hourly.hourlyForecasts) {
+    if (entry.dateTime) map.set(entry.dateTime, entry);
+  }
+  return map;
+}
+
+/**
  * Strip metadata and format the Google currentConditions response.
- * Returns null if the input is missing entirely.
+ * Returns null if the input is missing entirely. The optional
+ * `airQuality` argument attaches the local AQI block to `current_weather`.
  */
 export function transformCurrentConditions(
-  current: GoogleCurrentConditionsResponse | undefined
+  current: GoogleCurrentConditionsResponse | undefined,
+  airQuality?: GoogleCurrentAirQualityResponse
 ): CurrentWeather | null {
   if (!current) return null;
 
@@ -191,13 +252,18 @@ export function transformCurrentConditions(
     wind_direction: formatWindDirection(current.wind),
     wind_speed: formatGoogleSpeed(current.wind?.speed),
     wind_gust: formatGoogleSpeed(current.wind?.gust),
+    air_quality: airQualityFromCurrent(airQuality),
   };
 }
 
 /**
- * Format one hour of Google's hourly forecast.
+ * Format one hour of Google's hourly forecast. Pass an optional matching
+ * air-quality entry to attach the AQI block under `air_quality`.
  */
-export function transformForecastHour(hour: GoogleForecastHour): HourlyForecast {
+export function transformForecastHour(
+  hour: GoogleForecastHour,
+  airQualityEntry?: GoogleAirQualityHourlyEntry
+): HourlyForecast {
   const precip = hour.precipitation;
   return {
     forecast_start: hour.interval?.startTime,
@@ -223,6 +289,7 @@ export function transformForecastHour(hour: GoogleForecastHour): HourlyForecast 
     wind_direction: formatWindDirection(hour.wind),
     wind_speed: formatGoogleSpeed(hour.wind?.speed),
     wind_gust: formatGoogleSpeed(hour.wind?.gust),
+    air_quality: airQualityFromHourly(airQualityEntry),
   };
 }
 
@@ -266,11 +333,16 @@ function transformAlert(alert: GoogleWeatherAlert): WeatherAlert {
 }
 
 /**
- * Build a per-location forecast from the three Google Weather API responses.
+ * Build a per-location forecast from Google Weather + Air Quality responses.
  *
  * `location` is the full location string from the athlete's Intervals.icu
  * weather config (e.g., "Moose,Wyoming,US") — preferred over the shorter label
  * because it conveys region/country context to the model.
+ *
+ * Air-quality data is optional: if either AQ argument is omitted, the matching
+ * `air_quality` field is just omitted on the output. Hourly AQ entries are
+ * matched to weather hours by ISO timestamp (top-of-hour boundaries on both
+ * APIs), so a missing entry for a given hour is silently skipped.
  */
 export function assembleLocationForecast(
   location: string,
@@ -280,15 +352,22 @@ export function assembleLocationForecast(
   hourly: GoogleHourlyForecastResponse | undefined,
   alerts: GoogleWeatherAlertsResponse | undefined,
   timezone: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  currentAirQuality?: GoogleCurrentAirQualityResponse,
+  hourlyAirQuality?: GoogleAirQualityHourlyResponse
 ): LocationForecast {
   const filteredHours = filterHourlyToRestOfDay(hourly?.forecastHours, timezone, now);
+  const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
   return {
     location,
     latitude,
     longitude,
-    current_weather: transformCurrentConditions(current),
-    hourly_forecast: filteredHours.map(transformForecastHour),
+    current_weather: transformCurrentConditions(current, currentAirQuality),
+    hourly_forecast: filteredHours.map((h) => {
+      const startTime = h.interval?.startTime;
+      const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
+      return transformForecastHour(h, aqEntry);
+    }),
     alerts: (alerts?.weatherAlerts ?? []).map(transformAlert),
   };
 }

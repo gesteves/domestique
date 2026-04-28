@@ -662,6 +662,13 @@ const SportTotalsZ = z.object({
 // Weather forecast (Google Weather API)
 // ============================================
 
+const AirQualityZ = z.object({
+  aqi: z.number().describe('Numeric AQI value on the local scale'),
+  category: z.string().optional().describe('Category label for the AQI band (e.g., "Good air quality", "Moderate air quality")'),
+  dominant_pollutant: z.string().optional().describe('Lower-case pollutant code that drives the AQI value (e.g., "pm25", "o3", "no2")'),
+  index_display_name: z.string().optional().describe('Human-readable name for the AQI scale (e.g., "AQI (US)")'),
+}).passthrough();
+
 const CurrentWeatherZ = z.object({
   as_of: z.string().optional().describe('Timestamp the conditions were measured/modeled at'),
   condition: z.string().optional().describe('Human-readable description of the dominant condition (e.g., "Sunny", "Mostly cloudy", "Light rain")'),
@@ -683,6 +690,7 @@ const CurrentWeatherZ = z.object({
   wind_direction: z.string().optional().describe('Direction the wind is blowing from'),
   wind_speed: z.string().optional().describe('Sustained wind speed'),
   wind_gust: z.string().optional().describe('Peak wind gust speed'),
+  air_quality: AirQualityZ.optional().describe('Local air quality index from the Google Air Quality API'),
 }).passthrough();
 
 const HourlyForecastZ = z.object({
@@ -707,6 +715,7 @@ const HourlyForecastZ = z.object({
   wind_direction: z.string().optional().describe('Direction the wind is blowing from'),
   wind_speed: z.string().optional().describe('Sustained wind speed'),
   wind_gust: z.string().optional().describe('Peak wind gust speed'),
+  air_quality: AirQualityZ.optional().describe('Local air quality index from the Google Air Quality API for this hour'),
 }).passthrough();
 
 const WeatherAlertZ = z.object({
