@@ -1097,7 +1097,7 @@ export interface DailySummary {
   completed_workouts: WorkoutWithWhoop[];
   /** Race scheduled for today (if any) */
   scheduled_race: Race | null;
-  /** Per-location weather forecasts for today (empty if WeatherKit not configured) */
+  /** Per-location weather forecasts for today (empty if Google Weather is not configured) */
   forecast: LocationForecast[];
   /** Number of workouts planned for today */
   workouts_planned: number;
@@ -1110,14 +1110,14 @@ export interface DailySummary {
 }
 
 // ============================================
-// Weather forecast (WeatherKit)
+// Weather forecast (Google Weather API)
 // ============================================
 
 /**
  * A forecast location pulled from the athlete's Intervals.icu weather config.
- * Latitude/longitude are forwarded to WeatherKit; `location` is the original
- * "City,Region,Country" string from Intervals.icu (we extract the ISO Alpha-2
- * country code from the trailing token).
+ * Latitude/longitude are forwarded to Google Weather; `location` is the
+ * original "City,Region,Country" string from Intervals.icu, surfaced verbatim
+ * so the model has region/country context.
  */
 export interface WeatherLocation {
   id: number;
@@ -1133,16 +1133,20 @@ export interface WeatherLocation {
  */
 export interface CurrentWeather {
   as_of?: string;
-  condition_code?: string;
+  condition?: string;
   daylight?: boolean;
   cloud_cover?: string;
   humidity?: string;
   temperature?: string;
   temperature_apparent?: string;
   temperature_dew_point?: string;
+  temperature_heat_index?: string;
+  temperature_wind_chill?: string;
   pressure?: string;
-  pressure_trend?: string;
-  precipitation_intensity?: string;
+  precipitation_amount?: string;
+  precipitation_chance?: string;
+  precipitation_type?: string;
+  thunderstorm_probability?: string;
   uv_index?: number;
   visibility?: string;
   wind_direction?: string;
@@ -1151,46 +1155,25 @@ export interface CurrentWeather {
 }
 
 /**
- * Apple's "rest of today" daily-forecast slice with units applied.
- */
-export interface RestOfDayForecast {
-  forecast_start?: string;
-  forecast_end?: string;
-  condition_code?: string;
-  cloud_cover?: string;
-  humidity?: string;
-  precipitation_amount?: string;
-  precipitation_chance?: string;
-  precipitation_type?: string;
-  snowfall_amount?: string;
-  temperature_max?: string;
-  temperature_min?: string;
-  wind_direction?: string;
-  wind_speed?: string;
-  wind_speed_max?: string;
-  wind_gust_speed_max?: string;
-}
-
-/**
- * One hour of WeatherKit's hourly forecast.
+ * One hour of Google Weather's hourly forecast.
  */
 export interface HourlyForecast {
   forecast_start?: string;
-  condition_code?: string;
+  forecast_end?: string;
+  condition?: string;
   daylight?: boolean;
   cloud_cover?: string;
   humidity?: string;
   precipitation_amount?: string;
-  precipitation_intensity?: string;
   precipitation_chance?: string;
   precipitation_type?: string;
+  thunderstorm_probability?: string;
   pressure?: string;
-  pressure_trend?: string;
-  snowfall_amount?: string;
-  snowfall_intensity?: string;
   temperature?: string;
   temperature_apparent?: string;
   temperature_dew_point?: string;
+  temperature_heat_index?: string;
+  temperature_wind_chill?: string;
   uv_index?: number;
   visibility?: string;
   wind_direction?: string;
@@ -1198,33 +1181,20 @@ export interface HourlyForecast {
   wind_gust?: string;
 }
 
+/**
+ * A weather alert reduced to the fields useful for training decisions.
+ */
 export interface WeatherAlert {
-  id?: string;
-  area_id?: string;
-  attribution_url?: string;
-  country_code?: string;
+  title?: string;
   description?: string;
-  token?: string;
-  effective_time?: string;
-  expire_time?: string;
-  issued_time?: string;
-  event_onset_time?: string;
-  event_end_time?: string;
-  details_url?: string;
-  phenomenon?: string;
-  precedence?: number;
   severity?: string;
-  significance?: string;
+  start_time?: string;
+  expiration_time?: string;
   source?: string;
-  event_source?: string;
-  urgency?: string;
-  certainty?: string;
-  importance?: string;
-  responses?: string[];
 }
 
 /**
- * Forecast for a single location, assembled from a WeatherKit response.
+ * Forecast for a single location, assembled from Google Weather responses.
  */
 export interface LocationForecast {
   /** Full location string from the athlete's weather config (e.g., "Moose,Wyoming,US") */
@@ -1232,7 +1202,6 @@ export interface LocationForecast {
   latitude: number;
   longitude: number;
   current_weather: CurrentWeather | null;
-  rest_of_day_forecast: RestOfDayForecast | null;
   hourly_forecast: HourlyForecast[];
   alerts: WeatherAlert[];
 }

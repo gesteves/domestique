@@ -103,11 +103,8 @@ REDIS_URL=redis://redis:6379
 # TrainerRoad
 TRAINERROAD_CALENDAR_URL=  # Private iCal feed URL
 
-# Apple WeatherKit (all four required to enable forecasts)
-WEATHERKIT_KEY_ID=          # Apple Developer Key ID for the WeatherKit key
-WEATHERKIT_TEAM_ID=         # Apple Developer Team ID
-WEATHERKIT_SERVICE_ID=      # WeatherKit Service ID
-WEATHERKIT_PRIVATE_KEY=     # Base64-encoded PEM contents of the .p8 private key
+# Google Weather API (required to enable forecasts)
+GOOGLE_API_KEY=             # Google Cloud API key (used for Weather API and other Google services)
 
 # Error Reporting
 BUGSNAG_API_KEY=            # Bugsnag API key for error reporting (optional)

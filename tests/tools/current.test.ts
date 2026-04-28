@@ -3,14 +3,14 @@ import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import { WeatherKitClient } from '../../src/clients/weatherkit.js';
+import { GoogleWeatherClient } from '../../src/clients/google-weather.js';
 import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
 vi.mock('../../src/clients/trainerroad.js');
-vi.mock('../../src/clients/weatherkit.js');
+vi.mock('../../src/clients/google-weather.js');
 
 describe('CurrentTools', () => {
   let tools: CurrentTools;
@@ -1115,58 +1115,47 @@ describe('CurrentTools', () => {
   });
 
   describe('weather forecast', () => {
-    let mockWeatherKitClient: WeatherKitClient;
+    let mockGoogleWeatherClient: GoogleWeatherClient;
 
-    // Sample WeatherKit response with one current hour and one future hour today,
-    // plus an alert. The athlete is in America/Boise.
-    const sampleWeatherResponse = {
-      currentWeather: {
-        metadata: { latitude: 43.65, longitude: -110.71 },
-        asOf: '2026-04-28T14:49:34Z',
-        conditionCode: 'MostlyClear',
-        temperature: 4.07,
-        humidity: 0.58,
-        windSpeed: 12.12,
-      },
-      forecastDaily: {
-        days: [
-          {
-            forecastStart: '2026-04-28T06:00:00Z',
-            forecastEnd: '2026-04-29T06:00:00Z',
-            restOfDayForecast: {
-              forecastStart: '2026-04-28T14:49:34Z',
-              forecastEnd: '2026-04-29T06:00:00Z',
-              cloudCover: 0.33,
-              conditionCode: 'MostlyClear',
-              humidity: 0.36,
-              temperatureMax: 13.56,
-              temperatureMin: 4.07,
-            },
-          },
-        ],
-      },
-      forecastHourly: {
-        hours: [
-          { forecastStart: '2026-04-28T13:00:00Z', temperature: -0.47 }, // past — drop
-          { forecastStart: '2026-04-28T20:00:00Z', temperature: 12.01 }, // future today
-          { forecastStart: '2026-04-29T13:00:00Z', temperature: 1.28 }, // tomorrow — drop
-        ],
-      },
-      weatherAlerts: {
-        alerts: [
-          { id: 'warning', precedence: 1, description: 'Freeze Warning' },
-          { id: 'watch', precedence: 0, description: 'Freeze Watch' },
-        ],
+    // Sample Google Weather responses for the three calls. Athlete is in America/Boise.
+    const sampleCurrent = {
+      currentTime: '2026-04-28T14:49:34Z',
+      isDaytime: true,
+      weatherCondition: { description: { text: 'Mostly clear' } },
+      temperature: { degrees: 4.07, unit: 'CELSIUS' },
+      relativeHumidity: 58,
+      wind: {
+        direction: { degrees: 226, cardinal: 'SOUTHWEST' },
+        speed: { value: 12.12, unit: 'KILOMETERS_PER_HOUR' },
       },
     };
 
+    const sampleHourly = {
+      forecastHours: [
+        // past — drop
+        { interval: { startTime: '2026-04-28T13:00:00Z' }, temperature: { degrees: -0.47, unit: 'CELSIUS' } },
+        // future today — keep
+        { interval: { startTime: '2026-04-28T20:00:00Z' }, temperature: { degrees: 12.01, unit: 'CELSIUS' } },
+        // tomorrow — drop
+        { interval: { startTime: '2026-04-29T13:00:00Z' }, temperature: { degrees: 1.28, unit: 'CELSIUS' } },
+      ],
+    };
+
+    const sampleAlerts = {
+      weatherAlerts: [
+        {
+          alertTitle: { text: 'Freeze Warning' },
+          description: 'Freezing temperatures expected.',
+          severity: 'MODERATE',
+          startTime: '2026-04-29T00:00:00Z',
+          expirationTime: '2026-04-29T12:00:00Z',
+          dataSource: { name: 'National Weather Service' },
+        },
+      ],
+    };
+
     beforeEach(() => {
-      mockWeatherKitClient = new WeatherKitClient({
-        keyId: 'k',
-        teamId: 't',
-        serviceId: 's',
-        privateKey: 'p',
-      });
+      mockGoogleWeatherClient = new GoogleWeatherClient({ apiKey: 'k' });
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-04-28T14:49:34Z'));
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Boise');
@@ -1176,7 +1165,7 @@ describe('CurrentTools', () => {
       vi.useRealTimers();
     });
 
-    it('returns empty forecasts when WeatherKit is not configured', async () => {
+    it('returns empty forecasts when Google Weather is not configured', async () => {
       const toolsNoWeather = new CurrentTools(
         mockIntervalsClient,
         mockWhoopClient,
@@ -1190,77 +1179,86 @@ describe('CurrentTools', () => {
       expect(mockIntervalsClient.getEnabledWeatherLocations).not.toHaveBeenCalled();
     });
 
-    it('builds per-location forecasts when WeatherKit is configured', async () => {
+    it('builds per-location forecasts when Google Weather is configured', async () => {
       const toolsWithWeather = new CurrentTools(
         mockIntervalsClient,
         mockWhoopClient,
         mockTrainerRoadClient,
-        mockWeatherKitClient
+        mockGoogleWeatherClient
       );
 
       vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
         { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
       ]);
-      vi.mocked(mockWeatherKitClient.getWeather).mockResolvedValue(sampleWeatherResponse);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
       const result = await toolsWithWeather.getTodaysForecast();
 
-      expect(mockWeatherKitClient.getWeather).toHaveBeenCalledWith(
-        43.65,
-        -110.71,
-        'US',
-        'America/Boise'
-      );
+      expect(mockGoogleWeatherClient.getCurrentConditions).toHaveBeenCalledWith(43.65, -110.71);
+      expect(mockGoogleWeatherClient.getHourlyForecast).toHaveBeenCalledWith(43.65, -110.71);
+      expect(mockGoogleWeatherClient.getWeatherAlerts).toHaveBeenCalledWith(43.65, -110.71);
+
       expect(result.forecasts).toHaveLength(1);
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose,Wyoming,US');
-      expect(fc.current_weather?.condition_code).toBe('MostlyClear');
+      expect(fc.current_weather?.condition).toBe('Mostly clear');
       expect(fc.current_weather?.temperature).toBe('4.1 °C');
-      expect(fc.rest_of_day_forecast?.temperature_max).toBe('13.6 °C');
       // Hourly should only contain the one future hour for today
       expect(fc.hourly_forecast.map((h) => h.forecast_start)).toEqual(['2026-04-28T20:00:00Z']);
-      // Alerts sorted by precedence ascending
-      expect(fc.alerts.map((a) => a.id)).toEqual(['watch', 'warning']);
+      // Alerts pass through with the slimmed shape
+      expect(fc.alerts).toEqual([
+        {
+          title: 'Freeze Warning',
+          description: 'Freezing temperatures expected.',
+          severity: 'MODERATE',
+          start_time: '2026-04-29T00:00:00Z',
+          expiration_time: '2026-04-29T12:00:00Z',
+          source: 'National Weather Service',
+        },
+      ]);
     });
 
-    it('skips locations whose location string has no extractable country and continues with the rest', async () => {
+    it('keeps a location when one of the three Google calls fails (alerts only)', async () => {
       const toolsWithWeather = new CurrentTools(
         mockIntervalsClient,
         mockWhoopClient,
         mockTrainerRoadClient,
-        mockWeatherKitClient
+        mockGoogleWeatherClient
       );
 
       vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
-        { id: 1, label: 'Bad', latitude: 0, longitude: 0, location: '' },
-        { id: 2, label: 'Good', latitude: 1, longitude: 2, location: 'Boise,Idaho,US' },
+        { id: 1, label: 'Boise', latitude: 1, longitude: 2, location: 'Boise,Idaho,US' },
       ]);
-      vi.mocked(mockWeatherKitClient.getWeather).mockResolvedValue(sampleWeatherResponse);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockRejectedValue(new Error('alerts boom'));
 
       const result = await toolsWithWeather.getTodaysForecast();
-
       expect(result.forecasts.map((f) => f.location)).toEqual(['Boise,Idaho,US']);
-      expect(mockWeatherKitClient.getWeather).toHaveBeenCalledTimes(1);
+      expect(result.forecasts[0].alerts).toEqual([]);
+      expect(result.forecasts[0].current_weather?.temperature).toBe('4.1 °C');
     });
 
-    it('drops locations whose WeatherKit call fails but keeps the rest', async () => {
+    it('returns an empty current_weather when current conditions fails but keeps the location', async () => {
       const toolsWithWeather = new CurrentTools(
         mockIntervalsClient,
         mockWhoopClient,
         mockTrainerRoadClient,
-        mockWeatherKitClient
+        mockGoogleWeatherClient
       );
 
       vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
         { id: 1, label: 'A', latitude: 0, longitude: 0, location: 'A,US' },
-        { id: 2, label: 'B', latitude: 1, longitude: 2, location: 'B,US' },
       ]);
-      vi.mocked(mockWeatherKitClient.getWeather)
-        .mockRejectedValueOnce(new Error('boom'))
-        .mockResolvedValueOnce(sampleWeatherResponse);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockRejectedValue(new Error('boom'));
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
       const result = await toolsWithWeather.getTodaysForecast();
-      expect(result.forecasts.map((f) => f.location)).toEqual(['B,US']);
+      expect(result.forecasts.map((f) => f.location)).toEqual(['A,US']);
+      expect(result.forecasts[0].current_weather).toBeNull();
     });
 
     it("includes the forecast in getTodaysSummary's response", async () => {
@@ -1268,13 +1266,15 @@ describe('CurrentTools', () => {
         mockIntervalsClient,
         mockWhoopClient,
         mockTrainerRoadClient,
-        mockWeatherKitClient
+        mockGoogleWeatherClient
       );
 
       vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
         { id: 1, label: 'Boise', latitude: 43.61, longitude: -116.20, location: 'Boise,Idaho,US' },
       ]);
-      vi.mocked(mockWeatherKitClient.getWeather).mockResolvedValue(sampleWeatherResponse);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: null, recovery: null });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
       vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
@@ -1291,7 +1291,7 @@ describe('CurrentTools', () => {
       expect(result.forecast[0].location).toBe('Boise,Idaho,US');
     });
 
-    it("getTodaysSummary forecast is [] when WeatherKit isn't configured", async () => {
+    it("getTodaysSummary forecast is [] when Google Weather isn't configured", async () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: null, recovery: null });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
       vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
@@ -1303,7 +1303,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
 
-      // tools (the suite-level instance) is constructed without WeatherKit
+      // tools (the suite-level instance) is constructed without Google Weather
       const result = await tools.getTodaysSummary();
       expect(result.forecast).toEqual([]);
     });

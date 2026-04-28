@@ -119,17 +119,10 @@ export function getConfig() {
             apiKey: process.env.LASTFM_API_KEY,
           }
         : null,
-    weatherkit:
-      process.env.WEATHERKIT_KEY_ID &&
-      process.env.WEATHERKIT_TEAM_ID &&
-      process.env.WEATHERKIT_SERVICE_ID &&
-      process.env.WEATHERKIT_PRIVATE_KEY
-        ? {
-            keyId: process.env.WEATHERKIT_KEY_ID,
-            teamId: process.env.WEATHERKIT_TEAM_ID,
-            serviceId: process.env.WEATHERKIT_SERVICE_ID,
-            privateKey: process.env.WEATHERKIT_PRIVATE_KEY,
-          }
-        : null,
+    googleWeather: process.env.GOOGLE_API_KEY
+      ? {
+          apiKey: process.env.GOOGLE_API_KEY,
+        }
+      : null,
   };
 }

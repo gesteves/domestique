@@ -1,11 +1,11 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { WeatherKitClient } from '../clients/weatherkit.js';
+import { GoogleWeatherClient } from '../clients/google-weather.js';
 import { parseDateRangeInTimezone, getTodayInTimezone } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
-import { assembleLocationForecast, extractCountryCode } from '../utils/weather.js';
+import { assembleLocationForecast } from '../utils/weather.js';
 import type {
   StrainData,
   AthleteProfile,
@@ -28,18 +28,22 @@ export class CurrentTools {
     private intervals: IntervalsClient,
     private whoop: WhoopClient | null,
     private trainerroad: TrainerRoadClient | null,
-    private weatherkit: WeatherKitClient | null = null
+    private googleWeather: GoogleWeatherClient | null = null
   ) {}
 
   /**
    * Build today's per-location weather forecast for every enabled location in
-   * the athlete's Intervals.icu weather config. Returns [] when WeatherKit is
-   * not configured, when there are no enabled locations, or when a location
-   * has no extractable country code. Per-location failures are logged and
-   * skipped — one bad location doesn't suppress the others.
+   * the athlete's Intervals.icu weather config. Returns [] when Google Weather
+   * is not configured or there are no enabled locations. Per-location failures
+   * are logged and skipped — one bad location doesn't suppress the others.
+   *
+   * For each location we issue the three Google Weather calls (current
+   * conditions, hourly forecast, public alerts) in parallel and let any one of
+   * them fail independently — a missing alerts feed shouldn't suppress the
+   * forecast itself.
    */
   private async buildForecasts(timezone: string, now: Date): Promise<LocationForecast[]> {
-    if (!this.weatherkit) return [];
+    if (!this.googleWeather) return [];
 
     let locations: Awaited<ReturnType<IntervalsClient['getEnabledWeatherLocations']>>;
     try {
@@ -49,17 +53,34 @@ export class CurrentTools {
       return [];
     }
 
-    const wk = this.weatherkit;
+    const gw = this.googleWeather;
     const results = await Promise.all(
       locations.map(async (loc) => {
-        const country = extractCountryCode(loc.location);
-        if (!country) {
-          console.error(`Skipping forecast for "${loc.label}": no country code in location string "${loc.location}"`);
-          return null;
-        }
         try {
-          const response = await wk.getWeather(loc.latitude, loc.longitude, country, timezone);
-          return assembleLocationForecast(loc.location, loc.latitude, loc.longitude, response, timezone, now);
+          const [current, hourly, alerts] = await Promise.all([
+            gw.getCurrentConditions(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching current conditions for "${loc.label}":`, e);
+              return undefined;
+            }),
+            gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
+              return undefined;
+            }),
+            gw.getWeatherAlerts(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching weather alerts for "${loc.label}":`, e);
+              return undefined;
+            }),
+          ]);
+          return assembleLocationForecast(
+            loc.location,
+            loc.latitude,
+            loc.longitude,
+            current,
+            hourly,
+            alerts,
+            timezone,
+            now
+          );
         } catch (e) {
           console.error(`Error fetching forecast for "${loc.label}":`, e);
           return null;
@@ -72,7 +93,7 @@ export class CurrentTools {
   /**
    * Get today's weather forecast for each enabled location in the athlete's
    * Intervals.icu weather config. Returns an empty `forecasts` array if
-   * WeatherKit is not configured.
+   * Google Weather is not configured.
    */
   async getTodaysForecast(): Promise<TodaysForecastResponse> {
     const timezone = await this.intervals.getAthleteTimezone();

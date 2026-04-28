@@ -5,7 +5,7 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { LastFmClient } from '../clients/lastfm.js';
-import { WeatherKitClient } from '../clients/weatherkit.js';
+import { GoogleWeatherClient } from '../clients/google-weather.js';
 import { CurrentTools } from './current.js';
 
 // Common annotation presets for tool categories. All four hints are set
@@ -198,12 +198,7 @@ export interface ToolsConfig {
   } | null;
   trainerroad?: { calendarUrl: string } | null;
   lastfm?: { username: string; apiKey: string } | null;
-  weatherkit?: {
-    keyId: string;
-    teamId: string;
-    serviceId: string;
-    privateKey: string;
-  } | null;
+  googleWeather?: { apiKey: string } | null;
 }
 
 export class ToolRegistry {
@@ -217,7 +212,7 @@ export class ToolRegistry {
   private readonly hasWhoop: boolean;
   private readonly hasTrainerRoad: boolean;
   private readonly hasLastFm: boolean;
-  private readonly hasWeatherKit: boolean;
+  private readonly hasGoogleWeather: boolean;
 
   constructor(config: ToolsConfig) {
     const intervalsClient = new IntervalsClient(config.intervals);
@@ -227,13 +222,13 @@ export class ToolRegistry {
       ? new TrainerRoadClient(config.trainerroad)
       : null;
     const lastfmClient = config.lastfm ? new LastFmClient(config.lastfm) : null;
-    const weatherKitClient = config.weatherkit
-      ? new WeatherKitClient(config.weatherkit)
+    const googleWeatherClient = config.googleWeather
+      ? new GoogleWeatherClient(config.googleWeather)
       : null;
     this.hasWhoop = whoopClient !== null;
     this.hasTrainerRoad = trainerroadClient !== null;
     this.hasLastFm = lastfmClient !== null;
-    this.hasWeatherKit = weatherKitClient !== null;
+    this.hasGoogleWeather = googleWeatherClient !== null;
 
     // Connect Whoop client to Intervals.icu timezone for proper date filtering
     if (whoopClient) {
@@ -252,7 +247,7 @@ export class ToolRegistry {
       intervalsClient,
       whoopClient,
       trainerroadClient,
-      weatherKitClient
+      googleWeatherClient
     );
     this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
@@ -340,17 +335,16 @@ export class ToolRegistry {
       hints: [dailySummarySyncHint, ...dailySummaryHints],
     });
 
-    if (this.hasWeatherKit) {
+    if (this.hasGoogleWeather) {
       register({
         name: 'get_todays_forecast',
         title: "Today's Forecast",
-        description: `Fetches today's weather forecast for each enabled location in the athlete's Intervals.icu weather config, sourced from Apple WeatherKit.
+        description: `Fetches today's weather forecast for each enabled location in the athlete's Intervals.icu weather config, sourced from the Google Weather API.
 
 **Includes (per location):**
 - Current conditions (temperature, humidity, wind, pressure, visibility, UV, etc.)
-- Rest-of-day forecast (highs/lows, precipitation chance, dominant condition)
-- Hourly forecast for the rest of the day in the athlete's timezone
-- Active weather alerts (warnings, watches, advisories), sorted by precedence
+- Hourly forecast for the remaining daylight hours of the day in the athlete's timezone
+- Active weather alerts (warnings, watches, advisories)
 
 <use-cases>
 - Deciding whether to ride/run outside today.

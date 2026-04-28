@@ -1,6 +1,6 @@
 # Domestique
 
-A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com), [TrainerRoad](https://www.trainerroad.com), and Apple [WeatherKit](https://developer.apple.com/weatherkit/) to provide unified access to fitness data across all activities and sports.
+A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com), [TrainerRoad](https://www.trainerroad.com), and the [Google Weather API](https://developers.google.com/maps/documentation/weather) to provide unified access to fitness data across all activities and sports.
 
 ## Features
 
@@ -11,16 +11,16 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Analyze fitness trends (CTL/ATL/TSB)
 - Comprehensive workout analysis with intervals, notes, and weather data
 - Incorporates heat strain data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
-- Daily weather forecasts from Apple WeatherKit for each enabled location in the athlete's Intervals.icu weather config
+- Daily weather forecasts from the Google Weather API for each enabled location in the athlete's Intervals.icu weather config
 
 **Note:** Due to Strava API restrictions, workouts imported from Strava to Intervals.icu cannot be analyzed. To work around this, ensure that workouts are synced to Intervals.icu from other sources (Zwift, Garmin Connect, Dropbox, etc.)
 
 ## Available Tools
 
 ### Today's Data
-- `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), and the weather forecast for each enabled Intervals.icu weather location (when WeatherKit is configured).
+- `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured).
 - `get_todays_workouts` - Today's completed (with full per-activity details) and planned workouts only. A leaner alternative to `get_todays_summary` when only workout data is needed.
-- `get_todays_forecast` - Today's weather forecast for each enabled location in the athlete's Intervals.icu weather config, sourced from Apple WeatherKit. Includes current conditions, rest-of-day forecast, the remaining hours of the day, and active alerts.
+- `get_todays_forecast` - Today's weather forecast for each enabled location in the athlete's Intervals.icu weather config, sourced from the Google Weather API. Includes current conditions, the remaining daylight hours of the day, and active alerts.
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location
@@ -99,11 +99,8 @@ For Whoop integration:
 For TrainerRoad integration:
 - `TRAINERROAD_CALENDAR_URL` - Private iCal feed URL
 
-For weather forecasts (optional, all four required to enable Apple WeatherKit):
-- `WEATHERKIT_KEY_ID` - Apple Developer Key ID for the WeatherKit signing key
-- `WEATHERKIT_TEAM_ID` - Apple Developer Team ID
-- `WEATHERKIT_SERVICE_ID` - WeatherKit Service ID registered in the Apple Developer portal
-- `WEATHERKIT_PRIVATE_KEY` - Base64-encoded PEM contents of the WeatherKit `.p8` private key (e.g. `base64 < AuthKey_XXXX.p8`). Forecast locations come from the athlete's Intervals.icu weather config (only enabled locations are queried).
+For weather forecasts (optional):
+- `GOOGLE_API_KEY` - A Google Cloud API key with the [Weather API](https://developers.google.com/maps/documentation/weather) enabled. This key is also used for any other Google services Domestique adds in the future. Forecast locations come from the athlete's Intervals.icu weather config (only enabled locations are queried).
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Bugsnag API key for error reporting. When set, upstream API failures (Intervals.icu, Whoop, TrainerRoad) are reported to Bugsnag with full context including HTTP method, URL, status code, and response body.
