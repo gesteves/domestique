@@ -82,16 +82,32 @@ export function formatDateTimeHumanReadable(date: Date | string | number, timezo
 }
 
 /**
- * Check if an ISO datetime string has a midnight time component (00:00:00).
- * Used to determine if a datetime should be displayed as date-only.
+ * Detect a date-only sentinel — a datetime that lands on midnight in the
+ * target timezone. Sources like Intervals.icu use `T00:00:00` to mean "no
+ * time specified for this day"; we render those as a date alone.
+ *
+ * For naive datetimes (no offset, no Z) we trust the literal hours; the
+ * caller has already declared the string is in `timezone`. For datetimes
+ * with `Z` or an explicit offset we compare against the local clock — so
+ * `2026-04-29T00:00:00Z` viewed in `America/Denver` correctly resolves to
+ * 6:00 PM the prior day and is NOT treated as a date-only sentinel.
  */
-function isMidnight(isoDateTimeString: string): boolean {
-  const timeMatch = isoDateTimeString.match(/T(\d{2}):(\d{2}):?(\d{2})?/);
-  if (!timeMatch) return false;
-  const hours = parseInt(timeMatch[1], 10);
-  const minutes = parseInt(timeMatch[2], 10);
-  const seconds = parseInt(timeMatch[3] || '0', 10);
-  return hours === 0 && minutes === 0 && seconds === 0;
+function isMidnightInTimezone(isoDateTimeString: string, timezone: string): boolean {
+  const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(isoDateTimeString);
+
+  if (!hasOffset) {
+    const timeMatch = isoDateTimeString.match(/T(\d{2}):(\d{2}):?(\d{2})?/);
+    if (!timeMatch) return false;
+    const hours = parseInt(timeMatch[1], 10);
+    const minutes = parseInt(timeMatch[2], 10);
+    const seconds = parseInt(timeMatch[3] || '0', 10);
+    return hours === 0 && minutes === 0 && seconds === 0;
+  }
+
+  // Aware datetime — see what time it actually is in the target tz.
+  const date = new Date(isoDateTimeString);
+  if (Number.isNaN(date.getTime())) return false;
+  return formatInTimeZone(date, timezone, 'HH:mm:ss') === '00:00:00';
 }
 
 /**
@@ -113,7 +129,7 @@ function isMidnight(isoDateTimeString: string): boolean {
  * // Returns: 'Sunday, December 29, 2024'
  */
 export function localStringToHumanReadable(localDateTimeString: string, timezone: string): string {
-  if (isMidnight(localDateTimeString)) {
+  if (isMidnightInTimezone(localDateTimeString, timezone)) {
     return formatDateHumanReadable(localDateTimeString.split('T')[0], timezone);
   }
 
@@ -187,8 +203,15 @@ export function formatResponseDates<T>(data: T, timezone: string): T {
       if (ISO_DATE_PATTERN.test(value)) {
         result[key] = formatDateHumanReadable(value, timezone);
       } else if (ISO_DATETIME_PATTERN.test(value)) {
-        if (isMidnight(value)) {
-          result[key] = formatDateHumanReadable(value.split('T')[0], timezone);
+        if (isMidnightInTimezone(value, timezone)) {
+          // For naive midnight strings, the date portion is already correct.
+          // For aware datetimes that happen to be midnight in the target tz,
+          // pull the local date out of the converted value rather than the
+          // raw string (which may be on a different UTC day).
+          const localDate = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
+            ? formatInTimeZone(new Date(value), timezone, 'yyyy-MM-dd')
+            : value.split('T')[0];
+          result[key] = formatDateHumanReadable(localDate, timezone);
         } else {
           result[key] = formatDateTimeHumanReadable(value, timezone);
         }

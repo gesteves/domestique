@@ -105,6 +105,22 @@ describe('date-formatting', () => {
       expect(result.scheduled_for).toBe('Sunday, December 15, 2024');
     });
 
+    it('should NOT collapse a UTC-midnight value to date-only when it is not midnight in the target tz', () => {
+      // 2026-04-29T00:00:00Z is 6:00 PM Tuesday in America/Denver. Previously
+      // this was incorrectly rendered as "Wednesday, April 29, 2026" because
+      // the literal hour was 00.
+      const data = { forecast_start: '2026-04-29T00:00:00Z' };
+      const result = formatResponseDates(data, 'America/Denver');
+      expect(result.forecast_start).toBe('Tuesday, April 28, 2026 at 6:00 PM MDT');
+    });
+
+    it('should still collapse to date-only when an aware datetime is midnight in the target tz', () => {
+      // Midnight in America/New_York with the offset that matches.
+      const data = { scheduled_for: '2024-12-15T05:00:00Z' }; // = 00:00 EST
+      const result = formatResponseDates(data, 'America/New_York');
+      expect(result.scheduled_for).toBe('Sunday, December 15, 2024');
+    });
+
     it('should handle nested objects recursively', () => {
       const data = {
         whoop: {
