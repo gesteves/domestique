@@ -59,7 +59,7 @@ export class CurrentTools {
         }
         try {
           const response = await wk.getWeather(loc.latitude, loc.longitude, country, timezone);
-          return assembleLocationForecast(loc.label, loc.latitude, loc.longitude, response, timezone, now);
+          return assembleLocationForecast(loc.location, loc.latitude, loc.longitude, response, timezone, now);
         } catch (e) {
           console.error(`Error fetching forecast for "${loc.label}":`, e);
           return null;

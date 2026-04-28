@@ -1213,7 +1213,7 @@ describe('CurrentTools', () => {
       );
       expect(result.forecasts).toHaveLength(1);
       const fc = result.forecasts[0];
-      expect(fc.label).toBe('Moose');
+      expect(fc.location).toBe('Moose,Wyoming,US');
       expect(fc.current_weather?.condition_code).toBe('MostlyClear');
       expect(fc.current_weather?.temperature).toBe('4.1 °C');
       expect(fc.rest_of_day_forecast?.temperature_max).toBe('13.6 °C');
@@ -1239,7 +1239,7 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithWeather.getTodaysForecast();
 
-      expect(result.forecasts.map((f) => f.label)).toEqual(['Good']);
+      expect(result.forecasts.map((f) => f.location)).toEqual(['Boise,Idaho,US']);
       expect(mockWeatherKitClient.getWeather).toHaveBeenCalledTimes(1);
     });
 
@@ -1260,7 +1260,7 @@ describe('CurrentTools', () => {
         .mockResolvedValueOnce(sampleWeatherResponse);
 
       const result = await toolsWithWeather.getTodaysForecast();
-      expect(result.forecasts.map((f) => f.label)).toEqual(['B']);
+      expect(result.forecasts.map((f) => f.location)).toEqual(['B,US']);
     });
 
     it("includes the forecast in getTodaysSummary's response", async () => {
@@ -1288,7 +1288,7 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithWeather.getTodaysSummary();
       expect(result.forecast).toHaveLength(1);
-      expect(result.forecast[0].label).toBe('Boise');
+      expect(result.forecast[0].location).toBe('Boise,Idaho,US');
     });
 
     it("getTodaysSummary forecast is [] when WeatherKit isn't configured", async () => {

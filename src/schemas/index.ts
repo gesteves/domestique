@@ -749,7 +749,7 @@ const WeatherAlertZ = z.object({
 }).passthrough();
 
 const LocationForecastZ = z.object({
-  label: z.string().optional().describe('Location label from the athlete\'s Intervals.icu weather config'),
+  location: z.string().optional().describe("Full location string from the athlete's Intervals.icu weather config (e.g., \"Moose,Wyoming,US\")"),
   latitude: z.number().optional().describe('Location latitude'),
   longitude: z.number().optional().describe('Location longitude'),
   current_weather: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Null if WeatherKit returned no current data'),

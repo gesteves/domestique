@@ -296,7 +296,7 @@ describe('assembleLocationForecast', () => {
 
   it('produces a slimmed, formatted forecast for the location', () => {
     const result = assembleLocationForecast(
-      'Pocatello',
+      'Pocatello,Idaho,US',
       42.87,
       -112.58,
       sampleResponse,
@@ -304,7 +304,7 @@ describe('assembleLocationForecast', () => {
       now
     );
 
-    expect(result.label).toBe('Pocatello');
+    expect(result.location).toBe('Pocatello,Idaho,US');
     expect(result.latitude).toBe(42.87);
     expect(result.longitude).toBe(-112.58);
 
@@ -334,9 +334,9 @@ describe('assembleLocationForecast', () => {
   });
 
   it('handles missing datasets gracefully', () => {
-    const result = assembleLocationForecast('X', 0, 0, {}, tz, now);
+    const result = assembleLocationForecast('X,Y,US', 0, 0, {}, tz, now);
     expect(result).toEqual({
-      label: 'X',
+      location: 'X,Y,US',
       latitude: 0,
       longitude: 0,
       current_weather: null,

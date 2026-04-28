@@ -1227,7 +1227,8 @@ export interface WeatherAlert {
  * Forecast for a single location, assembled from a WeatherKit response.
  */
 export interface LocationForecast {
-  label: string;
+  /** Full location string from the athlete's weather config (e.g., "Moose,Wyoming,US") */
+  location: string;
   latitude: number;
   longitude: number;
   current_weather: CurrentWeather | null;

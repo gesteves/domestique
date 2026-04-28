@@ -267,9 +267,13 @@ function transformAlert(alert: WeatherKitAlert): WeatherAlert {
  * filters hourly to the remaining hours of today in `timezone`, and sorts alerts
  * by precedence. ISO time fields are left as-is so formatResponseDates can render
  * them in the athlete's timezone downstream.
+ *
+ * `location` is the full location string from the athlete's Intervals.icu
+ * weather config (e.g., "Moose,Wyoming,US") — preferred over the shorter label
+ * because it conveys region/country context to the model.
  */
 export function assembleLocationForecast(
-  label: string,
+  location: string,
   latitude: number,
   longitude: number,
   response: WeatherKitWeatherResponse,
@@ -284,7 +288,7 @@ export function assembleLocationForecast(
   const sortedAlerts = sortAlertsByPrecedence(alerts);
 
   return {
-    label,
+    location,
     latitude,
     longitude,
     current_weather: transformCurrentWeather(response.currentWeather),
