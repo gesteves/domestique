@@ -1097,6 +1097,8 @@ export interface DailySummary {
   completed_workouts: WorkoutWithWhoop[];
   /** Race scheduled for today (if any) */
   scheduled_race: Race | null;
+  /** Per-location weather forecasts for today (empty if WeatherKit not configured) */
+  forecast: LocationForecast[];
   /** Number of workouts planned for today */
   workouts_planned: number;
   /** Number of workouts completed today */
@@ -1105,6 +1107,141 @@ export interface DailySummary {
   tss_planned: number;
   /** Total TSS from completed workouts */
   tss_completed: number;
+}
+
+// ============================================
+// Weather forecast (WeatherKit)
+// ============================================
+
+/**
+ * A forecast location pulled from the athlete's Intervals.icu weather config.
+ * Latitude/longitude are forwarded to WeatherKit; `location` is the original
+ * "City,Region,Country" string from Intervals.icu (we extract the ISO Alpha-2
+ * country code from the trailing token).
+ */
+export interface WeatherLocation {
+  id: number;
+  label: string;
+  latitude: number;
+  longitude: number;
+  location: string;
+}
+
+/**
+ * Slimmed-down current-conditions block. Times stay as ISO strings so
+ * formatResponseDates renders them in the athlete's timezone.
+ */
+export interface CurrentWeather {
+  as_of?: string;
+  condition_code?: string;
+  daylight?: boolean;
+  cloud_cover?: string;
+  humidity?: string;
+  temperature?: string;
+  temperature_apparent?: string;
+  temperature_dew_point?: string;
+  pressure?: string;
+  pressure_trend?: string;
+  precipitation_intensity?: string;
+  uv_index?: number;
+  visibility?: string;
+  wind_direction?: string;
+  wind_speed?: string;
+  wind_gust?: string;
+}
+
+/**
+ * Apple's "rest of today" daily-forecast slice with units applied.
+ */
+export interface RestOfDayForecast {
+  forecast_start?: string;
+  forecast_end?: string;
+  condition_code?: string;
+  cloud_cover?: string;
+  humidity?: string;
+  precipitation_amount?: string;
+  precipitation_chance?: string;
+  precipitation_type?: string;
+  snowfall_amount?: string;
+  temperature_max?: string;
+  temperature_min?: string;
+  wind_direction?: string;
+  wind_speed?: string;
+  wind_speed_max?: string;
+  wind_gust_speed_max?: string;
+}
+
+/**
+ * One hour of WeatherKit's hourly forecast.
+ */
+export interface HourlyForecast {
+  forecast_start?: string;
+  condition_code?: string;
+  daylight?: boolean;
+  cloud_cover?: string;
+  humidity?: string;
+  precipitation_amount?: string;
+  precipitation_intensity?: string;
+  precipitation_chance?: string;
+  precipitation_type?: string;
+  pressure?: string;
+  pressure_trend?: string;
+  snowfall_amount?: string;
+  snowfall_intensity?: string;
+  temperature?: string;
+  temperature_apparent?: string;
+  temperature_dew_point?: string;
+  uv_index?: number;
+  visibility?: string;
+  wind_direction?: string;
+  wind_speed?: string;
+  wind_gust?: string;
+}
+
+export interface WeatherAlert {
+  id?: string;
+  area_id?: string;
+  attribution_url?: string;
+  country_code?: string;
+  description?: string;
+  token?: string;
+  effective_time?: string;
+  expire_time?: string;
+  issued_time?: string;
+  event_onset_time?: string;
+  event_end_time?: string;
+  details_url?: string;
+  phenomenon?: string;
+  precedence?: number;
+  severity?: string;
+  significance?: string;
+  source?: string;
+  event_source?: string;
+  urgency?: string;
+  certainty?: string;
+  importance?: string;
+  responses?: string[];
+}
+
+/**
+ * Forecast for a single location, assembled from a WeatherKit response.
+ */
+export interface LocationForecast {
+  label: string;
+  latitude: number;
+  longitude: number;
+  current_weather: CurrentWeather | null;
+  rest_of_day_forecast: RestOfDayForecast | null;
+  hourly_forecast: HourlyForecast[];
+  alerts: WeatherAlert[];
+}
+
+/**
+ * Today's forecast response, one entry per enabled Intervals.icu weather location.
+ */
+export interface TodaysForecastResponse {
+  current_time: string;
+  forecasts: LocationForecast[];
 }
 
 // ============================================

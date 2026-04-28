@@ -1,14 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CurrentTools } from '../../src/tools/current.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
+import { WeatherKitClient } from '../../src/clients/weatherkit.js';
 import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
 vi.mock('../../src/clients/trainerroad.js');
+vi.mock('../../src/clients/weatherkit.js');
 
 describe('CurrentTools', () => {
   let tools: CurrentTools;
@@ -1109,6 +1111,201 @@ describe('CurrentTools', () => {
       const result = await toolsWithoutTr.getTodaysSummary();
 
       expect(result.scheduled_race).toBeNull();
+    });
+  });
+
+  describe('weather forecast', () => {
+    let mockWeatherKitClient: WeatherKitClient;
+
+    // Sample WeatherKit response with one current hour and one future hour today,
+    // plus an alert. The athlete is in America/Boise.
+    const sampleWeatherResponse = {
+      currentWeather: {
+        metadata: { latitude: 43.65, longitude: -110.71 },
+        asOf: '2026-04-28T14:49:34Z',
+        conditionCode: 'MostlyClear',
+        temperature: 4.07,
+        humidity: 0.58,
+        windSpeed: 12.12,
+      },
+      forecastDaily: {
+        days: [
+          {
+            forecastStart: '2026-04-28T06:00:00Z',
+            forecastEnd: '2026-04-29T06:00:00Z',
+            restOfDayForecast: {
+              forecastStart: '2026-04-28T14:49:34Z',
+              forecastEnd: '2026-04-29T06:00:00Z',
+              cloudCover: 0.33,
+              conditionCode: 'MostlyClear',
+              humidity: 0.36,
+              temperatureMax: 13.56,
+              temperatureMin: 4.07,
+            },
+          },
+        ],
+      },
+      forecastHourly: {
+        hours: [
+          { forecastStart: '2026-04-28T13:00:00Z', temperature: -0.47 }, // past — drop
+          { forecastStart: '2026-04-28T20:00:00Z', temperature: 12.01 }, // future today
+          { forecastStart: '2026-04-29T13:00:00Z', temperature: 1.28 }, // tomorrow — drop
+        ],
+      },
+      weatherAlerts: {
+        alerts: [
+          { id: 'warning', precedence: 1, description: 'Freeze Warning' },
+          { id: 'watch', precedence: 0, description: 'Freeze Watch' },
+        ],
+      },
+    };
+
+    beforeEach(() => {
+      mockWeatherKitClient = new WeatherKitClient({
+        keyId: 'k',
+        teamId: 't',
+        serviceId: 's',
+        privateKey: 'p',
+      });
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-04-28T14:49:34Z'));
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Boise');
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('returns empty forecasts when WeatherKit is not configured', async () => {
+      const toolsNoWeather = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        null
+      );
+
+      const result = await toolsNoWeather.getTodaysForecast();
+      expect(result.forecasts).toEqual([]);
+      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+      expect(mockIntervalsClient.getEnabledWeatherLocations).not.toHaveBeenCalled();
+    });
+
+    it('builds per-location forecasts when WeatherKit is configured', async () => {
+      const toolsWithWeather = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockWeatherKitClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockWeatherKitClient.getWeather).mockResolvedValue(sampleWeatherResponse);
+
+      const result = await toolsWithWeather.getTodaysForecast();
+
+      expect(mockWeatherKitClient.getWeather).toHaveBeenCalledWith(
+        43.65,
+        -110.71,
+        'US',
+        'America/Boise'
+      );
+      expect(result.forecasts).toHaveLength(1);
+      const fc = result.forecasts[0];
+      expect(fc.label).toBe('Moose');
+      expect(fc.current_weather?.condition_code).toBe('MostlyClear');
+      expect(fc.current_weather?.temperature).toBe('4.1 °C');
+      expect(fc.rest_of_day_forecast?.temperature_max).toBe('13.6 °C');
+      // Hourly should only contain the one future hour for today
+      expect(fc.hourly_forecast.map((h) => h.forecast_start)).toEqual(['2026-04-28T20:00:00Z']);
+      // Alerts sorted by precedence ascending
+      expect(fc.alerts.map((a) => a.id)).toEqual(['watch', 'warning']);
+    });
+
+    it('skips locations whose location string has no extractable country and continues with the rest', async () => {
+      const toolsWithWeather = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockWeatherKitClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Bad', latitude: 0, longitude: 0, location: '' },
+        { id: 2, label: 'Good', latitude: 1, longitude: 2, location: 'Boise,Idaho,US' },
+      ]);
+      vi.mocked(mockWeatherKitClient.getWeather).mockResolvedValue(sampleWeatherResponse);
+
+      const result = await toolsWithWeather.getTodaysForecast();
+
+      expect(result.forecasts.map((f) => f.label)).toEqual(['Good']);
+      expect(mockWeatherKitClient.getWeather).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops locations whose WeatherKit call fails but keeps the rest', async () => {
+      const toolsWithWeather = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockWeatherKitClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'A', latitude: 0, longitude: 0, location: 'A,US' },
+        { id: 2, label: 'B', latitude: 1, longitude: 2, location: 'B,US' },
+      ]);
+      vi.mocked(mockWeatherKitClient.getWeather)
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce(sampleWeatherResponse);
+
+      const result = await toolsWithWeather.getTodaysForecast();
+      expect(result.forecasts.map((f) => f.label)).toEqual(['B']);
+    });
+
+    it("includes the forecast in getTodaysSummary's response", async () => {
+      const toolsWithWeather = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockWeatherKitClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Boise', latitude: 43.61, longitude: -116.20, location: 'Boise,Idaho,US' },
+      ]);
+      vi.mocked(mockWeatherKitClient.getWeather).mockResolvedValue(sampleWeatherResponse);
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: null, recovery: null });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
+
+      const result = await toolsWithWeather.getTodaysSummary();
+      expect(result.forecast).toHaveLength(1);
+      expect(result.forecast[0].label).toBe('Boise');
+    });
+
+    it("getTodaysSummary forecast is [] when WeatherKit isn't configured", async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: null, recovery: null });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
+
+      // tools (the suite-level instance) is constructed without WeatherKit
+      const result = await tools.getTodaysSummary();
+      expect(result.forecast).toEqual([]);
     });
   });
 });

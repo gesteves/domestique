@@ -1,9 +1,11 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
+import { WeatherKitClient } from '../clients/weatherkit.js';
 import { parseDateRangeInTimezone, getTodayInTimezone } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
+import { assembleLocationForecast, extractCountryCode } from '../utils/weather.js';
 import type {
   StrainData,
   AthleteProfile,
@@ -14,6 +16,8 @@ import type {
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
   TodaysWorkoutsResponse,
+  TodaysForecastResponse,
+  LocationForecast,
   Race,
 } from '../types/index.js';
 import { filterWhoopDuplicateFields } from '../types/index.js';
@@ -23,8 +27,62 @@ export class CurrentTools {
   constructor(
     private intervals: IntervalsClient,
     private whoop: WhoopClient | null,
-    private trainerroad: TrainerRoadClient | null
+    private trainerroad: TrainerRoadClient | null,
+    private weatherkit: WeatherKitClient | null = null
   ) {}
+
+  /**
+   * Build today's per-location weather forecast for every enabled location in
+   * the athlete's Intervals.icu weather config. Returns [] when WeatherKit is
+   * not configured, when there are no enabled locations, or when a location
+   * has no extractable country code. Per-location failures are logged and
+   * skipped — one bad location doesn't suppress the others.
+   */
+  private async buildForecasts(timezone: string, now: Date): Promise<LocationForecast[]> {
+    if (!this.weatherkit) return [];
+
+    let locations: Awaited<ReturnType<IntervalsClient['getEnabledWeatherLocations']>>;
+    try {
+      locations = await this.intervals.getEnabledWeatherLocations();
+    } catch (e) {
+      console.error('Error fetching weather config from Intervals.icu:', e);
+      return [];
+    }
+
+    const wk = this.weatherkit;
+    const results = await Promise.all(
+      locations.map(async (loc) => {
+        const country = extractCountryCode(loc.location);
+        if (!country) {
+          console.error(`Skipping forecast for "${loc.label}": no country code in location string "${loc.location}"`);
+          return null;
+        }
+        try {
+          const response = await wk.getWeather(loc.latitude, loc.longitude, country, timezone);
+          return assembleLocationForecast(loc.label, loc.latitude, loc.longitude, response, timezone, now);
+        } catch (e) {
+          console.error(`Error fetching forecast for "${loc.label}":`, e);
+          return null;
+        }
+      })
+    );
+    return results.filter((r): r is LocationForecast => r !== null);
+  }
+
+  /**
+   * Get today's weather forecast for each enabled location in the athlete's
+   * Intervals.icu weather config. Returns an empty `forecasts` array if
+   * WeatherKit is not configured.
+   */
+  async getTodaysForecast(): Promise<TodaysForecastResponse> {
+    const timezone = await this.intervals.getAthleteTimezone();
+    const currentDateTime = getCurrentTimeInTimezone(timezone);
+    const forecasts = await this.buildForecasts(timezone, new Date());
+    return {
+      current_time: currentDateTime,
+      forecasts,
+    };
+  }
 
   /**
    * Get today's recovery data from Whoop with current date/time in user's timezone.
@@ -212,7 +270,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, todaysRace] = await Promise.all([
+    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, todaysRace, forecast] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return { current_time: getCurrentTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
@@ -251,6 +309,10 @@ export class CurrentTools {
             return null as Race | null;
           })
         : Promise.resolve(null as Race | null),
+      this.buildForecasts(timezone, new Date()).catch((e) => {
+        console.error('Error building forecast for daily summary:', e);
+        return [] as LocationForecast[];
+      }),
     ]);
 
     // Extract data from response objects
@@ -291,6 +353,7 @@ export class CurrentTools {
       planned_workouts: plannedWorkouts,
       completed_workouts: completedWorkouts,
       scheduled_race: todaysRace,
+      forecast,
       workouts_planned: plannedWorkouts.length,
       workouts_completed: completedWorkouts.length,
       tss_planned: Math.round(tssPlanned),

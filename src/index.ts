@@ -17,6 +17,7 @@ async function main() {
     console.log(`Whoop: ${config.whoop ? 'configured' : 'not configured'}`);
     console.log(`TrainerRoad: ${config.trainerRoad ? 'configured' : 'not configured'}`);
     console.log(`Last.fm: ${config.lastfm ? 'configured' : 'not configured'}`);
+    console.log(`WeatherKit: ${config.weatherkit ? 'configured' : 'not configured'}`);
 
     await startServer({ port: config.port });
   } catch (error) {

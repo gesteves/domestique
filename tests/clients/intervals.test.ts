@@ -2954,4 +2954,53 @@ describe('IntervalsClient', () => {
       expect(settingsUrls).toHaveLength(1);
     });
   });
+
+  describe('getEnabledWeatherLocations', () => {
+    const weatherConfig = {
+      forecasts: [
+        { enabled: true, id: 2, label: 'Moose', lat: 43.65, lon: -110.71, location: 'Moose,Wyoming,US' },
+        { enabled: false, id: 3, label: 'San Francisco', lat: 37.77, lon: -122.41, location: 'San Francisco,California,US' },
+        { enabled: true, id: 4, label: 'Boise', lat: 43.61, lon: -116.20, location: 'Boise,Idaho,US' },
+      ],
+    };
+
+    it('returns only enabled locations and normalizes the shape', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(weatherConfig),
+      });
+
+      const result = await client.getEnabledWeatherLocations();
+
+      expect(result).toEqual([
+        { id: 2, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+        { id: 4, label: 'Boise', latitude: 43.61, longitude: -116.20, location: 'Boise,Idaho,US' },
+      ]);
+
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('/athlete/i12345/weather-config');
+    });
+
+    it('memoizes results across calls', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(weatherConfig),
+      });
+
+      await client.getEnabledWeatherLocations();
+      await client.getEnabledWeatherLocations();
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns [] when the API returns no forecasts', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      const result = await client.getEnabledWeatherLocations();
+      expect(result).toEqual([]);
+    });
+  });
 });

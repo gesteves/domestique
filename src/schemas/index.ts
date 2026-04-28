@@ -659,6 +659,106 @@ const SportTotalsZ = z.object({
 }).passthrough();
 
 // ============================================
+// Weather forecast (WeatherKit)
+// ============================================
+
+const CurrentWeatherZ = z.object({
+  as_of: z.string().optional().describe('Timestamp the conditions were measured/modeled at'),
+  condition_code: z.string().optional().describe('Short symbolic condition (e.g., Clear, MostlyClear, PartlyCloudy, MostlyCloudy, Cloudy, Rain, Snow, Thunderstorms)'),
+  daylight: z.boolean().optional().describe('Whether the location is currently in daylight'),
+  cloud_cover: z.string().optional().describe('Fraction of sky covered by clouds'),
+  humidity: z.string().optional().describe('Relative humidity'),
+  temperature: z.string().optional().describe('Air temperature'),
+  temperature_apparent: z.string().optional().describe('Feels-like temperature accounting for wind chill / heat index'),
+  temperature_dew_point: z.string().optional().describe('Dew point temperature'),
+  pressure: z.string().optional().describe('Sea-level air pressure'),
+  pressure_trend: z.string().optional().describe('Direction of pressure change (rising, falling, steady)'),
+  precipitation_intensity: z.string().optional().describe('Current precipitation rate'),
+  uv_index: z.number().optional().describe('UV index (unitless 0–11+ scale)'),
+  visibility: z.string().optional().describe('Horizontal visibility'),
+  wind_direction: z.string().optional().describe('Direction the wind is blowing from'),
+  wind_speed: z.string().optional().describe('Sustained wind speed'),
+  wind_gust: z.string().optional().describe('Peak wind gust speed'),
+}).passthrough();
+
+const RestOfDayForecastZ = z.object({
+  forecast_start: z.string().optional().describe('Start of the rest-of-day window'),
+  forecast_end: z.string().optional().describe('End of the rest-of-day window (typically end of local day)'),
+  condition_code: z.string().optional().describe('Dominant condition over the window'),
+  cloud_cover: z.string().optional().describe('Average cloud cover fraction'),
+  humidity: z.string().optional().describe('Average relative humidity'),
+  precipitation_amount: z.string().optional().describe('Total expected precipitation'),
+  precipitation_chance: z.string().optional().describe('Probability of any precipitation'),
+  precipitation_type: z.string().optional().describe('Expected precipitation type (clear, rain, snow, mixed, etc.)'),
+  snowfall_amount: z.string().optional().describe('Total expected snowfall'),
+  temperature_max: z.string().optional().describe('Highest expected temperature'),
+  temperature_min: z.string().optional().describe('Lowest expected temperature'),
+  wind_direction: z.string().optional().describe('Prevailing wind direction'),
+  wind_speed: z.string().optional().describe('Average sustained wind speed'),
+  wind_speed_max: z.string().optional().describe('Maximum sustained wind speed'),
+  wind_gust_speed_max: z.string().optional().describe('Maximum wind gust speed'),
+}).passthrough();
+
+const HourlyForecastZ = z.object({
+  forecast_start: z.string().optional().describe('Hour the forecast applies to'),
+  condition_code: z.string().optional().describe('Dominant condition for the hour'),
+  daylight: z.boolean().optional().describe('Whether this hour falls in daylight'),
+  cloud_cover: z.string().optional().describe('Cloud cover fraction'),
+  humidity: z.string().optional().describe('Relative humidity'),
+  precipitation_amount: z.string().optional().describe('Expected precipitation total for the hour'),
+  precipitation_intensity: z.string().optional().describe('Expected precipitation rate'),
+  precipitation_chance: z.string().optional().describe('Probability of any precipitation'),
+  precipitation_type: z.string().optional().describe('Expected precipitation type'),
+  pressure: z.string().optional().describe('Sea-level air pressure'),
+  pressure_trend: z.string().optional().describe('Direction of pressure change'),
+  snowfall_amount: z.string().optional().describe('Expected snowfall total for the hour'),
+  snowfall_intensity: z.string().optional().describe('Expected snowfall rate'),
+  temperature: z.string().optional().describe('Air temperature'),
+  temperature_apparent: z.string().optional().describe('Feels-like temperature'),
+  temperature_dew_point: z.string().optional().describe('Dew point temperature'),
+  uv_index: z.number().optional().describe('UV index'),
+  visibility: z.string().optional().describe('Horizontal visibility'),
+  wind_direction: z.string().optional().describe('Direction the wind is blowing from'),
+  wind_speed: z.string().optional().describe('Sustained wind speed'),
+  wind_gust: z.string().optional().describe('Peak wind gust speed'),
+}).passthrough();
+
+const WeatherAlertZ = z.object({
+  id: z.string().optional().describe('Unique alert identifier'),
+  area_id: z.string().optional().describe('Issuing area identifier (e.g., "idz054")'),
+  attribution_url: z.string().optional().describe('Source attribution URL'),
+  country_code: z.string().optional().describe('ISO Alpha-2 country code where the alert was issued'),
+  description: z.string().optional().describe('Short, human-readable alert headline'),
+  token: z.string().optional().describe('Programmatic token for the alert type (e.g., FREEZE_WARNING)'),
+  effective_time: z.string().optional().describe('When the alert goes into effect'),
+  expire_time: z.string().optional().describe('When the alert expires'),
+  issued_time: z.string().optional().describe('When the alert was issued'),
+  event_onset_time: z.string().optional().describe('When the event itself begins'),
+  event_end_time: z.string().optional().describe('When the event itself ends'),
+  details_url: z.string().optional().describe('URL with full alert details'),
+  phenomenon: z.string().optional().describe('Underlying phenomenon (e.g., Cold, Wind, Flood)'),
+  precedence: z.number().optional().describe('Apple-assigned precedence; lower values are more important and appear first'),
+  severity: z.string().optional().describe('Severity level (extreme, severe, moderate, minor, unknown)'),
+  significance: z.string().optional().describe('Significance (warning, watch, advisory, statement)'),
+  source: z.string().optional().describe('Issuing organization'),
+  event_source: z.string().optional().describe('Country issuing the alert'),
+  urgency: z.string().optional().describe('Urgency (immediate, expected, future, past)'),
+  certainty: z.string().optional().describe('Certainty (observed, likely, possible, unlikely, unknown)'),
+  importance: z.string().optional().describe('Importance level (high, normal, low)'),
+  responses: z.array(z.string()).optional().describe('Recommended responses (e.g., ["execute"], ["prepare"])'),
+}).passthrough();
+
+const LocationForecastZ = z.object({
+  label: z.string().optional().describe('Location label from the athlete\'s Intervals.icu weather config'),
+  latitude: z.number().optional().describe('Location latitude'),
+  longitude: z.number().optional().describe('Location longitude'),
+  current_weather: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Null if WeatherKit returned no current data'),
+  rest_of_day_forecast: RestOfDayForecastZ.nullable().optional().describe("Apple's rest-of-day daily forecast slice for the local day"),
+  hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the remaining hours of the athlete's local day"),
+  alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts for the location, sorted by precedence (most important first)'),
+}).passthrough();
+
+// ============================================
 // Tool output schemas (the raw shapes consumed by registerTool)
 // ============================================
 
@@ -845,11 +945,17 @@ export const todaysSummaryOutputSchema = {
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
   completed_workouts: z.array(WorkoutZ).optional().describe('Workouts completed so far today, with matched Whoop data'),
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
+  forecast: z.array(LocationForecastZ).optional().describe("Today's weather forecast for each enabled location in the athlete's Intervals.icu weather config. Empty when WeatherKit is not configured or has no enabled locations"),
   workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
   workouts_completed: z.number().optional().describe('Number of workouts completed today'),
   tss_planned: z.number().optional().describe('Total expected TSS from planned workouts'),
   tss_completed: z.number().optional().describe('Total TSS from completed workouts'),
   hints: hintsField,
+} as const;
+
+export const todaysForecastOutputSchema = {
+  current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
+  forecasts: z.array(LocationForecastZ).describe("Per-location forecasts for each enabled location in the athlete's Intervals.icu weather config"),
 } as const;
 
 export const todaysWorkoutsOutputSchema = {

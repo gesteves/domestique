@@ -34,6 +34,7 @@ import type {
   ActivityType,
   ActivityIntervalInput,
   PlayedSong,
+  WeatherLocation,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
@@ -110,6 +111,22 @@ interface IntervalsAthleteProfile {
     id: string;
     timezone?: string;
   };
+}
+
+// Weather forecast configuration from /athlete/{id}/weather-config endpoint
+interface IntervalsWeatherForecastLocation {
+  enabled: boolean;
+  id: number;
+  label: string;
+  lat: number;
+  lon: number;
+  /** Free-form location string from Intervals.icu, e.g. "San Francisco,California,US" */
+  location: string;
+  provider?: string;
+}
+
+interface IntervalsWeatherConfig {
+  forecasts?: IntervalsWeatherForecastLocation[];
 }
 
 // Sport settings from /sport-settings endpoint
@@ -601,6 +618,10 @@ export class IntervalsClient {
       athlete.fahrenheit
     );
   });
+  private fetchWeatherConfigCached = memoize(async () => {
+    const response = await this.fetch<IntervalsWeatherConfig>('/weather-config');
+    return response.forecasts ?? [];
+  });
 
   constructor(config: IntervalsConfig) {
     this.config = config;
@@ -733,6 +754,24 @@ export class IntervalsClient {
     }
 
     return result;
+  }
+
+  /**
+   * Get the athlete's enabled weather-forecast locations from Intervals.icu.
+   * Memoized — locations rarely change. Returns only the locations the user has
+   * marked enabled in their Intervals.icu weather settings.
+   */
+  async getEnabledWeatherLocations(): Promise<WeatherLocation[]> {
+    const locations = await this.fetchWeatherConfigCached();
+    return locations
+      .filter((l) => l.enabled)
+      .map((l) => ({
+        id: l.id,
+        label: l.label,
+        latitude: l.lat,
+        longitude: l.lon,
+        location: l.location,
+      }));
   }
 
   /**
