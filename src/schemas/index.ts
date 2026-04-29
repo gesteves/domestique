@@ -669,6 +669,32 @@ const AirQualityZ = z.object({
   index_display_name: z.string().optional().describe('Human-readable name for the AQI scale (e.g., "AQI (US)")'),
 }).passthrough();
 
+const PollenIndexInfoZ = z.object({
+  display_name: z.string().optional().describe('Human-readable name for the pollen index (e.g., "Universal Pollen Index")'),
+  value: z.number().optional().describe('Numeric index value'),
+  category: z.string().optional().describe('Category band for the index value (e.g., "Very low", "Low", "Moderate", "High", "Very high")'),
+  index_description: z.string().optional().describe('One-line description of what the index value means at this band'),
+}).passthrough();
+
+const PollenTypeInfoZ = z.object({
+  display_name: z.string().optional().describe('Display name for the pollen type (e.g., "Grass", "Tree", "Weed")'),
+  in_season: z.boolean().optional().describe('Whether this pollen type is currently in season at the location'),
+  index_info: PollenIndexInfoZ.optional().describe('Index info for this pollen type'),
+  health_recommendations: z.array(z.string()).optional().describe('Health recommendations for this pollen type'),
+}).passthrough();
+
+const PollenPlantInfoZ = z.object({
+  display_name: z.string().optional().describe('Display name for the plant (e.g., "Birch", "Ragweed")'),
+  in_season: z.boolean().optional().describe('Whether this plant is currently in season'),
+  index_info: PollenIndexInfoZ.optional().describe('Index info for this plant'),
+}).passthrough();
+
+const PollenZ = z.object({
+  date: z.string().describe("Date the pollen forecast applies to, in YYYY-MM-DD format in the athlete's timezone"),
+  pollen_types: z.array(PollenTypeInfoZ).optional().describe('Aggregated index per pollen type (grass, tree, weed)'),
+  plants: z.array(PollenPlantInfoZ).optional().describe('Per-plant breakdown'),
+}).passthrough();
+
 const CurrentWeatherZ = z.object({
   as_of: z.string().optional().describe('Timestamp the conditions were measured/modeled at'),
   condition: z.string().optional().describe('Human-readable description of the dominant condition (e.g., "Sunny", "Mostly cloudy", "Light rain")'),
@@ -731,9 +757,10 @@ const LocationForecastZ = z.object({
   location: z.string().optional().describe("Full location string from the athlete's Intervals.icu weather config (e.g., \"Moose,Wyoming,US\")"),
   latitude: z.number().optional().describe('Location latitude'),
   longitude: z.number().optional().describe('Location longitude'),
-  current_weather: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Null if Google Weather returned no current data'),
+  current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Null if Google Weather returned no current data'),
   hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the remaining daylight hours of the athlete's local day"),
   alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts for the location'),
+  pollen: PollenZ.optional().describe("Today's pollen forecast for the location from the Google Pollen API. Only present when the forecast date matches today in the athlete's timezone"),
 }).passthrough();
 
 // ============================================

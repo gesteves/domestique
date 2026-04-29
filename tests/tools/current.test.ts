@@ -5,6 +5,7 @@ import { WhoopClient } from '../../src/clients/whoop.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
 import { GoogleWeatherClient } from '../../src/clients/google-weather.js';
 import { GoogleAirQualityClient } from '../../src/clients/google-air-quality.js';
+import { GooglePollenClient } from '../../src/clients/google-pollen.js';
 import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
@@ -13,6 +14,7 @@ vi.mock('../../src/clients/whoop.js');
 vi.mock('../../src/clients/trainerroad.js');
 vi.mock('../../src/clients/google-weather.js');
 vi.mock('../../src/clients/google-air-quality.js');
+vi.mock('../../src/clients/google-pollen.js');
 
 describe('CurrentTools', () => {
   let tools: CurrentTools;
@@ -1119,6 +1121,7 @@ describe('CurrentTools', () => {
   describe('weather forecast', () => {
     let mockGoogleWeatherClient: GoogleWeatherClient;
     let mockGoogleAirQualityClient: GoogleAirQualityClient;
+    let mockGooglePollenClient: GooglePollenClient;
 
     // Sample Google Weather responses for the three calls. Athlete is in America/Boise.
     const sampleCurrent = {
@@ -1160,6 +1163,7 @@ describe('CurrentTools', () => {
     beforeEach(() => {
       mockGoogleWeatherClient = new GoogleWeatherClient({ apiKey: 'k' });
       mockGoogleAirQualityClient = new GoogleAirQualityClient({ apiKey: 'k' });
+      mockGooglePollenClient = new GooglePollenClient({ apiKey: 'k' });
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-04-28T14:49:34Z'));
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Boise');
@@ -1207,8 +1211,8 @@ describe('CurrentTools', () => {
       expect(result.forecasts).toHaveLength(1);
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose,Wyoming,US');
-      expect(fc.current_weather?.condition).toBe('Mostly clear');
-      expect(fc.current_weather?.temperature).toBe('4.1 °C');
+      expect(fc.current_conditions?.condition).toBe('Mostly clear');
+      expect(fc.current_conditions?.temperature).toBe('4.1 °C');
       // Hourly should only contain the one future hour for today
       expect(fc.hourly_forecast.map((h) => h.forecast_start)).toEqual(['2026-04-28T20:00:00Z']);
       // Alerts pass through with the slimmed shape
@@ -1242,10 +1246,10 @@ describe('CurrentTools', () => {
       const result = await toolsWithWeather.getTodaysForecast();
       expect(result.forecasts.map((f) => f.location)).toEqual(['Boise,Idaho,US']);
       expect(result.forecasts[0].alerts).toEqual([]);
-      expect(result.forecasts[0].current_weather?.temperature).toBe('4.1 °C');
+      expect(result.forecasts[0].current_conditions?.temperature).toBe('4.1 °C');
     });
 
-    it('returns an empty current_weather when current conditions fails but keeps the location', async () => {
+    it('returns a null current_conditions when current conditions fails but keeps the location', async () => {
       const toolsWithWeather = new CurrentTools(
         mockIntervalsClient,
         mockWhoopClient,
@@ -1262,7 +1266,7 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithWeather.getTodaysForecast();
       expect(result.forecasts.map((f) => f.location)).toEqual(['A,US']);
-      expect(result.forecasts[0].current_weather).toBeNull();
+      expect(result.forecasts[0].current_conditions).toBeNull();
     });
 
     it("includes the forecast in getTodaysSummary's response", async () => {
@@ -1365,9 +1369,9 @@ describe('CurrentTools', () => {
       );
 
       const fc = result.forecasts[0];
-      expect(fc.current_weather?.air_quality?.aqi).toBe(41);
-      expect(fc.current_weather?.air_quality?.dominant_pollutant).toBe('pm25');
-      expect(fc.current_weather?.air_quality?.index_display_name).toBe('AQI (US)');
+      expect(fc.current_conditions?.air_quality?.aqi).toBe(41);
+      expect(fc.current_conditions?.air_quality?.dominant_pollutant).toBe('pm25');
+      expect(fc.current_conditions?.air_quality?.index_display_name).toBe('AQI (US)');
       expect(fc.hourly_forecast).toHaveLength(1);
       expect(fc.hourly_forecast[0].air_quality?.aqi).toBe(55);
       expect(fc.hourly_forecast[0].air_quality?.dominant_pollutant).toBe('o3');
@@ -1394,10 +1398,10 @@ describe('CurrentTools', () => {
       const result = await toolsWithAirQuality.getTodaysForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose,Wyoming,US');
-      expect(fc.current_weather?.air_quality).toBeUndefined();
+      expect(fc.current_conditions?.air_quality).toBeUndefined();
       expect(fc.hourly_forecast[0].air_quality).toBeUndefined();
       // Weather data is still present
-      expect(fc.current_weather?.temperature).toBe('4.1 °C');
+      expect(fc.current_conditions?.temperature).toBe('4.1 °C');
     });
 
     it('does not call the Air Quality client when it is not configured', async () => {
@@ -1419,7 +1423,119 @@ describe('CurrentTools', () => {
       const result = await toolsWeatherOnly.getTodaysForecast();
       expect(mockGoogleAirQualityClient.getCurrentAirQuality).not.toHaveBeenCalled();
       expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).not.toHaveBeenCalled();
-      expect(result.forecasts[0].current_weather?.air_quality).toBeUndefined();
+      expect(result.forecasts[0].current_conditions?.air_quality).toBeUndefined();
+    });
+
+    it('attaches pollen from the Google Pollen client when configured', async () => {
+      const toolsWithPollen = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        null,
+        mockGooglePollenClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGooglePollenClient.getPollenForecast).mockResolvedValue({
+        regionCode: 'us',
+        dailyInfo: [
+          {
+            date: { year: 2026, month: 4, day: 28 },
+            pollenTypeInfo: [
+              {
+                code: 'GRASS',
+                displayName: 'Grass',
+                inSeason: true,
+                indexInfo: {
+                  code: 'UPI',
+                  displayName: 'Universal Pollen Index',
+                  value: 1,
+                  category: 'Very low',
+                },
+                healthRecommendations: ['Pollen levels are very low.'],
+              },
+            ],
+            plantInfo: [
+              {
+                code: 'BIRCH',
+                displayName: 'Birch',
+                inSeason: false,
+                indexInfo: {
+                  code: 'UPI',
+                  displayName: 'Universal Pollen Index',
+                  value: 1,
+                  category: 'Very low',
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      const result = await toolsWithPollen.getTodaysForecast();
+
+      expect(mockGooglePollenClient.getPollenForecast).toHaveBeenCalledWith(43.65, -110.71, 1);
+
+      const fc = result.forecasts[0];
+      expect(fc.current_conditions?.pollen).toBeUndefined();
+      expect(fc.pollen?.date).toBe('2026-04-28');
+      expect(fc.pollen?.pollen_types).toHaveLength(1);
+      expect(fc.pollen?.pollen_types?.[0].display_name).toBe('Grass');
+      expect(fc.pollen?.pollen_types?.[0].index_info?.category).toBe('Very low');
+      expect(fc.pollen?.plants?.[0].display_name).toBe('Birch');
+    });
+
+    it('keeps the forecast when the Pollen call fails', async () => {
+      const toolsWithPollen = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        null,
+        mockGooglePollenClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGooglePollenClient.getPollenForecast).mockRejectedValue(new Error('boom'));
+
+      const result = await toolsWithPollen.getTodaysForecast();
+      const fc = result.forecasts[0];
+      expect(fc.location).toBe('Moose,Wyoming,US');
+      expect(fc.pollen).toBeUndefined();
+      expect(fc.current_conditions?.temperature).toBe('4.1 °C');
+    });
+
+    it('does not call the Pollen client when it is not configured', async () => {
+      const toolsWeatherOnly = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        null,
+        null
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+
+      const result = await toolsWeatherOnly.getTodaysForecast();
+      expect(mockGooglePollenClient.getPollenForecast).not.toHaveBeenCalled();
+      expect(result.forecasts[0].pollen).toBeUndefined();
     });
   });
 });

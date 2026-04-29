@@ -24,6 +24,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     lastfm: config.lastfm,
     googleWeather: config.googleWeather,
     googleAirQuality: config.googleAirQuality,
+    googlePollen: config.googlePollen,
   });
 
   console.log('Tool registry created');

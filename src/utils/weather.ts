@@ -18,9 +18,20 @@ import type {
   GoogleCurrentAirQualityResponse,
 } from '../clients/google-air-quality.js';
 import type {
+  GooglePollenDailyInfo,
+  GooglePollenForecastResponse,
+  GooglePollenIndexInfo,
+  GooglePollenPlantInfo,
+  GooglePollenTypeInfo,
+} from '../clients/google-pollen.js';
+import type {
   AirQuality,
   CurrentWeather,
   HourlyForecast,
+  Pollen,
+  PollenIndexInfo,
+  PollenPlantInfo,
+  PollenTypeInfo,
   WeatherAlert,
   LocationForecast,
 } from '../types/index.js';
@@ -202,6 +213,99 @@ function airQualityFromHourly(entry: GoogleAirQualityHourlyEntry | undefined): A
 }
 
 /**
+ * Format a Google Pollen index info block. Drops `code` (an enum like "UPI" —
+ * not useful to the model when we have `display_name`) and `color`.
+ */
+function buildPollenIndexInfo(info: GooglePollenIndexInfo | undefined): PollenIndexInfo | undefined {
+  if (!info) return undefined;
+  if (
+    info.displayName === undefined &&
+    info.value === undefined &&
+    info.category === undefined &&
+    info.indexDescription === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    display_name: info.displayName,
+    value: info.value,
+    category: info.category,
+    index_description: info.indexDescription,
+  };
+}
+
+function buildPollenTypeInfo(type: GooglePollenTypeInfo): PollenTypeInfo {
+  return {
+    display_name: type.displayName,
+    in_season: type.inSeason,
+    index_info: buildPollenIndexInfo(type.indexInfo),
+    health_recommendations: type.healthRecommendations,
+  };
+}
+
+function buildPollenPlantInfo(plant: GooglePollenPlantInfo): PollenPlantInfo {
+  return {
+    display_name: plant.displayName,
+    in_season: plant.inSeason,
+    index_info: buildPollenIndexInfo(plant.indexInfo),
+  };
+}
+
+/**
+ * Drop pollen entries whose index value is 0. Google returns a long list of
+ * plants and types every day; the ones with value=0 just inflate the response
+ * without informing training decisions.
+ */
+function hasMeaningfulPollenValue(entry: { index_info?: PollenIndexInfo }): boolean {
+  return entry.index_info?.value !== undefined && entry.index_info.value > 0;
+}
+
+/**
+ * Format the {year, month, day} object Google returns into a YYYY-MM-DD
+ * string for direct comparison with the athlete's local "today".
+ */
+function formatPollenDate(date: GooglePollenDailyInfo['date']): string | undefined {
+  if (!date || date.year === undefined || date.month === undefined || date.day === undefined) {
+    return undefined;
+  }
+  const m = String(date.month).padStart(2, '0');
+  const d = String(date.day).padStart(2, '0');
+  return `${date.year}-${m}-${d}`;
+}
+
+/**
+ * Pick the pollen forecast entry whose date matches today in the athlete's
+ * timezone. Google's `forecast:lookup` returns up to N consecutive days; we
+ * always request `days=1` but the response date can drift across the UTC/local
+ * boundary, so we match explicitly rather than blindly taking `dailyInfo[0]`.
+ *
+ * Returns `undefined` if no entry matches today — better to omit pollen than
+ * to surface yesterday's or tomorrow's data labeled as today. Also returns
+ * `undefined` if every pollen type and plant ends up with an index value of 0
+ * (or no value at all), since the resulting block would carry no signal.
+ */
+function buildPollenForToday(
+  pollen: GooglePollenForecastResponse | undefined,
+  timezone: string,
+  now: Date
+): Pollen | undefined {
+  if (!pollen?.dailyInfo || pollen.dailyInfo.length === 0) return undefined;
+  const todayLocal = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
+  const match = pollen.dailyInfo.find((info) => formatPollenDate(info.date) === todayLocal);
+  if (!match) return undefined;
+  const pollenTypes = match.pollenTypeInfo?.map(buildPollenTypeInfo).filter(hasMeaningfulPollenValue);
+  const plants = match.plantInfo?.map(buildPollenPlantInfo).filter(hasMeaningfulPollenValue);
+  if ((!pollenTypes || pollenTypes.length === 0) && (!plants || plants.length === 0)) {
+    return undefined;
+  }
+  return {
+    date: todayLocal,
+    pollen_types: pollenTypes && pollenTypes.length > 0 ? pollenTypes : undefined,
+    plants: plants && plants.length > 0 ? plants : undefined,
+  };
+}
+
+/**
  * Index hourly air-quality entries by their `dateTime` so each weather hour
  * can find a matching entry by `interval.startTime` in O(1). Both APIs emit
  * top-of-hour ISO timestamps, so direct string equality is reliable.
@@ -220,7 +324,7 @@ function indexHourlyAirQuality(
 /**
  * Strip metadata and format the Google currentConditions response.
  * Returns null if the input is missing entirely. The optional
- * `airQuality` argument attaches the local AQI block to `current_weather`.
+ * `airQuality` argument attaches the local AQI block under `air_quality`.
  */
 export function transformCurrentConditions(
   current: GoogleCurrentConditionsResponse | undefined,
@@ -333,16 +437,20 @@ function transformAlert(alert: GoogleWeatherAlert): WeatherAlert {
 }
 
 /**
- * Build a per-location forecast from Google Weather + Air Quality responses.
+ * Build a per-location forecast from Google Weather + Air Quality + Pollen
+ * responses.
  *
  * `location` is the full location string from the athlete's Intervals.icu
  * weather config (e.g., "Moose,Wyoming,US") — preferred over the shorter label
  * because it conveys region/country context to the model.
  *
- * Air-quality data is optional: if either AQ argument is omitted, the matching
- * `air_quality` field is just omitted on the output. Hourly AQ entries are
- * matched to weather hours by ISO timestamp (top-of-hour boundaries on both
- * APIs), so a missing entry for a given hour is silently skipped.
+ * Air-quality and pollen data are optional: if any of those arguments are
+ * omitted, the matching field is just omitted on the output. Hourly AQ entries
+ * are matched to weather hours by ISO timestamp (top-of-hour boundaries on
+ * both APIs), so a missing entry for a given hour is silently skipped. The
+ * pollen response is filtered to the entry whose date matches today in the
+ * athlete's timezone (and to non-zero index values to keep the payload tight)
+ * — if nothing remains, pollen is omitted from the location forecast.
  */
 export function assembleLocationForecast(
   location: string,
@@ -354,20 +462,23 @@ export function assembleLocationForecast(
   timezone: string,
   now: Date = new Date(),
   currentAirQuality?: GoogleCurrentAirQualityResponse,
-  hourlyAirQuality?: GoogleAirQualityHourlyResponse
+  hourlyAirQuality?: GoogleAirQualityHourlyResponse,
+  pollen?: GooglePollenForecastResponse
 ): LocationForecast {
   const filteredHours = filterHourlyToRestOfDay(hourly?.forecastHours, timezone, now);
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
+  const pollenForToday = buildPollenForToday(pollen, timezone, now);
   return {
     location,
     latitude,
     longitude,
-    current_weather: transformCurrentConditions(current, currentAirQuality),
+    current_conditions: transformCurrentConditions(current, currentAirQuality),
     hourly_forecast: filteredHours.map((h) => {
       const startTime = h.interval?.startTime;
       const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
       return transformForecastHour(h, aqEntry);
     }),
     alerts: (alerts?.weatherAlerts ?? []).map(transformAlert),
+    pollen: pollenForToday,
   };
 }

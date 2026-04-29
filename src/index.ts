@@ -19,6 +19,7 @@ async function main() {
     console.log(`Last.fm: ${config.lastfm ? 'configured' : 'not configured'}`);
     console.log(`Google Weather: ${config.googleWeather ? 'configured' : 'not configured'}`);
     console.log(`Google Air Quality: ${config.googleAirQuality ? 'configured' : 'not configured'}`);
+    console.log(`Google Pollen: ${config.googlePollen ? 'configured' : 'not configured'}`);
 
     await startServer({ port: config.port });
   } catch (error) {

@@ -15,6 +15,7 @@ import type {
   GoogleAirQualityHourlyResponse,
   GoogleCurrentAirQualityResponse,
 } from '../../src/clients/google-air-quality.js';
+import type { GooglePollenForecastResponse } from '../../src/clients/google-pollen.js';
 
 describe('transformCurrentConditions', () => {
   it('formats every value-with-unit field from Google into our flat shape', () => {
@@ -287,7 +288,7 @@ describe('assembleLocationForecast', () => {
     expect(result.latitude).toBe(42.87);
     expect(result.longitude).toBe(-112.58);
 
-    expect(result.current_weather).toMatchObject({
+    expect(result.current_conditions).toMatchObject({
       condition: 'Mostly clear',
       temperature: '4.1 °C',
       humidity: '58%',
@@ -318,7 +319,7 @@ describe('assembleLocationForecast', () => {
       location: 'X,Y,US',
       latitude: 0,
       longitude: 0,
-      current_weather: null,
+      current_conditions: null,
       hourly_forecast: [],
       alerts: [],
     });
@@ -375,7 +376,7 @@ describe('assembleLocationForecast', () => {
       ],
     };
 
-    it('attaches AQI to current_weather and to matching hourly entries', () => {
+    it('attaches AQI to current_conditions and to matching hourly entries', () => {
       const result = assembleLocationForecast(
         'Pocatello,Idaho,US',
         42.87,
@@ -389,7 +390,7 @@ describe('assembleLocationForecast', () => {
         hourlyAq
       );
 
-      expect(result.current_weather?.air_quality).toEqual({
+      expect(result.current_conditions?.air_quality).toEqual({
         aqi: 41,
         category: 'Good air quality',
         dominant_pollutant: 'pm25',
@@ -411,7 +412,7 @@ describe('assembleLocationForecast', () => {
         tz,
         now
       );
-      expect(result.current_weather?.air_quality).toBeUndefined();
+      expect(result.current_conditions?.air_quality).toBeUndefined();
       for (const h of result.hourly_forecast) {
         expect(h.air_quality).toBeUndefined();
       }
@@ -462,8 +463,229 @@ describe('assembleLocationForecast', () => {
         mixed,
         undefined
       );
-      expect(result.current_weather?.air_quality?.aqi).toBe(41);
-      expect(result.current_weather?.air_quality?.index_display_name).toBe('AQI (US)');
+      expect(result.current_conditions?.air_quality?.aqi).toBe(41);
+      expect(result.current_conditions?.air_quality?.index_display_name).toBe('AQI (US)');
+    });
+  });
+
+  describe('pollen integration', () => {
+    // 2026-04-28T14:49:34Z → 08:49 local on 2026-04-28 in America/Boise
+    const todayPollen: GooglePollenForecastResponse = {
+      regionCode: 'us',
+      dailyInfo: [
+        {
+          date: { year: 2026, month: 4, day: 28 },
+          pollenTypeInfo: [
+            {
+              code: 'GRASS',
+              displayName: 'Grass',
+              inSeason: true,
+              indexInfo: {
+                code: 'UPI',
+                displayName: 'Universal Pollen Index',
+                value: 1,
+                category: 'Very low',
+                indexDescription: 'People extremely sensitive to pollen may have symptoms.',
+                color: { green: 0.62, blue: 0.23 },
+              },
+              healthRecommendations: ['Pollen levels are very low. Great day to be outside!'],
+            },
+            {
+              code: 'TREE',
+              displayName: 'Tree',
+              inSeason: false,
+              indexInfo: {
+                code: 'UPI',
+                displayName: 'Universal Pollen Index',
+                value: 0,
+                category: 'None',
+                indexDescription: 'Pollen levels are very low.',
+              },
+            },
+          ],
+          plantInfo: [
+            {
+              code: 'BIRCH',
+              displayName: 'Birch',
+              inSeason: false,
+              indexInfo: {
+                code: 'UPI',
+                displayName: 'Universal Pollen Index',
+                value: 1,
+                category: 'Very low',
+                color: { green: 0.62, blue: 0.23 },
+              },
+            },
+            // Out-of-season plant with no indexInfo — should still pass through
+            { code: 'OLIVE', displayName: 'Olive' },
+          ],
+        },
+      ],
+    };
+
+    it('surfaces today\'s pollen as a sibling of current_conditions, dropping codes/color and value=0 entries', () => {
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        todayPollen
+      );
+
+      // Pollen lives at the top level of LocationForecast, not under current_conditions.
+      expect(result.current_conditions?.pollen).toBeUndefined();
+      expect(result.pollen).toEqual({
+        date: '2026-04-28',
+        pollen_types: [
+          {
+            display_name: 'Grass',
+            in_season: true,
+            index_info: {
+              display_name: 'Universal Pollen Index',
+              value: 1,
+              category: 'Very low',
+              index_description: 'People extremely sensitive to pollen may have symptoms.',
+            },
+            health_recommendations: ['Pollen levels are very low. Great day to be outside!'],
+          },
+        ],
+        plants: [
+          {
+            display_name: 'Birch',
+            in_season: false,
+            index_info: {
+              display_name: 'Universal Pollen Index',
+              value: 1,
+              category: 'Very low',
+              index_description: undefined,
+            },
+          },
+        ],
+      });
+    });
+
+    it("omits pollen when no dailyInfo entry matches today in the athlete's timezone", () => {
+      // Both entries are for tomorrow (4/29) in athlete's local TZ — none matches today.
+      const tomorrowOnly: GooglePollenForecastResponse = {
+        dailyInfo: [
+          {
+            date: { year: 2026, month: 4, day: 29 },
+            pollenTypeInfo: [
+              {
+                code: 'GRASS',
+                displayName: 'Grass',
+                inSeason: true,
+                indexInfo: { code: 'UPI', value: 2, category: 'Low' },
+              },
+            ],
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        tomorrowOnly
+      );
+      expect(result.pollen).toBeUndefined();
+    });
+
+    it('omits pollen when no pollen response is provided', () => {
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now
+      );
+      expect(result.pollen).toBeUndefined();
+    });
+
+    it('omits pollen entirely when every type and plant has value=0 or no value', () => {
+      const allZeros: GooglePollenForecastResponse = {
+        dailyInfo: [
+          {
+            date: { year: 2026, month: 4, day: 28 },
+            pollenTypeInfo: [
+              { code: 'GRASS', displayName: 'Grass', indexInfo: { value: 0 } },
+              { code: 'TREE', displayName: 'Tree', indexInfo: { value: 0 } },
+            ],
+            plantInfo: [
+              { code: 'OLIVE', displayName: 'Olive' }, // no indexInfo at all
+            ],
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        allZeros
+      );
+      expect(result.pollen).toBeUndefined();
+    });
+
+    it('picks the matching day when multiple are returned', () => {
+      const multi: GooglePollenForecastResponse = {
+        dailyInfo: [
+          {
+            date: { year: 2026, month: 4, day: 27 },
+            pollenTypeInfo: [
+              { code: 'GRASS', displayName: 'Grass (yesterday)', indexInfo: { value: 1 } },
+            ],
+          },
+          {
+            date: { year: 2026, month: 4, day: 28 },
+            pollenTypeInfo: [
+              { code: 'GRASS', displayName: 'Grass (today)', indexInfo: { value: 1 } },
+            ],
+          },
+          {
+            date: { year: 2026, month: 4, day: 29 },
+            pollenTypeInfo: [
+              { code: 'GRASS', displayName: 'Grass (tomorrow)', indexInfo: { value: 2 } },
+            ],
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        multi
+      );
+      expect(result.pollen?.date).toBe('2026-04-28');
+      expect(result.pollen?.pollen_types?.[0].display_name).toBe('Grass (today)');
     });
   });
 });

@@ -1145,6 +1145,61 @@ export interface AirQuality {
 }
 
 /**
+ * The pollen index attached to a pollen type or plant entry. Sourced from
+ * Google's Pollen API (Universal Pollen Index by default).
+ */
+export interface PollenIndexInfo {
+  /** Human-readable name for the index (e.g., "Universal Pollen Index") */
+  display_name?: string;
+  /** Numeric index value */
+  value?: number;
+  /** Category band (e.g., "Very low", "Low", "Moderate", "High", "Very high") */
+  category?: string;
+  /** One-line description of what the index value means at this band */
+  index_description?: string;
+}
+
+/**
+ * Aggregated index for a pollen type (grass, tree, weed).
+ */
+export interface PollenTypeInfo {
+  /** Display name for the pollen type (e.g., "Grass", "Tree", "Weed") */
+  display_name?: string;
+  /** Whether this pollen type is currently in season at the location */
+  in_season?: boolean;
+  /** Index info for this pollen type */
+  index_info?: PollenIndexInfo;
+  /** Health recommendations for this pollen type */
+  health_recommendations?: string[];
+}
+
+/**
+ * Per-plant breakdown (e.g., birch, ragweed, graminales). Plants without
+ * an `index_info` block are out-of-season or not measured at the location.
+ */
+export interface PollenPlantInfo {
+  /** Display name for the plant (e.g., "Birch", "Ragweed") */
+  display_name?: string;
+  /** Whether this plant is currently in season */
+  in_season?: boolean;
+  /** Index info for this plant */
+  index_info?: PollenIndexInfo;
+}
+
+/**
+ * Pollen forecast for a single day, attached to a CurrentWeather entry.
+ * Sourced from Google's Pollen API.
+ */
+export interface Pollen {
+  /** Date the forecast applies to, in YYYY-MM-DD format (athlete's timezone). */
+  date: string;
+  /** Aggregated index per pollen type (grass, tree, weed). */
+  pollen_types?: PollenTypeInfo[];
+  /** Per-plant breakdown. */
+  plants?: PollenPlantInfo[];
+}
+
+/**
  * Slimmed-down current-conditions block. Times stay as ISO strings so
  * formatResponseDates renders them in the athlete's timezone.
  */
@@ -1220,9 +1275,11 @@ export interface LocationForecast {
   location: string;
   latitude: number;
   longitude: number;
-  current_weather: CurrentWeather | null;
+  current_conditions: CurrentWeather | null;
   hourly_forecast: HourlyForecast[];
   alerts: WeatherAlert[];
+  /** Today's pollen forecast for the location, sourced from the Google Pollen API. */
+  pollen?: Pollen;
 }
 
 /**
