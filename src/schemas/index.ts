@@ -669,30 +669,18 @@ const AirQualityZ = z.object({
   index_display_name: z.string().optional().describe('Human-readable name for the AQI scale (e.g., "AQI (US)")'),
 }).passthrough();
 
-const PollenIndexInfoZ = z.object({
-  display_name: z.string().optional().describe('Human-readable name for the pollen index (e.g., "Universal Pollen Index")'),
-  value: z.number().optional().describe('Numeric index value'),
-  category: z.string().optional().describe('Category band for the index value (e.g., "Very low", "Low", "Moderate", "High", "Very high")'),
-  index_description: z.string().optional().describe('One-line description of what the index value means at this band'),
-}).passthrough();
-
-const PollenTypeInfoZ = z.object({
-  display_name: z.string().optional().describe('Display name for the pollen type (e.g., "Grass", "Tree", "Weed")'),
-  in_season: z.boolean().optional().describe('Whether this pollen type is currently in season at the location'),
-  index_info: PollenIndexInfoZ.optional().describe('Index info for this pollen type'),
-  health_recommendations: z.array(z.string()).optional().describe('Health recommendations for this pollen type'),
-}).passthrough();
-
-const PollenPlantInfoZ = z.object({
-  display_name: z.string().optional().describe('Display name for the plant (e.g., "Birch", "Ragweed")'),
-  in_season: z.boolean().optional().describe('Whether this plant is currently in season'),
-  index_info: PollenIndexInfoZ.optional().describe('Index info for this plant'),
+const PollenIndexLevelZ = z.object({
+  value: z.number().describe('Numeric Universal Pollen Index value (typically 1–5; higher = more pollen)'),
+  category: z.string().optional().describe('Category band for the UPI value (e.g., "Very low", "Low", "Moderate", "High", "Very high")'),
+  description: z.string().optional().describe('One-line description of what this UPI value means for sensitive people'),
+  pollen_types: z.array(z.string()).optional().describe('Pollen-type display names at this UPI level (e.g., "Grass", "Tree", "Weed")'),
+  plants: z.array(z.string()).optional().describe('Plant display names at this UPI level (e.g., "Birch", "Oak", "Ragweed")'),
 }).passthrough();
 
 const PollenZ = z.object({
   date: z.string().describe("Date the pollen forecast applies to, in YYYY-MM-DD format in the athlete's timezone"),
-  pollen_types: z.array(PollenTypeInfoZ).optional().describe('Aggregated index per pollen type (grass, tree, weed)'),
-  plants: z.array(PollenPlantInfoZ).optional().describe('Per-plant breakdown'),
+  universal_pollen_index: z.array(PollenIndexLevelZ).describe('Pollen activity grouped by UPI value, sorted by value ascending. Only levels with at least one entry are present'),
+  health_recommendations: z.array(z.string()).optional().describe("Deduplicated health recommendations from entries at today's highest UPI level"),
 }).passthrough();
 
 const CurrentWeatherZ = z.object({

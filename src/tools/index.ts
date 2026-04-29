@@ -356,7 +356,7 @@ export class ToolRegistry {
 **Includes (per location):**
 - Current conditions (temperature, humidity, wind, pressure, visibility, UV, etc.)
 - Local AQI on the current conditions and on each hourly entry
-- Today's pollen forecast (grass, tree, weed indexes plus per-plant breakdown), as a sibling of the current conditions
+- Today's pollen forecast grouped by Universal Pollen Index level (with the pollen types and plants at each level, plus health recommendations from the highest active level), as a sibling of the current conditions
 - Hourly forecast for the remaining daylight hours of the day in the athlete's timezone
 - Active weather alerts (warnings, watches, advisories)
 

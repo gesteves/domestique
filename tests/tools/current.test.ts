@@ -1455,10 +1455,11 @@ describe('CurrentTools', () => {
                 indexInfo: {
                   code: 'UPI',
                   displayName: 'Universal Pollen Index',
-                  value: 1,
-                  category: 'Very low',
+                  value: 3,
+                  category: 'Moderate',
+                  indexDescription: 'Moderately allergic people may experience symptoms.',
                 },
-                healthRecommendations: ['Pollen levels are very low.'],
+                healthRecommendations: ['Keep windows closed and use AC if possible.'],
               },
             ],
             plantInfo: [
@@ -1470,7 +1471,7 @@ describe('CurrentTools', () => {
                   code: 'UPI',
                   displayName: 'Universal Pollen Index',
                   value: 1,
-                  category: 'Very low',
+                  category: 'Very Low',
                 },
               },
             ],
@@ -1483,12 +1484,19 @@ describe('CurrentTools', () => {
       expect(mockGooglePollenClient.getPollenForecast).toHaveBeenCalledWith(43.65, -110.71, 1);
 
       const fc = result.forecasts[0];
-      expect(fc.current_conditions?.pollen).toBeUndefined();
+      expect((fc.current_conditions as unknown as { pollen?: unknown })?.pollen).toBeUndefined();
       expect(fc.pollen?.date).toBe('2026-04-28');
-      expect(fc.pollen?.pollen_types).toHaveLength(1);
-      expect(fc.pollen?.pollen_types?.[0].display_name).toBe('Grass');
-      expect(fc.pollen?.pollen_types?.[0].index_info?.category).toBe('Very low');
-      expect(fc.pollen?.plants?.[0].display_name).toBe('Birch');
+      expect(fc.pollen?.universal_pollen_index).toEqual([
+        { value: 1, category: 'Very Low', description: undefined, pollen_types: undefined, plants: ['Birch'] },
+        {
+          value: 3,
+          category: 'Moderate',
+          description: 'Moderately allergic people may experience symptoms.',
+          pollen_types: ['Grass'],
+          plants: undefined,
+        },
+      ]);
+      expect(fc.pollen?.health_recommendations).toEqual(['Keep windows closed and use AC if possible.']);
     });
 
     it('keeps the forecast when the Pollen call fails', async () => {

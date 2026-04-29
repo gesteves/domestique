@@ -479,51 +479,62 @@ describe('assembleLocationForecast', () => {
             {
               code: 'GRASS',
               displayName: 'Grass',
-              inSeason: true,
-              indexInfo: {
-                code: 'UPI',
-                displayName: 'Universal Pollen Index',
-                value: 1,
-                category: 'Very low',
-                indexDescription: 'People extremely sensitive to pollen may have symptoms.',
-                color: { green: 0.62, blue: 0.23 },
-              },
-              healthRecommendations: ['Pollen levels are very low. Great day to be outside!'],
-            },
-            {
-              code: 'TREE',
-              displayName: 'Tree',
               inSeason: false,
               indexInfo: {
                 code: 'UPI',
                 displayName: 'Universal Pollen Index',
-                value: 0,
-                category: 'None',
-                indexDescription: 'Pollen levels are very low.',
+                value: 1,
+                category: 'Very Low',
+                indexDescription: 'Sensitive people may have symptoms.',
+                color: { green: 0.62, blue: 0.23 },
               },
+              healthRecommendations: ["Pollen levels are very low. It's a great day to be outside!"],
+            },
+            {
+              code: 'TREE',
+              displayName: 'Tree',
+              inSeason: true,
+              indexInfo: {
+                code: 'UPI',
+                displayName: 'Universal Pollen Index',
+                value: 3,
+                category: 'Moderate',
+                indexDescription: 'Moderately allergic people may experience symptoms.',
+              },
+              healthRecommendations: [
+                'Keep windows closed and use AC if possible.',
+                'Consider wearing sunglasses to keep pollen out of your eyes.',
+              ],
+            },
+            {
+              // value=0 → dropped entirely
+              code: 'WEED',
+              displayName: 'Weed',
+              indexInfo: { code: 'UPI', value: 0, category: 'None' },
+              healthRecommendations: ['Should not appear anywhere in the output.'],
             },
           ],
           plantInfo: [
             {
               code: 'BIRCH',
               displayName: 'Birch',
-              inSeason: false,
-              indexInfo: {
-                code: 'UPI',
-                displayName: 'Universal Pollen Index',
-                value: 1,
-                category: 'Very low',
-                color: { green: 0.62, blue: 0.23 },
-              },
+              inSeason: true,
+              indexInfo: { code: 'UPI', value: 3, category: 'Moderate' },
             },
-            // Out-of-season plant with no indexInfo — should still pass through
+            {
+              code: 'OAK',
+              displayName: 'Oak',
+              inSeason: true,
+              indexInfo: { code: 'UPI', value: 1, category: 'Very Low' },
+            },
+            // Out-of-season plant with no indexInfo — dropped
             { code: 'OLIVE', displayName: 'Olive' },
           ],
         },
       ],
     };
 
-    it('surfaces today\'s pollen as a sibling of current_conditions, dropping codes/color and value=0 entries', () => {
+    it("groups pollen by UPI level (sorted ascending) with deduped health recs from the highest level", () => {
       const result = assembleLocationForecast(
         'Pocatello,Idaho,US',
         42.87,
@@ -539,50 +550,117 @@ describe('assembleLocationForecast', () => {
       );
 
       // Pollen lives at the top level of LocationForecast, not under current_conditions.
-      expect(result.current_conditions?.pollen).toBeUndefined();
+      expect((result.current_conditions as unknown as { pollen?: unknown })?.pollen).toBeUndefined();
       expect(result.pollen).toEqual({
         date: '2026-04-28',
-        pollen_types: [
+        universal_pollen_index: [
           {
-            display_name: 'Grass',
-            in_season: true,
-            index_info: {
-              display_name: 'Universal Pollen Index',
-              value: 1,
-              category: 'Very low',
-              index_description: 'People extremely sensitive to pollen may have symptoms.',
-            },
-            health_recommendations: ['Pollen levels are very low. Great day to be outside!'],
+            value: 1,
+            category: 'Very Low',
+            description: 'Sensitive people may have symptoms.',
+            pollen_types: ['Grass'],
+            plants: ['Oak'],
+          },
+          {
+            value: 3,
+            category: 'Moderate',
+            description: 'Moderately allergic people may experience symptoms.',
+            pollen_types: ['Tree'],
+            plants: ['Birch'],
           },
         ],
-        plants: [
-          {
-            display_name: 'Birch',
-            in_season: false,
-            index_info: {
-              display_name: 'Universal Pollen Index',
-              value: 1,
-              category: 'Very low',
-              index_description: undefined,
-            },
-          },
+        // Only recs from the highest active level (UPI 3 = Tree); Grass recs (UPI 1) are dropped.
+        health_recommendations: [
+          'Keep windows closed and use AC if possible.',
+          'Consider wearing sunglasses to keep pollen out of your eyes.',
         ],
       });
     });
 
+    it('emits a level with only `pollen_types` when no plants land in that bucket (and vice versa)', () => {
+      const lopsided: GooglePollenForecastResponse = {
+        dailyInfo: [
+          {
+            date: { year: 2026, month: 4, day: 28 },
+            pollenTypeInfo: [
+              { code: 'GRASS', displayName: 'Grass', indexInfo: { value: 2, category: 'Low' } },
+            ],
+            plantInfo: [
+              { code: 'BIRCH', displayName: 'Birch', indexInfo: { value: 4, category: 'High' } },
+            ],
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        lopsided
+      );
+      expect(result.pollen?.universal_pollen_index).toEqual([
+        { value: 2, category: 'Low', description: undefined, pollen_types: ['Grass'], plants: undefined },
+        { value: 4, category: 'High', description: undefined, pollen_types: undefined, plants: ['Birch'] },
+      ]);
+      // No pollen type at the top level (UPI 4) → no health recommendations.
+      expect(result.pollen?.health_recommendations).toBeUndefined();
+    });
+
+    it('deduplicates health recommendations across multiple types at the highest level', () => {
+      const sameRecs: GooglePollenForecastResponse = {
+        dailyInfo: [
+          {
+            date: { year: 2026, month: 4, day: 28 },
+            pollenTypeInfo: [
+              {
+                code: 'GRASS',
+                displayName: 'Grass',
+                indexInfo: { value: 4, category: 'High' },
+                healthRecommendations: ['Stay indoors when possible.', 'Wear a mask outdoors.'],
+              },
+              {
+                code: 'TREE',
+                displayName: 'Tree',
+                indexInfo: { value: 4, category: 'High' },
+                healthRecommendations: ['Wear a mask outdoors.', 'Use antihistamines as needed.'],
+              },
+            ],
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        sameRecs
+      );
+      expect(result.pollen?.health_recommendations).toEqual([
+        'Stay indoors when possible.',
+        'Wear a mask outdoors.',
+        'Use antihistamines as needed.',
+      ]);
+    });
+
     it("omits pollen when no dailyInfo entry matches today in the athlete's timezone", () => {
-      // Both entries are for tomorrow (4/29) in athlete's local TZ — none matches today.
       const tomorrowOnly: GooglePollenForecastResponse = {
         dailyInfo: [
           {
             date: { year: 2026, month: 4, day: 29 },
             pollenTypeInfo: [
-              {
-                code: 'GRASS',
-                displayName: 'Grass',
-                inSeason: true,
-                indexInfo: { code: 'UPI', value: 2, category: 'Low' },
-              },
+              { code: 'GRASS', displayName: 'Grass', indexInfo: { value: 2, category: 'Low' } },
             ],
           },
         ],
@@ -626,9 +704,7 @@ describe('assembleLocationForecast', () => {
               { code: 'GRASS', displayName: 'Grass', indexInfo: { value: 0 } },
               { code: 'TREE', displayName: 'Tree', indexInfo: { value: 0 } },
             ],
-            plantInfo: [
-              { code: 'OLIVE', displayName: 'Olive' }, // no indexInfo at all
-            ],
+            plantInfo: [{ code: 'OLIVE', displayName: 'Olive' }],
           },
         ],
       };
@@ -685,7 +761,7 @@ describe('assembleLocationForecast', () => {
         multi
       );
       expect(result.pollen?.date).toBe('2026-04-28');
-      expect(result.pollen?.pollen_types?.[0].display_name).toBe('Grass (today)');
+      expect(result.pollen?.universal_pollen_index?.[0].pollen_types).toEqual(['Grass (today)']);
     });
   });
 });

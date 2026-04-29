@@ -20,18 +20,13 @@ import type {
 import type {
   GooglePollenDailyInfo,
   GooglePollenForecastResponse,
-  GooglePollenIndexInfo,
-  GooglePollenPlantInfo,
-  GooglePollenTypeInfo,
 } from '../clients/google-pollen.js';
 import type {
   AirQuality,
   CurrentWeather,
   HourlyForecast,
   Pollen,
-  PollenIndexInfo,
-  PollenPlantInfo,
-  PollenTypeInfo,
+  PollenIndexLevel,
   WeatherAlert,
   LocationForecast,
 } from '../types/index.js';
@@ -213,54 +208,6 @@ function airQualityFromHourly(entry: GoogleAirQualityHourlyEntry | undefined): A
 }
 
 /**
- * Format a Google Pollen index info block. Drops `code` (an enum like "UPI" —
- * not useful to the model when we have `display_name`) and `color`.
- */
-function buildPollenIndexInfo(info: GooglePollenIndexInfo | undefined): PollenIndexInfo | undefined {
-  if (!info) return undefined;
-  if (
-    info.displayName === undefined &&
-    info.value === undefined &&
-    info.category === undefined &&
-    info.indexDescription === undefined
-  ) {
-    return undefined;
-  }
-  return {
-    display_name: info.displayName,
-    value: info.value,
-    category: info.category,
-    index_description: info.indexDescription,
-  };
-}
-
-function buildPollenTypeInfo(type: GooglePollenTypeInfo): PollenTypeInfo {
-  return {
-    display_name: type.displayName,
-    in_season: type.inSeason,
-    index_info: buildPollenIndexInfo(type.indexInfo),
-    health_recommendations: type.healthRecommendations,
-  };
-}
-
-function buildPollenPlantInfo(plant: GooglePollenPlantInfo): PollenPlantInfo {
-  return {
-    display_name: plant.displayName,
-    in_season: plant.inSeason,
-    index_info: buildPollenIndexInfo(plant.indexInfo),
-  };
-}
-
-/**
- * Drop pollen entries whose index value is 0. Google returns a long list of
- * plants and types every day; the ones with value=0 just inflate the response
- * without informing training decisions.
- */
-function hasMeaningfulPollenValue(entry: { index_info?: PollenIndexInfo }): boolean {
-  return entry.index_info?.value !== undefined && entry.index_info.value > 0;
-}
-
-/**
  * Format the {year, month, day} object Google returns into a YYYY-MM-DD
  * string for direct comparison with the athlete's local "today".
  */
@@ -274,15 +221,23 @@ function formatPollenDate(date: GooglePollenDailyInfo['date']): string | undefin
 }
 
 /**
- * Pick the pollen forecast entry whose date matches today in the athlete's
- * timezone. Google's `forecast:lookup` returns up to N consecutive days; we
- * always request `days=1` but the response date can drift across the UTC/local
- * boundary, so we match explicitly rather than blindly taking `dailyInfo[0]`.
+ * Bucket today's pollen entries by UPI value.
  *
- * Returns `undefined` if no entry matches today — better to omit pollen than
- * to surface yesterday's or tomorrow's data labeled as today. Also returns
- * `undefined` if every pollen type and plant ends up with an index value of 0
- * (or no value at all), since the resulting block would carry no signal.
+ * Google emits one entry per pollen type (grass/tree/weed) and one per plant,
+ * each with an `indexInfo.value`. We collapse those into UPI levels so the
+ * model gets a single "what's elevated" view instead of N near-identical
+ * blocks. Per-entry metadata we drop: `code` (enum string, redundant with
+ * display name), `color` (presentation only), and `inSeason` (training
+ * decisions hinge on the pollen value, not the calendar — if it's elevated,
+ * that's what matters).
+ *
+ * Health recommendations attach only to pollen types in Google's response
+ * (plants don't carry them), and the lower bands are generic "great day to be
+ * outside" boilerplate, so we surface only the deduplicated recommendations
+ * from the highest UPI level present today.
+ *
+ * Returns `undefined` if no entry matches today, or if every entry has a UPI
+ * value of 0 (no signal worth surfacing).
  */
 function buildPollenForToday(
   pollen: GooglePollenForecastResponse | undefined,
@@ -293,15 +248,64 @@ function buildPollenForToday(
   const todayLocal = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
   const match = pollen.dailyInfo.find((info) => formatPollenDate(info.date) === todayLocal);
   if (!match) return undefined;
-  const pollenTypes = match.pollenTypeInfo?.map(buildPollenTypeInfo).filter(hasMeaningfulPollenValue);
-  const plants = match.plantInfo?.map(buildPollenPlantInfo).filter(hasMeaningfulPollenValue);
-  if ((!pollenTypes || pollenTypes.length === 0) && (!plants || plants.length === 0)) {
-    return undefined;
+
+  type Bucket = {
+    category?: string;
+    description?: string;
+    pollen_types: string[];
+    plants: string[];
+  };
+  const byValue = new Map<number, Bucket>();
+  const ensureBucket = (value: number): Bucket => {
+    let bucket = byValue.get(value);
+    if (!bucket) {
+      bucket = { pollen_types: [], plants: [] };
+      byValue.set(value, bucket);
+    }
+    return bucket;
+  };
+
+  for (const t of match.pollenTypeInfo ?? []) {
+    const v = t.indexInfo?.value;
+    if (v === undefined || v <= 0 || !t.displayName) continue;
+    const bucket = ensureBucket(v);
+    bucket.category ??= t.indexInfo?.category;
+    bucket.description ??= t.indexInfo?.indexDescription;
+    bucket.pollen_types.push(t.displayName);
   }
+  for (const p of match.plantInfo ?? []) {
+    const v = p.indexInfo?.value;
+    if (v === undefined || v <= 0 || !p.displayName) continue;
+    const bucket = ensureBucket(v);
+    bucket.category ??= p.indexInfo?.category;
+    bucket.description ??= p.indexInfo?.indexDescription;
+    bucket.plants.push(p.displayName);
+  }
+
+  if (byValue.size === 0) return undefined;
+
+  const universal_pollen_index: PollenIndexLevel[] = [...byValue.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([value, bucket]) => ({
+      value,
+      category: bucket.category,
+      description: bucket.description,
+      pollen_types: bucket.pollen_types.length > 0 ? bucket.pollen_types : undefined,
+      plants: bucket.plants.length > 0 ? bucket.plants : undefined,
+    }));
+
+  const maxValue = Math.max(...byValue.keys());
+  const recs = new Set<string>();
+  for (const t of match.pollenTypeInfo ?? []) {
+    if (t.indexInfo?.value !== maxValue) continue;
+    for (const r of t.healthRecommendations ?? []) recs.add(r);
+  }
+  const health_recommendations = recs.size > 0 ? [...recs] : undefined;
+
   return {
     date: todayLocal,
-    pollen_types: pollenTypes && pollenTypes.length > 0 ? pollenTypes : undefined,
-    plants: plants && plants.length > 0 ? plants : undefined,
+    universal_pollen_index,
+    health_recommendations,
   };
 }
 

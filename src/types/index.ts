@@ -1145,58 +1145,39 @@ export interface AirQuality {
 }
 
 /**
- * The pollen index attached to a pollen type or plant entry. Sourced from
- * Google's Pollen API (Universal Pollen Index by default).
+ * One bucket of the Universal Pollen Index for the day. Pollen types and
+ * plants at the same UPI value are grouped together so the model can scan
+ * "what's elevated" without re-deriving it from a per-entry list. Only levels
+ * with at least one entry are emitted; values of 0 are dropped upstream.
  */
-export interface PollenIndexInfo {
-  /** Human-readable name for the index (e.g., "Universal Pollen Index") */
-  display_name?: string;
-  /** Numeric index value */
-  value?: number;
-  /** Category band (e.g., "Very low", "Low", "Moderate", "High", "Very high") */
+export interface PollenIndexLevel {
+  /** Numeric UPI value (typically 1–5; higher = more pollen). */
+  value: number;
+  /** Category band for this UPI value (e.g., "Very low", "Moderate", "High"). */
   category?: string;
-  /** One-line description of what the index value means at this band */
-  index_description?: string;
+  /** One-line description of what this UPI value means for sensitive people. */
+  description?: string;
+  /** Pollen-type display names at this UPI level (e.g., "Grass", "Tree", "Weed"). */
+  pollen_types?: string[];
+  /** Plant display names at this UPI level (e.g., "Birch", "Oak", "Ragweed"). */
+  plants?: string[];
 }
 
 /**
- * Aggregated index for a pollen type (grass, tree, weed).
- */
-export interface PollenTypeInfo {
-  /** Display name for the pollen type (e.g., "Grass", "Tree", "Weed") */
-  display_name?: string;
-  /** Whether this pollen type is currently in season at the location */
-  in_season?: boolean;
-  /** Index info for this pollen type */
-  index_info?: PollenIndexInfo;
-  /** Health recommendations for this pollen type */
-  health_recommendations?: string[];
-}
-
-/**
- * Per-plant breakdown (e.g., birch, ragweed, graminales). Plants without
- * an `index_info` block are out-of-season or not measured at the location.
- */
-export interface PollenPlantInfo {
-  /** Display name for the plant (e.g., "Birch", "Ragweed") */
-  display_name?: string;
-  /** Whether this plant is currently in season */
-  in_season?: boolean;
-  /** Index info for this plant */
-  index_info?: PollenIndexInfo;
-}
-
-/**
- * Pollen forecast for a single day, attached to a CurrentWeather entry.
- * Sourced from Google's Pollen API.
+ * Pollen forecast for a single day at a location. Sourced from Google's
+ * Pollen API. Empty days (everything at UPI 0) are omitted upstream.
  */
 export interface Pollen {
   /** Date the forecast applies to, in YYYY-MM-DD format (athlete's timezone). */
   date: string;
-  /** Aggregated index per pollen type (grass, tree, weed). */
-  pollen_types?: PollenTypeInfo[];
-  /** Per-plant breakdown. */
-  plants?: PollenPlantInfo[];
+  /** Pollen activity grouped by UPI value, sorted by value ascending. */
+  universal_pollen_index: PollenIndexLevel[];
+  /**
+   * Deduplicated health recommendations from the entries at today's highest
+   * UPI level. Only the worst-band recommendations are surfaced — the lower
+   * bands say the same generic "great day to be outside" thing every time.
+   */
+  health_recommendations?: string[];
 }
 
 /**
