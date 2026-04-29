@@ -444,9 +444,10 @@ function transformAlert(alert: GoogleWeatherAlert): WeatherAlert {
  * Build a per-location forecast from Google Weather + Air Quality + Pollen
  * responses.
  *
- * `location` is the full location string from the athlete's Intervals.icu
- * weather config (e.g., "Moose,Wyoming,US") — preferred over the shorter label
- * because it conveys region/country context to the model.
+ * `location` is the human-readable label from the athlete's Intervals.icu
+ * weather config (e.g., "Home", "Moose"). The longer "City,Region,Country"
+ * string is intentionally not surfaced — the label is what the athlete
+ * recognizes when reading back a multi-location forecast.
  *
  * Air-quality and pollen data are optional: if any of those arguments are
  * omitted, the matching field is just omitted on the output. Hourly AQ entries

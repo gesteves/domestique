@@ -104,7 +104,7 @@ export class CurrentTools {
               : Promise.resolve(undefined),
           ]);
           return assembleLocationForecast(
-            loc.location,
+            loc.label,
             loc.latitude,
             loc.longitude,
             current,

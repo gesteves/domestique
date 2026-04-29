@@ -1210,7 +1210,7 @@ describe('CurrentTools', () => {
 
       expect(result.forecasts).toHaveLength(1);
       const fc = result.forecasts[0];
-      expect(fc.location).toBe('Moose,Wyoming,US');
+      expect(fc.location).toBe('Moose');
       expect(fc.current_conditions?.condition).toBe('Mostly clear');
       expect(fc.current_conditions?.temperature).toBe('4.1 °C');
       // Hourly should only contain the one future hour for today
@@ -1244,7 +1244,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockRejectedValue(new Error('alerts boom'));
 
       const result = await toolsWithWeather.getTodaysForecast();
-      expect(result.forecasts.map((f) => f.location)).toEqual(['Boise,Idaho,US']);
+      expect(result.forecasts.map((f) => f.location)).toEqual(['Boise']);
       expect(result.forecasts[0].alerts).toEqual([]);
       expect(result.forecasts[0].current_conditions?.temperature).toBe('4.1 °C');
     });
@@ -1265,7 +1265,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
       const result = await toolsWithWeather.getTodaysForecast();
-      expect(result.forecasts.map((f) => f.location)).toEqual(['A,US']);
+      expect(result.forecasts.map((f) => f.location)).toEqual(['A']);
       expect(result.forecasts[0].current_conditions).toBeNull();
     });
 
@@ -1296,7 +1296,7 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithWeather.getTodaysSummary();
       expect(result.forecast).toHaveLength(1);
-      expect(result.forecast[0].location).toBe('Boise,Idaho,US');
+      expect(result.forecast[0].location).toBe('Boise');
     });
 
     it("getTodaysSummary forecast is [] when Google Weather isn't configured", async () => {
@@ -1397,7 +1397,7 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithAirQuality.getTodaysForecast();
       const fc = result.forecasts[0];
-      expect(fc.location).toBe('Moose,Wyoming,US');
+      expect(fc.location).toBe('Moose');
       expect(fc.current_conditions?.air_quality).toBeUndefined();
       expect(fc.hourly_forecast[0].air_quality).toBeUndefined();
       // Weather data is still present
@@ -1519,7 +1519,7 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithPollen.getTodaysForecast();
       const fc = result.forecasts[0];
-      expect(fc.location).toBe('Moose,Wyoming,US');
+      expect(fc.location).toBe('Moose');
       expect(fc.pollen).toBeUndefined();
       expect(fc.current_conditions?.temperature).toBe('4.1 °C');
     });

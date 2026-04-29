@@ -1252,7 +1252,7 @@ export interface WeatherAlert {
  * Forecast for a single location, assembled from Google Weather responses.
  */
 export interface LocationForecast {
-  /** Full location string from the athlete's weather config (e.g., "Moose,Wyoming,US") */
+  /** Human-readable label for this location from the athlete's Intervals.icu weather config (e.g., "Home", "Moose") */
   location: string;
   latitude: number;
   longitude: number;
