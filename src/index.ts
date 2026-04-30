@@ -22,6 +22,7 @@ async function main() {
     console.log(`Google Pollen: ${config.googlePollen ? 'configured' : 'not configured'}`);
     console.log(`Google Elevation: ${config.googleElevation ? 'configured' : 'not configured'}`);
     console.log(`Google Geocoding: ${config.googleGeocoding ? 'configured' : 'not configured'}`);
+    console.log(`Google Time Zone: ${config.googleTimezone ? 'configured' : 'not configured'}`);
 
     await startServer({ port: config.port });
   } catch (error) {

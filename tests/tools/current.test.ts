@@ -8,6 +8,7 @@ import { GoogleAirQualityClient } from '../../src/clients/google-air-quality.js'
 import { GooglePollenClient } from '../../src/clients/google-pollen.js';
 import { GoogleElevationClient } from '../../src/clients/google-elevation.js';
 import { GoogleGeocodingClient } from '../../src/clients/google-geocoding.js';
+import { GoogleTimezoneClient } from '../../src/clients/google-timezone.js';
 import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
@@ -19,6 +20,7 @@ vi.mock('../../src/clients/google-air-quality.js');
 vi.mock('../../src/clients/google-pollen.js');
 vi.mock('../../src/clients/google-elevation.js');
 vi.mock('../../src/clients/google-geocoding.js');
+vi.mock('../../src/clients/google-timezone.js');
 
 describe('CurrentTools', () => {
   let tools: CurrentTools;
@@ -1222,16 +1224,19 @@ describe('CurrentTools', () => {
       expect(fc.location).toBe('Moose');
       expect(fc.current_conditions?.condition).toBe('Mostly clear');
       expect(fc.current_conditions?.temperature).toBe('4.1 °C');
-      // Hourly should only contain the one future hour for today
-      expect(fc.hourly_forecast.map((h) => h.forecast_start)).toEqual(['2026-04-28T20:00:00Z']);
-      // Alerts pass through with the slimmed shape
+      // Hourly should only contain the one future hour for today.
+      // Without a Time Zone client, the location's tz falls back to the
+      // athlete's tz (America/Boise = MDT, UTC-6). 20:00 UTC = 14:00 MDT.
+      expect(fc.hourly_forecast).toHaveLength(1);
+      expect(fc.hourly_forecast[0].forecast_start).toMatch(/at 2:00 PM MDT$/);
+      // Alerts pass through with the slimmed shape; datetimes pre-formatted.
       expect(fc.alerts).toEqual([
         {
           title: 'Freeze Warning',
           description: 'Freezing temperatures expected.',
           severity: 'MODERATE',
-          start_time: '2026-04-29T00:00:00Z',
-          expiration_time: '2026-04-29T12:00:00Z',
+          start_time: 'Tuesday, April 28, 2026 at 6:00 PM MDT', // 2026-04-29T00:00 UTC = 18:00 MDT prior day
+          expiration_time: 'Wednesday, April 29, 2026 at 6:00 AM MDT',
           source: 'National Weather Service',
         },
       ]);
@@ -1563,8 +1568,10 @@ describe('CurrentTools', () => {
 
       expect(mockGoogleWeatherClient.getDailyForecast).toHaveBeenCalledWith(43.65, -110.71);
       const fc = result.forecasts[0];
-      expect(fc.sunrise).toBe('2026-04-28T12:30:00Z');
-      expect(fc.sunset).toBe('2026-04-29T02:15:00Z');
+      // Pre-formatted in the location's tz (Boise = MDT, UTC-6 in DST).
+      // 12:30 UTC = 06:30 MDT; 02:15 UTC next day = 20:15 MDT today.
+      expect(fc.sunrise).toMatch(/at 6:30 AM MDT$/);
+      expect(fc.sunset).toMatch(/at 8:15 PM MDT$/);
     });
 
     it('keeps the forecast when the daily forecast call fails', async () => {
@@ -1796,11 +1803,11 @@ describe('CurrentTools', () => {
         // - 2026-04-30T18:00Z = 12:00 local (keep)
         // - 2026-05-01T04:00Z = 22:00 local same day (keep)
         // - 2026-05-01T13:00Z = 07:00 local next day (drop)
-        expect(fc.hourly_forecast.map((h) => h.forecast_start)).toEqual([
-          '2026-04-30T06:00:00Z',
-          '2026-04-30T18:00:00Z',
-          '2026-05-01T04:00:00Z',
-        ]);
+        // forecast_start is pre-formatted in the location's tz.
+        expect(fc.hourly_forecast).toHaveLength(3);
+        expect(fc.hourly_forecast[0].forecast_start).toMatch(/at 12:00 AM MDT$/);
+        expect(fc.hourly_forecast[1].forecast_start).toMatch(/at 12:00 PM MDT$/);
+        expect(fc.hourly_forecast[2].forecast_start).toMatch(/at 10:00 PM MDT$/);
         expect(fc.daily_summary?.condition).toBe('Mostly sunny');
         expect(fc.daily_summary?.temperature_max).toBe('22.5 °C');
         expect(fc.daily_summary?.temperature_min).toBe('8.1 °C');
@@ -1901,10 +1908,117 @@ describe('CurrentTools', () => {
         });
 
         const result = await tools.getForecast();
-        expect(result.forecasts[0].hourly_forecast.map((h) => h.forecast_start)).toEqual([
-          '2026-04-28T20:00:00Z',
-          '2026-04-29T04:00:00Z',
+        // Pre-formatted in the location's tz (Boise = MDT, UTC-6 in DST).
+        // 20:00 UTC = 14:00 MDT same day; 04:00 UTC next day = 22:00 MDT same day.
+        const fc = result.forecasts[0];
+        expect(fc.hourly_forecast).toHaveLength(2);
+        expect(fc.hourly_forecast[0].forecast_start).toMatch(/at 2:00 PM MDT$/);
+        expect(fc.hourly_forecast[1].forecast_start).toMatch(/at 10:00 PM MDT$/);
+      });
+
+      it('uses the geocoded location\'s timezone for hour filtering and formatting (NYC athlete asks for SF)', async () => {
+        // Athlete tz is America/Boise (set in parent beforeEach), but this
+        // test simulates the cross-tz case: the geocoded location is in SF,
+        // and the timezone client resolves PT for it. Hours filtered to the
+        // SF local date and rendered in PDT.
+        const mockTz = new GoogleTimezoneClient({ apiKey: 'k' });
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient,
+          null,
+          null,
+          null,
+          mockGoogleGeocodingClient,
+          mockTz
+        );
+        vi.mocked(mockGoogleGeocodingClient.geocode).mockResolvedValue({
+          formattedAddress: 'San Francisco, CA, USA',
+          latitude: 37.7749,
+          longitude: -122.4194,
+        });
+        vi.mocked(mockTz.getTimezone).mockResolvedValue('America/Los_Angeles');
+        vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-04-30'));
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({
+          forecastHours: [
+            // 2026-04-30 in SF (PDT, UTC-7) = 2026-04-30T07:00Z..2026-05-01T06:59Z
+            { interval: { startTime: '2026-04-30T07:00:00Z' }, temperature: { degrees: 8, unit: 'CELSIUS' } },  // 00:00 PDT
+            { interval: { startTime: '2026-04-30T18:00:00Z' }, temperature: { degrees: 18, unit: 'CELSIUS' } }, // 11:00 PDT
+            { interval: { startTime: '2026-05-01T06:00:00Z' }, temperature: { degrees: 11, unit: 'CELSIUS' } }, // 23:00 PDT — the hour that was missing under MDT filtering
+            // Different SF date — should be filtered out
+            { interval: { startTime: '2026-05-01T07:00:00Z' }, temperature: { degrees: 5, unit: 'CELSIUS' } },
+          ],
+        });
+
+        const result = await tools.getForecast({ date: '2026-04-30', location: 'San Francisco, CA' });
+
+        expect(mockTz.getTimezone).toHaveBeenCalledWith(37.7749, -122.4194);
+        expect(result.forecasts).toHaveLength(1);
+        const fc = result.forecasts[0];
+        // All three SF-local hours of 2026-04-30 are kept; tz-incorrect filter would have dropped the 23:00 PDT entry.
+        expect(fc.hourly_forecast).toHaveLength(3);
+        expect(fc.hourly_forecast[0].forecast_start).toMatch(/at 12:00 AM PDT$/);
+        expect(fc.hourly_forecast[1].forecast_start).toMatch(/at 11:00 AM PDT$/);
+        expect(fc.hourly_forecast[2].forecast_start).toMatch(/at 11:00 PM PDT$/);
+      });
+
+      it('also resolves timezones for Intervals.icu locations (no location arg)', async () => {
+        const mockTz = new GoogleTimezoneClient({ apiKey: 'k' });
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient,
+          null,
+          null,
+          null,
+          null,
+          mockTz
+        );
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'Tokyo office', latitude: 35.6762, longitude: 139.6503, location: 'Tokyo,Japan' },
         ]);
+        vi.mocked(mockTz.getTimezone).mockResolvedValue('Asia/Tokyo');
+        vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
+        vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue({ weatherAlerts: [] });
+
+        const result = await tools.getForecast();
+
+        expect(mockTz.getTimezone).toHaveBeenCalledWith(35.6762, 139.6503);
+        expect(result.forecasts).toHaveLength(1);
+        // System time is 2026-04-28T14:49:34Z. In Tokyo (UTC+9) that's 23:49
+        // local; in the athlete's tz (Boise, MDT, UTC-6) it's 08:49 local.
+        // Confirm `as_of` is rendered in Tokyo time (the location's tz), not Boise.
+        expect(result.forecasts[0].current_conditions?.as_of).toMatch(/at 11:49 PM/);
+      });
+
+      it('falls back to athlete tz when timezone lookup fails for a location', async () => {
+        const mockTz = new GoogleTimezoneClient({ apiKey: 'k' });
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient,
+          null,
+          null,
+          null,
+          null,
+          mockTz
+        );
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'Boise', latitude: 0, longitude: 0, location: 'Boise,Idaho,US' },
+        ]);
+        vi.mocked(mockTz.getTimezone).mockRejectedValue(new Error('tz boom'));
+        vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
+        vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue({ weatherAlerts: [] });
+
+        const result = await tools.getForecast();
+        expect(result.forecasts).toHaveLength(1);
+        // Falls back to athlete tz (America/Boise = MDT) for the response formatting.
+        expect(result.forecasts[0].current_conditions?.as_of).toMatch(/MDT$/);
       });
     });
   });

@@ -20,6 +20,8 @@ import type { GooglePollenForecastResponse } from '../../src/clients/google-poll
 import type { GoogleElevationResponse } from '../../src/clients/google-elevation.js';
 
 describe('transformCurrentConditions', () => {
+  const tz = 'America/Boise';
+
   it('formats every value-with-unit field from Google into our flat shape', () => {
     const result = transformCurrentConditions({
       currentTime: '2025-01-28T22:04:12.025273178Z',
@@ -48,10 +50,12 @@ describe('transformCurrentConditions', () => {
       },
       visibility: { distance: 16, unit: 'KILOMETERS' },
       cloudCover: 0,
-    });
+    }, tz);
 
-    expect(result).toEqual({
-      as_of: '2025-01-28T22:04:12.025273178Z',
+    // `as_of` is pre-formatted in the location's tz so it doesn't get
+    // re-formatted (in the wrong tz) by the response-level formatter.
+    expect(result?.as_of).toMatch(/at .* MST$/);
+    expect(result).toMatchObject({
       condition: 'Sunny',
       daylight: true,
       cloud_cover: '0%',
@@ -75,7 +79,7 @@ describe('transformCurrentConditions', () => {
   });
 
   it('returns null when input is undefined', () => {
-    expect(transformCurrentConditions(undefined)).toBe(null);
+    expect(transformCurrentConditions(undefined, tz)).toBe(null);
   });
 
   it('derives the cardinal abbreviation from degrees when Google omits the cardinal', () => {
@@ -95,7 +99,7 @@ describe('transformCurrentConditions', () => {
     for (const [degrees, expected] of cases) {
       const result = transformCurrentConditions({
         wind: { direction: { degrees } },
-      });
+      }, tz);
       expect(result?.wind_direction).toBe(expected);
     }
   });
@@ -103,7 +107,7 @@ describe('transformCurrentConditions', () => {
   it('converts Fahrenheit responses to Celsius before formatting', () => {
     const result = transformCurrentConditions({
       temperature: { degrees: 50, unit: 'FAHRENHEIT' },
-    });
+    }, tz);
     expect(result?.temperature).toBe('10.0 °C');
   });
 
@@ -111,7 +115,7 @@ describe('transformCurrentConditions', () => {
     const result = transformCurrentConditions({
       currentTime: '2025-01-28T22:04:12Z',
       weatherCondition: { description: { text: 'Sunny' } },
-    });
+    }, tz);
     expect(result?.condition).toBe('Sunny');
     expect(result?.temperature).toBeUndefined();
     expect(result?.wind_speed).toBeUndefined();
@@ -120,6 +124,8 @@ describe('transformCurrentConditions', () => {
 });
 
 describe('transformForecastHour', () => {
+  const tz = 'America/Boise';
+
   it('formats an hour entry with all unit-bearing fields', () => {
     const hour: GoogleForecastHour = {
       interval: {
@@ -149,9 +155,12 @@ describe('transformForecastHour', () => {
       visibility: { distance: 16, unit: 'KILOMETERS' },
       cloudCover: 0,
     };
-    const result = transformForecastHour(hour);
-    expect(result.forecast_start).toBe('2025-02-05T23:00:00Z');
-    expect(result.forecast_end).toBe('2025-02-06T00:00:00Z');
+    const result = transformForecastHour(hour, tz);
+    // forecast_start/end are pre-formatted in the location's tz so the
+    // response-level formatter (which only knows the athlete's tz) leaves
+    // them alone. Expect a human-readable string with the location's tz abbr.
+    expect(result.forecast_start).toMatch(/at 4:00 PM MST$/); // 23:00 UTC = 16:00 MST
+    expect(result.forecast_end).toMatch(/at 5:00 PM MST$/);
     expect(result.condition).toBe('Sunny');
     expect(result.daylight).toBe(true);
     expect(result.temperature).toBe('12.7 °C');
@@ -302,18 +311,20 @@ describe('assembleLocationForecast', () => {
       wind_speed: '12.1 km/h',
     });
 
-    expect(result.hourly_forecast.map((h) => h.forecast_start)).toEqual([
-      '2026-04-28T14:00:00Z', // in-progress hour
-      '2026-04-28T20:00:00Z',
-    ]);
+    // Hourly entries — forecast_start is pre-formatted in the location's tz
+    // (Boise = MDT, UTC-6 in DST). Verify the underlying mapping is right by
+    // checking the local-clock hour, not the raw ISO.
+    expect(result.hourly_forecast).toHaveLength(2);
+    expect(result.hourly_forecast[0].forecast_start).toMatch(/at 8:00 AM MDT$/);  // 14:00 UTC = 08:00 MDT
+    expect(result.hourly_forecast[1].forecast_start).toMatch(/at 2:00 PM MDT$/);  // 20:00 UTC = 14:00 MDT
 
     expect(result.alerts).toEqual([
       {
         title: 'Freeze Watch',
         description: 'Temperatures dropping below freezing tonight.',
         severity: 'MODERATE',
-        start_time: '2026-04-29T00:00:00Z',
-        expiration_time: '2026-04-29T12:00:00Z',
+        start_time: 'Tuesday, April 28, 2026 at 6:00 PM MDT', // 2026-04-29T00:00 UTC = 18:00 MDT prior day
+        expiration_time: 'Wednesday, April 29, 2026 at 6:00 AM MDT', // 12:00 UTC = 06:00 MDT
         source: 'National Weather Service',
       },
     ]);
@@ -526,8 +537,10 @@ describe('assembleLocationForecast', () => {
         daily
       );
 
-      expect(result.sunrise).toBe('2026-04-28T12:30:00.123Z');
-      expect(result.sunset).toBe('2026-04-29T02:15:00.456Z');
+      // Pre-formatted in the location's tz (Boise = MDT, UTC-6 in DST).
+      // 12:30 UTC = 06:30 MDT; 02:15 UTC next day = 20:15 MDT today.
+      expect(result.sunrise).toMatch(/at 6:30 AM MDT$/);
+      expect(result.sunset).toMatch(/at 8:15 PM MDT$/);
     });
 
     it("omits sunrise/sunset when no daily entry matches today in the athlete's timezone", () => {

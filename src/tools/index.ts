@@ -10,6 +10,7 @@ import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
 import { GooglePollenClient } from '../clients/google-pollen.js';
 import { GoogleElevationClient } from '../clients/google-elevation.js';
 import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
+import { GoogleTimezoneClient } from '../clients/google-timezone.js';
 import { CurrentTools } from './current.js';
 
 // Common annotation presets for tool categories. All four hints are set
@@ -207,6 +208,7 @@ export interface ToolsConfig {
   googlePollen?: { apiKey: string } | null;
   googleElevation?: { apiKey: string } | null;
   googleGeocoding?: { apiKey: string } | null;
+  googleTimezone?: { apiKey: string } | null;
 }
 
 export class ToolRegistry {
@@ -245,6 +247,9 @@ export class ToolRegistry {
     const googleGeocodingClient = config.googleGeocoding
       ? new GoogleGeocodingClient(config.googleGeocoding)
       : null;
+    const googleTimezoneClient = config.googleTimezone
+      ? new GoogleTimezoneClient(config.googleTimezone)
+      : null;
     this.hasWhoop = whoopClient !== null;
     this.hasTrainerRoad = trainerroadClient !== null;
     this.hasLastFm = lastfmClient !== null;
@@ -271,7 +276,8 @@ export class ToolRegistry {
       googleAirQualityClient,
       googlePollenClient,
       googleElevationClient,
-      googleGeocodingClient
+      googleGeocodingClient,
+      googleTimezoneClient
     );
     this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);

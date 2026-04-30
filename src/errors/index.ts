@@ -32,7 +32,7 @@ export interface ErrorContext {
 /**
  * Source of the error - which API or component caused it.
  */
-export type ErrorSource = 'intervals' | 'whoop' | 'trainerroad' | 'lastfm' | 'google-weather' | 'google-air-quality' | 'google-pollen' | 'google-elevation' | 'google-geocoding' | 'date_parser';
+export type ErrorSource = 'intervals' | 'whoop' | 'trainerroad' | 'lastfm' | 'google-weather' | 'google-air-quality' | 'google-pollen' | 'google-elevation' | 'google-geocoding' | 'google-timezone' | 'date_parser';
 
 /**
  * Base error class for all API and tool errors.

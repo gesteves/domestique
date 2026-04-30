@@ -6,6 +6,7 @@ import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
 import { GooglePollenClient } from '../clients/google-pollen.js';
 import { GoogleElevationClient } from '../clients/google-elevation.js';
 import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
+import { GoogleTimezoneClient } from '../clients/google-timezone.js';
 import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
@@ -50,23 +51,46 @@ export class CurrentTools {
     private googleAirQuality: GoogleAirQualityClient | null = null,
     private googlePollen: GooglePollenClient | null = null,
     private googleElevation: GoogleElevationClient | null = null,
-    private googleGeocoding: GoogleGeocodingClient | null = null
+    private googleGeocoding: GoogleGeocodingClient | null = null,
+    private googleTimezone: GoogleTimezoneClient | null = null
   ) {}
 
   /**
-   * Build today's per-location weather forecast for every enabled location in
-   * the athlete's Intervals.icu weather config. Returns [] when Google Weather
-   * is not configured or there are no enabled locations. Per-location failures
-   * are logged and skipped — one bad location doesn't suppress the others.
-   *
-   * For each location we issue the Google Weather calls (current conditions,
-   * hourly forecast, public alerts, daily forecast for sun events) plus
-   * Google Air Quality calls (current AQI, hourly AQI), the Google Pollen
-   * call (today's pollen forecast), and the Google Elevation call in parallel
-   * and let any one of them fail independently — a missing alerts feed, AQI,
-   * sun events, pollen, or elevation shouldn't suppress the forecast itself.
+   * Resolve a base location list (label/lat/lng) into a list with each
+   * location's IANA timezone attached. Falls back to `fallbackTimezone` when
+   * the Time Zone client is missing or a per-location lookup fails — better
+   * to surface a forecast in the wrong tz than to fail the whole request.
    */
-  private async buildForecasts(timezone: string, now: Date): Promise<LocationForecast[]> {
+  private async resolveLocationTimezones(
+    locations: { label: string; latitude: number; longitude: number }[],
+    fallbackTimezone: string
+  ): Promise<{ label: string; latitude: number; longitude: number; timezone: string }[]> {
+    const tzClient = this.googleTimezone;
+    if (!tzClient) {
+      return locations.map((loc) => ({ ...loc, timezone: fallbackTimezone }));
+    }
+    return Promise.all(
+      locations.map(async (loc) => {
+        try {
+          const timezone = await tzClient.getTimezone(loc.latitude, loc.longitude);
+          return { ...loc, timezone };
+        } catch (e) {
+          console.error(`Error resolving timezone for "${loc.label}":`, e);
+          return { ...loc, timezone: fallbackTimezone };
+        }
+      })
+    );
+  }
+
+  /**
+   * Build today's per-location weather forecast for every enabled Intervals.icu
+   * weather location. Returns [] when Google Weather is not configured or there
+   * are no enabled locations. Used by `getTodaysSummary`'s embedded forecast.
+   */
+  private async buildForecasts(
+    fallbackTimezone: string,
+    now: Date
+  ): Promise<LocationForecast[]> {
     if (!this.googleWeather) return [];
 
     let enabled: Awaited<ReturnType<IntervalsClient['getEnabledWeatherLocations']>>;
@@ -77,30 +101,31 @@ export class CurrentTools {
       return [];
     }
 
-    return this.buildForecastsForLocations(
-      timezone,
-      now,
+    const withTz = await this.resolveLocationTimezones(
       enabled.map((loc) => ({
         label: loc.label,
         latitude: loc.latitude,
         longitude: loc.longitude,
-      }))
+      })),
+      fallbackTimezone
     );
+
+    const results = await Promise.all(
+      withTz.map((loc) => this.buildOneTodayForecast(loc, now))
+    );
+    return results.filter((r): r is LocationForecast => r !== null);
   }
 
   /**
-   * Build today's per-location forecasts for an explicit set of locations.
-   * Extracted from {@link buildForecasts} so the unified `getForecast` tool
-   * can reuse it for both Intervals.icu locations and a single geocoded
-   * location.
+   * Fetch all data for a single location and assemble today's forecast for it,
+   * using the location's local timezone for date filtering and per-location
+   * datetime formatting. Per-API failures are isolated and logged.
    */
-  private async buildForecastsForLocations(
-    timezone: string,
-    now: Date,
-    locations: { label: string; latitude: number; longitude: number }[]
-  ): Promise<LocationForecast[]> {
-    if (!this.googleWeather) return [];
-
+  private async buildOneTodayForecast(
+    loc: { label: string; latitude: number; longitude: number; timezone: string },
+    now: Date
+  ): Promise<LocationForecast | null> {
+    if (!this.googleWeather) return null;
     const gw = this.googleWeather;
     const aq = this.googleAirQuality;
     const pollen = this.googlePollen;
@@ -109,205 +134,189 @@ export class CurrentTools {
     // surfaces; the AQ API computes the window from its own "now."
     const aqHours = 24;
 
-    const results = await Promise.all(
-      locations.map(async (loc) => {
-        try {
-          const [current, hourly, alerts, daily, currentAq, hourlyAq, pollenForecast, elevation] = await Promise.all([
-            gw.getCurrentConditions(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching current conditions for "${loc.label}":`, e);
+    try {
+      const [current, hourly, alerts, daily, currentAq, hourlyAq, pollenForecast, elevation] = await Promise.all([
+        gw.getCurrentConditions(loc.latitude, loc.longitude).catch((e) => {
+          console.error(`Error fetching current conditions for "${loc.label}":`, e);
+          return undefined;
+        }),
+        gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
+          console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
+          return undefined;
+        }),
+        gw.getWeatherAlerts(loc.latitude, loc.longitude).catch((e) => {
+          console.error(`Error fetching weather alerts for "${loc.label}":`, e);
+          return undefined;
+        }),
+        gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
+          console.error(`Error fetching daily forecast for "${loc.label}":`, e);
+          return undefined;
+        }),
+        aq
+          ? aq.getCurrentAirQuality(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching current air quality for "${loc.label}":`, e);
               return undefined;
-            }),
-            gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
+            })
+          : Promise.resolve(undefined),
+        aq
+          ? aq
+              .getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHours)
+              .catch((e) => {
+                console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
+                return undefined;
+              })
+          : Promise.resolve(undefined),
+        pollen
+          ? pollen.getPollenForecast(loc.latitude, loc.longitude, 1).catch((e) => {
+              console.error(`Error fetching pollen forecast for "${loc.label}":`, e);
               return undefined;
-            }),
-            gw.getWeatherAlerts(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching weather alerts for "${loc.label}":`, e);
+            })
+          : Promise.resolve(undefined),
+        elev
+          ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching elevation for "${loc.label}":`, e);
               return undefined;
-            }),
-            gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching daily forecast for "${loc.label}":`, e);
-              return undefined;
-            }),
-            aq
-              ? aq.getCurrentAirQuality(loc.latitude, loc.longitude).catch((e) => {
-                  console.error(`Error fetching current air quality for "${loc.label}":`, e);
-                  return undefined;
-                })
-              : Promise.resolve(undefined),
-            aq
-              ? aq
-                  .getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHours)
-                  .catch((e) => {
-                    console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
-                    return undefined;
-                  })
-              : Promise.resolve(undefined),
-            pollen
-              ? pollen.getPollenForecast(loc.latitude, loc.longitude, 1).catch((e) => {
-                  console.error(`Error fetching pollen forecast for "${loc.label}":`, e);
-                  return undefined;
-                })
-              : Promise.resolve(undefined),
-            elev
-              ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
-                  console.error(`Error fetching elevation for "${loc.label}":`, e);
-                  return undefined;
-                })
-              : Promise.resolve(undefined),
-          ]);
-          return assembleLocationForecast(
-            loc.label,
-            loc.latitude,
-            loc.longitude,
-            current,
-            hourly,
-            alerts,
-            timezone,
-            now,
-            currentAq,
-            hourlyAq,
-            pollenForecast,
-            daily,
-            elevation
-          );
-        } catch (e) {
-          console.error(`Error fetching forecast for "${loc.label}":`, e);
-          return null;
-        }
-      })
-    );
-    return results.filter((r): r is LocationForecast => r !== null);
+            })
+          : Promise.resolve(undefined),
+      ]);
+      return assembleLocationForecast(
+        loc.label,
+        loc.latitude,
+        loc.longitude,
+        current,
+        hourly,
+        alerts,
+        loc.timezone,
+        now,
+        currentAq,
+        hourlyAq,
+        pollenForecast,
+        daily,
+        elevation
+      );
+    } catch (e) {
+      console.error(`Error fetching forecast for "${loc.label}":`, e);
+      return null;
+    }
   }
 
   /**
-   * Build per-location forecasts for a future date. Differs from
-   * {@link buildForecasts} in that it skips current-conditions and alerts
-   * (both inherently near-term), gates the Pollen and Air Quality calls on
-   * their respective day-limits, and fills the full 24-hour day rather than
-   * just the rest of today.
+   * Fetch all data for a single location and assemble a future-date forecast
+   * for it. The Pollen and Air Quality calls are gated on their respective
+   * forecast windows. Per-API failures are isolated and logged.
    */
-  private async buildFutureForecasts(
-    timezone: string,
+  private async buildOneFutureForecast(
+    loc: { label: string; latitude: number; longitude: number; timezone: string },
     today: string,
-    targetDate: string,
-    locations: { label: string; latitude: number; longitude: number }[]
-  ): Promise<LocationForecast[]> {
-    if (!this.googleWeather) return [];
+    targetDate: string
+  ): Promise<LocationForecast | null> {
+    if (!this.googleWeather) return null;
     const dayOffset = daysBetweenYMD(today, targetDate);
     const fetchPollen = this.googlePollen && dayOffset >= 0 && dayOffset < MAX_POLLEN_FORECAST_DAYS;
     // The AQ hourly endpoint returns the next N hours from "now" (max 96).
     // To cover all hours of the target date, the date must be no further than
     // (96h / 24h) - 1 = 3 days out: at the latest "now" the 96h window still
     // reaches the end of today+3.
-    const fetchAirQuality =
-      this.googleAirQuality && dayOffset >= 0 && dayOffset <= 3;
+    const fetchAirQuality = this.googleAirQuality && dayOffset >= 0 && dayOffset <= 3;
 
     const gw = this.googleWeather;
     const aq = this.googleAirQuality;
     const pollen = this.googlePollen;
     const elev = this.googleElevation;
 
-    const results = await Promise.all(
-      locations.map(async (loc) => {
-        try {
-          const [hourly, daily, hourlyAq, pollenForecast, elevation] = await Promise.all([
-            gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
+    try {
+      const [hourly, daily, hourlyAq, pollenForecast, elevation] = await Promise.all([
+        gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
+          console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
+          return undefined;
+        }),
+        gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
+          console.error(`Error fetching daily forecast for "${loc.label}":`, e);
+          return undefined;
+        }),
+        fetchAirQuality && aq
+          ? aq
+              .getHourlyAirQualityForecast(
+                loc.latitude,
+                loc.longitude,
+                MAX_AIR_QUALITY_FORECAST_HOURS
+              )
+              .catch((e) => {
+                console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
+                return undefined;
+              })
+          : Promise.resolve(undefined),
+        fetchPollen && pollen
+          ? pollen
+              .getPollenForecast(loc.latitude, loc.longitude, dayOffset + 1)
+              .catch((e) => {
+                console.error(`Error fetching pollen forecast for "${loc.label}":`, e);
+                return undefined;
+              })
+          : Promise.resolve(undefined),
+        elev
+          ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching elevation for "${loc.label}":`, e);
               return undefined;
-            }),
-            gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching daily forecast for "${loc.label}":`, e);
-              return undefined;
-            }),
-            fetchAirQuality && aq
-              ? aq
-                  .getHourlyAirQualityForecast(
-                    loc.latitude,
-                    loc.longitude,
-                    MAX_AIR_QUALITY_FORECAST_HOURS
-                  )
-                  .catch((e) => {
-                    console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
-                    return undefined;
-                  })
-              : Promise.resolve(undefined),
-            fetchPollen && pollen
-              ? pollen
-                  .getPollenForecast(loc.latitude, loc.longitude, dayOffset + 1)
-                  .catch((e) => {
-                    console.error(`Error fetching pollen forecast for "${loc.label}":`, e);
-                    return undefined;
-                  })
-              : Promise.resolve(undefined),
-            elev
-              ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
-                  console.error(`Error fetching elevation for "${loc.label}":`, e);
-                  return undefined;
-                })
-              : Promise.resolve(undefined),
-          ]);
-          return assembleFutureLocationForecast(
-            loc.label,
-            loc.latitude,
-            loc.longitude,
-            targetDate,
-            hourly,
-            daily,
-            timezone,
-            hourlyAq,
-            pollenForecast,
-            elevation
-          );
-        } catch (e) {
-          console.error(`Error fetching forecast for "${loc.label}":`, e);
-          return null;
-        }
-      })
-    );
-    return results.filter((r): r is LocationForecast => r !== null);
+            })
+          : Promise.resolve(undefined),
+      ]);
+      return assembleFutureLocationForecast(
+        loc.label,
+        loc.latitude,
+        loc.longitude,
+        targetDate,
+        hourly,
+        daily,
+        loc.timezone,
+        hourlyAq,
+        pollenForecast,
+        elevation
+      );
+    } catch (e) {
+      console.error(`Error fetching forecast for "${loc.label}":`, e);
+      return null;
+    }
   }
 
   /**
    * Get the weather forecast for a date and (optionally) a location. Defaults
-   * to today and the enabled Intervals.icu weather locations.
+   * to today and the user's configured weather locations.
    *
-   * - When `args.location` is provided, the string is geocoded (Google
-   *   Geocoding API, top result silently used) and the forecast is for that
-   *   single resolved location. The response surfaces the resolved address
-   *   in the per-location `location` field.
-   * - When `args.date` is today, the response includes current conditions,
-   *   active alerts, and pollen/AQI populated as in the prior
-   *   `get_todays_forecast` behavior. For future dates, current conditions
-   *   and alerts are omitted; pollen and hourly AQI are included only when
-   *   the date is within the respective API's forecast window.
+   * Each location is forecast in **its own** timezone — so "today" and
+   * "tomorrow" mean the location's day, hourly entries are filtered to the
+   * location's local date, and per-location datetime fields are formatted in
+   * the location's tz. The top-level `current_time` stays in the athlete's
+   * timezone.
    *
    * Date input accepts ISO YYYY-MM-DD or natural-language strings (e.g.,
    * "tomorrow", "in 3 days"). The resolved date must be within today through
-   * today+10 (Google Weather's 10-day forecast window).
+   * today+10 in each location's tz.
    */
   async getForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {
-    const timezone = await this.intervals.getAthleteTimezone();
-    const currentDateTime = getCurrentTimeInTimezone(timezone);
-    const today = getTodayInTimezone(timezone);
+    const athleteTimezone = await this.intervals.getAthleteTimezone();
+    const currentDateTime = getCurrentTimeInTimezone(athleteTimezone);
 
     if (!this.googleWeather) {
       return { current_time: currentDateTime, forecasts: [] };
     }
 
-    const targetDate = args.date
-      ? parseDateStringInTimezone(args.date, timezone, 'date')
-      : today;
-
-    const dayOffset = daysBetweenYMD(today, targetDate);
-    if (dayOffset < 0 || dayOffset > MAX_FORECAST_DAYS) {
-      const maxDate = addDaysToYMD(today, MAX_FORECAST_DAYS);
-      throw new Error(
-        `Forecast date ${targetDate} is outside the supported window (${today} through ${maxDate}). Google Weather supports up to ${MAX_FORECAST_DAYS}-day forecasts.`
-      );
+    // Upfront sanity check on `args.date` using the athlete's tz, so a clearly
+    // out-of-range date fails fast before we incur location/geocoding/timezone
+    // calls. Per-location validation runs again later in each location's tz.
+    if (args.date) {
+      const todayInAthleteTz = getTodayInTimezone(athleteTimezone);
+      const targetInAthleteTz = parseDateStringInTimezone(args.date, athleteTimezone, 'date');
+      const offset = daysBetweenYMD(todayInAthleteTz, targetInAthleteTz);
+      if (offset < 0 || offset > MAX_FORECAST_DAYS) {
+        const maxDate = addDaysToYMD(todayInAthleteTz, MAX_FORECAST_DAYS);
+        throw new Error(
+          `Forecast date ${targetInAthleteTz} is outside the supported window (${todayInAthleteTz} through ${maxDate}). The forecast covers up to ${MAX_FORECAST_DAYS} days from today.`
+        );
+      }
     }
 
-    let locations: { label: string; latitude: number; longitude: number }[];
+    let baseLocations: { label: string; latitude: number; longitude: number }[];
     if (args.location) {
       if (!this.googleGeocoding) {
         throw new Error(
@@ -315,7 +324,7 @@ export class CurrentTools {
         );
       }
       const resolved = await this.googleGeocoding.geocode(args.location);
-      locations = [
+      baseLocations = [
         {
           label: resolved.formattedAddress,
           latitude: resolved.latitude,
@@ -325,7 +334,7 @@ export class CurrentTools {
     } else {
       try {
         const enabled = await this.intervals.getEnabledWeatherLocations();
-        locations = enabled.map((loc) => ({
+        baseLocations = enabled.map((loc) => ({
           label: loc.label,
           latitude: loc.latitude,
           longitude: loc.longitude,
@@ -336,15 +345,36 @@ export class CurrentTools {
       }
     }
 
-    if (locations.length === 0) {
+    if (baseLocations.length === 0) {
       return { current_time: currentDateTime, forecasts: [] };
     }
 
-    const forecasts =
-      dayOffset === 0
-        ? await this.buildForecastsForLocations(timezone, new Date(), locations)
-        : await this.buildFutureForecasts(timezone, today, targetDate, locations);
+    const locations = await this.resolveLocationTimezones(baseLocations, athleteTimezone);
+    const now = new Date();
 
+    // Per-location: parse `args.date` (or default "today") in the location's
+    // own tz, validate against the location's [today, today+10] window, and
+    // dispatch to the today or future builder.
+    const results = await Promise.all(
+      locations.map(async (loc) => {
+        const todayInLoc = getTodayInTimezone(loc.timezone);
+        const targetDate = args.date
+          ? parseDateStringInTimezone(args.date, loc.timezone, 'date')
+          : todayInLoc;
+        const dayOffset = daysBetweenYMD(todayInLoc, targetDate);
+        if (dayOffset < 0 || dayOffset > MAX_FORECAST_DAYS) {
+          const maxDate = addDaysToYMD(todayInLoc, MAX_FORECAST_DAYS);
+          throw new Error(
+            `Forecast date ${targetDate} is outside the supported window (${todayInLoc} through ${maxDate}) for "${loc.label}". The forecast covers up to ${MAX_FORECAST_DAYS} days from today.`
+          );
+        }
+        return dayOffset === 0
+          ? this.buildOneTodayForecast(loc, now)
+          : this.buildOneFutureForecast(loc, todayInLoc, targetDate);
+      })
+    );
+
+    const forecasts = results.filter((r): r is LocationForecast => r !== null);
     return { current_time: currentDateTime, forecasts };
   }
 

@@ -1,5 +1,6 @@
 import { formatInTimeZone } from 'date-fns-tz';
 import { formatTemperature, formatPercent, formatLength, withUnit } from './format-units.js';
+import { formatDateTimeHumanReadable } from './date-formatting.js';
 import type {
   GoogleCurrentConditionsResponse,
   GoogleDailyForecastResponse,
@@ -328,6 +329,16 @@ function indexHourlyAirQuality(
   return map;
 }
 
+/** Pre-format an ISO datetime in the location's tz to a human-readable string,
+ * skipping the recursive response formatter (which only knows the athlete's tz).
+ * Returns undefined for missing/invalid input. */
+function formatLocalDateTime(iso: string | undefined, locationTimezone: string): string | undefined {
+  if (!iso) return undefined;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return formatDateTimeHumanReadable(date, locationTimezone);
+}
+
 /**
  * Strip metadata and format the Google currentConditions response.
  * Returns null if the input is missing entirely. The optional
@@ -335,13 +346,14 @@ function indexHourlyAirQuality(
  */
 export function transformCurrentConditions(
   current: GoogleCurrentConditionsResponse | undefined,
+  locationTimezone: string,
   airQuality?: GoogleCurrentAirQualityResponse
 ): CurrentWeather | null {
   if (!current) return null;
 
   const precip = current.precipitation;
   return {
-    as_of: current.currentTime,
+    as_of: formatLocalDateTime(current.currentTime, locationTimezone),
     condition: getConditionText(current.weatherCondition),
     daylight: current.isDaytime,
     cloud_cover: current.cloudCover !== undefined ? formatPercent(current.cloudCover) : undefined,
@@ -369,16 +381,19 @@ export function transformCurrentConditions(
 
 /**
  * Format one hour of Google's hourly forecast. Pass an optional matching
- * air-quality entry to attach the AQI block under `air_quality`.
+ * air-quality entry to attach the AQI block under `air_quality`. Datetime
+ * fields are pre-formatted in the location's tz so the response-level
+ * recursive formatter (which uses the athlete's tz) leaves them alone.
  */
 export function transformForecastHour(
   hour: GoogleForecastHour,
+  locationTimezone: string,
   airQualityEntry?: GoogleAirQualityHourlyEntry
 ): HourlyForecast {
   const precip = hour.precipitation;
   return {
-    forecast_start: hour.interval?.startTime,
-    forecast_end: hour.interval?.endTime,
+    forecast_start: formatLocalDateTime(hour.interval?.startTime, locationTimezone),
+    forecast_end: formatLocalDateTime(hour.interval?.endTime, locationTimezone),
     condition: getConditionText(hour.weatherCondition),
     daylight: hour.isDaytime,
     cloud_cover: hour.cloudCover !== undefined ? formatPercent(hour.cloudCover) : undefined,
@@ -481,12 +496,16 @@ function findDailyForecastForDate(
 
 /**
  * Build the {sunrise, sunset} pair from a matched daily-forecast entry.
+ * Pre-formats both in the location's tz.
  */
-function pickSunEvents(day: GoogleForecastDay | undefined): { sunrise?: string; sunset?: string } {
+function pickSunEvents(
+  day: GoogleForecastDay | undefined,
+  locationTimezone: string
+): { sunrise?: string; sunset?: string } {
   if (!day?.sunEvents) return {};
   return {
-    sunrise: day.sunEvents.sunriseTime,
-    sunset: day.sunEvents.sunsetTime,
+    sunrise: formatLocalDateTime(day.sunEvents.sunriseTime, locationTimezone),
+    sunset: formatLocalDateTime(day.sunEvents.sunsetTime, locationTimezone),
   };
 }
 
@@ -530,13 +549,13 @@ function buildDailySummary(day: GoogleForecastDay | undefined): DailyForecastSum
   return hasAny ? summary : undefined;
 }
 
-function transformAlert(alert: GoogleWeatherAlert): WeatherAlert {
+function transformAlert(alert: GoogleWeatherAlert, locationTimezone: string): WeatherAlert {
   return {
     title: alert.alertTitle?.text,
     description: alert.description,
     severity: alert.severity,
-    start_time: alert.startTime,
-    expiration_time: alert.expirationTime,
+    start_time: formatLocalDateTime(alert.startTime, locationTimezone),
+    expiration_time: formatLocalDateTime(alert.expirationTime, locationTimezone),
     source: alert.dataSource?.name,
   };
 }
@@ -566,7 +585,7 @@ export function assembleLocationForecast(
   current: GoogleCurrentConditionsResponse | undefined,
   hourly: GoogleHourlyForecastResponse | undefined,
   alerts: GoogleWeatherAlertsResponse | undefined,
-  timezone: string,
+  locationTimezone: string,
   now: Date = new Date(),
   currentAirQuality?: GoogleCurrentAirQualityResponse,
   hourlyAirQuality?: GoogleAirQualityHourlyResponse,
@@ -574,12 +593,12 @@ export function assembleLocationForecast(
   daily?: GoogleDailyForecastResponse,
   elevation?: GoogleElevationResponse
 ): LocationForecast {
-  const todayLocal = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
-  const filteredHours = filterHourlyToRestOfDay(hourly?.forecastHours, timezone, now);
+  const todayLocal = formatInTimeZone(now, locationTimezone, 'yyyy-MM-dd');
+  const filteredHours = filterHourlyToRestOfDay(hourly?.forecastHours, locationTimezone, now);
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
   const pollenForToday = buildPollenForDate(pollen, todayLocal);
   const dailyForToday = findDailyForecastForDate(daily, todayLocal);
-  const sunEvents = pickSunEvents(dailyForToday);
+  const sunEvents = pickSunEvents(dailyForToday, locationTimezone);
   const dailySummary = buildDailySummary(dailyForToday);
   const elevationMeters =
     elevation?.status === 'OK' && typeof elevation.results?.[0]?.elevation === 'number'
@@ -594,13 +613,13 @@ export function assembleLocationForecast(
     sunrise: sunEvents.sunrise,
     sunset: sunEvents.sunset,
     daily_summary: dailySummary,
-    current_conditions: transformCurrentConditions(current, currentAirQuality),
+    current_conditions: transformCurrentConditions(current, locationTimezone, currentAirQuality),
     hourly_forecast: filteredHours.map((h) => {
       const startTime = h.interval?.startTime;
       const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
-      return transformForecastHour(h, aqEntry);
+      return transformForecastHour(h, locationTimezone, aqEntry);
     }),
-    alerts: (alerts?.weatherAlerts ?? []).map(transformAlert),
+    alerts: (alerts?.weatherAlerts ?? []).map((a) => transformAlert(a, locationTimezone)),
     pollen: pollenForToday,
   };
 }
@@ -630,16 +649,16 @@ export function assembleFutureLocationForecast(
   targetDate: string,
   hourly: GoogleHourlyForecastResponse | undefined,
   daily: GoogleDailyForecastResponse | undefined,
-  timezone: string,
+  locationTimezone: string,
   hourlyAirQuality?: GoogleAirQualityHourlyResponse,
   pollen?: GooglePollenForecastResponse,
   elevation?: GoogleElevationResponse
 ): LocationForecast {
-  const filteredHours = filterHourlyToDate(hourly?.forecastHours, timezone, targetDate);
+  const filteredHours = filterHourlyToDate(hourly?.forecastHours, locationTimezone, targetDate);
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
   const pollenForDate = buildPollenForDate(pollen, targetDate);
   const dailyForDate = findDailyForecastForDate(daily, targetDate);
-  const sunEvents = pickSunEvents(dailyForDate);
+  const sunEvents = pickSunEvents(dailyForDate, locationTimezone);
   const dailySummary = buildDailySummary(dailyForDate);
   const elevationMeters =
     elevation?.status === 'OK' && typeof elevation.results?.[0]?.elevation === 'number'
@@ -657,7 +676,7 @@ export function assembleFutureLocationForecast(
     hourly_forecast: filteredHours.map((h) => {
       const startTime = h.interval?.startTime;
       const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
-      return transformForecastHour(h, aqEntry);
+      return transformForecastHour(h, locationTimezone, aqEntry);
     }),
     pollen: pollenForDate,
   };

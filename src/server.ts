@@ -27,6 +27,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     googlePollen: config.googlePollen,
     googleElevation: config.googleElevation,
     googleGeocoding: config.googleGeocoding,
+    googleTimezone: config.googleTimezone,
   });
 
   console.log('Tool registry created');
