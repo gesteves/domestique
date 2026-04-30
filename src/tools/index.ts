@@ -8,6 +8,7 @@ import { LastFmClient } from '../clients/lastfm.js';
 import { GoogleWeatherClient } from '../clients/google-weather.js';
 import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
 import { GooglePollenClient } from '../clients/google-pollen.js';
+import { GoogleElevationClient } from '../clients/google-elevation.js';
 import { CurrentTools } from './current.js';
 
 // Common annotation presets for tool categories. All four hints are set
@@ -203,6 +204,7 @@ export interface ToolsConfig {
   googleWeather?: { apiKey: string } | null;
   googleAirQuality?: { apiKey: string } | null;
   googlePollen?: { apiKey: string } | null;
+  googleElevation?: { apiKey: string } | null;
 }
 
 export class ToolRegistry {
@@ -235,6 +237,9 @@ export class ToolRegistry {
     const googlePollenClient = config.googlePollen
       ? new GooglePollenClient(config.googlePollen)
       : null;
+    const googleElevationClient = config.googleElevation
+      ? new GoogleElevationClient(config.googleElevation)
+      : null;
     this.hasWhoop = whoopClient !== null;
     this.hasTrainerRoad = trainerroadClient !== null;
     this.hasLastFm = lastfmClient !== null;
@@ -259,7 +264,8 @@ export class ToolRegistry {
       trainerroadClient,
       googleWeatherClient,
       googleAirQualityClient,
-      googlePollenClient
+      googlePollenClient,
+      googleElevationClient
     );
     this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
@@ -354,6 +360,7 @@ export class ToolRegistry {
         description: `Fetches today's weather forecast for each enabled location in the athlete's Intervals.icu weather config, sourced from the Google Weather API and (when configured) the Google Air Quality and Pollen APIs.
 
 **Includes (per location):**
+- Elevation at the location (sourced from the Google Elevation API)
 - Current conditions (temperature, humidity, wind, pressure, visibility, UV, etc.)
 - Local AQI on the current conditions and on each hourly entry
 - Today's pollen forecast grouped by Universal Pollen Index level (with the pollen types and plants at each level, plus health recommendations from the highest active level), as a sibling of the current conditions

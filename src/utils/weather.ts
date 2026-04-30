@@ -1,5 +1,5 @@
 import { formatInTimeZone } from 'date-fns-tz';
-import { formatTemperature, formatPercent, withUnit } from './format-units.js';
+import { formatTemperature, formatPercent, formatLength, withUnit } from './format-units.js';
 import type {
   GoogleCurrentConditionsResponse,
   GoogleDailyForecastResponse,
@@ -23,6 +23,7 @@ import type {
   GooglePollenDailyInfo,
   GooglePollenForecastResponse,
 } from '../clients/google-pollen.js';
+import type { GoogleElevationResponse } from '../clients/google-elevation.js';
 import type {
   AirQuality,
   CurrentWeather,
@@ -477,21 +478,22 @@ function transformAlert(alert: GoogleWeatherAlert): WeatherAlert {
 }
 
 /**
- * Build a per-location forecast from Google Weather + Air Quality + Pollen
- * responses.
+ * Build a per-location forecast from Google Weather + Air Quality + Pollen +
+ * Elevation responses.
  *
  * `location` is the human-readable label from the athlete's Intervals.icu
  * weather config (e.g., "Home", "Moose"). The longer "City,Region,Country"
  * string is intentionally not surfaced — the label is what the athlete
  * recognizes when reading back a multi-location forecast.
  *
- * Air-quality and pollen data are optional: if any of those arguments are
- * omitted, the matching field is just omitted on the output. Hourly AQ entries
- * are matched to weather hours by ISO timestamp (top-of-hour boundaries on
- * both APIs), so a missing entry for a given hour is silently skipped. The
- * pollen response is filtered to the entry whose date matches today in the
- * athlete's timezone (and to non-zero index values to keep the payload tight)
- * — if nothing remains, pollen is omitted from the location forecast.
+ * Air-quality, pollen, and elevation data are optional: if any of those
+ * arguments are omitted (or come back with a non-OK status), the matching
+ * field is just omitted on the output. Hourly AQ entries are matched to
+ * weather hours by ISO timestamp (top-of-hour boundaries on both APIs), so a
+ * missing entry for a given hour is silently skipped. The pollen response is
+ * filtered to the entry whose date matches today in the athlete's timezone
+ * (and to non-zero index values to keep the payload tight) — if nothing
+ * remains, pollen is omitted from the location forecast.
  */
 export function assembleLocationForecast(
   location: string,
@@ -505,16 +507,22 @@ export function assembleLocationForecast(
   currentAirQuality?: GoogleCurrentAirQualityResponse,
   hourlyAirQuality?: GoogleAirQualityHourlyResponse,
   pollen?: GooglePollenForecastResponse,
-  daily?: GoogleDailyForecastResponse
+  daily?: GoogleDailyForecastResponse,
+  elevation?: GoogleElevationResponse
 ): LocationForecast {
   const filteredHours = filterHourlyToRestOfDay(hourly?.forecastHours, timezone, now);
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
   const pollenForToday = buildPollenForToday(pollen, timezone, now);
   const sunEvents = pickSunEventsForToday(daily, timezone, now);
+  const elevationMeters =
+    elevation?.status === 'OK' && typeof elevation.results?.[0]?.elevation === 'number'
+      ? elevation.results[0].elevation
+      : undefined;
   return {
     location,
     latitude,
     longitude,
+    elevation: elevationMeters !== undefined ? formatLength(elevationMeters) : undefined,
     sunrise: sunEvents.sunrise,
     sunset: sunEvents.sunset,
     current_conditions: transformCurrentConditions(current, currentAirQuality),

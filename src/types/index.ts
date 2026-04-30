@@ -1256,6 +1256,8 @@ export interface LocationForecast {
   location: string;
   latitude: number;
   longitude: number;
+  /** Elevation at the location, sourced from the Google Elevation API. */
+  elevation?: string;
   /** Sunrise time at the location for today, ISO 8601. */
   sunrise?: string;
   /** Sunset time at the location for today, ISO 8601. */

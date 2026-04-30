@@ -134,5 +134,10 @@ export function getConfig() {
           apiKey: process.env.GOOGLE_API_KEY,
         }
       : null,
+    googleElevation: process.env.GOOGLE_API_KEY
+      ? {
+          apiKey: process.env.GOOGLE_API_KEY,
+        }
+      : null,
   };
 }

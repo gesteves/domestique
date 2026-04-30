@@ -17,6 +17,7 @@ import type {
   GoogleCurrentAirQualityResponse,
 } from '../../src/clients/google-air-quality.js';
 import type { GooglePollenForecastResponse } from '../../src/clients/google-pollen.js';
+import type { GoogleElevationResponse } from '../../src/clients/google-elevation.js';
 
 describe('transformCurrentConditions', () => {
   it('formats every value-with-unit field from Google into our flat shape', () => {
@@ -885,6 +886,89 @@ describe('assembleLocationForecast', () => {
       );
       expect(result.pollen?.date).toBe('2026-04-28');
       expect(result.pollen?.universal_pollen_index?.[0].pollen_types).toEqual(['Grass (today)']);
+    });
+  });
+
+  describe('elevation integration', () => {
+    it('formats elevation via formatLength when status is OK', () => {
+      const elevation: GoogleElevationResponse = {
+        status: 'OK',
+        results: [{ elevation: 1608.6, location: { lat: 42.87, lng: -112.58 }, resolution: 4.7 }],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        elevation
+      );
+      expect(result.elevation).toBe('1609 m');
+    });
+
+    it('omits elevation when status is non-OK (e.g., REQUEST_DENIED)', () => {
+      const elevation: GoogleElevationResponse = {
+        status: 'REQUEST_DENIED',
+        error_message: 'API key invalid',
+        results: [],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        elevation
+      );
+      expect(result.elevation).toBeUndefined();
+    });
+
+    it('omits elevation when no response is provided', () => {
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now
+      );
+      expect(result.elevation).toBeUndefined();
+    });
+
+    it('omits elevation when status is OK but results array is empty', () => {
+      const elevation: GoogleElevationResponse = { status: 'OK', results: [] };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        elevation
+      );
+      expect(result.elevation).toBeUndefined();
     });
   });
 });

@@ -20,6 +20,7 @@ async function main() {
     console.log(`Google Weather: ${config.googleWeather ? 'configured' : 'not configured'}`);
     console.log(`Google Air Quality: ${config.googleAirQuality ? 'configured' : 'not configured'}`);
     console.log(`Google Pollen: ${config.googlePollen ? 'configured' : 'not configured'}`);
+    console.log(`Google Elevation: ${config.googleElevation ? 'configured' : 'not configured'}`);
 
     await startServer({ port: config.port });
   } catch (error) {

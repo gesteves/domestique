@@ -6,6 +6,7 @@ import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
 import { GoogleWeatherClient } from '../../src/clients/google-weather.js';
 import { GoogleAirQualityClient } from '../../src/clients/google-air-quality.js';
 import { GooglePollenClient } from '../../src/clients/google-pollen.js';
+import { GoogleElevationClient } from '../../src/clients/google-elevation.js';
 import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
@@ -15,6 +16,7 @@ vi.mock('../../src/clients/trainerroad.js');
 vi.mock('../../src/clients/google-weather.js');
 vi.mock('../../src/clients/google-air-quality.js');
 vi.mock('../../src/clients/google-pollen.js');
+vi.mock('../../src/clients/google-elevation.js');
 
 describe('CurrentTools', () => {
   let tools: CurrentTools;
@@ -1122,6 +1124,7 @@ describe('CurrentTools', () => {
     let mockGoogleWeatherClient: GoogleWeatherClient;
     let mockGoogleAirQualityClient: GoogleAirQualityClient;
     let mockGooglePollenClient: GooglePollenClient;
+    let mockGoogleElevationClient: GoogleElevationClient;
 
     // Sample Google Weather responses for the three calls. Athlete is in America/Boise.
     const sampleCurrent = {
@@ -1164,6 +1167,7 @@ describe('CurrentTools', () => {
       mockGoogleWeatherClient = new GoogleWeatherClient({ apiKey: 'k' });
       mockGoogleAirQualityClient = new GoogleAirQualityClient({ apiKey: 'k' });
       mockGooglePollenClient = new GooglePollenClient({ apiKey: 'k' });
+      mockGoogleElevationClient = new GoogleElevationClient({ apiKey: 'k' });
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-04-28T14:49:34Z'));
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Boise');
@@ -1605,6 +1609,83 @@ describe('CurrentTools', () => {
       const result = await toolsWeatherOnly.getTodaysForecast();
       expect(mockGooglePollenClient.getPollenForecast).not.toHaveBeenCalled();
       expect(result.forecasts[0].pollen).toBeUndefined();
+    });
+
+    it('attaches elevation from the Google Elevation client when configured', async () => {
+      const toolsWithElevation = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        null,
+        null,
+        mockGoogleElevationClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGoogleElevationClient.getElevation).mockResolvedValue({
+        status: 'OK',
+        results: [{ elevation: 1980.4, location: { lat: 43.65, lng: -110.71 }, resolution: 4.7 }],
+      });
+
+      const result = await toolsWithElevation.getTodaysForecast();
+
+      expect(mockGoogleElevationClient.getElevation).toHaveBeenCalledWith(43.65, -110.71);
+      expect(result.forecasts[0].elevation).toBe('1980 m');
+    });
+
+    it('keeps the forecast when the Elevation call fails', async () => {
+      const toolsWithElevation = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        null,
+        null,
+        mockGoogleElevationClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGoogleElevationClient.getElevation).mockRejectedValue(new Error('elevation boom'));
+
+      const result = await toolsWithElevation.getTodaysForecast();
+      const fc = result.forecasts[0];
+      expect(fc.location).toBe('Moose');
+      expect(fc.elevation).toBeUndefined();
+      expect(fc.current_conditions?.temperature).toBe('4.1 °C');
+    });
+
+    it('does not call the Elevation client when it is not configured', async () => {
+      const toolsWeatherOnly = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient,
+        null,
+        null,
+        null
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+
+      const result = await toolsWeatherOnly.getTodaysForecast();
+      expect(mockGoogleElevationClient.getElevation).not.toHaveBeenCalled();
+      expect(result.forecasts[0].elevation).toBeUndefined();
     });
   });
 });

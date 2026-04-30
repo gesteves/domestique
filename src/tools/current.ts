@@ -4,6 +4,7 @@ import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { GoogleWeatherClient } from '../clients/google-weather.js';
 import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
 import { GooglePollenClient } from '../clients/google-pollen.js';
+import { GoogleElevationClient } from '../clients/google-elevation.js';
 import { parseDateRangeInTimezone, getTodayInTimezone } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
@@ -32,7 +33,8 @@ export class CurrentTools {
     private trainerroad: TrainerRoadClient | null,
     private googleWeather: GoogleWeatherClient | null = null,
     private googleAirQuality: GoogleAirQualityClient | null = null,
-    private googlePollen: GooglePollenClient | null = null
+    private googlePollen: GooglePollenClient | null = null,
+    private googleElevation: GoogleElevationClient | null = null
   ) {}
 
   /**
@@ -43,10 +45,10 @@ export class CurrentTools {
    *
    * For each location we issue the Google Weather calls (current conditions,
    * hourly forecast, public alerts, daily forecast for sun events) plus
-   * Google Air Quality calls (current AQI, hourly AQI) and the Google Pollen
-   * call (today's pollen forecast) in parallel and let any one of them fail
-   * independently — a missing alerts feed, AQI, sun events, or pollen
-   * dataset shouldn't suppress the forecast itself.
+   * Google Air Quality calls (current AQI, hourly AQI), the Google Pollen
+   * call (today's pollen forecast), and the Google Elevation call in parallel
+   * and let any one of them fail independently — a missing alerts feed, AQI,
+   * sun events, pollen, or elevation shouldn't suppress the forecast itself.
    */
   private async buildForecasts(timezone: string, now: Date): Promise<LocationForecast[]> {
     if (!this.googleWeather) return [];
@@ -62,6 +64,7 @@ export class CurrentTools {
     const gw = this.googleWeather;
     const aq = this.googleAirQuality;
     const pollen = this.googlePollen;
+    const elev = this.googleElevation;
     // 24h covers the "rest of today" hourly window the weather forecast
     // surfaces; the AQ API computes the window from its own "now."
     const aqHours = 24;
@@ -69,7 +72,7 @@ export class CurrentTools {
     const results = await Promise.all(
       locations.map(async (loc) => {
         try {
-          const [current, hourly, alerts, daily, currentAq, hourlyAq, pollenForecast] = await Promise.all([
+          const [current, hourly, alerts, daily, currentAq, hourlyAq, pollenForecast, elevation] = await Promise.all([
             gw.getCurrentConditions(loc.latitude, loc.longitude).catch((e) => {
               console.error(`Error fetching current conditions for "${loc.label}":`, e);
               return undefined;
@@ -106,6 +109,12 @@ export class CurrentTools {
                   return undefined;
                 })
               : Promise.resolve(undefined),
+            elev
+              ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
+                  console.error(`Error fetching elevation for "${loc.label}":`, e);
+                  return undefined;
+                })
+              : Promise.resolve(undefined),
           ]);
           return assembleLocationForecast(
             loc.label,
@@ -119,7 +128,8 @@ export class CurrentTools {
             currentAq,
             hourlyAq,
             pollenForecast,
-            daily
+            daily,
+            elevation
           );
         } catch (e) {
           console.error(`Error fetching forecast for "${loc.label}":`, e);

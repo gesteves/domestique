@@ -745,6 +745,7 @@ const LocationForecastZ = z.object({
   location: z.string().optional().describe("Human-readable label for this location from the athlete's Intervals.icu weather config (e.g., \"Home\", \"Moose\")"),
   latitude: z.number().optional().describe('Location latitude'),
   longitude: z.number().optional().describe('Location longitude'),
+  elevation: z.string().optional().describe('Elevation at the location'),
   sunrise: z.string().optional().describe("Sunrise time at the location for today"),
   sunset: z.string().optional().describe("Sunset time at the location for today"),
   current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Null if Google Weather returned no current data'),
