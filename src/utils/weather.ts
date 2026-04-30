@@ -2,6 +2,8 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { formatTemperature, formatPercent, withUnit } from './format-units.js';
 import type {
   GoogleCurrentConditionsResponse,
+  GoogleDailyForecastResponse,
+  GoogleForecastDay,
   GoogleForecastHour,
   GoogleHourlyForecastResponse,
   GoogleSpeed,
@@ -429,6 +431,40 @@ export function filterHourlyToRestOfDay(
   });
 }
 
+/**
+ * Format the {year, month, day} object Google emits on `displayDate` into a
+ * YYYY-MM-DD string for direct comparison with the athlete's local "today".
+ */
+function formatDisplayDate(date: GoogleForecastDay['displayDate']): string | undefined {
+  if (!date || date.year === undefined || date.month === undefined || date.day === undefined) {
+    return undefined;
+  }
+  const m = String(date.month).padStart(2, '0');
+  const d = String(date.day).padStart(2, '0');
+  return `${date.year}-${m}-${d}`;
+}
+
+/**
+ * Pick today's sunrise/sunset from a daily-forecast response. Google returns
+ * one entry per local day in `forecastDays[]`; we match on `displayDate`
+ * against today in the athlete's timezone (the same approach used for pollen).
+ * Returns `{}` when no matching day is found or the dataset is missing.
+ */
+function pickSunEventsForToday(
+  daily: GoogleDailyForecastResponse | undefined,
+  timezone: string,
+  now: Date
+): { sunrise?: string; sunset?: string } {
+  if (!daily?.forecastDays || daily.forecastDays.length === 0) return {};
+  const todayLocal = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
+  const match = daily.forecastDays.find((d) => formatDisplayDate(d.displayDate) === todayLocal);
+  if (!match?.sunEvents) return {};
+  return {
+    sunrise: match.sunEvents.sunriseTime,
+    sunset: match.sunEvents.sunsetTime,
+  };
+}
+
 function transformAlert(alert: GoogleWeatherAlert): WeatherAlert {
   return {
     title: alert.alertTitle?.text,
@@ -468,15 +504,19 @@ export function assembleLocationForecast(
   now: Date = new Date(),
   currentAirQuality?: GoogleCurrentAirQualityResponse,
   hourlyAirQuality?: GoogleAirQualityHourlyResponse,
-  pollen?: GooglePollenForecastResponse
+  pollen?: GooglePollenForecastResponse,
+  daily?: GoogleDailyForecastResponse
 ): LocationForecast {
   const filteredHours = filterHourlyToRestOfDay(hourly?.forecastHours, timezone, now);
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
   const pollenForToday = buildPollenForToday(pollen, timezone, now);
+  const sunEvents = pickSunEventsForToday(daily, timezone, now);
   return {
     location,
     latitude,
     longitude,
+    sunrise: sunEvents.sunrise,
+    sunset: sunEvents.sunset,
     current_conditions: transformCurrentConditions(current, currentAirQuality),
     hourly_forecast: filteredHours.map((h) => {
       const startTime = h.interval?.startTime;

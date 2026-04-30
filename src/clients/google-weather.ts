@@ -152,6 +152,31 @@ export interface GoogleWeatherAlertsResponse {
   regionCode?: string;
 }
 
+export interface GoogleSunEvents {
+  sunriseTime?: string;
+  sunsetTime?: string;
+}
+
+export interface GoogleForecastDay {
+  interval?: {
+    startTime?: string;
+    endTime?: string;
+  };
+  displayDate?: {
+    year?: number;
+    month?: number;
+    day?: number;
+  };
+  sunEvents?: GoogleSunEvents;
+  [key: string]: unknown;
+}
+
+export interface GoogleDailyForecastResponse {
+  forecastDays?: GoogleForecastDay[];
+  timeZone?: { id?: string };
+  nextPageToken?: string;
+}
+
 /**
  * Error thrown when Google Weather API calls fail.
  */
@@ -305,6 +330,30 @@ export class GoogleWeatherClient {
       headers: { Accept: 'application/json' },
       context: {
         operation: 'fetch hourly forecast',
+        resource: `${latitude},${longitude}`,
+      },
+      ...googleWeatherHttpErrorBuilders,
+    });
+  }
+
+  /**
+   * GET /v1/forecast/days:lookup — daily forecast. We only consume sun-event
+   * times today, so the default page size (which covers ≥10 days) is more
+   * than enough.
+   * @see https://developers.google.com/maps/documentation/weather/daily-forecast
+   */
+  async getDailyForecast(
+    latitude: number,
+    longitude: number
+  ): Promise<GoogleDailyForecastResponse> {
+    const url = this.buildUrl('/forecast/days:lookup', latitude, longitude, { units: true });
+    console.log(`[GoogleWeather] Making API call to /forecast/days:lookup for ${latitude},${longitude}`);
+
+    return httpRequestJson<GoogleDailyForecastResponse>({
+      url: url.toString(),
+      headers: { Accept: 'application/json' },
+      context: {
+        operation: 'fetch daily forecast',
         resource: `${latitude},${longitude}`,
       },
       ...googleWeatherHttpErrorBuilders,

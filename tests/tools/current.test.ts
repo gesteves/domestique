@@ -1167,6 +1167,9 @@ describe('CurrentTools', () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-04-28T14:49:34Z'));
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Boise');
+      // Default the daily forecast to undefined so existing tests that don't
+      // care about sun events don't have to mock it explicitly.
+      vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(undefined as never);
     });
 
     afterEach(() => {
@@ -1521,6 +1524,64 @@ describe('CurrentTools', () => {
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.pollen).toBeUndefined();
+      expect(fc.current_conditions?.temperature).toBe('4.1 °C');
+    });
+
+    it("attaches today's sunrise/sunset from the daily forecast", async () => {
+      const toolsWithWeather = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue({
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+            sunEvents: {
+              sunriseTime: '2026-04-28T12:30:00Z',
+              sunsetTime: '2026-04-29T02:15:00Z',
+            },
+          },
+        ],
+      });
+
+      const result = await toolsWithWeather.getTodaysForecast();
+
+      expect(mockGoogleWeatherClient.getDailyForecast).toHaveBeenCalledWith(43.65, -110.71);
+      const fc = result.forecasts[0];
+      expect(fc.sunrise).toBe('2026-04-28T12:30:00Z');
+      expect(fc.sunset).toBe('2026-04-29T02:15:00Z');
+    });
+
+    it('keeps the forecast when the daily forecast call fails', async () => {
+      const toolsWithWeather = new CurrentTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        mockTrainerRoadClient,
+        mockGoogleWeatherClient
+      );
+
+      vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+        { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+      ]);
+      vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+      vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
+      vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+      vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockRejectedValue(new Error('daily boom'));
+
+      const result = await toolsWithWeather.getTodaysForecast();
+      const fc = result.forecasts[0];
+      expect(fc.location).toBe('Moose');
+      expect(fc.sunrise).toBeUndefined();
+      expect(fc.sunset).toBeUndefined();
       expect(fc.current_conditions?.temperature).toBe('4.1 °C');
     });
 

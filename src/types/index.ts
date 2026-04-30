@@ -1256,6 +1256,10 @@ export interface LocationForecast {
   location: string;
   latitude: number;
   longitude: number;
+  /** Sunrise time at the location for today, ISO 8601. */
+  sunrise?: string;
+  /** Sunset time at the location for today, ISO 8601. */
+  sunset?: string;
   current_conditions: CurrentWeather | null;
   hourly_forecast: HourlyForecast[];
   alerts: WeatherAlert[];

@@ -69,6 +69,39 @@ describe('GoogleWeatherClient', () => {
     });
   });
 
+  describe('getDailyForecast', () => {
+    it('hits the days forecast endpoint with METRIC units', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ forecastDays: [] }));
+
+      await client.getDailyForecast(42.87, -112.58);
+
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('/forecast/days:lookup');
+      expect(url).toContain('location.latitude=42.87');
+      expect(url).toContain('location.longitude=-112.58');
+      expect(url).toContain('unitsSystem=METRIC');
+    });
+
+    it('returns the parsed body on success', async () => {
+      const body = {
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+            sunEvents: {
+              sunriseTime: '2026-04-28T12:30:00Z',
+              sunsetTime: '2026-04-29T02:15:00Z',
+            },
+          },
+        ],
+      };
+      mockFetch.mockResolvedValueOnce(createMockResponse(body));
+
+      const result = await client.getDailyForecast(0, 0);
+      expect(result.forecastDays?.[0].sunEvents?.sunriseTime).toBe('2026-04-28T12:30:00Z');
+      expect(result.forecastDays?.[0].sunEvents?.sunsetTime).toBe('2026-04-29T02:15:00Z');
+    });
+  });
+
   describe('getWeatherAlerts', () => {
     it('hits the public alerts endpoint without the unitsSystem param', async () => {
       mockFetch.mockResolvedValueOnce(createMockResponse({ weatherAlerts: [] }));
