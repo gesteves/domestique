@@ -42,11 +42,11 @@ export class CurrentTools {
    * are logged and skipped — one bad location doesn't suppress the others.
    *
    * For each location we issue the Google Weather calls (current conditions,
-   * hourly forecast, public alerts) plus Google Air Quality calls (current
-   * AQI, hourly AQI) and the Google Pollen call (today's pollen forecast)
-   * in parallel and let any one of them fail independently — a missing
-   * alerts feed, AQI, or pollen dataset shouldn't suppress the forecast
-   * itself.
+   * hourly forecast, public alerts, daily forecast for sun events) plus
+   * Google Air Quality calls (current AQI, hourly AQI) and the Google Pollen
+   * call (today's pollen forecast) in parallel and let any one of them fail
+   * independently — a missing alerts feed, AQI, sun events, or pollen
+   * dataset shouldn't suppress the forecast itself.
    */
   private async buildForecasts(timezone: string, now: Date): Promise<LocationForecast[]> {
     if (!this.googleWeather) return [];
@@ -69,7 +69,7 @@ export class CurrentTools {
     const results = await Promise.all(
       locations.map(async (loc) => {
         try {
-          const [current, hourly, alerts, currentAq, hourlyAq, pollenForecast] = await Promise.all([
+          const [current, hourly, alerts, daily, currentAq, hourlyAq, pollenForecast] = await Promise.all([
             gw.getCurrentConditions(loc.latitude, loc.longitude).catch((e) => {
               console.error(`Error fetching current conditions for "${loc.label}":`, e);
               return undefined;
@@ -80,6 +80,10 @@ export class CurrentTools {
             }),
             gw.getWeatherAlerts(loc.latitude, loc.longitude).catch((e) => {
               console.error(`Error fetching weather alerts for "${loc.label}":`, e);
+              return undefined;
+            }),
+            gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching daily forecast for "${loc.label}":`, e);
               return undefined;
             }),
             aq
@@ -114,7 +118,8 @@ export class CurrentTools {
             now,
             currentAq,
             hourlyAq,
-            pollenForecast
+            pollenForecast,
+            daily
           );
         } catch (e) {
           console.error(`Error fetching forecast for "${loc.label}":`, e);

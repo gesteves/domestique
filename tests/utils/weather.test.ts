@@ -7,6 +7,7 @@ import {
 } from '../../src/utils/weather.js';
 import type {
   GoogleCurrentConditionsResponse,
+  GoogleDailyForecastResponse,
   GoogleForecastHour,
   GoogleHourlyForecastResponse,
   GoogleWeatherAlertsResponse,
@@ -465,6 +466,128 @@ describe('assembleLocationForecast', () => {
       );
       expect(result.current_conditions?.air_quality?.aqi).toBe(41);
       expect(result.current_conditions?.air_quality?.index_display_name).toBe('AQI (US)');
+    });
+  });
+
+  describe('sun events integration', () => {
+    it("attaches today's sunrise/sunset from the daily forecast", () => {
+      const daily: GoogleDailyForecastResponse = {
+        forecastDays: [
+          // Yesterday — should be ignored
+          {
+            displayDate: { year: 2026, month: 4, day: 27 },
+            sunEvents: {
+              sunriseTime: '2026-04-27T12:31:00Z',
+              sunsetTime: '2026-04-28T02:14:00Z',
+            },
+          },
+          // Today in America/Boise (matches the test's `now`)
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+            sunEvents: {
+              sunriseTime: '2026-04-28T12:30:00.123Z',
+              sunsetTime: '2026-04-29T02:15:00.456Z',
+            },
+          },
+          // Tomorrow — should be ignored
+          {
+            displayDate: { year: 2026, month: 4, day: 29 },
+            sunEvents: {
+              sunriseTime: '2026-04-29T12:29:00Z',
+              sunsetTime: '2026-04-30T02:16:00Z',
+            },
+          },
+        ],
+      };
+
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        daily
+      );
+
+      expect(result.sunrise).toBe('2026-04-28T12:30:00.123Z');
+      expect(result.sunset).toBe('2026-04-29T02:15:00.456Z');
+    });
+
+    it("omits sunrise/sunset when no daily entry matches today in the athlete's timezone", () => {
+      const tomorrowOnly: GoogleDailyForecastResponse = {
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 29 },
+            sunEvents: {
+              sunriseTime: '2026-04-29T12:29:00Z',
+              sunsetTime: '2026-04-30T02:16:00Z',
+            },
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        tomorrowOnly
+      );
+      expect(result.sunrise).toBeUndefined();
+      expect(result.sunset).toBeUndefined();
+    });
+
+    it('omits sunrise/sunset when no daily forecast is provided', () => {
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now
+      );
+      expect(result.sunrise).toBeUndefined();
+      expect(result.sunset).toBeUndefined();
+    });
+
+    it('handles a matching day with no sunEvents block', () => {
+      const noSunEvents: GoogleDailyForecastResponse = {
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        noSunEvents
+      );
+      expect(result.sunrise).toBeUndefined();
+      expect(result.sunset).toBeUndefined();
     });
   });
 
