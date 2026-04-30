@@ -197,17 +197,21 @@ describe('filterHourlyToRestOfDay', () => {
     expect(filterHourlyToRestOfDay(undefined, tz, now)).toEqual([]);
   });
 
-  it('drops hours explicitly marked isDaytime=false', () => {
+  it('keeps nighttime hours of the same local day', () => {
+    // Nighttime hours of the local "today" are retained — early-morning and
+    // post-sunset training cares about overnight conditions.
     const dayHours: GoogleForecastHour[] = [
       { interval: { startTime: '2026-04-28T15:00:00Z' }, isDaytime: true },
       { interval: { startTime: '2026-04-28T23:00:00Z' }, isDaytime: true },
-      { interval: { startTime: '2026-04-29T03:00:00Z' }, isDaytime: false }, // 21:00 local — drop
-      { interval: { startTime: '2026-04-29T05:00:00Z' }, isDaytime: false }, // 23:00 local — drop
+      { interval: { startTime: '2026-04-29T03:00:00Z' }, isDaytime: false }, // 21:00 local same day
+      { interval: { startTime: '2026-04-29T05:00:00Z' }, isDaytime: false }, // 23:00 local same day
     ];
     const result = filterHourlyToRestOfDay(dayHours, tz, now);
     expect(result.map((h) => h.interval?.startTime)).toEqual([
       '2026-04-28T15:00:00Z',
       '2026-04-28T23:00:00Z',
+      '2026-04-29T03:00:00Z',
+      '2026-04-29T05:00:00Z',
     ]);
   });
 
@@ -321,9 +325,15 @@ describe('assembleLocationForecast', () => {
       location: 'X,Y,US',
       latitude: 0,
       longitude: 0,
+      elevation: undefined,
+      date: '2026-04-28',
+      sunrise: undefined,
+      sunset: undefined,
+      daily_summary: undefined,
       current_conditions: null,
       hourly_forecast: [],
       alerts: [],
+      pollen: undefined,
     });
   });
 

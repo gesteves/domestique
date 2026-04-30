@@ -1,6 +1,6 @@
 # Domestique
 
-A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com), [TrainerRoad](https://www.trainerroad.com), the [Google Weather API](https://developers.google.com/maps/documentation/weather), the [Google Air Quality API](https://developers.google.com/maps/documentation/air-quality), the [Google Pollen API](https://developers.google.com/maps/documentation/pollen), and the [Google Elevation API](https://developers.google.com/maps/documentation/elevation) to provide unified access to fitness data across all activities and sports.
+A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com), [TrainerRoad](https://www.trainerroad.com), the [Google Weather API](https://developers.google.com/maps/documentation/weather), the [Google Air Quality API](https://developers.google.com/maps/documentation/air-quality), the [Google Pollen API](https://developers.google.com/maps/documentation/pollen), the [Google Elevation API](https://developers.google.com/maps/documentation/elevation), and the [Google Geocoding API](https://developers.google.com/maps/documentation/geocoding) to provide unified access to fitness data across all activities and sports.
 
 ## Features
 
@@ -11,7 +11,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Analyze fitness trends (CTL/ATL/TSB)
 - Comprehensive workout analysis with intervals, notes, and weather data
 - Incorporates heat strain data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
-- Daily weather forecasts from the Google Weather API for each enabled location in the athlete's Intervals.icu weather config, with local AQI from the Google Air Quality API, a pollen forecast from the Google Pollen API, and elevation from the Google Elevation API
+- Weather forecasts up to 10 days out (Google Weather's forecast horizon) for each enabled location in the athlete's Intervals.icu weather config or, optionally, for any geocoded place (e.g., a race location), with local AQI from the Google Air Quality API, a pollen forecast from the Google Pollen API, elevation from the Google Elevation API, and place resolution via the Google Geocoding API
 
 **Note:** Due to Strava API restrictions, workouts imported from Strava to Intervals.icu cannot be analyzed. To work around this, ensure that workouts are synced to Intervals.icu from other sources (Zwift, Garmin Connect, Dropbox, etc.)
 
@@ -20,7 +20,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ### Today's Data
 - `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured).
 - `get_todays_workouts` - Today's completed (with full per-activity details) and planned workouts only. A leaner alternative to `get_todays_summary` when only workout data is needed.
-- `get_todays_forecast` - Today's weather forecast for each enabled location in the athlete's Intervals.icu weather config, sourced from the Google Weather API. Includes elevation (from the Google Elevation API), current conditions, the remaining daylight hours of the day, today's sunrise and sunset times, active alerts, local AQI (from the Google Air Quality API) on the current conditions and each hourly entry, and today's pollen forecast (from the Google Pollen API) on the current conditions.
+- `get_forecast` - Weather forecast for a date (default: today) and optional location (default: enabled Intervals.icu weather locations). Sourced from the Google Weather API. Includes elevation, sunrise/sunset, a daily summary (high/low temps, conditions, wind, precipitation), and an hourly forecast for the requested date — remaining hours of today when the date is today, all 24 hours of the day otherwise. When the date is today, also includes current conditions and active alerts. Local AQI (Google Air Quality API) is attached to current conditions and to each hourly entry within the API's 96-hour window; pollen (Google Pollen API) is attached for dates within the API's 5-day window. When `location` is provided as free text (e.g., `"San Francisco, CA"`), it's geocoded via the Google Geocoding API and the resolved address is surfaced in the response.
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location
@@ -100,7 +100,7 @@ For TrainerRoad integration:
 - `TRAINERROAD_CALENDAR_URL` - Private iCal feed URL
 
 For weather forecasts (optional):
-- `GOOGLE_API_KEY` - A Google Cloud API key. Enable the [Weather API](https://developers.google.com/maps/documentation/weather) (current conditions, hourly forecast, daily forecast for sunrise/sunset, alerts), the [Air Quality API](https://developers.google.com/maps/documentation/air-quality) (local AQI), the [Pollen API](https://developers.google.com/maps/documentation/pollen) (today's pollen forecast), and the [Elevation API](https://developers.google.com/maps/documentation/elevation) (per-location elevation) on the project. The same key is used for any other Google services Domestique adds in the future. Forecast locations come from the athlete's Intervals.icu weather config (only enabled locations are queried).
+- `GOOGLE_API_KEY` - A Google Cloud API key. Enable the [Weather API](https://developers.google.com/maps/documentation/weather) (current conditions, hourly and daily forecasts, alerts, sunrise/sunset), the [Air Quality API](https://developers.google.com/maps/documentation/air-quality) (local AQI), the [Pollen API](https://developers.google.com/maps/documentation/pollen) (pollen forecast), the [Elevation API](https://developers.google.com/maps/documentation/elevation) (per-location elevation), and the [Geocoding API](https://developers.google.com/maps/documentation/geocoding) (resolves free-text location queries to coordinates) on the project. The same key is used for any other Google services Domestique adds in the future. Forecast locations default to the athlete's Intervals.icu weather config (only enabled locations are queried); pass a `location` argument to `get_forecast` to forecast for a different place.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Bugsnag API key for error reporting. When set, upstream API failures (Intervals.icu, Whoop, TrainerRoad) are reported to Bugsnag with full context including HTTP method, URL, status code, and response body.
@@ -362,6 +362,8 @@ Once connected, you can ask Claude:
 - "What are my swimming, cycling and running totals for the past month?"
 - "How much time did I spend in each power zone this month?"
 - "Sync my TrainerRoad runs to Intervals.icu so they sync to Zwift"
+- "What's the weather like for my race in Boulder next Saturday?"
+- "Forecast for Kona, HI in 5 days — what should I expect?"
 
 ## MCP Client Compatibility Notes
 

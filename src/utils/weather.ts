@@ -4,6 +4,7 @@ import type {
   GoogleCurrentConditionsResponse,
   GoogleDailyForecastResponse,
   GoogleForecastDay,
+  GoogleForecastDayPeriod,
   GoogleForecastHour,
   GoogleHourlyForecastResponse,
   GoogleSpeed,
@@ -27,6 +28,7 @@ import type { GoogleElevationResponse } from '../clients/google-elevation.js';
 import type {
   AirQuality,
   CurrentWeather,
+  DailyForecastSummary,
   HourlyForecast,
   Pollen,
   PollenIndexLevel,
@@ -224,7 +226,7 @@ function formatPollenDate(date: GooglePollenDailyInfo['date']): string | undefin
 }
 
 /**
- * Bucket today's pollen entries by UPI value.
+ * Bucket pollen entries for a given date by UPI value.
  *
  * Google emits one entry per pollen type (grass/tree/weed) and one per plant,
  * each with an `indexInfo.value`. We collapse those into UPI levels so the
@@ -237,19 +239,17 @@ function formatPollenDate(date: GooglePollenDailyInfo['date']): string | undefin
  * Health recommendations attach only to pollen types in Google's response
  * (plants don't carry them), and the lower bands are generic "great day to be
  * outside" boilerplate, so we surface only the deduplicated recommendations
- * from the highest UPI level present today.
+ * from the highest UPI level present on the target date.
  *
- * Returns `undefined` if no entry matches today, or if every entry has a UPI
- * value of 0 (no signal worth surfacing).
+ * Returns `undefined` if no entry matches the date, or if every entry has a
+ * UPI value of 0 (no signal worth surfacing).
  */
-function buildPollenForToday(
+function buildPollenForDate(
   pollen: GooglePollenForecastResponse | undefined,
-  timezone: string,
-  now: Date
+  targetDate: string
 ): Pollen | undefined {
   if (!pollen?.dailyInfo || pollen.dailyInfo.length === 0) return undefined;
-  const todayLocal = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
-  const match = pollen.dailyInfo.find((info) => formatPollenDate(info.date) === todayLocal);
+  const match = pollen.dailyInfo.find((info) => formatPollenDate(info.date) === targetDate);
   if (!match) return undefined;
 
   type Bucket = {
@@ -306,7 +306,7 @@ function buildPollenForToday(
   const health_recommendations = recs.size > 0 ? [...recs] : undefined;
 
   return {
-    date: todayLocal,
+    date: targetDate,
     universal_pollen_index,
     health_recommendations,
   };
@@ -409,8 +409,9 @@ export function transformForecastHour(
  * keep hours that fall on today's local date and whose 1-hour window has not
  * fully elapsed (i.e. the in-progress hour and every later hour today).
  *
- * Drops any hour explicitly marked `isDaytime: false` — for outdoor training
- * the dark hours of the evening aren't useful and just inflate the payload.
+ * No daylight filter: nighttime hours of the same local day are kept too,
+ * because plenty of training (early-morning runs, indoor trainer sessions,
+ * post-sunset rides) cares about overnight conditions.
  */
 export function filterHourlyToRestOfDay(
   hours: GoogleForecastHour[] | undefined,
@@ -423,12 +424,32 @@ export function filterHourlyToRestOfDay(
   return hours.filter((h) => {
     const startTime = h.interval?.startTime;
     if (!startTime) return false;
-    if (h.isDaytime === false) return false;
     const startMs = new Date(startTime).getTime();
     if (Number.isNaN(startMs)) return false;
     if (startMs <= cutoffMs) return false;
     const localDate = formatInTimeZone(new Date(startMs), timezone, 'yyyy-MM-dd');
     return localDate === today;
+  });
+}
+
+/**
+ * Filter the hourly forecast to all hours that fall on a specific local date
+ * in the athlete's timezone. Used for future-date forecasts where the full
+ * 24-hour day is relevant (no "remaining hours" cutoff).
+ */
+export function filterHourlyToDate(
+  hours: GoogleForecastHour[] | undefined,
+  timezone: string,
+  targetDate: string
+): GoogleForecastHour[] {
+  if (!hours || hours.length === 0) return [];
+  return hours.filter((h) => {
+    const startTime = h.interval?.startTime;
+    if (!startTime) return false;
+    const startMs = new Date(startTime).getTime();
+    if (Number.isNaN(startMs)) return false;
+    const localDate = formatInTimeZone(new Date(startMs), timezone, 'yyyy-MM-dd');
+    return localDate === targetDate;
   });
 }
 
@@ -446,24 +467,67 @@ function formatDisplayDate(date: GoogleForecastDay['displayDate']): string | und
 }
 
 /**
- * Pick today's sunrise/sunset from a daily-forecast response. Google returns
- * one entry per local day in `forecastDays[]`; we match on `displayDate`
- * against today in the athlete's timezone (the same approach used for pollen).
- * Returns `{}` when no matching day is found or the dataset is missing.
+ * Pick the daily-forecast entry whose `displayDate` matches `targetDate` in
+ * the athlete's timezone. Google returns one entry per local day in
+ * `forecastDays[]`. Returns undefined when nothing matches.
  */
-function pickSunEventsForToday(
+function findDailyForecastForDate(
   daily: GoogleDailyForecastResponse | undefined,
-  timezone: string,
-  now: Date
-): { sunrise?: string; sunset?: string } {
-  if (!daily?.forecastDays || daily.forecastDays.length === 0) return {};
-  const todayLocal = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
-  const match = daily.forecastDays.find((d) => formatDisplayDate(d.displayDate) === todayLocal);
-  if (!match?.sunEvents) return {};
+  targetDate: string
+): GoogleForecastDay | undefined {
+  if (!daily?.forecastDays || daily.forecastDays.length === 0) return undefined;
+  return daily.forecastDays.find((d) => formatDisplayDate(d.displayDate) === targetDate);
+}
+
+/**
+ * Build the {sunrise, sunset} pair from a matched daily-forecast entry.
+ */
+function pickSunEvents(day: GoogleForecastDay | undefined): { sunrise?: string; sunset?: string } {
+  if (!day?.sunEvents) return {};
   return {
-    sunrise: match.sunEvents.sunriseTime,
-    sunset: match.sunEvents.sunsetTime,
+    sunrise: day.sunEvents.sunriseTime,
+    sunset: day.sunEvents.sunsetTime,
   };
+}
+
+/**
+ * Assemble the daytime-period summary for a daily-forecast entry. The daytime
+ * half is the relevant one for outdoor training decisions; whole-day fields
+ * (max/min temperature) come from the day root, half-day fields (humidity,
+ * wind, condition, etc.) come from `daytimeForecast`. Returns undefined if
+ * neither set carries any signal.
+ */
+function buildDailySummary(day: GoogleForecastDay | undefined): DailyForecastSummary | undefined {
+  if (!day) return undefined;
+  const dayPart: GoogleForecastDayPeriod | undefined = day.daytimeForecast;
+  const precip = dayPart?.precipitation;
+  const summary: DailyForecastSummary = {
+    condition: getConditionText(dayPart?.weatherCondition),
+    temperature_max: formatGoogleTemperature(day.maxTemperature),
+    temperature_min: formatGoogleTemperature(day.minTemperature),
+    temperature_max_apparent: formatGoogleTemperature(day.feelsLikeMaxTemperature),
+    temperature_min_apparent: formatGoogleTemperature(day.feelsLikeMinTemperature),
+    cloud_cover: dayPart?.cloudCover !== undefined ? formatPercent(dayPart.cloudCover) : undefined,
+    humidity:
+      dayPart?.relativeHumidity !== undefined ? formatPercent(dayPart.relativeHumidity) : undefined,
+    precipitation_amount: formatPrecipitationAmount(precip?.qpf),
+    precipitation_chance:
+      precip?.probability?.percent !== undefined
+        ? formatPercent(precip.probability.percent)
+        : undefined,
+    precipitation_type: precip?.probability?.type,
+    thunderstorm_probability:
+      dayPart?.thunderstormProbability !== undefined
+        ? formatPercent(dayPart.thunderstormProbability)
+        : undefined,
+    uv_index: dayPart?.uvIndex,
+    wind_direction: formatWindDirection(dayPart?.wind),
+    wind_speed: formatGoogleSpeed(dayPart?.wind?.speed),
+    wind_gust: formatGoogleSpeed(dayPart?.wind?.gust),
+  };
+  // Drop entirely if every field is undefined — nothing useful to surface.
+  const hasAny = Object.values(summary).some((v) => v !== undefined);
+  return hasAny ? summary : undefined;
 }
 
 function transformAlert(alert: GoogleWeatherAlert): WeatherAlert {
@@ -510,10 +574,13 @@ export function assembleLocationForecast(
   daily?: GoogleDailyForecastResponse,
   elevation?: GoogleElevationResponse
 ): LocationForecast {
+  const todayLocal = formatInTimeZone(now, timezone, 'yyyy-MM-dd');
   const filteredHours = filterHourlyToRestOfDay(hourly?.forecastHours, timezone, now);
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
-  const pollenForToday = buildPollenForToday(pollen, timezone, now);
-  const sunEvents = pickSunEventsForToday(daily, timezone, now);
+  const pollenForToday = buildPollenForDate(pollen, todayLocal);
+  const dailyForToday = findDailyForecastForDate(daily, todayLocal);
+  const sunEvents = pickSunEvents(dailyForToday);
+  const dailySummary = buildDailySummary(dailyForToday);
   const elevationMeters =
     elevation?.status === 'OK' && typeof elevation.results?.[0]?.elevation === 'number'
       ? elevation.results[0].elevation
@@ -523,8 +590,10 @@ export function assembleLocationForecast(
     latitude,
     longitude,
     elevation: elevationMeters !== undefined ? formatLength(elevationMeters) : undefined,
+    date: todayLocal,
     sunrise: sunEvents.sunrise,
     sunset: sunEvents.sunset,
+    daily_summary: dailySummary,
     current_conditions: transformCurrentConditions(current, currentAirQuality),
     hourly_forecast: filteredHours.map((h) => {
       const startTime = h.interval?.startTime;
@@ -533,5 +602,63 @@ export function assembleLocationForecast(
     }),
     alerts: (alerts?.weatherAlerts ?? []).map(transformAlert),
     pollen: pollenForToday,
+  };
+}
+
+/**
+ * Build a per-location forecast for a specific future date.
+ *
+ * Differences from {@link assembleLocationForecast}:
+ * - No `current_conditions` or `alerts` — both are inherently near-term.
+ * - `hourly_forecast` covers the full 24 hours of the target date in the
+ *   athlete's timezone.
+ * - `pollen` is included only when the caller passes a response that contains
+ *   a matching `dailyInfo` entry (the calling code gates on the Pollen API's
+ *   5-day window before bothering to fetch).
+ * - `air_quality` on hourly entries is included only for entries the AQ API
+ *   actually covers (the calling code gates on the AQ API's 96-hour window
+ *   before bothering to fetch).
+ *
+ * `location` is the human-readable label (Intervals.icu config label or the
+ * geocoded `formattedAddress`). Per-API failures are isolated upstream so
+ * `daily`, `hourly`, `pollen`, etc. may all be undefined independently.
+ */
+export function assembleFutureLocationForecast(
+  location: string,
+  latitude: number,
+  longitude: number,
+  targetDate: string,
+  hourly: GoogleHourlyForecastResponse | undefined,
+  daily: GoogleDailyForecastResponse | undefined,
+  timezone: string,
+  hourlyAirQuality?: GoogleAirQualityHourlyResponse,
+  pollen?: GooglePollenForecastResponse,
+  elevation?: GoogleElevationResponse
+): LocationForecast {
+  const filteredHours = filterHourlyToDate(hourly?.forecastHours, timezone, targetDate);
+  const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
+  const pollenForDate = buildPollenForDate(pollen, targetDate);
+  const dailyForDate = findDailyForecastForDate(daily, targetDate);
+  const sunEvents = pickSunEvents(dailyForDate);
+  const dailySummary = buildDailySummary(dailyForDate);
+  const elevationMeters =
+    elevation?.status === 'OK' && typeof elevation.results?.[0]?.elevation === 'number'
+      ? elevation.results[0].elevation
+      : undefined;
+  return {
+    location,
+    latitude,
+    longitude,
+    elevation: elevationMeters !== undefined ? formatLength(elevationMeters) : undefined,
+    date: targetDate,
+    sunrise: sunEvents.sunrise,
+    sunset: sunEvents.sunset,
+    daily_summary: dailySummary,
+    hourly_forecast: filteredHours.map((h) => {
+      const startTime = h.interval?.startTime;
+      const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
+      return transformForecastHour(h, aqEntry);
+    }),
+    pollen: pollenForDate,
   };
 }

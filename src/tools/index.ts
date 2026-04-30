@@ -9,6 +9,7 @@ import { GoogleWeatherClient } from '../clients/google-weather.js';
 import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
 import { GooglePollenClient } from '../clients/google-pollen.js';
 import { GoogleElevationClient } from '../clients/google-elevation.js';
+import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
 import { CurrentTools } from './current.js';
 
 // Common annotation presets for tool categories. All four hints are set
@@ -205,6 +206,7 @@ export interface ToolsConfig {
   googleAirQuality?: { apiKey: string } | null;
   googlePollen?: { apiKey: string } | null;
   googleElevation?: { apiKey: string } | null;
+  googleGeocoding?: { apiKey: string } | null;
 }
 
 export class ToolRegistry {
@@ -240,6 +242,9 @@ export class ToolRegistry {
     const googleElevationClient = config.googleElevation
       ? new GoogleElevationClient(config.googleElevation)
       : null;
+    const googleGeocodingClient = config.googleGeocoding
+      ? new GoogleGeocodingClient(config.googleGeocoding)
+      : null;
     this.hasWhoop = whoopClient !== null;
     this.hasTrainerRoad = trainerroadClient !== null;
     this.hasLastFm = lastfmClient !== null;
@@ -265,7 +270,8 @@ export class ToolRegistry {
       googleWeatherClient,
       googleAirQualityClient,
       googlePollenClient,
-      googleElevationClient
+      googleElevationClient,
+      googleGeocodingClient
     );
     this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
@@ -355,39 +361,41 @@ export class ToolRegistry {
 
     if (this.hasGoogleWeather) {
       register({
-        name: 'get_todays_forecast',
-        title: "Today's Forecast",
-        description: `Fetches today's weather forecast for each enabled location in the athlete's Intervals.icu weather config, sourced from the Google Weather API and (when configured) the Google Air Quality and Pollen APIs.
+        name: 'get_forecast',
+        title: 'Weather Forecast',
+        description: `Fetches a weather forecast for a date and (optionally) a location. Supports up to 10 days from today.
 
 **Includes (per location):**
-- Elevation at the location (sourced from the Google Elevation API)
-- Current conditions (temperature, humidity, wind, pressure, visibility, UV, etc.)
-- Local AQI on the current conditions and on each hourly entry
-- Today's pollen forecast grouped by Universal Pollen Index level (with the pollen types and plants at each level, plus health recommendations from the highest active level), as a sibling of the current conditions
-- Hourly forecast for the remaining daylight hours of the day in the athlete's timezone
-- Active weather alerts (warnings, watches, advisories)
+- Location label, coordinates, and elevation
+- The forecast date, sunrise, and sunset
+- Daily summary: high/low temperatures, conditions, precipitation, thunderstorm probability, wind, humidity, UV, cloud cover
+- Hourly forecast — remaining hours of the day when the date is today, all 24 hours otherwise. Each hour may include local AQI
+- Pollen forecast (Universal Pollen Index level with pollen types, plants, and health recommendations) when available for the date
+- When the date is today: current conditions and active weather alerts (warnings, watches, advisories)
 
 <use-cases>
-- Deciding whether to ride/run outside today.
+- Deciding whether to ride/run outside today (no args).
 - Picking a workout window based on temperature, precipitation, wind, or air quality.
-- Surfacing safety-relevant weather alerts (heat, cold, wind, storms, flooding).
-- Adjusting fueling and hydration plans for hot or cold conditions.
+- Race-week planning: forecast for an upcoming race location 1–10 days out.
+- Surfacing safety-relevant weather alerts for today (heat, cold, wind, storms, flooding).
+- Adjusting fueling, hydration, gear, and pacing for hot or cold conditions on race day.
 - Adjusting training intensity based on air quality (AQI band, dominant pollutant).
-- Flagging pollen exposure for athletes with seasonal allergies (in-season grass/tree/weed indexes).
+- Flagging pollen exposure for athletes with seasonal allergies.
 </use-cases>
 
 <instructions>
-- Use this tool when the user asks specifically about today's weather, conditions, or forecast and doesn't need other "today" data. For a complete daily snapshot that already includes the forecast, prefer get_todays_summary.
+- For "today's weather" with no other "today" data, call this tool with no arguments. For a complete daily snapshot that already includes today's forecast, prefer get_todays_summary.
+- For a future date or a specific location, pass \`date\` and/or \`location\`. Date input accepts ISO YYYY-MM-DD or natural-language strings (e.g., "tomorrow", "in 3 days").
 </instructions>
 
 <notes>
-- Locations come from the athlete's Intervals.icu weather config; only enabled locations are returned.
-- Conditions can change over the course of the day; call again as needed instead of relying on stale data.
+- Pollen and hourly air quality may be absent for dates further out; they have shorter forecast windows than the daily/hourly weather.
+- Current conditions and active alerts are included only when the date is today.
 </notes>`,
-        inputSchema: {},
-        outputSchema: schemas.todaysForecastOutputSchema,
+        inputSchema: schemas.forecastInputSchema,
+        outputSchema: schemas.forecastOutputSchema,
         annotations: READ_ONLY,
-        handler: async () => this.currentTools.getTodaysForecast(),
+        handler: async (args: { date?: string; location?: string }) => this.currentTools.getForecast(args),
       });
     }
 

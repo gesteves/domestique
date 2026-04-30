@@ -7,6 +7,7 @@ import { GoogleWeatherClient } from '../../src/clients/google-weather.js';
 import { GoogleAirQualityClient } from '../../src/clients/google-air-quality.js';
 import { GooglePollenClient } from '../../src/clients/google-pollen.js';
 import { GoogleElevationClient } from '../../src/clients/google-elevation.js';
+import { GoogleGeocodingClient } from '../../src/clients/google-geocoding.js';
 import type { WhoopSleepData, WhoopRecoveryData, StrainData, PlannedWorkout, NormalizedWorkout, StrainActivity, FitnessMetrics, WellnessData, WhoopBodyMeasurements, Race } from '../../src/types/index.js';
 
 // Mock the clients
@@ -17,6 +18,7 @@ vi.mock('../../src/clients/google-weather.js');
 vi.mock('../../src/clients/google-air-quality.js');
 vi.mock('../../src/clients/google-pollen.js');
 vi.mock('../../src/clients/google-elevation.js');
+vi.mock('../../src/clients/google-geocoding.js');
 
 describe('CurrentTools', () => {
   let tools: CurrentTools;
@@ -1188,7 +1190,7 @@ describe('CurrentTools', () => {
         null
       );
 
-      const result = await toolsNoWeather.getTodaysForecast();
+      const result = await toolsNoWeather.getForecast();
       expect(result.forecasts).toEqual([]);
       expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
       expect(mockIntervalsClient.getEnabledWeatherLocations).not.toHaveBeenCalled();
@@ -1209,7 +1211,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWithWeather.getTodaysForecast();
+      const result = await toolsWithWeather.getForecast();
 
       expect(mockGoogleWeatherClient.getCurrentConditions).toHaveBeenCalledWith(43.65, -110.71);
       expect(mockGoogleWeatherClient.getHourlyForecast).toHaveBeenCalledWith(43.65, -110.71);
@@ -1250,7 +1252,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockRejectedValue(new Error('alerts boom'));
 
-      const result = await toolsWithWeather.getTodaysForecast();
+      const result = await toolsWithWeather.getForecast();
       expect(result.forecasts.map((f) => f.location)).toEqual(['Boise']);
       expect(result.forecasts[0].alerts).toEqual([]);
       expect(result.forecasts[0].current_conditions?.temperature).toBe('4.1 °C');
@@ -1271,7 +1273,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWithWeather.getTodaysForecast();
+      const result = await toolsWithWeather.getForecast();
       expect(result.forecasts.map((f) => f.location)).toEqual(['A']);
       expect(result.forecasts[0].current_conditions).toBeNull();
     });
@@ -1366,7 +1368,7 @@ describe('CurrentTools', () => {
         ],
       });
 
-      const result = await toolsWithAirQuality.getTodaysForecast();
+      const result = await toolsWithAirQuality.getForecast();
 
       expect(mockGoogleAirQualityClient.getCurrentAirQuality).toHaveBeenCalledWith(43.65, -110.71);
       expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).toHaveBeenCalledWith(
@@ -1402,7 +1404,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleAirQualityClient.getCurrentAirQuality).mockRejectedValue(new Error('boom'));
       vi.mocked(mockGoogleAirQualityClient.getHourlyAirQualityForecast).mockRejectedValue(new Error('boom'));
 
-      const result = await toolsWithAirQuality.getTodaysForecast();
+      const result = await toolsWithAirQuality.getForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.current_conditions?.air_quality).toBeUndefined();
@@ -1427,7 +1429,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWeatherOnly.getTodaysForecast();
+      const result = await toolsWeatherOnly.getForecast();
       expect(mockGoogleAirQualityClient.getCurrentAirQuality).not.toHaveBeenCalled();
       expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).not.toHaveBeenCalled();
       expect(result.forecasts[0].current_conditions?.air_quality).toBeUndefined();
@@ -1486,7 +1488,7 @@ describe('CurrentTools', () => {
         ],
       });
 
-      const result = await toolsWithPollen.getTodaysForecast();
+      const result = await toolsWithPollen.getForecast();
 
       expect(mockGooglePollenClient.getPollenForecast).toHaveBeenCalledWith(43.65, -110.71, 1);
 
@@ -1524,7 +1526,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
       vi.mocked(mockGooglePollenClient.getPollenForecast).mockRejectedValue(new Error('boom'));
 
-      const result = await toolsWithPollen.getTodaysForecast();
+      const result = await toolsWithPollen.getForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.pollen).toBeUndefined();
@@ -1557,7 +1559,7 @@ describe('CurrentTools', () => {
         ],
       });
 
-      const result = await toolsWithWeather.getTodaysForecast();
+      const result = await toolsWithWeather.getForecast();
 
       expect(mockGoogleWeatherClient.getDailyForecast).toHaveBeenCalledWith(43.65, -110.71);
       const fc = result.forecasts[0];
@@ -1581,7 +1583,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
       vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockRejectedValue(new Error('daily boom'));
 
-      const result = await toolsWithWeather.getTodaysForecast();
+      const result = await toolsWithWeather.getForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.sunrise).toBeUndefined();
@@ -1606,7 +1608,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWeatherOnly.getTodaysForecast();
+      const result = await toolsWeatherOnly.getForecast();
       expect(mockGooglePollenClient.getPollenForecast).not.toHaveBeenCalled();
       expect(result.forecasts[0].pollen).toBeUndefined();
     });
@@ -1633,7 +1635,7 @@ describe('CurrentTools', () => {
         results: [{ elevation: 1980.4, location: { lat: 43.65, lng: -110.71 }, resolution: 4.7 }],
       });
 
-      const result = await toolsWithElevation.getTodaysForecast();
+      const result = await toolsWithElevation.getForecast();
 
       expect(mockGoogleElevationClient.getElevation).toHaveBeenCalledWith(43.65, -110.71);
       expect(result.forecasts[0].elevation).toBe('1980 m');
@@ -1658,7 +1660,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
       vi.mocked(mockGoogleElevationClient.getElevation).mockRejectedValue(new Error('elevation boom'));
 
-      const result = await toolsWithElevation.getTodaysForecast();
+      const result = await toolsWithElevation.getForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.elevation).toBeUndefined();
@@ -1683,9 +1685,227 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWeatherOnly.getTodaysForecast();
+      const result = await toolsWeatherOnly.getForecast();
       expect(mockGoogleElevationClient.getElevation).not.toHaveBeenCalled();
       expect(result.forecasts[0].elevation).toBeUndefined();
+    });
+
+    describe('future dates and geocoded locations', () => {
+      let mockGoogleGeocodingClient: GoogleGeocodingClient;
+
+      const sampleDailyAt = (ymd: string) => ({
+        forecastDays: [
+          {
+            displayDate: { year: Number(ymd.slice(0, 4)), month: Number(ymd.slice(5, 7)), day: Number(ymd.slice(8, 10)) },
+            sunEvents: { sunriseTime: `${ymd}T13:30:00Z`, sunsetTime: `${ymd}T03:00:00Z` },
+            maxTemperature: { degrees: 22.5, unit: 'CELSIUS' },
+            minTemperature: { degrees: 8.1, unit: 'CELSIUS' },
+            feelsLikeMaxTemperature: { degrees: 21, unit: 'CELSIUS' },
+            feelsLikeMinTemperature: { degrees: 6, unit: 'CELSIUS' },
+            daytimeForecast: {
+              weatherCondition: { description: { text: 'Mostly sunny' } },
+              relativeHumidity: 35,
+              uvIndex: 7,
+              cloudCover: 20,
+              precipitation: { qpf: { quantity: 0, unit: 'MILLIMETERS' }, probability: { percent: 5, type: 'RAIN' } },
+              thunderstormProbability: 0,
+              wind: {
+                direction: { degrees: 270, cardinal: 'WEST' },
+                speed: { value: 14, unit: 'KILOMETERS_PER_HOUR' },
+                gust: { value: 22, unit: 'KILOMETERS_PER_HOUR' },
+              },
+            },
+          },
+        ],
+      });
+
+      const sampleHourlyAcrossDays = {
+        forecastHours: [
+          // 2026-04-30 in Boise (UTC-6) = 2026-04-30T06:00Z..2026-05-01T05:59Z
+          { interval: { startTime: '2026-04-30T06:00:00Z' }, temperature: { degrees: 8, unit: 'CELSIUS' } },
+          { interval: { startTime: '2026-04-30T18:00:00Z' }, temperature: { degrees: 18, unit: 'CELSIUS' }, isDaytime: true },
+          { interval: { startTime: '2026-05-01T04:00:00Z' }, temperature: { degrees: 11, unit: 'CELSIUS' }, isDaytime: false },
+          // Different date — should be filtered out
+          { interval: { startTime: '2026-05-01T13:00:00Z' }, temperature: { degrees: 5, unit: 'CELSIUS' } },
+        ],
+      };
+
+      beforeEach(() => {
+        mockGoogleGeocodingClient = new GoogleGeocodingClient({ apiKey: 'k' });
+      });
+
+      it('rejects dates outside the supported window', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient
+        );
+        await expect(tools.getForecast({ date: '2026-05-15' })).rejects.toThrow(/outside the supported window/);
+        await expect(tools.getForecast({ date: '2026-04-27' })).rejects.toThrow(/outside the supported window/);
+      });
+
+      it('returns empty forecasts when Google Weather is not configured (no args)', async () => {
+        const tools = new CurrentTools(mockIntervalsClient, mockWhoopClient, mockTrainerRoadClient, null);
+        const result = await tools.getForecast({ date: '2026-05-02' });
+        expect(result.forecasts).toEqual([]);
+      });
+
+      it('throws when location arg is provided but geocoding is not configured', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient,
+          null,
+          null,
+          null,
+          null
+        );
+        await expect(tools.getForecast({ location: 'Boulder, CO' })).rejects.toThrow(/Free-text location lookup is not available/);
+      });
+
+      it('builds a future-date forecast with only daily/hourly when date > today and no AQ/pollen configured', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient
+        );
+
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+        ]);
+        vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-04-30'));
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourlyAcrossDays);
+
+        const result = await tools.getForecast({ date: '2026-04-30' });
+
+        // No current_conditions or alerts on future-date forecast
+        expect(mockGoogleWeatherClient.getCurrentConditions).not.toHaveBeenCalled();
+        expect(mockGoogleWeatherClient.getWeatherAlerts).not.toHaveBeenCalled();
+
+        expect(result.forecasts).toHaveLength(1);
+        const fc = result.forecasts[0];
+        expect(fc.location).toBe('Moose');
+        expect(fc.date).toBe('2026-04-30');
+        expect(fc.current_conditions).toBeUndefined();
+        expect(fc.alerts).toBeUndefined();
+        // All hours that fall on the local date 2026-04-30 in Boise (UTC-6 in DST):
+        // - 2026-04-30T06:00Z = 00:00 local (keep)
+        // - 2026-04-30T18:00Z = 12:00 local (keep)
+        // - 2026-05-01T04:00Z = 22:00 local same day (keep)
+        // - 2026-05-01T13:00Z = 07:00 local next day (drop)
+        expect(fc.hourly_forecast.map((h) => h.forecast_start)).toEqual([
+          '2026-04-30T06:00:00Z',
+          '2026-04-30T18:00:00Z',
+          '2026-05-01T04:00:00Z',
+        ]);
+        expect(fc.daily_summary?.condition).toBe('Mostly sunny');
+        expect(fc.daily_summary?.temperature_max).toBe('22.5 °C');
+        expect(fc.daily_summary?.temperature_min).toBe('8.1 °C');
+      });
+
+      it('omits pollen for dates beyond the Pollen API window (today+5 or later)', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient,
+          null,
+          mockGooglePollenClient
+        );
+
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'X', latitude: 0, longitude: 0, location: 'X' },
+        ]);
+        vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-05-05'));
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
+
+        // 2026-05-05 is today (2026-04-28) + 7 days — beyond pollen's 5-day window
+        const result = await tools.getForecast({ date: '2026-05-05' });
+        expect(mockGooglePollenClient.getPollenForecast).not.toHaveBeenCalled();
+        expect(result.forecasts[0].pollen).toBeUndefined();
+      });
+
+      it('omits hourly air quality for dates beyond the AQ window (today+4 or later)', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient,
+          mockGoogleAirQualityClient
+        );
+
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'X', latitude: 0, longitude: 0, location: 'X' },
+        ]);
+        vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-05-03'));
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
+
+        // 2026-05-03 is today (2026-04-28) + 5 days — beyond AQ's 96h window
+        await tools.getForecast({ date: '2026-05-03' });
+        expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).not.toHaveBeenCalled();
+      });
+
+      it('geocodes the location string and returns a single resolved forecast', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient,
+          null,
+          null,
+          null,
+          mockGoogleGeocodingClient
+        );
+
+        vi.mocked(mockGoogleGeocodingClient.geocode).mockResolvedValue({
+          formattedAddress: 'San Francisco, CA, USA',
+          latitude: 37.7749,
+          longitude: -122.4194,
+        });
+        vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-04-30'));
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
+
+        const result = await tools.getForecast({ date: '2026-04-30', location: 'San Francisco, CA' });
+
+        expect(mockGoogleGeocodingClient.geocode).toHaveBeenCalledWith('San Francisco, CA');
+        // Intervals.icu enabled-location lookup must be skipped when location is provided
+        expect(mockIntervalsClient.getEnabledWeatherLocations).not.toHaveBeenCalled();
+        expect(result.forecasts).toHaveLength(1);
+        expect(result.forecasts[0].location).toBe('San Francisco, CA, USA');
+        expect(result.forecasts[0].latitude).toBe(37.7749);
+        expect(result.forecasts[0].longitude).toBe(-122.4194);
+      });
+
+      it('hourly forecast for today now includes nighttime hours of the same local day', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient
+        );
+
+        // System time set in the parent beforeEach to 2026-04-28T14:49:34Z (08:49 Boise)
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'Boise', latitude: 0, longitude: 0, location: 'Boise,Idaho,US' },
+        ]);
+        vi.mocked(mockGoogleWeatherClient.getCurrentConditions).mockResolvedValue(sampleCurrent);
+        vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({
+          forecastHours: [
+            { interval: { startTime: '2026-04-28T20:00:00Z' }, temperature: { degrees: 12, unit: 'CELSIUS' }, isDaytime: true },
+            { interval: { startTime: '2026-04-29T04:00:00Z' }, temperature: { degrees: 6, unit: 'CELSIUS' }, isDaytime: false }, // 22:00 local same day
+          ],
+        });
+
+        const result = await tools.getForecast();
+        expect(result.forecasts[0].hourly_forecast.map((h) => h.forecast_start)).toEqual([
+          '2026-04-28T20:00:00Z',
+          '2026-04-29T04:00:00Z',
+        ]);
+      });
     });
   });
 });

@@ -121,6 +121,19 @@ describe('date-formatting', () => {
       expect(result.scheduled_for).toBe('Sunday, December 15, 2024');
     });
 
+    it('keeps the time on hourly forecast boundary fields even when they land on midnight', () => {
+      // The last hour of a day legitimately ends at midnight (and the first
+      // hour starts at midnight). These are interval boundaries, not date
+      // sentinels — the midnight-as-date-only heuristic must skip them.
+      const data = {
+        forecast_start: '2026-05-01T05:00:00Z', // = 23:00 MDT (Apr 30)
+        forecast_end: '2026-05-01T06:00:00Z',   // = 00:00 MDT (May 1)
+      };
+      const result = formatResponseDates(data, 'America/Denver');
+      expect(result.forecast_start).toBe('Thursday, April 30, 2026 at 11:00 PM MDT');
+      expect(result.forecast_end).toBe('Friday, May 1, 2026 at 12:00 AM MDT');
+    });
+
     it('should handle nested objects recursively', () => {
       const data = {
         whoop: {

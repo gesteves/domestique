@@ -157,6 +157,26 @@ export interface GoogleSunEvents {
   sunsetTime?: string;
 }
 
+/**
+ * Sub-period of a daily forecast (`daytimeForecast` or `nighttimeForecast`).
+ * Shape mirrors {@link GoogleForecastHour} minus per-hour fields the daily
+ * endpoint doesn't compute (visibility, temperature, dew point, etc.).
+ */
+export interface GoogleForecastDayPeriod {
+  interval?: {
+    startTime?: string;
+    endTime?: string;
+  };
+  weatherCondition?: GoogleWeatherCondition;
+  relativeHumidity?: number;
+  uvIndex?: number;
+  precipitation?: GooglePrecipitation;
+  thunderstormProbability?: number;
+  wind?: GoogleWind;
+  cloudCover?: number;
+  [key: string]: unknown;
+}
+
 export interface GoogleForecastDay {
   interval?: {
     startTime?: string;
@@ -168,6 +188,12 @@ export interface GoogleForecastDay {
     day?: number;
   };
   sunEvents?: GoogleSunEvents;
+  daytimeForecast?: GoogleForecastDayPeriod;
+  nighttimeForecast?: GoogleForecastDayPeriod;
+  maxTemperature?: GoogleTemperature;
+  minTemperature?: GoogleTemperature;
+  feelsLikeMaxTemperature?: GoogleTemperature;
+  feelsLikeMinTemperature?: GoogleTemperature;
   [key: string]: unknown;
 }
 

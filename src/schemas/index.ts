@@ -704,7 +704,7 @@ const CurrentWeatherZ = z.object({
   wind_direction: z.string().optional().describe('Direction the wind is blowing from'),
   wind_speed: z.string().optional().describe('Sustained wind speed'),
   wind_gust: z.string().optional().describe('Peak wind gust speed'),
-  air_quality: AirQualityZ.optional().describe('Local air quality index from the Google Air Quality API'),
+  air_quality: AirQualityZ.optional().describe('Local air quality index'),
 }).passthrough();
 
 const HourlyForecastZ = z.object({
@@ -729,7 +729,7 @@ const HourlyForecastZ = z.object({
   wind_direction: z.string().optional().describe('Direction the wind is blowing from'),
   wind_speed: z.string().optional().describe('Sustained wind speed'),
   wind_gust: z.string().optional().describe('Peak wind gust speed'),
-  air_quality: AirQualityZ.optional().describe('Local air quality index from the Google Air Quality API for this hour'),
+  air_quality: AirQualityZ.optional().describe('Local air quality index for this hour'),
 }).passthrough();
 
 const WeatherAlertZ = z.object({
@@ -741,17 +741,37 @@ const WeatherAlertZ = z.object({
   source: z.string().optional().describe('Issuing organization (e.g., "National Weather Service")'),
 }).passthrough();
 
+const DailySummaryZ = z.object({
+  condition: z.string().optional().describe('Human-readable description of the dominant daytime condition (e.g., "Sunny", "Mostly cloudy", "Light rain")'),
+  temperature_max: z.string().optional().describe('Maximum air temperature for the day'),
+  temperature_min: z.string().optional().describe('Minimum air temperature for the day'),
+  temperature_max_apparent: z.string().optional().describe('Maximum feels-like temperature for the day'),
+  temperature_min_apparent: z.string().optional().describe('Minimum feels-like temperature for the day'),
+  cloud_cover: z.string().optional().describe('Daytime cloud cover fraction'),
+  humidity: z.string().optional().describe('Daytime relative humidity'),
+  precipitation_amount: z.string().optional().describe('Expected daytime precipitation total'),
+  precipitation_chance: z.string().optional().describe('Daytime probability of any precipitation'),
+  precipitation_type: z.string().optional().describe('Expected daytime precipitation type (RAIN, SNOW, etc.)'),
+  thunderstorm_probability: z.string().optional().describe('Daytime probability of thunderstorm activity'),
+  uv_index: z.number().optional().describe('Daytime UV index'),
+  wind_direction: z.string().optional().describe('Daytime direction the wind is blowing from'),
+  wind_speed: z.string().optional().describe('Daytime sustained wind speed'),
+  wind_gust: z.string().optional().describe('Daytime peak wind gust speed'),
+}).passthrough();
+
 const LocationForecastZ = z.object({
-  location: z.string().optional().describe("Human-readable label for this location from the athlete's Intervals.icu weather config (e.g., \"Home\", \"Moose\")"),
+  location: z.string().optional().describe("Human-readable label for this location. For configured weather locations this is the user's label (e.g., \"Home\", \"Moose\"); for free-text place queries this is the resolved formatted address"),
   latitude: z.number().optional().describe('Location latitude'),
   longitude: z.number().optional().describe('Location longitude'),
   elevation: z.string().optional().describe('Elevation at the location'),
-  sunrise: z.string().optional().describe("Sunrise time at the location for today"),
-  sunset: z.string().optional().describe("Sunset time at the location for today"),
-  current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Null if Google Weather returned no current data'),
-  hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the remaining daylight hours of the athlete's local day"),
-  alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts for the location'),
-  pollen: PollenZ.optional().describe("Today's pollen forecast for the location from the Google Pollen API. Only present when the forecast date matches today in the athlete's timezone"),
+  date: z.string().optional().describe("The date this forecast is for (YYYY-MM-DD) in the athlete's timezone"),
+  sunrise: z.string().optional().describe('Sunrise time at the location on the forecast date'),
+  sunset: z.string().optional().describe('Sunset time at the location on the forecast date'),
+  daily_summary: DailySummaryZ.optional().describe('Daily forecast summary for the date (high/low temps, conditions, precipitation, wind)'),
+  current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Only present when the forecast date is today; null if no current data is available'),
+  hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the forecast date in the athlete's timezone — remaining hours of the day when the date is today, all 24 hours otherwise"),
+  alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts for the location. Only present when the forecast date is today'),
+  pollen: PollenZ.optional().describe('Pollen forecast for the location on the forecast date. May be absent for dates further out — pollen has a shorter forecast window than the daily/hourly weather'),
 }).passthrough();
 
 // ============================================
@@ -941,7 +961,7 @@ export const todaysSummaryOutputSchema = {
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
   completed_workouts: z.array(WorkoutZ).optional().describe('Workouts completed so far today, with matched Whoop data'),
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
-  forecast: z.array(LocationForecastZ).optional().describe("Today's weather forecast for each enabled location in the athlete's Intervals.icu weather config. Empty when Google Weather is not configured or has no enabled locations"),
+  forecast: z.array(LocationForecastZ).optional().describe("Today's weather forecast for each of the user's configured weather locations. Empty when no weather provider is configured or no locations are configured"),
   workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
   workouts_completed: z.number().optional().describe('Number of workouts completed today'),
   tss_planned: z.number().optional().describe('Total expected TSS from planned workouts'),
@@ -949,9 +969,14 @@ export const todaysSummaryOutputSchema = {
   hints: hintsField,
 } as const;
 
-export const todaysForecastOutputSchema = {
+export const forecastInputSchema = {
+  date: z.string().optional().describe("Date the forecast is for, accepting ISO YYYY-MM-DD or natural language (e.g., \"tomorrow\", \"in 3 days\"). Defaults to today. Must be within today through 10 days from today"),
+  location: z.string().optional().describe("Free-text place query (e.g., \"San Francisco, CA\", \"Kona, HI\") to forecast for. When omitted, returns forecasts for the user's configured weather locations. The resolved place name is surfaced in the response"),
+} as const;
+
+export const forecastOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
-  forecasts: z.array(LocationForecastZ).describe("Per-location forecasts for each enabled location in the athlete's Intervals.icu weather config"),
+  forecasts: z.array(LocationForecastZ).describe("Per-location forecasts for the requested date. One entry per resolved location: the user's configured weather locations when `location` is omitted, a single entry when `location` is provided"),
 } as const;
 
 export const todaysWorkoutsOutputSchema = {

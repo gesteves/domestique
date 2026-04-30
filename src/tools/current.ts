@@ -5,10 +5,11 @@ import { GoogleWeatherClient } from '../clients/google-weather.js';
 import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
 import { GooglePollenClient } from '../clients/google-pollen.js';
 import { GoogleElevationClient } from '../clients/google-elevation.js';
-import { parseDateRangeInTimezone, getTodayInTimezone } from '../utils/tz.js';
+import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
+import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
-import { assembleLocationForecast } from '../utils/weather.js';
+import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
 import type {
   StrainData,
   AthleteProfile,
@@ -19,12 +20,26 @@ import type {
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
   TodaysWorkoutsResponse,
-  TodaysForecastResponse,
+  ForecastResponse,
   LocationForecast,
   Race,
 } from '../types/index.js';
 import { filterWhoopDuplicateFields } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
+
+/** Maximum forecast horizon supported by Google Weather (days). */
+const MAX_FORECAST_DAYS = 10;
+/** Maximum days the Pollen API forecast covers. */
+const MAX_POLLEN_FORECAST_DAYS = 5;
+/** Maximum hours the Air Quality hourly forecast covers. */
+const MAX_AIR_QUALITY_FORECAST_HOURS = 96;
+
+/** Days between two YYYY-MM-DD strings (UTC arithmetic; result independent of runtime tz). */
+function daysBetweenYMD(start: string, end: string): number {
+  const [ys, ms, ds] = start.split('-').map(Number);
+  const [ye, me, de] = end.split('-').map(Number);
+  return Math.round((Date.UTC(ye, me - 1, de) - Date.UTC(ys, ms - 1, ds)) / 86400000);
+}
 
 export class CurrentTools {
   constructor(
@@ -34,7 +49,8 @@ export class CurrentTools {
     private googleWeather: GoogleWeatherClient | null = null,
     private googleAirQuality: GoogleAirQualityClient | null = null,
     private googlePollen: GooglePollenClient | null = null,
-    private googleElevation: GoogleElevationClient | null = null
+    private googleElevation: GoogleElevationClient | null = null,
+    private googleGeocoding: GoogleGeocodingClient | null = null
   ) {}
 
   /**
@@ -53,13 +69,37 @@ export class CurrentTools {
   private async buildForecasts(timezone: string, now: Date): Promise<LocationForecast[]> {
     if (!this.googleWeather) return [];
 
-    let locations: Awaited<ReturnType<IntervalsClient['getEnabledWeatherLocations']>>;
+    let enabled: Awaited<ReturnType<IntervalsClient['getEnabledWeatherLocations']>>;
     try {
-      locations = await this.intervals.getEnabledWeatherLocations();
+      enabled = await this.intervals.getEnabledWeatherLocations();
     } catch (e) {
       console.error('Error fetching weather config from Intervals.icu:', e);
       return [];
     }
+
+    return this.buildForecastsForLocations(
+      timezone,
+      now,
+      enabled.map((loc) => ({
+        label: loc.label,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      }))
+    );
+  }
+
+  /**
+   * Build today's per-location forecasts for an explicit set of locations.
+   * Extracted from {@link buildForecasts} so the unified `getForecast` tool
+   * can reuse it for both Intervals.icu locations and a single geocoded
+   * location.
+   */
+  private async buildForecastsForLocations(
+    timezone: string,
+    now: Date,
+    locations: { label: string; latitude: number; longitude: number }[]
+  ): Promise<LocationForecast[]> {
+    if (!this.googleWeather) return [];
 
     const gw = this.googleWeather;
     const aq = this.googleAirQuality;
@@ -141,18 +181,171 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's weather forecast for each enabled location in the athlete's
-   * Intervals.icu weather config. Returns an empty `forecasts` array if
-   * Google Weather is not configured.
+   * Build per-location forecasts for a future date. Differs from
+   * {@link buildForecasts} in that it skips current-conditions and alerts
+   * (both inherently near-term), gates the Pollen and Air Quality calls on
+   * their respective day-limits, and fills the full 24-hour day rather than
+   * just the rest of today.
    */
-  async getTodaysForecast(): Promise<TodaysForecastResponse> {
+  private async buildFutureForecasts(
+    timezone: string,
+    today: string,
+    targetDate: string,
+    locations: { label: string; latitude: number; longitude: number }[]
+  ): Promise<LocationForecast[]> {
+    if (!this.googleWeather) return [];
+    const dayOffset = daysBetweenYMD(today, targetDate);
+    const fetchPollen = this.googlePollen && dayOffset >= 0 && dayOffset < MAX_POLLEN_FORECAST_DAYS;
+    // The AQ hourly endpoint returns the next N hours from "now" (max 96).
+    // To cover all hours of the target date, the date must be no further than
+    // (96h / 24h) - 1 = 3 days out: at the latest "now" the 96h window still
+    // reaches the end of today+3.
+    const fetchAirQuality =
+      this.googleAirQuality && dayOffset >= 0 && dayOffset <= 3;
+
+    const gw = this.googleWeather;
+    const aq = this.googleAirQuality;
+    const pollen = this.googlePollen;
+    const elev = this.googleElevation;
+
+    const results = await Promise.all(
+      locations.map(async (loc) => {
+        try {
+          const [hourly, daily, hourlyAq, pollenForecast, elevation] = await Promise.all([
+            gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
+              return undefined;
+            }),
+            gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
+              console.error(`Error fetching daily forecast for "${loc.label}":`, e);
+              return undefined;
+            }),
+            fetchAirQuality && aq
+              ? aq
+                  .getHourlyAirQualityForecast(
+                    loc.latitude,
+                    loc.longitude,
+                    MAX_AIR_QUALITY_FORECAST_HOURS
+                  )
+                  .catch((e) => {
+                    console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
+                    return undefined;
+                  })
+              : Promise.resolve(undefined),
+            fetchPollen && pollen
+              ? pollen
+                  .getPollenForecast(loc.latitude, loc.longitude, dayOffset + 1)
+                  .catch((e) => {
+                    console.error(`Error fetching pollen forecast for "${loc.label}":`, e);
+                    return undefined;
+                  })
+              : Promise.resolve(undefined),
+            elev
+              ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
+                  console.error(`Error fetching elevation for "${loc.label}":`, e);
+                  return undefined;
+                })
+              : Promise.resolve(undefined),
+          ]);
+          return assembleFutureLocationForecast(
+            loc.label,
+            loc.latitude,
+            loc.longitude,
+            targetDate,
+            hourly,
+            daily,
+            timezone,
+            hourlyAq,
+            pollenForecast,
+            elevation
+          );
+        } catch (e) {
+          console.error(`Error fetching forecast for "${loc.label}":`, e);
+          return null;
+        }
+      })
+    );
+    return results.filter((r): r is LocationForecast => r !== null);
+  }
+
+  /**
+   * Get the weather forecast for a date and (optionally) a location. Defaults
+   * to today and the enabled Intervals.icu weather locations.
+   *
+   * - When `args.location` is provided, the string is geocoded (Google
+   *   Geocoding API, top result silently used) and the forecast is for that
+   *   single resolved location. The response surfaces the resolved address
+   *   in the per-location `location` field.
+   * - When `args.date` is today, the response includes current conditions,
+   *   active alerts, and pollen/AQI populated as in the prior
+   *   `get_todays_forecast` behavior. For future dates, current conditions
+   *   and alerts are omitted; pollen and hourly AQI are included only when
+   *   the date is within the respective API's forecast window.
+   *
+   * Date input accepts ISO YYYY-MM-DD or natural-language strings (e.g.,
+   * "tomorrow", "in 3 days"). The resolved date must be within today through
+   * today+10 (Google Weather's 10-day forecast window).
+   */
+  async getForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {
     const timezone = await this.intervals.getAthleteTimezone();
     const currentDateTime = getCurrentTimeInTimezone(timezone);
-    const forecasts = await this.buildForecasts(timezone, new Date());
-    return {
-      current_time: currentDateTime,
-      forecasts,
-    };
+    const today = getTodayInTimezone(timezone);
+
+    if (!this.googleWeather) {
+      return { current_time: currentDateTime, forecasts: [] };
+    }
+
+    const targetDate = args.date
+      ? parseDateStringInTimezone(args.date, timezone, 'date')
+      : today;
+
+    const dayOffset = daysBetweenYMD(today, targetDate);
+    if (dayOffset < 0 || dayOffset > MAX_FORECAST_DAYS) {
+      const maxDate = addDaysToYMD(today, MAX_FORECAST_DAYS);
+      throw new Error(
+        `Forecast date ${targetDate} is outside the supported window (${today} through ${maxDate}). Google Weather supports up to ${MAX_FORECAST_DAYS}-day forecasts.`
+      );
+    }
+
+    let locations: { label: string; latitude: number; longitude: number }[];
+    if (args.location) {
+      if (!this.googleGeocoding) {
+        throw new Error(
+          "Free-text location lookup is not available. Omit the `location` argument to use the user's configured weather locations."
+        );
+      }
+      const resolved = await this.googleGeocoding.geocode(args.location);
+      locations = [
+        {
+          label: resolved.formattedAddress,
+          latitude: resolved.latitude,
+          longitude: resolved.longitude,
+        },
+      ];
+    } else {
+      try {
+        const enabled = await this.intervals.getEnabledWeatherLocations();
+        locations = enabled.map((loc) => ({
+          label: loc.label,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+        }));
+      } catch (e) {
+        console.error('Error fetching weather config from Intervals.icu:', e);
+        return { current_time: currentDateTime, forecasts: [] };
+      }
+    }
+
+    if (locations.length === 0) {
+      return { current_time: currentDateTime, forecasts: [] };
+    }
+
+    const forecasts =
+      dayOffset === 0
+        ? await this.buildForecastsForLocations(timezone, new Date(), locations)
+        : await this.buildFutureForecasts(timezone, today, targetDate, locations);
+
+    return { current_time: currentDateTime, forecasts };
   }
 
   /**

@@ -1249,30 +1249,76 @@ export interface WeatherAlert {
 }
 
 /**
+ * Daily forecast summary surfaced for race-week planning.
+ *
+ * All fields come from the daytime half of Google's daily forecast (the half
+ * that matters for outdoor training); high/low temps span the full 24-hour
+ * day. Reuses the unit-in-value formatting convention from
+ * {@link CurrentWeather} and {@link HourlyForecast}.
+ *
+ * Distinct from {@link DailySummary} (today's-data summary response) — this
+ * type is a forecast block embedded inside {@link LocationForecast}.
+ */
+export interface DailyForecastSummary {
+  condition?: string;
+  temperature_max?: string;
+  temperature_min?: string;
+  temperature_max_apparent?: string;
+  temperature_min_apparent?: string;
+  cloud_cover?: string;
+  humidity?: string;
+  precipitation_amount?: string;
+  precipitation_chance?: string;
+  precipitation_type?: string;
+  thunderstorm_probability?: string;
+  uv_index?: number;
+  wind_direction?: string;
+  wind_speed?: string;
+  wind_gust?: string;
+}
+
+/**
  * Forecast for a single location, assembled from Google Weather responses.
+ *
+ * Field presence depends on the forecast date:
+ * - `current_conditions` and `alerts` are populated only when the forecast
+ *   date is today (alerts are inherently near-term; current conditions are
+ *   N/A for future dates).
+ * - `pollen` is populated only when the date is within the Google Pollen
+ *   API's forecast window.
+ * - `hourly_forecast` covers the remaining hours of the day when the date
+ *   is today, and all 24 hours of the day otherwise.
  */
 export interface LocationForecast {
-  /** Human-readable label for this location from the athlete's Intervals.icu weather config (e.g., "Home", "Moose") */
+  /** Human-readable label. For Intervals.icu locations this is the configured
+   * label (e.g., "Home", "Moose"); for geocoded queries this is Google's
+   * resolved formatted address. */
   location: string;
   latitude: number;
   longitude: number;
   /** Elevation at the location, sourced from the Google Elevation API. */
   elevation?: string;
-  /** Sunrise time at the location for today, ISO 8601. */
+  /** The date this forecast is for (YYYY-MM-DD) in the athlete's timezone. */
+  date?: string;
+  /** Sunrise time at the location on the forecast date, ISO 8601. */
   sunrise?: string;
-  /** Sunset time at the location for today, ISO 8601. */
+  /** Sunset time at the location on the forecast date, ISO 8601. */
   sunset?: string;
-  current_conditions: CurrentWeather | null;
+  /** Daily forecast summary for the date. */
+  daily_summary?: DailyForecastSummary;
+  /** Current conditions. Only populated when the forecast date is today. */
+  current_conditions?: CurrentWeather | null;
   hourly_forecast: HourlyForecast[];
-  alerts: WeatherAlert[];
-  /** Today's pollen forecast for the location, sourced from the Google Pollen API. */
+  /** Active weather alerts. Only populated when the forecast date is today. */
+  alerts?: WeatherAlert[];
+  /** Pollen forecast for the location on the forecast date. */
   pollen?: Pollen;
 }
 
 /**
- * Today's forecast response, one entry per enabled Intervals.icu weather location.
+ * Forecast response, one entry per resolved location for the requested date.
  */
-export interface TodaysForecastResponse {
+export interface ForecastResponse {
   current_time: string;
   forecasts: LocationForecast[];
 }

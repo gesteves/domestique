@@ -170,6 +170,12 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 // ISO datetime pattern: YYYY-MM-DDTHH:mm:ss with optional timezone offset or Z
 const ISO_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 
+// Fields whose datetime values are always concrete interval boundaries — the
+// midnight-as-date-only heuristic must not strip the time on these. Applies
+// to the hourly-forecast window edges, where the last hour of a day legitimately
+// ends at midnight and the first hour legitimately starts at midnight.
+const ALWAYS_FULL_DATETIME_FIELDS = new Set(['forecast_start', 'forecast_end']);
+
 /**
  * Recursively format all date/datetime string values in a response object to human-readable strings.
  * Detects dates by value pattern rather than field name:
@@ -203,7 +209,7 @@ export function formatResponseDates<T>(data: T, timezone: string): T {
       if (ISO_DATE_PATTERN.test(value)) {
         result[key] = formatDateHumanReadable(value, timezone);
       } else if (ISO_DATETIME_PATTERN.test(value)) {
-        if (isMidnightInTimezone(value, timezone)) {
+        if (!ALWAYS_FULL_DATETIME_FIELDS.has(key) && isMidnightInTimezone(value, timezone)) {
           // For naive midnight strings, the date portion is already correct.
           // For aware datetimes that happen to be midnight in the target tz,
           // pull the local date out of the converted value rather than the
