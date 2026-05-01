@@ -1,7 +1,18 @@
 /**
  * Unit formatting utilities for human-readable output.
- * All units are metric. The LLM can convert to imperial or mixed units as needed.
+ *
+ * Formatters take metric inputs (kilometers, meters, kilograms, Celsius, etc.)
+ * and emit human-readable strings whose unit token reflects the athlete's
+ * Intervals.icu preferences. Preferences are read from the request-scoped
+ * AsyncLocalStorage in `unit-context.ts`; outside a request they default to
+ * metric.
  */
+import { getCurrentUnitPreferences } from './unit-context.js';
+
+const KM_TO_MILES = 0.621371192;
+const METERS_TO_FEET = 3.2808399;
+const KG_TO_LB = 2.20462262;
+const METERS_TO_INCHES = 39.3700787;
 
 /**
  * Format duration in seconds to human-readable string.
@@ -21,15 +32,17 @@ export function formatDuration(seconds: number): string {
 /**
  * Format distance to human-readable string.
  *
- * For swims, the unit follows the pool: yards for SCY (25yd / 22.86 m) and LCY
- * (50yd / 45.72 m) pools, meters otherwise. Open water and unknown pool sizes
- * default to meters. The user's broader metric/imperial preference is not
- * consulted — this is a pool-convention choice, not a unit-system choice.
+ * For swims, the unit follows the pool when the pool is one of the four
+ * standard lengths: SCY (22.86 m / 25 yd) and LCY (45.72 m / 50 yd) → yards;
+ * SCM (25 m) and LCM (50 m) → meters. Open water and non-standard pool sizes
+ * fall back to the athlete's measurement preference (`system`).
+ *
+ * Non-swim distances follow `system`: km for metric, mi for imperial.
  *
  * @param km Distance in kilometers
- * @param isSwim Whether this is a swimming activity (per-stroke / per-length distances)
+ * @param isSwim Whether this is a swimming activity
  * @param poolLengthM Pool length in meters (only consulted when isSwim is true)
- * @returns Formatted string like "42.5 km", "2500 m", or "2000 yd"
+ * @returns Formatted string like "42.5 km", "26.4 mi", "2500 m", or "2000 yd"
  */
 export function formatDistance(km: number, isSwim: boolean, poolLengthM?: number): string {
   if (isSwim) {
@@ -37,7 +50,17 @@ export function formatDistance(km: number, isSwim: boolean, poolLengthM?: number
     if (isYardPool(poolLengthM)) {
       return `${Math.round(meters * METERS_TO_YARDS)} yd`;
     }
+    if (isMeterPool(poolLengthM)) {
+      return `${Math.round(meters)} m`;
+    }
+    // Open water or non-standard pool: follow system preference
+    if (getCurrentUnitPreferences().system === 'imperial') {
+      return `${Math.round(meters * METERS_TO_YARDS)} yd`;
+    }
     return `${Math.round(meters)} m`;
+  }
+  if (getCurrentUnitPreferences().system === 'imperial') {
+    return `${(km * KM_TO_MILES).toFixed(1)} mi`;
   }
   return `${km.toFixed(1)} km`;
 }
@@ -54,6 +77,15 @@ const METERS_TO_YARDS = 1.0936133;
 export function isYardPool(poolLengthM: number | undefined | null): boolean {
   if (poolLengthM == null) return false;
   return Math.abs(poolLengthM - 22.86) < 0.1 || Math.abs(poolLengthM - 45.72) < 0.1;
+}
+
+/**
+ * Detect whether a pool length corresponds to a standard meters pool —
+ * 25 m (SCM) or 50 m (LCM). Allows ±0.1 m tolerance for sensor noise.
+ */
+export function isMeterPool(poolLengthM: number | undefined | null): boolean {
+  if (poolLengthM == null) return false;
+  return Math.abs(poolLengthM - 25) < 0.1 || Math.abs(poolLengthM - 50) < 0.1;
 }
 
 /**
@@ -81,31 +113,44 @@ export function formatStrokeLength(meters: number, poolLengthM: number | undefin
 }
 
 /**
- * Format speed to human-readable string.
+ * Format speed to human-readable string. Reflects the athlete's measurement
+ * preference (km/h for metric, mph for imperial). Used for activity speeds
+ * only — wind speed has its own dedicated formatter that respects the
+ * separate `wind` preference.
+ *
  * @param kph Speed in kilometers per hour
- * @returns Formatted string like "32.5 km/h"
+ * @returns Formatted string like "32.5 km/h" or "20.2 mph"
  */
 export function formatSpeed(kph: number): string {
+  if (getCurrentUnitPreferences().system === 'imperial') {
+    return `${(kph * KM_TO_MILES).toFixed(1)} mph`;
+  }
   return `${kph.toFixed(1)} km/h`;
 }
 
 /**
- * Format pace to human-readable string.
+ * Format pace to human-readable string. Reflects the athlete's measurement
+ * preference: per-kilometer for metric, per-mile for imperial. Swim pace
+ * uses /100m for metric and /100yd for imperial regardless of pool.
+ *
  * @param secPerKm Pace in seconds per kilometer
- * @param isSwim Whether this is a swimming activity (uses /100m)
- * @returns Formatted string like "4:30/km" or "1:45/100m"
+ * @param isSwim Whether this is a swimming activity
+ * @returns Formatted string like "4:30/km", "7:14/mi", "1:45/100m", or "1:36/100yd"
  */
 export function formatPace(secPerKm: number, isSwim: boolean): string {
+  const isImperial = getCurrentUnitPreferences().system === 'imperial';
   if (isSwim) {
-    // Convert sec/km to sec/100m (divide by 10)
+    // Per-100 metric distance: convert sec/km → sec/100m, then optionally to sec/100yd.
     const secPer100m = secPerKm / 10;
-    const m = Math.floor(secPer100m / 60);
-    const s = Math.round(secPer100m % 60);
-    return `${m}:${s.toString().padStart(2, '0')}/100m`;
+    const sec = isImperial ? secPer100m / METERS_TO_YARDS : secPer100m;
+    const m = Math.floor(sec / 60);
+    const s = Math.round(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}/${isImperial ? '100yd' : '100m'}`;
   }
-  const m = Math.floor(secPerKm / 60);
-  const s = Math.round(secPerKm % 60);
-  return `${m}:${s.toString().padStart(2, '0')}/km`;
+  const sec = isImperial ? secPerKm / KM_TO_MILES : secPerKm;
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}/${isImperial ? 'mi' : 'km'}`;
 }
 
 /**
@@ -206,38 +251,77 @@ export function formatPercent(value: number, decimals = 0): string {
 }
 
 /**
- * Format a temperature in Celsius.
+ * Format a temperature, taking Celsius and emitting the athlete's preferred
+ * temperature unit.
  * @param celsius Temperature in degrees Celsius
- * @returns Formatted string like "18.0 °C"
+ * @returns Formatted string like "18.0 °C" or "64.4 °F"
  */
 export function formatTemperature(celsius: number): string {
+  if (getCurrentUnitPreferences().temperature === 'fahrenheit') {
+    return `${(celsius * 9 / 5 + 32).toFixed(1)} °F`;
+  }
   return `${celsius.toFixed(1)} °C`;
 }
 
 /**
- * Format body weight in kilograms.
+ * Format body weight, taking kilograms and emitting the athlete's preferred
+ * weight unit.
  * @param kg Weight in kilograms
- * @returns Formatted string like "75.9 kg"
+ * @returns Formatted string like "75.9 kg" or "167.3 lb"
  */
 export function formatWeight(kg: number): string {
+  if (getCurrentUnitPreferences().weight === 'lb') {
+    return `${(kg * KG_TO_LB).toFixed(1)} lb`;
+  }
   return `${kg.toFixed(1)} kg`;
 }
 
 /**
- * Format a height (or stride length) in meters with two decimals.
- * @param m Length in meters
- * @returns Formatted string like "1.71 m"
+ * Format an athlete's physical stature height. Uses centimeters (whole) for
+ * metric and feet+inches for imperial, per the athlete's `height` preference.
+ * Do not use for stride length, elevation, or other lengths — see
+ * `formatStride` and `formatLength`.
+ *
+ * @param m Height in meters
+ * @returns Formatted string like "171 cm" or `5'7"`
  */
 export function formatHeight(m: number): string {
+  if (getCurrentUnitPreferences().height === 'feet') {
+    const totalInches = Math.round(m * METERS_TO_INCHES);
+    const feet = Math.floor(totalInches / 12);
+    const inches = totalInches % 12;
+    return `${feet}'${inches}"`;
+  }
+  return `${Math.round(m * 100)} cm`;
+}
+
+/**
+ * Format a stride length (per-step distance for runners; not athlete stature).
+ * Reflects the athlete's measurement preference: meters for metric, feet for
+ * imperial. Two decimals so subtle gait changes are visible.
+ *
+ * @param m Stride length in meters
+ * @returns Formatted string like "1.71 m" or "5.61 ft"
+ */
+export function formatStride(m: number): string {
+  if (getCurrentUnitPreferences().system === 'imperial') {
+    return `${(m * METERS_TO_FEET).toFixed(2)} ft`;
+  }
   return `${m.toFixed(2)} m`;
 }
 
 /**
- * Format a length in meters as a whole number — for altitude, pool length, etc.
+ * Format a length in meters as a whole number — for altitude, elevation gain,
+ * etc. Reflects the athlete's measurement preference (meters for metric, feet
+ * for imperial). Pool length has its own intrinsic-unit formatter.
+ *
  * @param m Length in meters
- * @returns Formatted string like "1234 m"
+ * @returns Formatted string like "1234 m" or "4049 ft"
  */
 export function formatLength(m: number): string {
+  if (getCurrentUnitPreferences().system === 'imperial') {
+    return `${Math.round(m * METERS_TO_FEET)} ft`;
+  }
   return `${Math.round(m)} m`;
 }
 

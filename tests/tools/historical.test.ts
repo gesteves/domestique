@@ -1335,7 +1335,7 @@ describe('HistoricalTools', () => {
       // Check totals
       expect(result.totals.activities).toBe(3);
       expect(result.totals.duration).toBe('4:15:00'); // 2:00 + 0:45 + 1:30
-      expect(result.totals.distance).toBe('114 km'); // 60.5 + 8.5 + 45 = 114
+      expect(result.totals.distance).toBe('114.0 km'); // 60.5 + 8.5 + 45 = 114
       expect(result.totals.climbing).toBe('1500 m'); // 800 + 100 + 600
       expect(result.totals.load).toBe(270); // 120 + 60 + 90
       expect(result.totals.kcal).toBe(2600); // 1200 + 500 + 900
@@ -1416,7 +1416,7 @@ describe('HistoricalTools', () => {
 
       expect(result.totals.activities).toBe(0);
       expect(result.totals.duration).toBe('0:00:00');
-      expect(result.totals.distance).toBe('0 km');
+      expect(result.totals.distance).toBe('0.0 km');
       expect(result.totals.load).toBe(0);
       expect(result.period.active_days).toBe(0);
       expect(Object.keys(result.by_sport)).toHaveLength(0);
@@ -1506,12 +1506,12 @@ describe('HistoricalTools', () => {
       // Cycling totals
       expect(result.by_sport.cycling.activities).toBe(2);
       expect(result.by_sport.cycling.duration).toBe('3:30:00'); // 2:00 + 1:30
-      expect(result.by_sport.cycling.distance).toBe('106 km'); // 60.5 + 45 = 105.5, rounds to 106
+      expect(result.by_sport.cycling.distance).toBe('105.5 km'); // 60.5 + 45 = 105.5
 
       // Running totals
       expect(result.by_sport.running.activities).toBe(1);
       expect(result.by_sport.running.duration).toBe('0:45:00');
-      expect(result.by_sport.running.distance).toBe('9 km'); // 8.5, rounds to 9
+      expect(result.by_sport.running.distance).toBe('8.5 km'); // 8.5
     });
   });
 });

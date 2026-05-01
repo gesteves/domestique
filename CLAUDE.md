@@ -174,10 +174,12 @@ curl -X POST http://localhost:3000/mcp \
 
 Tool responses standardize on **unit-in-value** strings for every unit-bearing field. Two rules:
 
-1. **Values carry the unit.** Emit `weight: "75.9 kg"`, `max_hr: "165 bpm"`, `average_power: "220 W"`, `recovery_score: "82%"` — not `weight_kilogram: 75.9` or `max_hr: 165`. Field names should describe the metric (`max_hr`, `weight`, `average_power`), not the unit. Use the helpers in `src/utils/format-units.ts` (`formatPower`, `formatHR`, `formatWeight`, `formatHeight`, `formatPercent`, `formatTemperature`, `formatLength`, `formatEnergy`, `formatEnergyKJ`, `formatCadence`, `formatMass`, `formatHRV`, `formatVO2max`, `formatBP`, plus `withUnit` for one-offs).
-2. **Field descriptions in `.describe()` must NOT name units.** Describe what the field is (`'Average heart rate'`, `'Functional Threshold Power'`), not the unit it's in. The unit lives in the value. This keeps schemas valid when server-side unit formatting becomes user-preference-aware in a future change — descriptions don't need a second sweep.
+1. **Values carry the unit.** Emit `weight: "75.9 kg"`, `max_hr: "165 bpm"`, `average_power: "220 W"`, `recovery_score: "82%"` — not `weight_kilogram: 75.9` or `max_hr: 165`. Field names should describe the metric (`max_hr`, `weight`, `average_power`), not the unit. Use the helpers in `src/utils/format-units.ts` (`formatPower`, `formatHR`, `formatWeight`, `formatHeight`, `formatStride`, `formatPercent`, `formatTemperature`, `formatLength`, `formatEnergy`, `formatEnergyKJ`, `formatCadence`, `formatMass`, `formatHRV`, `formatVO2max`, `formatBP`, plus `withUnit` for one-offs).
+2. **Field descriptions in `.describe()` must NOT name units.** Describe what the field is (`'Average heart rate'`, `'Functional Threshold Power'`), not the unit it's in. The unit lives in the value. This keeps schemas valid as the server formats values per user preference — descriptions don't need a second sweep.
 
 Bare numerics are reserved for unitless scores (TSS, CTL/ATL/TSB, intensity factor, RPE 1-10, scale-based wellness fields like `mood`/`fatigue` 1-4) and counts (`activities`, `lengths`, `steps`).
+
+Unit-bearing formatters consult the athlete's Intervals.icu unit preferences via the request-scoped AsyncLocalStorage in `src/utils/unit-context.ts`. Each tool call wraps its handler in `runWithUnitPreferences(prefs, ...)` so formatters emit values in the user's chosen units (kg/lb, °C/°F, km/mi, m/ft, mm/in, km·h/mph/m·s/kn/Bft, cm/feet+inches). Outside a request, formatters fall back to metric. Use `formatStride` for stride length and `formatHeight` only for athlete physical stature; use `formatLength` for elevation/altitude.
 
 ## Important Notes
 

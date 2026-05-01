@@ -47,6 +47,8 @@ import * as schemas from '../schemas/index.js';
 import { buildToolResponse, type ToolResponse } from '../utils/response-builder.js';
 import { formatResponseDates } from '../utils/date-formatting.js';
 import { type HintGenerator, generateHints } from '../utils/hints.js';
+import { runWithUnitPreferences, METRIC_DEFAULTS } from '../utils/unit-context.js';
+import type { UnitPreferences } from '../types/index.js';
 import {
   trainerroadSyncHint,
   dailySummarySyncHint,
@@ -163,33 +165,49 @@ function buildErrorResponse(error: unknown, toolName?: string): ErrorResponse {
  * Wraps a tool handler with response building and comprehensive error handling.
  * Catches all errors and formats them consistently for LLM consumption.
  * Formats all date fields in the response to human-readable strings.
+ *
+ * Also fetches the athlete's unit preferences from Intervals.icu (cached) and
+ * runs the handler within an AsyncLocalStorage context so unit-aware formatters
+ * emit values in the user's chosen units. A failure to fetch preferences falls
+ * back to metric defaults — a one-time profile-read hiccup shouldn't fail tools.
  */
 function withToolResponse<TArgs, TResult>(
   toolName: string,
   handler: (args: TArgs) => Promise<TResult>,
   options: ResponseOptions<TResult>,
-  getTimezone?: () => Promise<string>
+  getTimezone?: () => Promise<string>,
+  getUnitPreferences?: () => Promise<UnitPreferences>
 ): (args: TArgs) => Promise<ToolResponse | ErrorResponse> {
   return async (args: TArgs) => {
     console.log(`[Tool] Calling tool: ${toolName}`);
-    try {
-      const data = await handler(args);
-
-      // Format all date fields to human-readable strings
-      const timezone = getTimezone ? await getTimezone() : null;
-      const formattedData = timezone ? formatResponseDates(data, timezone) : data;
-
-      // Generate hints from the response data if hint generators are provided
-      const hints = options.hints ? generateHints(formattedData as TResult, options.hints) : undefined;
-
-      return await buildToolResponse({
-        data: formattedData as Record<string, unknown>,
-        widgetMeta: options.widgetMeta,
-        hints,
-      });
-    } catch (error) {
-      return buildErrorResponse(error, toolName);
+    let prefs: UnitPreferences = METRIC_DEFAULTS;
+    if (getUnitPreferences) {
+      try {
+        prefs = await getUnitPreferences();
+      } catch (error) {
+        console.error(`[Tool] Failed to fetch unit preferences for ${toolName}, defaulting to metric:`, error);
+      }
     }
+    return runWithUnitPreferences(prefs, async () => {
+      try {
+        const data = await handler(args);
+
+        // Format all date fields to human-readable strings
+        const timezone = getTimezone ? await getTimezone() : null;
+        const formattedData = timezone ? formatResponseDates(data, timezone) : data;
+
+        // Generate hints from the response data if hint generators are provided
+        const hints = options.hints ? generateHints(formattedData as TResult, options.hints) : undefined;
+
+        return await buildToolResponse({
+          data: formattedData as Record<string, unknown>,
+          widgetMeta: options.widgetMeta,
+          hints,
+        });
+      } catch (error) {
+        return buildErrorResponse(error, toolName);
+      }
+    });
   };
 }
 
@@ -291,6 +309,7 @@ export class ToolRegistry {
   private registerTool<TArgs, TResult>(
     server: McpServer,
     getTimezone: () => Promise<string>,
+    getUnitPreferences: () => Promise<UnitPreferences>,
     def: ToolDef<TArgs, TResult>
   ): void {
     const wrapped = withToolResponse(
@@ -300,7 +319,8 @@ export class ToolRegistry {
         hints: def.hints,
         widgetMeta: def.widgetMeta,
       },
-      getTimezone
+      getTimezone,
+      getUnitPreferences
     );
     server.registerTool(
       def.name,
@@ -323,8 +343,9 @@ export class ToolRegistry {
    */
   registerTools(server: McpServer): void {
     const getTimezone = () => this.intervalsClient.getAthleteTimezone();
+    const getUnitPreferences = () => this.intervalsClient.getUnitPreferences();
     const register = <TArgs, TResult>(def: ToolDef<TArgs, TResult>): void =>
-      this.registerTool(server, getTimezone, def);
+      this.registerTool(server, getTimezone, getUnitPreferences, def);
     // Today's Summary (most likely to be called first)
     register({
       name: 'get_todays_summary',
@@ -441,20 +462,16 @@ export class ToolRegistry {
     register({
       name: 'get_athlete_profile',
       title: 'Athlete Profile',
-      description: `Returns the athlete's profile from Intervals.icu including:
-  - Athlete info: name, location, timezone, gender, date of birth, and age.
-  - The user's preferred unit system (metric or imperial, with optional overrides for weight and temperature).
+      description: `Returns the athlete's profile from Intervals.icu including name, location, timezone, gender, date of birth, and age.
 
 <use-cases>
-- Fetching the user's preferred unit system, which **MUST** be used in all responses.
 - Fetching the user's name, which may be useful to identify the user's notes from a workout.
 - Fetching the user's age, which may be important to interpret their fitness and performance trends over time.
 </use-cases>
 
-<instructions>
-- You **MUST** use the user's preferred units in all responses.
-- If you don't know the user's preferred units, you **MUST** call this tool before responding to the user, so you can get their preferences.
-</instructions>`,
+<notes>
+- Domestique formats every unit-bearing field server-side per the athlete's Intervals.icu settings. Values arrive ready to use — do not re-convert them unless asked to.
+</notes>`,
       inputSchema: {},
       outputSchema: schemas.athleteProfileOutputSchema,
       annotations: READ_ONLY,

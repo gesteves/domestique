@@ -1522,6 +1522,9 @@ describe('IntervalsClient', () => {
         system: 'metric',
         weight: 'kg',
         temperature: 'celsius',
+        wind: 'kmh',
+        precipitation: 'mm',
+        height: 'cm',
       });
     });
 
@@ -1542,6 +1545,9 @@ describe('IntervalsClient', () => {
         system: 'imperial',
         weight: 'lb',
         temperature: 'fahrenheit',
+        wind: 'mph',
+        precipitation: 'inches',
+        height: 'feet',
       });
     });
 
@@ -1562,7 +1568,57 @@ describe('IntervalsClient', () => {
         system: 'metric',
         weight: 'lb',
         temperature: 'fahrenheit',
+        wind: 'kmh',
+        precipitation: 'mm',
+        height: 'cm',
       });
+    });
+
+    it('honors wind_speed, rain, and height_units overrides independently of system', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'i12345',
+          measurement_preference: 'meters',
+          wind_speed: 'BFT',
+          rain: 'INCHES',
+          height_units: 'FEET',
+        }),
+      });
+
+      const result = await client.getAthleteProfile();
+
+      expect(result.unit_preferences).toEqual({
+        system: 'metric',
+        weight: 'kg',
+        temperature: 'celsius',
+        wind: 'bft',
+        precipitation: 'inches',
+        height: 'feet',
+      });
+    });
+
+    it('maps every wind_speed enum value', async () => {
+      const cases: Array<['KMH' | 'MPS' | 'KNOTS' | 'MPH' | 'BFT', string]> = [
+        ['KMH', 'kmh'],
+        ['MPS', 'mps'],
+        ['KNOTS', 'knots'],
+        ['MPH', 'mph'],
+        ['BFT', 'bft'],
+      ];
+      for (const [raw, expected] of cases) {
+        const c = new IntervalsClient({ apiKey: 'test-api-key', athleteId: 'i12345' });
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i12345',
+            measurement_preference: 'meters',
+            wind_speed: raw,
+          }),
+        });
+        const result = await c.getAthleteProfile();
+        expect(result.unit_preferences?.wind).toBe(expected);
+      }
     });
 
     it('should include date of birth and age when set', async () => {
@@ -1614,6 +1670,9 @@ describe('IntervalsClient', () => {
         system: 'metric',
         weight: 'kg',
         temperature: 'celsius',
+        wind: 'kmh',
+        precipitation: 'mm',
+        height: 'cm',
       });
     });
   });

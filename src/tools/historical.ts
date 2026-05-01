@@ -13,6 +13,8 @@ import {
   formatDuration,
   formatPower,
   formatHR,
+  formatDistance,
+  formatLength,
   withUnit,
 } from '../utils/format-units.js';
 import type {
@@ -937,18 +939,27 @@ export class HistoricalTools {
       }
 
       if (activity.distance) {
-        const distMatch = activity.distance.match(/^([\d.]+)\s*(km|m)$/);
+        // Activities arrive with units already applied per athlete preference
+        // (km/mi for non-swim, m/yd for swim). Normalize back to km for the
+        // running totals, then re-format on the output side.
+        const distMatch = activity.distance.match(/^([\d.]+)\s*(km|mi|m|yd)$/);
         if (distMatch) {
           const value = parseFloat(distMatch[1]);
-          const unit = distMatch[2];
-          distanceKm += unit === 'km' ? value : value / 1000;
+          switch (distMatch[2]) {
+            case 'km': distanceKm += value; break;
+            case 'mi': distanceKm += value * 1.609344; break;
+            case 'm': distanceKm += value / 1000; break;
+            case 'yd': distanceKm += value * 0.0009144; break;
+          }
         }
       }
 
       if (activity.elevation_gain) {
-        const elevMatch = activity.elevation_gain.match(/^([\d.]+)\s*m$/);
+        // Elevation may arrive in meters (metric) or feet (imperial).
+        const elevMatch = activity.elevation_gain.match(/^([\d.]+)\s*(m|ft)$/);
         if (elevMatch) {
-          climbingM += parseFloat(elevMatch[1]);
+          const value = parseFloat(elevMatch[1]);
+          climbingM += elevMatch[2] === 'ft' ? value / 3.2808399 : value;
         }
       }
 
@@ -1011,7 +1022,7 @@ export class HistoricalTools {
     const result: ActivityTotalsResponse['totals'] = {
       activities: activities.length,
       duration: formatLargeDuration(stats.durationSeconds),
-      distance: `${Math.round(stats.distanceKm)} km`,
+      distance: formatDistance(stats.distanceKm, false),
       load: Math.round(stats.load),
       kcal: Math.round(stats.kcal),
       coasting: formatLargeDuration(stats.coastingSeconds),
@@ -1021,7 +1032,7 @@ export class HistoricalTools {
     };
 
     if (stats.climbingM > 0) {
-      result.climbing = `${Math.round(stats.climbingM)} m`;
+      result.climbing = formatLength(stats.climbingM);
     }
     if (stats.workKj > 0) {
       result.work = `${Math.round(stats.workKj)} kJ`;
@@ -1051,11 +1062,11 @@ export class HistoricalTools {
     for (const [sport, sportActivities] of sportGroups) {
       const stats = this.accumulateActivityStats(sportActivities);
 
-      // Format distance based on sport
+      // Format distance based on sport. Swim totals are aggregated across
+      // varied pools (and possibly open water), so pool-intrinsic units don't
+      // apply — fall back to the athlete's measurement preference.
       const isSwim = sport === 'swimming';
-      const distanceFormatted = isSwim
-        ? `${Math.round(stats.distanceKm * 1000)} m`
-        : `${Math.round(stats.distanceKm)} km`;
+      const distanceFormatted = formatDistance(stats.distanceKm, isSwim);
 
       // Calculate zone percentages
       const hrZones = this.calculateZonePercentages(stats.hrZoneSeconds);
@@ -1072,7 +1083,7 @@ export class HistoricalTools {
       };
 
       if (stats.climbingM > 0) {
-        sportTotals.climbing = `${Math.round(stats.climbingM)} m`;
+        sportTotals.climbing = formatLength(stats.climbingM);
       }
       if (stats.workKj > 0) {
         sportTotals.work = `${Math.round(stats.workKj)} kJ`;

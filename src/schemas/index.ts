@@ -520,13 +520,16 @@ const RaceZ = z.object({
 // Athlete profile and sport settings
 // ============================================
 
-// TODO: revisit when server emits per-athlete units — these descriptions
-// document the LLM-side conversion that becomes obsolete once the server
-// formats per athlete preference.
+// Tool responses already format every unit-bearing field per these
+// preferences server-side, so the LLM only needs them for narration consistency
+// (e.g., when restating the user's height in a sentence).
 const UnitPreferencesZ = z.object({
-  system: z.string().optional().describe('Base unit system: "metric" or "imperial". Use metric (km, m, kg, celsius) or imperial (mi, ft, lb, fahrenheit) accordingly'),
-  weight: z.string().optional().describe('Weight unit: "kg" or "lb". May differ from system preference — always use this for weight'),
-  temperature: z.string().optional().describe('Temperature unit: "celsius" or "fahrenheit". May differ from system preference — always use this for temperatures'),
+  system: z.string().optional().describe('Fallback unit system for distance, speed, pace, elevation, and stride'),
+  weight: z.string().optional().describe('Preferred weight unit'),
+  temperature: z.string().optional().describe('Preferred temperature unit'),
+  wind: z.string().optional().describe('Preferred wind speed unit (independent of the system fallback)'),
+  precipitation: z.string().optional().describe('Preferred precipitation unit'),
+  height: z.string().optional().describe("Preferred unit for the athlete's physical-stature height; not used for elevation or stride"),
 }).passthrough();
 
 const SportSettingsZ = z.object({
@@ -577,7 +580,7 @@ const PowerCurveComparisonZ = z.object({
 
 const PaceBestZ = z.object({
   time_seconds: z.number().optional().describe('Best time in seconds'),
-  pace: z.string().optional().describe('Pace in human-readable format ("min:ss/km" running, "min:ss/100m" swimming)'),
+  pace: z.string().optional().describe('Pace in human-readable format'),
   activity_id: z.string().optional(),
   date: z.string().optional(),
 }).passthrough();
@@ -788,7 +791,7 @@ export const athleteProfileOutputSchema = {
   sex: z.string().optional().describe("Athlete's gender"),
   date_of_birth: z.string().optional().describe('Date of birth in ISO 8601 format. Only present if set in Intervals.icu'),
   age: z.number().optional().describe('Current age in years. Only present if date_of_birth is set'),
-  unit_preferences: UnitPreferencesZ.optional().describe("User's preferred unit system. You MUST use these units in all responses to the user"),
+  unit_preferences: UnitPreferencesZ.optional().describe("Athlete's preferred units, sourced from Intervals.icu. Tool responses are already formatted in these units; use them for narrative consistency when restating values"),
 } as const;
 
 export const sportSettingsOutputSchema = {
@@ -839,7 +842,7 @@ export const activityTotalsOutputSchema = {
     climbing: z.string().optional().describe('Total elevation gain (only present if > 0)'),
     load: z.number().optional().describe('Total training load (TSS)'),
     kcal: z.number().optional().describe('Total calories burned'),
-    work: z.string().optional().describe('Total work done in kilojoules (only present if > 0)'),
+    work: z.string().optional().describe('Total work done (only present if > 0)'),
     coasting: z.string().optional().describe('Total coasting/recovery time'),
     zones: z.object({
       heart_rate: z.array(ZoneTotalEntryZ).optional().describe('Combined heart rate zone times across all sports'),

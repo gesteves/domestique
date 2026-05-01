@@ -5,6 +5,8 @@ import {
   filterHourlyToRestOfDay,
   assembleLocationForecast,
 } from '../../src/utils/weather.js';
+import { runWithUnitPreferences } from '../../src/utils/unit-context.js';
+import type { UnitPreferences } from '../../src/types/index.js';
 import type {
   GoogleCurrentConditionsResponse,
   GoogleDailyForecastResponse,
@@ -120,6 +122,86 @@ describe('transformCurrentConditions', () => {
     expect(result?.temperature).toBeUndefined();
     expect(result?.wind_speed).toBeUndefined();
     expect(result?.wind_direction).toBeUndefined();
+  });
+
+  describe('preference-aware unit formatting', () => {
+    const tz = 'America/Boise';
+
+    const baseInput = {
+      currentTime: '2025-01-28T22:04:12Z',
+      temperature: { degrees: 0, unit: 'CELSIUS' as const },
+      relativeHumidity: 50,
+      precipitation: {
+        probability: { percent: 10, type: 'RAIN' as const },
+        qpf: { quantity: 25.4, unit: 'MILLIMETERS' as const }, // exactly 1.00 in
+      },
+      airPressure: { meanSeaLevelMillibars: 1013 },
+      wind: {
+        direction: { degrees: 90, cardinal: 'EAST' as const },
+        // 10 m/s — convenient round value across all wind units
+        speed: { value: 36, unit: 'KILOMETERS_PER_HOUR' as const },
+      },
+      visibility: { distance: 16.09344, unit: 'KILOMETERS' as const }, // ≈ 10 mi
+    };
+
+    const prefs = (overrides: Partial<UnitPreferences>): UnitPreferences => ({
+      system: 'metric',
+      weight: 'kg',
+      temperature: 'celsius',
+      wind: 'kmh',
+      precipitation: 'mm',
+      height: 'cm',
+      ...overrides,
+    });
+
+    it('renders wind in mph, m/s, knots, and Beaufort per preference', () => {
+      runWithUnitPreferences(prefs({ wind: 'mph' }), () => {
+        expect(transformCurrentConditions(baseInput, tz)?.wind_speed).toBe('22.4 mph');
+      });
+      runWithUnitPreferences(prefs({ wind: 'mps' }), () => {
+        expect(transformCurrentConditions(baseInput, tz)?.wind_speed).toBe('10.0 m/s');
+      });
+      runWithUnitPreferences(prefs({ wind: 'knots' }), () => {
+        expect(transformCurrentConditions(baseInput, tz)?.wind_speed).toBe('19.4 kn');
+      });
+      runWithUnitPreferences(prefs({ wind: 'bft' }), () => {
+        // 10 m/s falls into force 5 (8.0–10.7 m/s)
+        expect(transformCurrentConditions(baseInput, tz)?.wind_speed).toBe('5 Bft');
+      });
+    });
+
+    it('renders precipitation in inches when the user prefers it', () => {
+      runWithUnitPreferences(prefs({ precipitation: 'inches' }), () => {
+        expect(transformCurrentConditions(baseInput, tz)?.precipitation_amount).toBe('1.00 in');
+      });
+    });
+
+    it('renders temperature in Fahrenheit when the user prefers it', () => {
+      runWithUnitPreferences(prefs({ temperature: 'fahrenheit' }), () => {
+        expect(transformCurrentConditions(baseInput, tz)?.temperature).toBe('32.0 °F');
+      });
+    });
+
+    it('renders visibility in miles when the system is imperial', () => {
+      runWithUnitPreferences(prefs({ system: 'imperial' }), () => {
+        expect(transformCurrentConditions(baseInput, tz)?.visibility).toBe('10.0 mi');
+      });
+    });
+
+    it('classifies Beaufort thresholds correctly', () => {
+      // Boundary cases: 0.29 m/s → 0, 0.31 → 1, 32.7 → 12, 32.69 → 11
+      const speedAt = (mps: number) => ({
+        ...baseInput,
+        wind: { ...baseInput.wind, speed: { value: mps, unit: 'METERS_PER_SECOND' as const } },
+      });
+      runWithUnitPreferences(prefs({ wind: 'bft' }), () => {
+        expect(transformCurrentConditions(speedAt(0.29), tz)?.wind_speed).toBe('0 Bft');
+        expect(transformCurrentConditions(speedAt(0.31), tz)?.wind_speed).toBe('1 Bft');
+        expect(transformCurrentConditions(speedAt(32.69), tz)?.wind_speed).toBe('11 Bft');
+        expect(transformCurrentConditions(speedAt(32.7), tz)?.wind_speed).toBe('12 Bft');
+        expect(transformCurrentConditions(speedAt(50), tz)?.wind_speed).toBe('12 Bft');
+      });
+    });
   });
 });
 

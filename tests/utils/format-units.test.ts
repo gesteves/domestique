@@ -11,6 +11,7 @@ import {
   formatTemperature,
   formatWeight,
   formatHeight,
+  formatStride,
   formatLength,
   formatEnergy,
   formatEnergyKJ,
@@ -21,11 +22,23 @@ import {
   formatBP,
   withUnit,
   isYardPool,
+  isMeterPool,
   formatPoolLength,
   formatStrokeLength,
   formatRpe,
   formatFeel,
 } from '../../src/utils/format-units.js';
+import { runWithUnitPreferences } from '../../src/utils/unit-context.js';
+import type { UnitPreferences } from '../../src/types/index.js';
+
+const IMPERIAL_PREFS: UnitPreferences = {
+  system: 'imperial',
+  weight: 'lb',
+  temperature: 'fahrenheit',
+  wind: 'mph',
+  precipitation: 'inches',
+  height: 'feet',
+};
 
 describe('format-units', () => {
   describe('formatDuration', () => {
@@ -100,6 +113,36 @@ describe('format-units', () => {
       expect(formatDistance(0.1, true, 50)).toBe('100 m');
       expect(formatDistance(0.182707, true, undefined)).toBe('183 m'); // open water
     });
+
+    it('formats non-swim distances in miles under imperial preferences', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatDistance(42.195, false)).toBe('26.2 mi');
+        expect(formatDistance(1.609344, false)).toBe('1.0 mi');
+      });
+    });
+
+    it('keeps SCY/LCY swims in yards regardless of preference', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatDistance(1.8288, true, 22.86)).toBe('2000 yd');
+        expect(formatDistance(0.0914, true, 45.72)).toBe('100 yd');
+      });
+    });
+
+    it('keeps SCM/LCM swims in meters regardless of preference', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatDistance(0.05, true, 25)).toBe('50 m');
+        expect(formatDistance(0.1, true, 50)).toBe('100 m');
+      });
+    });
+
+    it('falls back to system preference for non-standard pools and open water', () => {
+      // Open water + imperial → yards
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatDistance(1, true, undefined)).toBe('1094 yd');
+        // 33 m pool is non-standard → falls back to system (yards)
+        expect(formatDistance(0.066, true, 33)).toBe('72 yd');
+      });
+    });
   });
 
   describe('formatSpeed', () => {
@@ -112,6 +155,13 @@ describe('format-units', () => {
     it('should round correctly', () => {
       expect(formatSpeed(30.05)).toBe('30.1 km/h');
       expect(formatSpeed(30.04)).toBe('30.0 km/h');
+    });
+
+    it('renders mph under imperial preferences', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatSpeed(32.5)).toBe('20.2 mph');
+        expect(formatSpeed(0)).toBe('0.0 mph');
+      });
     });
   });
 
@@ -166,6 +216,24 @@ describe('format-units', () => {
         expect(formatPace(650, true)).toBe('1:05/100m');
         // 61 sec/100m = 610 sec/km
         expect(formatPace(610, true)).toBe('1:01/100m');
+      });
+    });
+
+    describe('imperial pace', () => {
+      it('renders run/cycle pace per mile under imperial', () => {
+        runWithUnitPreferences(IMPERIAL_PREFS, () => {
+          // 240 sec/km × 1.609344 ≈ 386 sec/mi → 6:26/mi
+          expect(formatPace(240, false)).toBe('6:26/mi');
+          // 300 sec/km × 1.609344 ≈ 483 sec/mi → 8:03/mi
+          expect(formatPace(300, false)).toBe('8:03/mi');
+        });
+      });
+
+      it('renders swim pace per 100yd under imperial', () => {
+        runWithUnitPreferences(IMPERIAL_PREFS, () => {
+          // 1050 sec/km → 105 sec/100m → 96.0 sec/100yd → 1:36/100yd
+          expect(formatPace(1050, true)).toBe('1:36/100yd');
+        });
       });
     });
   });
@@ -236,6 +304,14 @@ describe('format-units', () => {
       expect(formatTemperature(24.36)).toBe('24.4 °C');
       expect(formatTemperature(-2.5)).toBe('-2.5 °C');
     });
+
+    it('renders Fahrenheit when the user prefers it', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatTemperature(0)).toBe('32.0 °F');
+        expect(formatTemperature(100)).toBe('212.0 °F');
+        expect(formatTemperature(18)).toBe('64.4 °F');
+      });
+    });
   });
 
   describe('formatWeight', () => {
@@ -244,21 +320,55 @@ describe('format-units', () => {
       expect(formatWeight(75)).toBe('75.0 kg');
       expect(formatWeight(75.95)).toBe('76.0 kg');
     });
+
+    it('renders pounds when the user prefers it', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatWeight(75.9)).toBe('167.3 lb');
+        expect(formatWeight(0)).toBe('0.0 lb');
+      });
+    });
   });
 
   describe('formatHeight', () => {
-    it('keeps two decimals', () => {
-      expect(formatHeight(1.71)).toBe('1.71 m');
-      expect(formatHeight(1.7)).toBe('1.70 m');
-      expect(formatHeight(1.715)).toBe('1.72 m');
+    it('renders centimeters under metric defaults', () => {
+      expect(formatHeight(1.71)).toBe('171 cm');
+      expect(formatHeight(1.715)).toBe('172 cm');
+    });
+
+    it('renders feet+inches under imperial preferences', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatHeight(1.71)).toBe(`5'7"`);
+        expect(formatHeight(1.83)).toBe(`6'0"`);
+      });
+    });
+  });
+
+  describe('formatStride', () => {
+    it('keeps two decimals in meters under metric defaults', () => {
+      expect(formatStride(1.42)).toBe('1.42 m');
+      expect(formatStride(1.4)).toBe('1.40 m');
+    });
+
+    it('uses feet under imperial preferences', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatStride(1)).toBe('3.28 ft');
+        expect(formatStride(0.91)).toBe('2.99 ft');
+      });
     });
   });
 
   describe('formatLength', () => {
-    it('rounds to whole meters', () => {
+    it('rounds to whole meters under metric defaults', () => {
       expect(formatLength(1234)).toBe('1234 m');
       expect(formatLength(25)).toBe('25 m');
       expect(formatLength(1234.6)).toBe('1235 m');
+    });
+
+    it('renders feet under imperial preferences', () => {
+      runWithUnitPreferences(IMPERIAL_PREFS, () => {
+        expect(formatLength(1234)).toBe('4049 ft');
+        expect(formatLength(0)).toBe('0 ft');
+      });
     });
   });
 
@@ -350,6 +460,22 @@ describe('format-units', () => {
       expect(isYardPool(33)).toBe(false); // some odd pool
       expect(isYardPool(undefined)).toBe(false);
       expect(isYardPool(null)).toBe(false);
+    });
+  });
+
+  describe('isMeterPool', () => {
+    it('returns true for SCM (25 m) and LCM (50 m) within tolerance', () => {
+      expect(isMeterPool(25)).toBe(true);
+      expect(isMeterPool(25.05)).toBe(true);
+      expect(isMeterPool(50)).toBe(true);
+    });
+
+    it('returns false for yard pools, non-standard pools, and missing values', () => {
+      expect(isMeterPool(22.86)).toBe(false);
+      expect(isMeterPool(45.72)).toBe(false);
+      expect(isMeterPool(33)).toBe(false);
+      expect(isMeterPool(undefined)).toBe(false);
+      expect(isMeterPool(null)).toBe(false);
     });
   });
 

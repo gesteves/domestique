@@ -1,5 +1,6 @@
 import { formatInTimeZone } from 'date-fns-tz';
 import { formatTemperature, formatPercent, formatLength, withUnit } from './format-units.js';
+import { getCurrentUnitPreferences } from './unit-context.js';
 import { formatDateTimeHumanReadable } from './date-formatting.js';
 import type {
   GoogleCurrentConditionsResponse,
@@ -51,42 +52,78 @@ function formatGoogleTemperature(temp: GoogleTemperature | undefined): string | 
   return formatTemperature(temp.degrees);
 }
 
+// Speed conversion helpers — every Google response unit is normalized to m/s
+// first, then projected to the athlete's preferred wind unit.
+const SPEED_TO_MPS: Record<string, number> = {
+  KILOMETERS_PER_HOUR: 1 / 3.6,
+  MILES_PER_HOUR: 0.44704,
+  METERS_PER_SECOND: 1,
+  KNOTS: 0.514444,
+};
+
+// Beaufort scale upper bounds (m/s) for forces 0–11; anything ≥ 32.7 m/s is 12.
+// Source: WMO. Each entry is the *upper* bound of that force.
+const BEAUFORT_UPPER_MPS = [
+  0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7,
+];
+
+function metersPerSecondToBeaufort(mps: number): number {
+  for (let i = 0; i < BEAUFORT_UPPER_MPS.length; i++) {
+    if (mps < BEAUFORT_UPPER_MPS[i]) return i;
+  }
+  return 12;
+}
+
 /**
- * Format a value-with-unit speed object (e.g., wind speed/gust). Google emits
- * "KILOMETERS_PER_HOUR" / "MILES_PER_HOUR" enum strings; we surface the unit
- * as the conventional "km/h" or "mph" abbreviation. Unknown units pass through
- * verbatim — better to be honest than silently mis-label.
+ * Format a value-with-unit speed object (e.g., wind speed/gust). Normalizes
+ * Google's reported unit to m/s and then renders in the athlete's preferred
+ * wind unit (km/h, mph, m/s, knots, or Beaufort).
  */
 function formatGoogleSpeed(speed: GoogleSpeed | undefined): string | undefined {
   if (!speed || speed.value === undefined || speed.value === null) return undefined;
   const unit = (speed.unit ?? 'KILOMETERS_PER_HOUR').toUpperCase();
-  switch (unit) {
-    case 'KILOMETERS_PER_HOUR':
-      return withUnit(speed.value, 'km/h', 1);
-    case 'MILES_PER_HOUR':
-      return withUnit(speed.value, 'mph', 1);
-    case 'METERS_PER_SECOND':
-      return withUnit(speed.value, 'm/s', 1);
-    case 'KNOTS':
-      return withUnit(speed.value, 'kn', 1);
-    default:
-      return `${speed.value.toFixed(1)} ${speed.unit ?? ''}`.trim();
+  const factor = SPEED_TO_MPS[unit];
+  if (factor === undefined) {
+    // Unknown source unit — keep what the API gave us rather than guess.
+    return `${speed.value.toFixed(1)} ${speed.unit ?? ''}`.trim();
+  }
+  const mps = speed.value * factor;
+  switch (getCurrentUnitPreferences().wind) {
+    case 'kmh':
+      return withUnit(mps * 3.6, 'km/h', 1);
+    case 'mph':
+      return withUnit(mps / 0.44704, 'mph', 1);
+    case 'mps':
+      return withUnit(mps, 'm/s', 1);
+    case 'knots':
+      return withUnit(mps / 0.514444, 'kn', 1);
+    case 'bft':
+      return `${metersPerSecondToBeaufort(mps)} Bft`;
   }
 }
 
 function formatGoogleVisibility(vis: GoogleVisibility | undefined): string | undefined {
   if (!vis || vis.distance === undefined || vis.distance === null) return undefined;
   const unit = (vis.unit ?? 'KILOMETERS').toUpperCase();
+  // Normalize to kilometers first.
+  let km: number;
   switch (unit) {
     case 'KILOMETERS':
-      return withUnit(vis.distance, 'km', 1);
+      km = vis.distance;
+      break;
     case 'MILES':
-      return withUnit(vis.distance, 'mi', 1);
+      km = vis.distance * 1.609344;
+      break;
     case 'METERS':
-      return withUnit(vis.distance, 'm', 0);
+      km = vis.distance / 1000;
+      break;
     default:
       return `${vis.distance} ${vis.unit ?? ''}`.trim();
   }
+  if (getCurrentUnitPreferences().system === 'imperial') {
+    return withUnit(km / 1.609344, 'mi', 1);
+  }
+  return withUnit(km, 'km', 1);
 }
 
 function formatPressure(hpa: number | undefined): string | undefined {
@@ -97,16 +134,25 @@ function formatPressure(hpa: number | undefined): string | undefined {
 function formatPrecipitationAmount(qpf: { quantity?: number; unit?: string } | undefined): string | undefined {
   if (!qpf || qpf.quantity === undefined || qpf.quantity === null) return undefined;
   const unit = (qpf.unit ?? 'MILLIMETERS').toUpperCase();
+  // Normalize source quantity to millimeters.
+  let mm: number;
   switch (unit) {
     case 'MILLIMETERS':
-      return withUnit(qpf.quantity, 'mm', 2);
+      mm = qpf.quantity;
+      break;
     case 'CENTIMETERS':
-      return withUnit(qpf.quantity, 'cm', 2);
+      mm = qpf.quantity * 10;
+      break;
     case 'INCHES':
-      return withUnit(qpf.quantity, 'in', 2);
+      mm = qpf.quantity * 25.4;
+      break;
     default:
       return `${qpf.quantity} ${qpf.unit ?? ''}`.trim();
   }
+  if (getCurrentUnitPreferences().precipitation === 'inches') {
+    return withUnit(mm / 25.4, 'in', 2);
+  }
+  return withUnit(mm, 'mm', 2);
 }
 
 const CARDINAL_ABBREVIATIONS: Record<string, string> = {

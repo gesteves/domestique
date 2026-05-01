@@ -12,6 +12,12 @@ import type {
   SportSettings,
   SportSettingsResponse,
   UnitPreferences,
+  UnitSystem,
+  WeightUnit,
+  TemperatureUnit,
+  WindUnit,
+  PrecipitationUnit,
+  HeightUnit,
   HRZone,
   PowerZone,
   PaceZone,
@@ -49,7 +55,7 @@ import {
   formatPercent,
   formatTemperature,
   formatWeight,
-  formatHeight,
+  formatStride,
   formatLength,
   formatEnergy,
   formatEnergyKJ,
@@ -80,6 +86,14 @@ import { memoize } from '../utils/memo.js';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
+const WIND_UNIT_MAP: Record<'KMH' | 'MPS' | 'KNOTS' | 'MPH' | 'BFT', WindUnit> = {
+  KMH: 'kmh',
+  MPS: 'mps',
+  KNOTS: 'knots',
+  MPH: 'mph',
+  BFT: 'bft',
+};
+
 const intervalsHttpErrorBuilders = {
   toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
     IntervalsApiError.fromHttpStatus(status, context, body),
@@ -101,6 +115,9 @@ interface IntervalsAthleteData {
   measurement_preference?: 'meters' | 'feet'; // "meters" = metric, "feet" = imperial
   weight_pref_lb?: boolean; // true = use pounds for weight regardless of measurement_preference
   fahrenheit?: boolean; // true = use Fahrenheit regardless of measurement_preference
+  wind_speed?: 'KMH' | 'MPS' | 'KNOTS' | 'MPH' | 'BFT'; // wind speed unit override
+  rain?: 'MM' | 'INCHES'; // precipitation unit override
+  height_units?: 'CM' | 'FEET'; // athlete physical-stature height unit override
   // Date of birth (only available at root endpoint, not /profile)
   icu_date_of_birth?: string; // ISO date (YYYY-MM-DD)
 }
@@ -615,7 +632,10 @@ export class IntervalsClient {
     return this.computeUnitPreferences(
       athlete.measurement_preference,
       athlete.weight_pref_lb,
-      athlete.fahrenheit
+      athlete.fahrenheit,
+      athlete.wind_speed,
+      athlete.rain,
+      athlete.height_units
     );
   });
   private fetchWeatherConfigCached = memoize(async () => {
@@ -665,26 +685,38 @@ export class IntervalsClient {
 
   /**
    * Compute unit preferences from raw API values.
-   * @param measurementPreference - "meters" (metric) or "feet" (imperial)
+   * @param measurementPreference - "meters" (metric) or "feet" (imperial); fallback for distance/speed/pace/elevation/stride
    * @param weightPrefLb - true = use pounds for weight regardless of measurement_preference
    * @param fahrenheit - true = use Fahrenheit regardless of measurement_preference
+   * @param windSpeed - wind speed unit override; missing → follow system
+   * @param rain - precipitation unit override; missing → follow system
+   * @param heightUnits - athlete physical-stature height unit override; missing → follow system
    */
   private computeUnitPreferences(
     measurementPreference: 'meters' | 'feet' | undefined,
     weightPrefLb: boolean | undefined,
-    fahrenheit: boolean | undefined
+    fahrenheit: boolean | undefined,
+    windSpeed?: 'KMH' | 'MPS' | 'KNOTS' | 'MPH' | 'BFT',
+    rain?: 'MM' | 'INCHES',
+    heightUnits?: 'CM' | 'FEET'
   ): UnitPreferences {
-    // Default to metric if not specified
     const isMetric = measurementPreference !== 'feet';
-    const system = isMetric ? 'metric' : 'imperial';
+    const system: UnitSystem = isMetric ? 'metric' : 'imperial';
 
-    // Weight: use lb if explicitly set, otherwise follow system preference
-    const weight = weightPrefLb ? 'lb' : (isMetric ? 'kg' : 'lb');
+    const weight: WeightUnit = weightPrefLb ? 'lb' : (isMetric ? 'kg' : 'lb');
+    const temperature: TemperatureUnit = fahrenheit ? 'fahrenheit' : (isMetric ? 'celsius' : 'fahrenheit');
 
-    // Temperature: use fahrenheit if explicitly set, otherwise follow system preference
-    const temperature = fahrenheit ? 'fahrenheit' : (isMetric ? 'celsius' : 'fahrenheit');
+    const wind: WindUnit = windSpeed
+      ? WIND_UNIT_MAP[windSpeed]
+      : (isMetric ? 'kmh' : 'mph');
+    const precipitation: PrecipitationUnit = rain
+      ? (rain === 'INCHES' ? 'inches' : 'mm')
+      : (isMetric ? 'mm' : 'inches');
+    const height: HeightUnit = heightUnits
+      ? (heightUnits === 'FEET' ? 'feet' : 'cm')
+      : (isMetric ? 'cm' : 'feet');
 
-    return { system, weight, temperature };
+    return { system, weight, temperature, wind, precipitation, height };
   }
 
   /**
@@ -730,7 +762,10 @@ export class IntervalsClient {
     const unitPreferences = this.computeUnitPreferences(
       athlete.measurement_preference,
       athlete.weight_pref_lb,
-      athlete.fahrenheit
+      athlete.fahrenheit,
+      athlete.wind_speed,
+      athlete.rain,
+      athlete.height_units
     );
 
     // Calculate age if date of birth is set
@@ -1638,7 +1673,7 @@ export class IntervalsClient {
         raw.average_cadence != null ? formatCadence(raw.average_cadence, activityType) : undefined,
       stride_length:
         raw.average_stride != null
-          ? (isSwim ? formatStrokeLength(raw.average_stride, poolLengthM) : formatHeight(raw.average_stride))
+          ? (isSwim ? formatStrokeLength(raw.average_stride, poolLengthM) : formatStride(raw.average_stride))
           : undefined,
 
       // Speed (m/s → km/h)
@@ -2234,7 +2269,7 @@ export class IntervalsClient {
       // Running/pace metrics
       // For swims the value is per-stroke distance; the unit follows the pool.
       average_stride: activity.average_stride != null
-        ? (isSwim ? formatStrokeLength(activity.average_stride, poolLengthM) : formatHeight(activity.average_stride))
+        ? (isSwim ? formatStrokeLength(activity.average_stride, poolLengthM) : formatStride(activity.average_stride))
         : undefined,
       gap: gapSecPerKm != null ? formatPace(gapSecPerKm, isSwim) : undefined,
 
@@ -2475,28 +2510,17 @@ export class IntervalsClient {
   }
 
   /**
-   * Format time in seconds to pace string.
-   * For running: min:ss/km
-   * For swimming: min:ss/100m
+   * Format time-over-distance to a pace string in the athlete's preferred units.
+   * Delegates to the shared `formatPace` so the per-km/per-mi and /100m/100yd
+   * decisions are made in one place.
    */
   private formatPaceFromTime(
     timeSeconds: number,
     distanceMeters: number,
     isSwimming: boolean
   ): string {
-    if (isSwimming) {
-      // Seconds per 100m
-      const per100m = (timeSeconds / distanceMeters) * 100;
-      const mins = Math.floor(per100m / 60);
-      const secs = Math.round(per100m % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}/100m`;
-    } else {
-      // Minutes per km
-      const perKm = (timeSeconds / distanceMeters) * 1000;
-      const mins = Math.floor(perKm / 60);
-      const secs = Math.round(perKm % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}/km`;
-    }
+    const secPerKm = (timeSeconds / distanceMeters) * 1000;
+    return formatPace(secPerKm, isSwimming);
   }
 
   /**

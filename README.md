@@ -12,6 +12,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Comprehensive workout analysis with intervals, notes, and weather data
 - Incorporates heat strain data recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
 - Weather forecasts up to 10 days out (Google Weather's forecast horizon) for each enabled location in the athlete's Intervals.icu weather config or, optionally, for any geocoded place (e.g., a race location), with local AQI from the Google Air Quality API, a pollen forecast from the Google Pollen API, elevation from the Google Elevation API, and place resolution via the Google Geocoding API
+- All unit-bearing fields in tool responses (distance, elevation, weight, temperature, wind speed, precipitation, height, etc.) are formatted using the athlete's unit preferences from Intervals.icu
 
 **Note:** Due to Strava API restrictions, workouts imported from Strava to Intervals.icu cannot be analyzed. To work around this, ensure that workouts are synced to Intervals.icu from other sources (Zwift, Garmin Connect, Dropbox, etc.)
 

@@ -227,15 +227,12 @@ export interface WorkoutWithWhoop extends NormalizedWorkout {
 // ============================================
 
 /**
- * Body measurements from Whoop API. Server emits metric units; the LLM
- * converts to imperial via athlete unit_preferences when needed.
+ * Body measurements from Whoop API. Values are pre-formatted server-side per
+ * the athlete's Intervals.icu unit preferences.
  */
 export interface WhoopBodyMeasurements {
-  /** Height (e.g., "1.71 m") */
   height: string;
-  /** Weight (e.g., "75.9 kg") */
   weight: string;
-  /** Maximum heart rate (e.g., "190 bpm") */
   max_heart_rate: string;
 }
 
@@ -683,18 +680,29 @@ export interface DateRange {
 export type UnitSystem = 'metric' | 'imperial';
 export type WeightUnit = 'kg' | 'lb';
 export type TemperatureUnit = 'celsius' | 'fahrenheit';
+export type WindUnit = 'kmh' | 'mph' | 'mps' | 'knots' | 'bft';
+export type PrecipitationUnit = 'mm' | 'inches';
+export type HeightUnit = 'cm' | 'feet';
 
 /**
- * User's preferred unit system for displaying data.
- * IMPORTANT: The LLM MUST use these units when responding to the user.
+ * User's preferred unit system for displaying data, derived from the athlete's
+ * Intervals.icu settings. Server-side formatters consult these via
+ * src/utils/unit-context.ts so every unit-bearing field arrives in the user's
+ * chosen units.
  */
 export interface UnitPreferences {
-  /** Base unit system: "metric" or "imperial". Use metric units (km, m, kg, celsius) or imperial (mi, ft, lb, fahrenheit). */
+  /** Fallback for distance, speed, pace, elevation, and stride length. */
   system: UnitSystem;
-  /** Weight unit override: "kg" or "lb". May differ from system preference. */
+  /** Weight unit override; may differ from `system`. */
   weight: WeightUnit;
-  /** Temperature unit override: "celsius" or "fahrenheit". May differ from system preference. */
+  /** Temperature unit override; may differ from `system`. */
   temperature: TemperatureUnit;
+  /** Wind speed unit (independent of `system`; supports Beaufort). */
+  wind: WindUnit;
+  /** Precipitation unit (independent of `system`). */
+  precipitation: PrecipitationUnit;
+  /** Athlete physical-stature height unit; not used for elevation or stride. */
+  height: HeightUnit;
 }
 
 // Heart rate zone with name and range
@@ -777,8 +785,9 @@ export interface AthleteProfile {
   /** Current age in years. Only present if date_of_birth is set. */
   age?: number;
   /**
-   * User's preferred unit system for displaying data.
-   * CRITICAL: The LLM MUST use these units when responding to the user.
+   * Athlete's configured unit preferences. Tool responses are already
+   * formatted in these units; surface them so the LLM can stay consistent
+   * when restating values in narrative text.
    */
   unit_preferences: UnitPreferences;
 }
