@@ -1,4 +1,9 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
+import {
+  buildGoogleErrorFromHttpStatus,
+  buildGoogleNetworkError,
+  googleErrorBuilders,
+} from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
 
 const GOOGLE_WEATHER_API_BASE = 'https://weather.googleapis.com/v1';
@@ -228,58 +233,15 @@ export class GoogleWeatherApiError extends ApiError {
     context: ErrorContext,
     responseBody?: string
   ): GoogleWeatherApiError {
-    const isRetryable = statusCode >= 500 || statusCode === 429;
-    let category: ErrorCategory;
-    let message: string;
-
-    switch (statusCode) {
-      case 400:
-        category = 'validation';
-        message = 'Google Weather rejected the request as invalid. Please check the parameters.';
-        break;
-      case 401:
-      case 403:
-        category = 'authentication';
-        message = 'Google Weather authentication failed. The API key may be invalid or the Weather API may not be enabled for the project.';
-        break;
-      case 404:
-        category = 'not_found';
-        message = 'Google Weather had no data for the requested location.';
-        break;
-      case 429:
-        category = 'rate_limit';
-        message = 'Google Weather is rate-limiting requests. Please try again in a few seconds.';
-        break;
-      default:
-        if (statusCode >= 500) {
-          category = 'service_unavailable';
-          message = 'Google Weather is temporarily unavailable. Please try again shortly.';
-        } else {
-          category = 'internal';
-          message = `An unexpected error occurred with Google Weather (${statusCode}).`;
-        }
-    }
-
-    return new GoogleWeatherApiError(message, category, isRetryable, context, statusCode, responseBody);
+    return buildGoogleErrorFromHttpStatus(GoogleWeatherApiError, 'Weather', statusCode, context, responseBody);
   }
 
   static networkError(context: ErrorContext, originalError?: Error): GoogleWeatherApiError {
-    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
-    return new GoogleWeatherApiError(
-      `I'm having trouble connecting to Google Weather${errorDetail}. This is usually temporary. Please try again in a moment.`,
-      'network',
-      true,
-      context
-    );
+    return buildGoogleNetworkError(GoogleWeatherApiError, 'Weather', context, originalError);
   }
 }
 
-const googleWeatherHttpErrorBuilders = {
-  toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
-    GoogleWeatherApiError.fromHttpStatus(status, context, body),
-  toNetworkError: (context: ErrorContext, err?: Error) =>
-    GoogleWeatherApiError.networkError(context, err),
-};
+const googleWeatherHttpErrorBuilders = googleErrorBuilders(GoogleWeatherApiError);
 
 /**
  * Client for Google's Weather API.

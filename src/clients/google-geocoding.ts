@@ -1,4 +1,9 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
+import {
+  buildGoogleErrorFromHttpStatus,
+  buildGoogleNetworkError,
+  googleErrorBuilders,
+} from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
 
 const GOOGLE_GEOCODING_API_BASE = 'https://maps.googleapis.com/maps/api/geocode';
@@ -61,49 +66,11 @@ export class GoogleGeocodingApiError extends ApiError {
     context: ErrorContext,
     responseBody?: string
   ): GoogleGeocodingApiError {
-    const isRetryable = statusCode >= 500 || statusCode === 429;
-    let category: ErrorCategory;
-    let message: string;
-
-    switch (statusCode) {
-      case 400:
-        category = 'validation';
-        message = 'Google Geocoding rejected the request as invalid. Please check the parameters.';
-        break;
-      case 401:
-      case 403:
-        category = 'authentication';
-        message = 'Google Geocoding authentication failed. The API key may be invalid or the Geocoding API may not be enabled for the project.';
-        break;
-      case 404:
-        category = 'not_found';
-        message = 'Google Geocoding had no data for the requested query.';
-        break;
-      case 429:
-        category = 'rate_limit';
-        message = 'Google Geocoding is rate-limiting requests. Please try again in a few seconds.';
-        break;
-      default:
-        if (statusCode >= 500) {
-          category = 'service_unavailable';
-          message = 'Google Geocoding is temporarily unavailable. Please try again shortly.';
-        } else {
-          category = 'internal';
-          message = `An unexpected error occurred with Google Geocoding (${statusCode}).`;
-        }
-    }
-
-    return new GoogleGeocodingApiError(message, category, isRetryable, context, statusCode, responseBody);
+    return buildGoogleErrorFromHttpStatus(GoogleGeocodingApiError, 'Geocoding', statusCode, context, responseBody);
   }
 
   static networkError(context: ErrorContext, originalError?: Error): GoogleGeocodingApiError {
-    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
-    return new GoogleGeocodingApiError(
-      `I'm having trouble connecting to Google Geocoding${errorDetail}. This is usually temporary. Please try again in a moment.`,
-      'network',
-      true,
-      context
-    );
+    return buildGoogleNetworkError(GoogleGeocodingApiError, 'Geocoding', context, originalError);
   }
 
   static noResults(query: string, context: ErrorContext): GoogleGeocodingApiError {
@@ -116,12 +83,7 @@ export class GoogleGeocodingApiError extends ApiError {
   }
 }
 
-const googleGeocodingHttpErrorBuilders = {
-  toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
-    GoogleGeocodingApiError.fromHttpStatus(status, context, body),
-  toNetworkError: (context: ErrorContext, err?: Error) =>
-    GoogleGeocodingApiError.networkError(context, err),
-};
+const googleGeocodingHttpErrorBuilders = googleErrorBuilders(GoogleGeocodingApiError);
 
 /**
  * Client for Google's Geocoding API.

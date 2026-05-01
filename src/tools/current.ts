@@ -101,6 +101,24 @@ export class CurrentTools {
   }
 
   /**
+   * Run an async fetch and swallow any error, returning `undefined` and logging.
+   * Used to fan out the per-API forecast fetches so a single API failure (AQ
+   * 4xx, weather alert outage, etc.) doesn't take down the whole forecast.
+   */
+  private async safeFetch<T>(
+    label: string,
+    what: string,
+    fn: () => Promise<T>
+  ): Promise<T | undefined> {
+    try {
+      return await fn();
+    } catch (e) {
+      console.error(`Error fetching ${what} for "${label}":`, e);
+      return undefined;
+    }
+  }
+
+  /**
    * Build today's per-location weather forecast for every enabled Intervals.icu
    * weather location. Returns [] when Google Weather is not configured or there
    * are no enabled locations. Used by `getTodaysSummary`'s embedded forecast.
@@ -154,47 +172,23 @@ export class CurrentTools {
 
     try {
       const [current, hourly, alerts, daily, currentAq, hourlyAq, pollenForecast, elevation] = await Promise.all([
-        gw.getCurrentConditions(loc.latitude, loc.longitude).catch((e) => {
-          console.error(`Error fetching current conditions for "${loc.label}":`, e);
-          return undefined;
-        }),
-        gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
-          console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
-          return undefined;
-        }),
-        gw.getWeatherAlerts(loc.latitude, loc.longitude).catch((e) => {
-          console.error(`Error fetching weather alerts for "${loc.label}":`, e);
-          return undefined;
-        }),
-        gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
-          console.error(`Error fetching daily forecast for "${loc.label}":`, e);
-          return undefined;
-        }),
+        this.safeFetch(loc.label, 'current conditions', () => gw.getCurrentConditions(loc.latitude, loc.longitude)),
+        this.safeFetch(loc.label, 'hourly forecast', () => gw.getHourlyForecast(loc.latitude, loc.longitude)),
+        this.safeFetch(loc.label, 'weather alerts', () => gw.getWeatherAlerts(loc.latitude, loc.longitude)),
+        this.safeFetch(loc.label, 'daily forecast', () => gw.getDailyForecast(loc.latitude, loc.longitude)),
         aq
-          ? aq.getCurrentAirQuality(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching current air quality for "${loc.label}":`, e);
-              return undefined;
-            })
+          ? this.safeFetch(loc.label, 'current air quality', () => aq.getCurrentAirQuality(loc.latitude, loc.longitude))
           : Promise.resolve(undefined),
         aq
-          ? aq
-              .getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHours)
-              .catch((e) => {
-                console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
-                return undefined;
-              })
+          ? this.safeFetch(loc.label, 'hourly air quality', () =>
+              aq.getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHours)
+            )
           : Promise.resolve(undefined),
         pollen
-          ? pollen.getPollenForecast(loc.latitude, loc.longitude, 1).catch((e) => {
-              console.error(`Error fetching pollen forecast for "${loc.label}":`, e);
-              return undefined;
-            })
+          ? this.safeFetch(loc.label, 'pollen forecast', () => pollen.getPollenForecast(loc.latitude, loc.longitude, 1))
           : Promise.resolve(undefined),
         elev
-          ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching elevation for "${loc.label}":`, e);
-              return undefined;
-            })
+          ? this.safeFetch(loc.label, 'elevation', () => elev.getElevation(loc.latitude, loc.longitude))
           : Promise.resolve(undefined),
       ]);
       return assembleLocationForecast(
@@ -252,35 +246,22 @@ export class CurrentTools {
 
     try {
       const [hourly, daily, hourlyAq, pollenForecast, elevation] = await Promise.all([
-        gw.getHourlyForecast(loc.latitude, loc.longitude, hoursToCoverDate).catch((e) => {
-          console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
-          return undefined;
-        }),
-        gw.getDailyForecast(loc.latitude, loc.longitude).catch((e) => {
-          console.error(`Error fetching daily forecast for "${loc.label}":`, e);
-          return undefined;
-        }),
+        this.safeFetch(loc.label, 'hourly forecast', () =>
+          gw.getHourlyForecast(loc.latitude, loc.longitude, hoursToCoverDate)
+        ),
+        this.safeFetch(loc.label, 'daily forecast', () => gw.getDailyForecast(loc.latitude, loc.longitude)),
         fetchAirQuality && aq
-          ? aq
-              .getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHoursNeeded)
-              .catch((e) => {
-                console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
-                return undefined;
-              })
+          ? this.safeFetch(loc.label, 'hourly air quality', () =>
+              aq.getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHoursNeeded)
+            )
           : Promise.resolve(undefined),
         fetchPollen && pollen
-          ? pollen
-              .getPollenForecast(loc.latitude, loc.longitude, dayOffset + 1)
-              .catch((e) => {
-                console.error(`Error fetching pollen forecast for "${loc.label}":`, e);
-                return undefined;
-              })
+          ? this.safeFetch(loc.label, 'pollen forecast', () =>
+              pollen.getPollenForecast(loc.latitude, loc.longitude, dayOffset + 1)
+            )
           : Promise.resolve(undefined),
         elev
-          ? elev.getElevation(loc.latitude, loc.longitude).catch((e) => {
-              console.error(`Error fetching elevation for "${loc.label}":`, e);
-              return undefined;
-            })
+          ? this.safeFetch(loc.label, 'elevation', () => elev.getElevation(loc.latitude, loc.longitude))
           : Promise.resolve(undefined),
       ]);
       return assembleFutureLocationForecast(

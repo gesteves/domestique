@@ -1,4 +1,9 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
+import {
+  buildGoogleErrorFromHttpStatus,
+  buildGoogleNetworkError,
+  googleErrorBuilders,
+} from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
 
 const GOOGLE_AIR_QUALITY_API_BASE = 'https://airquality.googleapis.com/v1';
@@ -66,58 +71,15 @@ export class GoogleAirQualityApiError extends ApiError {
     context: ErrorContext,
     responseBody?: string
   ): GoogleAirQualityApiError {
-    const isRetryable = statusCode >= 500 || statusCode === 429;
-    let category: ErrorCategory;
-    let message: string;
-
-    switch (statusCode) {
-      case 400:
-        category = 'validation';
-        message = 'Google Air Quality rejected the request as invalid. Please check the parameters.';
-        break;
-      case 401:
-      case 403:
-        category = 'authentication';
-        message = 'Google Air Quality authentication failed. The API key may be invalid or the Air Quality API may not be enabled for the project.';
-        break;
-      case 404:
-        category = 'not_found';
-        message = 'Google Air Quality had no data for the requested location.';
-        break;
-      case 429:
-        category = 'rate_limit';
-        message = 'Google Air Quality is rate-limiting requests. Please try again in a few seconds.';
-        break;
-      default:
-        if (statusCode >= 500) {
-          category = 'service_unavailable';
-          message = 'Google Air Quality is temporarily unavailable. Please try again shortly.';
-        } else {
-          category = 'internal';
-          message = `An unexpected error occurred with Google Air Quality (${statusCode}).`;
-        }
-    }
-
-    return new GoogleAirQualityApiError(message, category, isRetryable, context, statusCode, responseBody);
+    return buildGoogleErrorFromHttpStatus(GoogleAirQualityApiError, 'Air Quality', statusCode, context, responseBody);
   }
 
   static networkError(context: ErrorContext, originalError?: Error): GoogleAirQualityApiError {
-    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
-    return new GoogleAirQualityApiError(
-      `I'm having trouble connecting to Google Air Quality${errorDetail}. This is usually temporary. Please try again in a moment.`,
-      'network',
-      true,
-      context
-    );
+    return buildGoogleNetworkError(GoogleAirQualityApiError, 'Air Quality', context, originalError);
   }
 }
 
-const googleAirQualityHttpErrorBuilders = {
-  toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
-    GoogleAirQualityApiError.fromHttpStatus(status, context, body),
-  toNetworkError: (context: ErrorContext, err?: Error) =>
-    GoogleAirQualityApiError.networkError(context, err),
-};
+const googleAirQualityHttpErrorBuilders = googleErrorBuilders(GoogleAirQualityApiError);
 
 /**
  * Client for Google's Air Quality API.

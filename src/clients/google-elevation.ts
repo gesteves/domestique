@@ -1,4 +1,9 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
+import {
+  buildGoogleErrorFromHttpStatus,
+  buildGoogleNetworkError,
+  googleErrorBuilders,
+} from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
 
 const GOOGLE_ELEVATION_API_BASE = 'https://maps.googleapis.com/maps/api/elevation';
@@ -53,58 +58,15 @@ export class GoogleElevationApiError extends ApiError {
     context: ErrorContext,
     responseBody?: string
   ): GoogleElevationApiError {
-    const isRetryable = statusCode >= 500 || statusCode === 429;
-    let category: ErrorCategory;
-    let message: string;
-
-    switch (statusCode) {
-      case 400:
-        category = 'validation';
-        message = 'Google Elevation rejected the request as invalid. Please check the parameters.';
-        break;
-      case 401:
-      case 403:
-        category = 'authentication';
-        message = 'Google Elevation authentication failed. The API key may be invalid or the Elevation API may not be enabled for the project.';
-        break;
-      case 404:
-        category = 'not_found';
-        message = 'Google Elevation had no data for the requested location.';
-        break;
-      case 429:
-        category = 'rate_limit';
-        message = 'Google Elevation is rate-limiting requests. Please try again in a few seconds.';
-        break;
-      default:
-        if (statusCode >= 500) {
-          category = 'service_unavailable';
-          message = 'Google Elevation is temporarily unavailable. Please try again shortly.';
-        } else {
-          category = 'internal';
-          message = `An unexpected error occurred with Google Elevation (${statusCode}).`;
-        }
-    }
-
-    return new GoogleElevationApiError(message, category, isRetryable, context, statusCode, responseBody);
+    return buildGoogleErrorFromHttpStatus(GoogleElevationApiError, 'Elevation', statusCode, context, responseBody);
   }
 
   static networkError(context: ErrorContext, originalError?: Error): GoogleElevationApiError {
-    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
-    return new GoogleElevationApiError(
-      `I'm having trouble connecting to Google Elevation${errorDetail}. This is usually temporary. Please try again in a moment.`,
-      'network',
-      true,
-      context
-    );
+    return buildGoogleNetworkError(GoogleElevationApiError, 'Elevation', context, originalError);
   }
 }
 
-const googleElevationHttpErrorBuilders = {
-  toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
-    GoogleElevationApiError.fromHttpStatus(status, context, body),
-  toNetworkError: (context: ErrorContext, err?: Error) =>
-    GoogleElevationApiError.networkError(context, err),
-};
+const googleElevationHttpErrorBuilders = googleErrorBuilders(GoogleElevationApiError);
 
 /**
  * Client for Google's Elevation API.

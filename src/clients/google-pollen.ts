@@ -1,4 +1,9 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
+import {
+  buildGoogleErrorFromHttpStatus,
+  buildGoogleNetworkError,
+  googleErrorBuilders,
+} from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
 
 const GOOGLE_POLLEN_API_BASE = 'https://pollen.googleapis.com/v1';
@@ -80,58 +85,15 @@ export class GooglePollenApiError extends ApiError {
     context: ErrorContext,
     responseBody?: string
   ): GooglePollenApiError {
-    const isRetryable = statusCode >= 500 || statusCode === 429;
-    let category: ErrorCategory;
-    let message: string;
-
-    switch (statusCode) {
-      case 400:
-        category = 'validation';
-        message = 'Google Pollen rejected the request as invalid. Please check the parameters.';
-        break;
-      case 401:
-      case 403:
-        category = 'authentication';
-        message = 'Google Pollen authentication failed. The API key may be invalid or the Pollen API may not be enabled for the project.';
-        break;
-      case 404:
-        category = 'not_found';
-        message = 'Google Pollen had no data for the requested location.';
-        break;
-      case 429:
-        category = 'rate_limit';
-        message = 'Google Pollen is rate-limiting requests. Please try again in a few seconds.';
-        break;
-      default:
-        if (statusCode >= 500) {
-          category = 'service_unavailable';
-          message = 'Google Pollen is temporarily unavailable. Please try again shortly.';
-        } else {
-          category = 'internal';
-          message = `An unexpected error occurred with Google Pollen (${statusCode}).`;
-        }
-    }
-
-    return new GooglePollenApiError(message, category, isRetryable, context, statusCode, responseBody);
+    return buildGoogleErrorFromHttpStatus(GooglePollenApiError, 'Pollen', statusCode, context, responseBody);
   }
 
   static networkError(context: ErrorContext, originalError?: Error): GooglePollenApiError {
-    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
-    return new GooglePollenApiError(
-      `I'm having trouble connecting to Google Pollen${errorDetail}. This is usually temporary. Please try again in a moment.`,
-      'network',
-      true,
-      context
-    );
+    return buildGoogleNetworkError(GooglePollenApiError, 'Pollen', context, originalError);
   }
 }
 
-const googlePollenHttpErrorBuilders = {
-  toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
-    GooglePollenApiError.fromHttpStatus(status, context, body),
-  toNetworkError: (context: ErrorContext, err?: Error) =>
-    GooglePollenApiError.networkError(context, err),
-};
+const googlePollenHttpErrorBuilders = googleErrorBuilders(GooglePollenApiError);
 
 /**
  * Client for Google's Pollen API.
@@ -153,9 +115,9 @@ export class GooglePollenClient {
   /**
    * GET /v1/forecast:lookup
    *
-   * The endpoint covers up to 5 days; we always request a single day (today
-   * in the athlete's timezone), and the calling code matches the returned
-   * `dailyInfo[].date` against today before surfacing the data.
+   * The endpoint covers up to 5 days. Callers pass the number of days they
+   * need (1 for today, `dayOffset + 1` for a future date) and pick the matching
+   * entry by date from the returned `dailyInfo[]` in the location's timezone.
    * @see https://developers.google.com/maps/documentation/pollen/forecast
    */
   async getPollenForecast(

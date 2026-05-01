@@ -1,4 +1,9 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
+import {
+  buildGoogleErrorFromHttpStatus,
+  buildGoogleNetworkError,
+  googleErrorBuilders,
+} from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
 
 const GOOGLE_TIMEZONE_API_BASE = 'https://maps.googleapis.com/maps/api/timezone';
@@ -47,49 +52,11 @@ export class GoogleTimezoneApiError extends ApiError {
     context: ErrorContext,
     responseBody?: string
   ): GoogleTimezoneApiError {
-    const isRetryable = statusCode >= 500 || statusCode === 429;
-    let category: ErrorCategory;
-    let message: string;
-
-    switch (statusCode) {
-      case 400:
-        category = 'validation';
-        message = 'Google Time Zone rejected the request as invalid. Please check the parameters.';
-        break;
-      case 401:
-      case 403:
-        category = 'authentication';
-        message = 'Google Time Zone authentication failed. The API key may be invalid or the Time Zone API may not be enabled for the project.';
-        break;
-      case 404:
-        category = 'not_found';
-        message = 'Google Time Zone had no data for the requested location.';
-        break;
-      case 429:
-        category = 'rate_limit';
-        message = 'Google Time Zone is rate-limiting requests. Please try again in a few seconds.';
-        break;
-      default:
-        if (statusCode >= 500) {
-          category = 'service_unavailable';
-          message = 'Google Time Zone is temporarily unavailable. Please try again shortly.';
-        } else {
-          category = 'internal';
-          message = `An unexpected error occurred with Google Time Zone (${statusCode}).`;
-        }
-    }
-
-    return new GoogleTimezoneApiError(message, category, isRetryable, context, statusCode, responseBody);
+    return buildGoogleErrorFromHttpStatus(GoogleTimezoneApiError, 'Time Zone', statusCode, context, responseBody);
   }
 
   static networkError(context: ErrorContext, originalError?: Error): GoogleTimezoneApiError {
-    const errorDetail = originalError?.message ? `: ${originalError.message}` : '';
-    return new GoogleTimezoneApiError(
-      `I'm having trouble connecting to Google Time Zone${errorDetail}. This is usually temporary. Please try again in a moment.`,
-      'network',
-      true,
-      context
-    );
+    return buildGoogleNetworkError(GoogleTimezoneApiError, 'Time Zone', context, originalError);
   }
 
   static missingTimeZoneId(context: ErrorContext): GoogleTimezoneApiError {
@@ -102,12 +69,7 @@ export class GoogleTimezoneApiError extends ApiError {
   }
 }
 
-const googleTimezoneHttpErrorBuilders = {
-  toHttpError: (status: number, context: ErrorContext, body: string | undefined) =>
-    GoogleTimezoneApiError.fromHttpStatus(status, context, body),
-  toNetworkError: (context: ErrorContext, err?: Error) =>
-    GoogleTimezoneApiError.networkError(context, err),
-};
+const googleTimezoneHttpErrorBuilders = googleErrorBuilders(GoogleTimezoneApiError);
 
 /**
  * Client for Google's Time Zone API.
