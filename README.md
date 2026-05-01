@@ -202,7 +202,7 @@ The inspector will open a web interface where you can:
 
 ### Debug Token Counting
 
-In development mode, tool responses include a `_debug` object with token count information. This helps you understand how many tokens each tool response would consume when passed to Claude.
+In development mode, tool responses include a `token_count` field in `_meta` to help you understand how many tokens each tool response would consume when passed to Claude.
 
 To enable this feature:
 
@@ -219,13 +219,15 @@ To enable this feature:
 Tool responses will now include:
 ```json
 {
-  "response": { ... },
-  "field_descriptions": { ... },
-  "_debug": {
+  "content": [{ "type": "text", "text": "..." }],
+  "structuredContent": { ... },
+  "_meta": {
     "token_count": 1234
   }
 }
 ```
+
+`_meta` is reserved by the MCP spec for out-of-band metadata that clients aren't required to forward to the model, so the token count doesn't pollute what Claude sees.
 
 This feature is automatically disabled in production (when `NODE_ENV` is not `development`) or when `ANTHROPIC_API_KEY` is not set.
 
