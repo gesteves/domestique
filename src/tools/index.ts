@@ -388,7 +388,7 @@ export class ToolRegistry {
 
     if (this.hasGoogleWeather) {
       register({
-        name: 'get_forecast',
+        name: 'get_weather_forecast',
         title: 'Weather Forecast',
         description: `Fetches a weather forecast for a date and (optionally) a location. Supports up to 10 days from today.
 
@@ -423,7 +423,7 @@ export class ToolRegistry {
         inputSchema: schemas.forecastInputSchema,
         outputSchema: schemas.forecastOutputSchema,
         annotations: READ_ONLY,
-        handler: async (args: { date?: string; location?: string }) => this.currentTools.getForecast(args),
+        handler: async (args: { date?: string; location?: string }) => this.currentTools.getWeatherForecast(args),
       });
     }
 

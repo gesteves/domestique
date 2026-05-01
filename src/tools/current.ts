@@ -296,7 +296,7 @@ export class CurrentTools {
    * "tomorrow", "in 3 days"). The resolved date must be within today through
    * today+10 in each location's tz.
    */
-  async getForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {
+  async getWeatherForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {
     const athleteTimezone = await this.intervals.getAthleteTimezone();
     const currentDateTime = getCurrentTimeInTimezone(athleteTimezone);
 

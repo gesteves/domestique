@@ -1192,7 +1192,7 @@ describe('CurrentTools', () => {
         null
       );
 
-      const result = await toolsNoWeather.getForecast();
+      const result = await toolsNoWeather.getWeatherForecast();
       expect(result.forecasts).toEqual([]);
       expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
       expect(mockIntervalsClient.getEnabledWeatherLocations).not.toHaveBeenCalled();
@@ -1213,7 +1213,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWithWeather.getForecast();
+      const result = await toolsWithWeather.getWeatherForecast();
 
       expect(mockGoogleWeatherClient.getCurrentConditions).toHaveBeenCalledWith(43.65, -110.71);
       expect(mockGoogleWeatherClient.getHourlyForecast).toHaveBeenCalledWith(43.65, -110.71);
@@ -1257,7 +1257,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockRejectedValue(new Error('alerts boom'));
 
-      const result = await toolsWithWeather.getForecast();
+      const result = await toolsWithWeather.getWeatherForecast();
       expect(result.forecasts.map((f) => f.location)).toEqual(['Boise']);
       expect(result.forecasts[0].alerts).toEqual([]);
       expect(result.forecasts[0].current_conditions?.temperature).toBe('4.1 °C');
@@ -1278,7 +1278,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWithWeather.getForecast();
+      const result = await toolsWithWeather.getWeatherForecast();
       expect(result.forecasts.map((f) => f.location)).toEqual(['A']);
       expect(result.forecasts[0].current_conditions).toBeNull();
     });
@@ -1373,7 +1373,7 @@ describe('CurrentTools', () => {
         ],
       });
 
-      const result = await toolsWithAirQuality.getForecast();
+      const result = await toolsWithAirQuality.getWeatherForecast();
 
       expect(mockGoogleAirQualityClient.getCurrentAirQuality).toHaveBeenCalledWith(43.65, -110.71);
       expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).toHaveBeenCalledWith(
@@ -1409,7 +1409,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleAirQualityClient.getCurrentAirQuality).mockRejectedValue(new Error('boom'));
       vi.mocked(mockGoogleAirQualityClient.getHourlyAirQualityForecast).mockRejectedValue(new Error('boom'));
 
-      const result = await toolsWithAirQuality.getForecast();
+      const result = await toolsWithAirQuality.getWeatherForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.current_conditions?.air_quality).toBeUndefined();
@@ -1434,7 +1434,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWeatherOnly.getForecast();
+      const result = await toolsWeatherOnly.getWeatherForecast();
       expect(mockGoogleAirQualityClient.getCurrentAirQuality).not.toHaveBeenCalled();
       expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).not.toHaveBeenCalled();
       expect(result.forecasts[0].current_conditions?.air_quality).toBeUndefined();
@@ -1493,7 +1493,7 @@ describe('CurrentTools', () => {
         ],
       });
 
-      const result = await toolsWithPollen.getForecast();
+      const result = await toolsWithPollen.getWeatherForecast();
 
       expect(mockGooglePollenClient.getPollenForecast).toHaveBeenCalledWith(43.65, -110.71, 1);
 
@@ -1531,7 +1531,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
       vi.mocked(mockGooglePollenClient.getPollenForecast).mockRejectedValue(new Error('boom'));
 
-      const result = await toolsWithPollen.getForecast();
+      const result = await toolsWithPollen.getWeatherForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.pollen).toBeUndefined();
@@ -1564,7 +1564,7 @@ describe('CurrentTools', () => {
         ],
       });
 
-      const result = await toolsWithWeather.getForecast();
+      const result = await toolsWithWeather.getWeatherForecast();
 
       expect(mockGoogleWeatherClient.getDailyForecast).toHaveBeenCalledWith(43.65, -110.71);
       const fc = result.forecasts[0];
@@ -1590,7 +1590,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
       vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockRejectedValue(new Error('daily boom'));
 
-      const result = await toolsWithWeather.getForecast();
+      const result = await toolsWithWeather.getWeatherForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.sunrise).toBeUndefined();
@@ -1615,7 +1615,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWeatherOnly.getForecast();
+      const result = await toolsWeatherOnly.getWeatherForecast();
       expect(mockGooglePollenClient.getPollenForecast).not.toHaveBeenCalled();
       expect(result.forecasts[0].pollen).toBeUndefined();
     });
@@ -1642,7 +1642,7 @@ describe('CurrentTools', () => {
         results: [{ elevation: 1980.4, location: { lat: 43.65, lng: -110.71 }, resolution: 4.7 }],
       });
 
-      const result = await toolsWithElevation.getForecast();
+      const result = await toolsWithElevation.getWeatherForecast();
 
       expect(mockGoogleElevationClient.getElevation).toHaveBeenCalledWith(43.65, -110.71);
       expect(result.forecasts[0].elevation).toBe('1980 m');
@@ -1667,7 +1667,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
       vi.mocked(mockGoogleElevationClient.getElevation).mockRejectedValue(new Error('elevation boom'));
 
-      const result = await toolsWithElevation.getForecast();
+      const result = await toolsWithElevation.getWeatherForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
       expect(fc.elevation).toBeUndefined();
@@ -1692,7 +1692,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourly);
       vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue(sampleAlerts);
 
-      const result = await toolsWeatherOnly.getForecast();
+      const result = await toolsWeatherOnly.getWeatherForecast();
       expect(mockGoogleElevationClient.getElevation).not.toHaveBeenCalled();
       expect(result.forecasts[0].elevation).toBeUndefined();
     });
@@ -1748,13 +1748,13 @@ describe('CurrentTools', () => {
           mockTrainerRoadClient,
           mockGoogleWeatherClient
         );
-        await expect(tools.getForecast({ date: '2026-05-15' })).rejects.toThrow(/outside the supported window/);
-        await expect(tools.getForecast({ date: '2026-04-27' })).rejects.toThrow(/outside the supported window/);
+        await expect(tools.getWeatherForecast({ date: '2026-05-15' })).rejects.toThrow(/outside the supported window/);
+        await expect(tools.getWeatherForecast({ date: '2026-04-27' })).rejects.toThrow(/outside the supported window/);
       });
 
       it('returns empty forecasts when Google Weather is not configured (no args)', async () => {
         const tools = new CurrentTools(mockIntervalsClient, mockWhoopClient, mockTrainerRoadClient, null);
-        const result = await tools.getForecast({ date: '2026-05-02' });
+        const result = await tools.getWeatherForecast({ date: '2026-05-02' });
         expect(result.forecasts).toEqual([]);
       });
 
@@ -1769,7 +1769,7 @@ describe('CurrentTools', () => {
           null,
           null
         );
-        await expect(tools.getForecast({ location: 'Boulder, CO' })).rejects.toThrow(/Free-text location lookup is not available/);
+        await expect(tools.getWeatherForecast({ location: 'Boulder, CO' })).rejects.toThrow(/Free-text location lookup is not available/);
       });
 
       it('builds a future-date forecast with only daily/hourly when date > today and no AQ/pollen configured', async () => {
@@ -1786,7 +1786,7 @@ describe('CurrentTools', () => {
         vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-04-30'));
         vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue(sampleHourlyAcrossDays);
 
-        const result = await tools.getForecast({ date: '2026-04-30' });
+        const result = await tools.getWeatherForecast({ date: '2026-04-30' });
 
         // No current_conditions or alerts on future-date forecast
         expect(mockGoogleWeatherClient.getCurrentConditions).not.toHaveBeenCalled();
@@ -1830,7 +1830,7 @@ describe('CurrentTools', () => {
         vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
 
         // 2026-05-05 is today (2026-04-28) + 7 days — beyond pollen's 5-day window
-        const result = await tools.getForecast({ date: '2026-05-05' });
+        const result = await tools.getWeatherForecast({ date: '2026-05-05' });
         expect(mockGooglePollenClient.getPollenForecast).not.toHaveBeenCalled();
         expect(result.forecasts[0].pollen).toBeUndefined();
       });
@@ -1851,7 +1851,7 @@ describe('CurrentTools', () => {
         vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
 
         // 2026-05-03 is today (2026-04-28) + 5 days — beyond AQ's 96h window
-        await tools.getForecast({ date: '2026-05-03' });
+        await tools.getWeatherForecast({ date: '2026-05-03' });
         expect(mockGoogleAirQualityClient.getHourlyAirQualityForecast).not.toHaveBeenCalled();
       });
 
@@ -1875,7 +1875,7 @@ describe('CurrentTools', () => {
         vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-04-30'));
         vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
 
-        const result = await tools.getForecast({ date: '2026-04-30', location: 'San Francisco, CA' });
+        const result = await tools.getWeatherForecast({ date: '2026-04-30', location: 'San Francisco, CA' });
 
         expect(mockGoogleGeocodingClient.geocode).toHaveBeenCalledWith('San Francisco, CA');
         // Intervals.icu enabled-location lookup must be skipped when location is provided
@@ -1907,7 +1907,7 @@ describe('CurrentTools', () => {
           ],
         });
 
-        const result = await tools.getForecast();
+        const result = await tools.getWeatherForecast();
         // Pre-formatted in the location's tz (Boise = MDT, UTC-6 in DST).
         // 20:00 UTC = 14:00 MDT same day; 04:00 UTC next day = 22:00 MDT same day.
         const fc = result.forecasts[0];
@@ -1951,7 +1951,7 @@ describe('CurrentTools', () => {
           ],
         });
 
-        const result = await tools.getForecast({ date: '2026-04-30', location: 'San Francisco, CA' });
+        const result = await tools.getWeatherForecast({ date: '2026-04-30', location: 'San Francisco, CA' });
 
         expect(mockTz.getTimezone).toHaveBeenCalledWith(37.7749, -122.4194);
         expect(result.forecasts).toHaveLength(1);
@@ -1984,7 +1984,7 @@ describe('CurrentTools', () => {
         vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
         vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue({ weatherAlerts: [] });
 
-        const result = await tools.getForecast();
+        const result = await tools.getWeatherForecast();
 
         expect(mockTz.getTimezone).toHaveBeenCalledWith(35.6762, 139.6503);
         expect(result.forecasts).toHaveLength(1);
@@ -2010,7 +2010,7 @@ describe('CurrentTools', () => {
         vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-04-30'));
         vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
 
-        await tools.getForecast({ date: '2026-04-30' });
+        await tools.getWeatherForecast({ date: '2026-04-30' });
 
         expect(mockGoogleWeatherClient.getHourlyForecast).toHaveBeenCalledTimes(1);
         const call = vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mock.calls[0];
@@ -2041,7 +2041,7 @@ describe('CurrentTools', () => {
         vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
         vi.mocked(mockGoogleWeatherClient.getWeatherAlerts).mockResolvedValue({ weatherAlerts: [] });
 
-        const result = await tools.getForecast();
+        const result = await tools.getWeatherForecast();
         expect(result.forecasts).toHaveLength(1);
         // Falls back to athlete tz (America/Boise = MDT) for the response formatting.
         expect(result.forecasts[0].current_conditions?.as_of).toMatch(/MDT$/);

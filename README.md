@@ -20,7 +20,6 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ### Today's Data
 - `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured)
 - `get_todays_workouts` - Today's completed (with full per-activity details) and planned workouts only. A leaner alternative to `get_todays_summary` when only workout data is needed.
-- `get_forecast` - Weather forecast for a date and optional location, including AQI and pollen forecasts
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location
@@ -59,6 +58,10 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_power_curve` - Cycling power curve analysis showing best watts at various durations with W/kg, estimated FTP, and period comparison
 - `get_pace_curve` - Running/swimming pace curve analysis showing best times at key distances
 - `get_hr_curve` - Heart rate curve analysis showing max sustained HR at various durations
+
+### Weather
+
+- `get_weather_forecast` - Weather forecast for a date and optional location, including AQI and pollen forecasts
 
 ## Setup
 
