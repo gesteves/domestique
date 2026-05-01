@@ -213,35 +213,11 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     // For new sessions (initialization), create a new server and transport
     const mcpServer = new McpServer(
       { name: 'domestique', version: '1.0.0' },
-      { capabilities: { tools: { listChanged: true }, prompts: {} } }
+      { capabilities: { tools: { listChanged: true } } }
     );
 
     // Register tools for this connection
     toolRegistry.registerTools(mcpServer);
-
-    // Register prompts
-    mcpServer.registerPrompt(
-      'daily_summary',
-      {
-        title: 'Daily Summary',
-        description:
-          'Get a complete overview of your fitness status today including recovery, strain, workouts, and fitness metrics',
-      },
-      async () => {
-        console.log('[MCP] Prompt requested: daily_summary');
-        return {
-          messages: [
-            {
-              role: 'user',
-              content: {
-                type: 'text',
-                text: 'Give me my daily fitness summary for today.',
-              },
-            },
-          ],
-        };
-      }
-    );
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),

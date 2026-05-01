@@ -371,8 +371,4 @@ This server has been tested with Claude and ChatGPT. However, there are some com
 
 - **Tool responses**: Every tool declares an `outputSchema` per the [2025-11-25 MCP spec](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). Responses return the typed payload as `structuredContent` (validated against the schema) and the same payload serialized as JSON in `content` for backwards compatibility with clients that only read `content` (e.g., older Claude). Field-level descriptions live in the schema delivered via `tools/list`, not inside every response payload.
 
-- **MCP prompts**: ChatGPT doesn't support [prompts](https://modelcontextprotocol.io/specification/2025-11-25/server/prompts), and Claude inserts them as .txt files rather than as regular prompts. The `daily_summary` prompt is provided but may not work as expected on all clients.
-
-- **MCP resources**: ChatGPT does not support [resources](https://modelcontextprotocol.io/specification/2025-11-25/server/resources); Claude does but doesn't seem to reliably use them while invoking tools.
-
 - **`_meta` fields**: ChatGPT [provides](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) `_meta` fields in tool inputs, which could be used to identify that the request is coming from ChatGPT, and provides things like the location and locale of the user. Claude doesn't provide any hints.

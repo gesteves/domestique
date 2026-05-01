@@ -38,7 +38,6 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
       connect: vi.fn(),
       close: vi.fn(),
       resource: vi.fn(),
-      registerPrompt: vi.fn(),
     };
   }),
 }));
@@ -182,31 +181,6 @@ describe('Server', () => {
       expect(response.status).toBe(200);
     });
 
-    it('should register daily_summary prompt on session initialization', async () => {
-      const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-
-      // Make a request to trigger session initialization
-      await fetch(`${baseUrl}/mcp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify({}),
-      });
-
-      // Verify registerPrompt was called with correct arguments
-      const mockInstance = (McpServer as any).mock.results[0]?.value;
-      expect(mockInstance.registerPrompt).toHaveBeenCalledWith(
-        'daily_summary',
-        {
-          title: 'Daily Summary',
-          description:
-            'Get a complete overview of your fitness status today including recovery, strain, workouts, and fitness metrics',
-        },
-        expect.any(Function)
-      );
-    });
   });
 
   describe('Root redirect', () => {
