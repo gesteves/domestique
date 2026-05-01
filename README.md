@@ -1,6 +1,6 @@
 # Domestique
 
-A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com), [TrainerRoad](https://www.trainerroad.com), the [Google Weather API](https://developers.google.com/maps/documentation/weather), the [Google Air Quality API](https://developers.google.com/maps/documentation/air-quality), the [Google Pollen API](https://developers.google.com/maps/documentation/pollen), the [Google Elevation API](https://developers.google.com/maps/documentation/elevation), the [Google Geocoding API](https://developers.google.com/maps/documentation/geocoding), and the [Google Time Zone API](https://developers.google.com/maps/documentation/timezone) to provide unified access to fitness data across all activities and sports.
+A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals.icu](https://intervals.icu), [Whoop](https://www.whoop.com) and [TrainerRoad](https://www.trainerroad.com) to provide unified access to fitness data across all activities and sports.
 
 ## Features
 
