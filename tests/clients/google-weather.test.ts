@@ -56,16 +56,67 @@ describe('GoogleWeatherClient', () => {
   });
 
   describe('getHourlyForecast', () => {
-    it('hits the hours forecast endpoint', async () => {
+    it('hits the hours forecast endpoint with default hours=24 and pageSize=24 in a single page', async () => {
       mockFetch.mockResolvedValueOnce(createMockResponse({ forecastHours: [] }));
 
       await client.getHourlyForecast(42.87, -112.58);
 
+      expect(mockFetch).toHaveBeenCalledTimes(1);
       const url = mockFetch.mock.calls[0][0] as string;
       expect(url).toContain('/forecast/hours:lookup');
       expect(url).toContain('location.latitude=42.87');
       expect(url).toContain('location.longitude=-112.58');
       expect(url).toContain('unitsSystem=METRIC');
+      expect(url).toContain('hours=24');
+      expect(url).toContain('pageSize=24');
+      expect(url).not.toContain('pageToken');
+    });
+
+    it('paginates with pageToken until the requested hours are collected', async () => {
+      // 30 hours requested → 2 pages of 24 max
+      const page1Hours = Array.from({ length: 24 }, (_, i) => ({
+        interval: { startTime: `2026-04-30T${String(i).padStart(2, '0')}:00:00Z` },
+      }));
+      const page2Hours = Array.from({ length: 6 }, (_, i) => ({
+        interval: { startTime: `2026-05-01T${String(i).padStart(2, '0')}:00:00Z` },
+      }));
+      mockFetch
+        .mockResolvedValueOnce(createMockResponse({ forecastHours: page1Hours, nextPageToken: 'tok-2' }))
+        .mockResolvedValueOnce(createMockResponse({ forecastHours: page2Hours }));
+
+      const result = await client.getHourlyForecast(0, 0, 30);
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const url1 = mockFetch.mock.calls[0][0] as string;
+      const url2 = mockFetch.mock.calls[1][0] as string;
+      expect(url1).toContain('hours=30');
+      expect(url1).toContain('pageSize=24');
+      expect(url1).not.toContain('pageToken');
+      expect(url2).toContain('hours=30');
+      expect(url2).toContain('pageSize=24');
+      expect(url2).toContain('pageToken=tok-2');
+
+      expect(result.forecastHours).toHaveLength(30);
+    });
+
+    it('stops when the API runs out of pages even if requested hours > returned', async () => {
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({ forecastHours: [{ interval: { startTime: '2026-04-30T00:00:00Z' } }] })
+      );
+
+      const result = await client.getHourlyForecast(0, 0, 240);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(result.forecastHours).toHaveLength(1);
+    });
+
+    it('caps the requested hours at the API maximum of 240', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ forecastHours: [] }));
+
+      await client.getHourlyForecast(0, 0, 1000);
+
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('hours=240');
     });
   });
 

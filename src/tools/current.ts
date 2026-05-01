@@ -7,6 +7,7 @@ import { GooglePollenClient } from '../clients/google-pollen.js';
 import { GoogleElevationClient } from '../clients/google-elevation.js';
 import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
 import { GoogleTimezoneClient } from '../clients/google-timezone.js';
+import { fromZonedTime } from 'date-fns-tz';
 import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
@@ -34,12 +35,29 @@ const MAX_FORECAST_DAYS = 10;
 const MAX_POLLEN_FORECAST_DAYS = 5;
 /** Maximum hours the Air Quality hourly forecast covers. */
 const MAX_AIR_QUALITY_FORECAST_HOURS = 96;
+/** Maximum hours the Weather hourly forecast covers (also the API's pageSize cap). */
+const MAX_WEATHER_HOURLY_FORECAST_HOURS = 240;
 
 /** Days between two YYYY-MM-DD strings (UTC arithmetic; result independent of runtime tz). */
 function daysBetweenYMD(start: string, end: string): number {
   const [ys, ms, ds] = start.split('-').map(Number);
   const [ye, me, de] = end.split('-').map(Number);
   return Math.round((Date.UTC(ye, me - 1, de) - Date.UTC(ys, ms - 1, ds)) / 86400000);
+}
+
+/**
+ * Number of hourly forecast entries to request from "now" so that the response
+ * covers the entire target local date in the given timezone. `targetDate` is
+ * YYYY-MM-DD interpreted in `timezone`; we need hours from `now` up to (but
+ * not including) the start of the next local day in `timezone`. Capped at the
+ * Weather API's 240-hour limit.
+ */
+function hoursNeededToCoverDate(now: Date, targetDate: string, timezone: string): number {
+  const endOfDayUtc = fromZonedTime(`${addDaysToYMD(targetDate, 1)}T00:00:00`, timezone);
+  const ms = endOfDayUtc.getTime() - now.getTime();
+  if (ms <= 0) return 1;
+  const hours = Math.ceil(ms / 3_600_000);
+  return Math.min(hours, MAX_WEATHER_HOURLY_FORECAST_HOURS);
 }
 
 export class CurrentTools {
@@ -224,9 +242,17 @@ export class CurrentTools {
     const pollen = this.googlePollen;
     const elev = this.googleElevation;
 
+    // The Weather and Air Quality hourly endpoints both return entries from
+    // "now" forward. Default Weather pageSize is 24 and AQ caps at 96h — both
+    // would truncate or reject when the target date is well in the future.
+    // Compute the smallest window that covers the target local day for each.
+    const now = new Date();
+    const hoursToCoverDate = hoursNeededToCoverDate(now, targetDate, loc.timezone);
+    const aqHoursNeeded = Math.min(hoursToCoverDate, MAX_AIR_QUALITY_FORECAST_HOURS);
+
     try {
       const [hourly, daily, hourlyAq, pollenForecast, elevation] = await Promise.all([
-        gw.getHourlyForecast(loc.latitude, loc.longitude).catch((e) => {
+        gw.getHourlyForecast(loc.latitude, loc.longitude, hoursToCoverDate).catch((e) => {
           console.error(`Error fetching hourly forecast for "${loc.label}":`, e);
           return undefined;
         }),
@@ -236,11 +262,7 @@ export class CurrentTools {
         }),
         fetchAirQuality && aq
           ? aq
-              .getHourlyAirQualityForecast(
-                loc.latitude,
-                loc.longitude,
-                MAX_AIR_QUALITY_FORECAST_HOURS
-              )
+              .getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHoursNeeded)
               .catch((e) => {
                 console.error(`Error fetching hourly air quality for "${loc.label}":`, e);
                 return undefined;

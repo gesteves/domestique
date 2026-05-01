@@ -339,27 +339,65 @@ export class GoogleWeatherClient {
   }
 
   /**
-   * GET /v1/forecast/hours:lookup — paginated; we request the first page only
-   * (default page size covers ≥24 hours of forecast, which is more than the
-   * "rest of today" window we filter to).
-   * @see https://developers.google.com/maps/documentation/weather/hourly-forecast
+   * GET /v1/forecast/hours:lookup
+   *
+   * Returns hourly forecast entries starting from "now" forward. The API:
+   * - `hours` = the total window to return (1–240, also the API's max
+   *   forecast horizon).
+   * - `pageSize` = max records per page (max 24, default 24).
+   * - `pageToken` = follow-up cursor.
+   *
+   * For windows above 24 hours we walk `pageToken` until we've collected the
+   * requested `hours` worth of entries (or the API runs out). Returns a
+   * single concatenated response so callers can ignore pagination.
+   *
+   * Defaults to 24 hours — one page, enough for the "rest of today" window
+   * the today's-forecast path consumes. The future-date path passes a larger
+   * value to cover the whole target local day.
+   *
+   * @see https://developers.google.com/maps/documentation/weather/reference/rest/v1/forecast.hours/lookup
    */
   async getHourlyForecast(
     latitude: number,
-    longitude: number
+    longitude: number,
+    hours: number = 24
   ): Promise<GoogleHourlyForecastResponse> {
-    const url = this.buildUrl('/forecast/hours:lookup', latitude, longitude, { units: true });
-    console.log(`[GoogleWeather] Making API call to /forecast/hours:lookup for ${latitude},${longitude}`);
+    const totalHours = Math.min(Math.max(hours, 1), 240);
+    const pageSize = Math.min(totalHours, 24);
 
-    return httpRequestJson<GoogleHourlyForecastResponse>({
-      url: url.toString(),
-      headers: { Accept: 'application/json' },
-      context: {
-        operation: 'fetch hourly forecast',
-        resource: `${latitude},${longitude}`,
-      },
-      ...googleWeatherHttpErrorBuilders,
-    });
+    const all: GoogleForecastHour[] = [];
+    let timeZone: { id?: string } | undefined;
+    let pageToken: string | undefined;
+    let pageNumber = 0;
+
+    do {
+      const url = this.buildUrl('/forecast/hours:lookup', latitude, longitude, { units: true });
+      url.searchParams.set('hours', String(totalHours));
+      url.searchParams.set('pageSize', String(pageSize));
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+      pageNumber += 1;
+      console.log(
+        `[GoogleWeather] Making API call to /forecast/hours:lookup for ${latitude},${longitude} (hours=${totalHours}, pageSize=${pageSize}, page=${pageNumber})`
+      );
+
+      const page = await httpRequestJson<GoogleHourlyForecastResponse>({
+        url: url.toString(),
+        headers: { Accept: 'application/json' },
+        context: {
+          operation: 'fetch hourly forecast',
+          resource: `${latitude},${longitude}`,
+          parameters: { hours: totalHours, pageSize, page: pageNumber },
+        },
+        ...googleWeatherHttpErrorBuilders,
+      });
+
+      if (page.forecastHours?.length) all.push(...page.forecastHours);
+      if (page.timeZone) timeZone = page.timeZone;
+      pageToken = page.nextPageToken;
+    } while (pageToken && all.length < totalHours);
+
+    return { forecastHours: all, timeZone };
   }
 
   /**

@@ -1994,6 +1994,32 @@ describe('CurrentTools', () => {
         expect(result.forecasts[0].current_conditions?.as_of).toMatch(/at 11:49 PM/);
       });
 
+      it('requests enough hourly entries to cover the entire target local day (not just the API default 24)', async () => {
+        // System time: 2026-04-28T14:49:34Z (08:49 Boise / America/Boise = MDT).
+        // Target: 2026-04-30 in Boise. End of that day local = 2026-05-01 00:00 MDT
+        // = 2026-05-01T06:00Z. From now that's roughly 63h17m → ceil to 64.
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient
+        );
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'Moose', latitude: 0, longitude: 0, location: 'Moose,Wyoming,US' },
+        ]);
+        vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-04-30'));
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
+
+        await tools.getForecast({ date: '2026-04-30' });
+
+        expect(mockGoogleWeatherClient.getHourlyForecast).toHaveBeenCalledTimes(1);
+        const call = vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mock.calls[0];
+        const hoursRequested = call[2] as number;
+        // Must be at least 64 to reach end of 2026-04-30 in MDT; cap is 240.
+        expect(hoursRequested).toBeGreaterThanOrEqual(64);
+        expect(hoursRequested).toBeLessThanOrEqual(240);
+      });
+
       it('falls back to athlete tz when timezone lookup fails for a location', async () => {
         const mockTz = new GoogleTimezoneClient({ apiKey: 'k' });
         const tools = new CurrentTools(
