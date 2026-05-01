@@ -192,25 +192,42 @@ function buildAirQuality(index: GoogleAirQualityIndex | undefined): AirQuality |
 }
 
 /**
- * Pick the local AQI index from the response. We always request
- * `universalAqi: false` + `LOCAL_AQI`, so in practice there's exactly one
- * entry; defensively skip `uaqi` if it ever shows up.
+ * Pick the best AQI index from the response, preferring the more responsive
+ * scale when available.
+ *
+ * `aqi` is not normalized — each index uses its own scale (US EPA: 0–500,
+ * higher = worse; Universal AQI: 0–100, higher = better; etc.) — so the
+ * `index_display_name` we surface alongside the value is what tells the
+ * consumer which scale they're reading.
+ *
+ * Priority:
+ *   1. `usa_epa_nowcast` — the NowCast variant we explicitly request via
+ *      `customLocalAqis` for US locations; tracks current conditions much
+ *      better than the 24h-averaged default.
+ *   2. Any other non-UAQI local index (e.g., `usa_epa`, `gbr_defra`,
+ *      `fra_atmo`) — the regional default for non-US locations.
+ *   3. UAQI — Google's universal index. Different scale (0–100, inverted),
+ *      but better than nothing for regions Google has no local index for.
  */
-function pickLocalIndex(indexes: GoogleAirQualityIndex[] | undefined): GoogleAirQualityIndex | undefined {
+function pickAqiIndex(indexes: GoogleAirQualityIndex[] | undefined): GoogleAirQualityIndex | undefined {
   if (!indexes || indexes.length === 0) return undefined;
-  return indexes.find((i) => i.code !== 'uaqi') ?? indexes[0];
+  return (
+    indexes.find((i) => i.code === 'usa_epa_nowcast') ??
+    indexes.find((i) => i.code !== 'uaqi' && i.code !== 'usa_epa_nowcast') ??
+    indexes.find((i) => i.code === 'uaqi')
+  );
 }
 
 function airQualityFromCurrent(
   airQuality: GoogleCurrentAirQualityResponse | undefined
 ): AirQuality | undefined {
   if (!airQuality) return undefined;
-  return buildAirQuality(pickLocalIndex(airQuality.indexes));
+  return buildAirQuality(pickAqiIndex(airQuality.indexes));
 }
 
 function airQualityFromHourly(entry: GoogleAirQualityHourlyEntry | undefined): AirQuality | undefined {
   if (!entry) return undefined;
-  return buildAirQuality(pickLocalIndex(entry.indexes));
+  return buildAirQuality(pickAqiIndex(entry.indexes));
 }
 
 /**

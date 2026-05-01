@@ -467,27 +467,59 @@ describe('assembleLocationForecast', () => {
       expect(result.hourly_forecast[1].air_quality).toBeUndefined();
     });
 
-    it('skips a uaqi entry and picks the local index when both are returned', () => {
+    it('prefers the EPA NowCast index when present (priority over default usa_epa and uaqi)', () => {
+      // For US locations we explicitly request `customLocalAqis: usa_epa_nowcast`,
+      // so the response should include nowcast — and it's the most responsive
+      // scale, so we pick it first.
       const mixed: GoogleCurrentAirQualityResponse = {
         indexes: [
           { code: 'uaqi', aqi: 89 },
           { code: 'usa_epa', aqi: 41, displayName: 'AQI (US)' },
+          { code: 'usa_epa_nowcast', aqi: 52, displayName: 'AQI (US NowCast)' },
         ],
       };
       const result = assembleLocationForecast(
-        'Pocatello,Idaho,US',
-        42.87,
-        -112.58,
-        current,
-        hourly,
-        alerts,
-        tz,
-        now,
-        mixed,
-        undefined
+        'Pocatello,Idaho,US', 42.87, -112.58,
+        current, hourly, alerts, tz, now,
+        mixed, undefined
       );
-      expect(result.current_conditions?.air_quality?.aqi).toBe(41);
-      expect(result.current_conditions?.air_quality?.index_display_name).toBe('AQI (US)');
+      expect(result.current_conditions?.air_quality?.aqi).toBe(52);
+      expect(result.current_conditions?.air_quality?.index_display_name).toBe('AQI (US NowCast)');
+    });
+
+    it('falls back to a non-uaqi local index when nowcast is absent', () => {
+      // Non-US location: response carries the regional default (e.g. DEFRA in
+      // the UK) plus uaqi. Pick the local index.
+      const mixed: GoogleCurrentAirQualityResponse = {
+        indexes: [
+          { code: 'uaqi', aqi: 89 },
+          { code: 'gbr_defra', aqi: 3, displayName: 'AQI (UK)' },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'London,UK', 51.5, -0.13,
+        current, hourly, alerts, tz, now,
+        mixed, undefined
+      );
+      expect(result.current_conditions?.air_quality?.aqi).toBe(3);
+      expect(result.current_conditions?.air_quality?.index_display_name).toBe('AQI (UK)');
+    });
+
+    it('falls back to UAQI as a last resort when no local index is available', () => {
+      // Some regions Google has no local AQI scale for. UAQI is on a different
+      // scale (0–100, inverted) but we surface it (with its display name) so
+      // the consumer has *something* rather than nothing — better than
+      // silently omitting air quality data.
+      const onlyUaqi: GoogleCurrentAirQualityResponse = {
+        indexes: [{ code: 'uaqi', aqi: 89, displayName: 'Universal AQI' }],
+      };
+      const result = assembleLocationForecast(
+        'Somewhere,Unsupported', 0, 0,
+        current, hourly, alerts, tz, now,
+        onlyUaqi, undefined
+      );
+      expect(result.current_conditions?.air_quality?.aqi).toBe(89);
+      expect(result.current_conditions?.air_quality?.index_display_name).toBe('Universal AQI');
     });
   });
 

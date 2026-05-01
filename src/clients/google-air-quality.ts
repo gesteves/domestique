@@ -126,9 +126,12 @@ const googleAirQualityHttpErrorBuilders = {
  * GET with query params). The API key is the same Google Cloud key used by
  * the Weather API; the Air Quality API must also be enabled on the project.
  *
- * We always request `LOCAL_AQI` with `universalAqi=false` so the response
- * carries the regionally-relevant index (e.g., US EPA in the US, DEFRA in
- * the UK). We don't request `HEALTH_RECOMMENDATIONS` — the per-population
+ * We always request `LOCAL_AQI` with `universalAqi=true`, plus a
+ * `customLocalAqis` override that maps the US to the EPA NowCast variant
+ * (more responsive to rapidly-changing air than the default 24h-averaged
+ * EPA AQI — better matches what hyperlocal sensors like PurpleAir report).
+ * Universal AQI is included as a fallback for regions where Google has no
+ * local index. We don't request `HEALTH_RECOMMENDATIONS` — the per-population
  * advice Google returns is generic enough that it doesn't add useful signal
  * over the AQI band itself.
  *
@@ -149,9 +152,14 @@ export class GoogleAirQualityClient {
     extra?: Record<string, unknown>
   ): string {
     return JSON.stringify({
-      universalAqi: false,
+      universalAqi: true,
       location: { latitude, longitude },
       extraComputations: ['LOCAL_AQI'],
+      // Override the default US local AQI (`usa_epa`, 24h-averaged) with the
+      // NowCast variant — its weighted-recent-hours formula tracks rapid
+      // changes (wildfire smoke, rush-hour spikes) much better and is what
+      // AirNow.gov surfaces as "current AQI."
+      customLocalAqis: [{ regionCode: 'US', aqi: 'usa_epa_nowcast' }],
       languageCode: 'en',
       ...extra,
     });

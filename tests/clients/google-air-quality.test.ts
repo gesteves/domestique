@@ -45,9 +45,10 @@ describe('GoogleAirQualityClient', () => {
 
       const body = JSON.parse(init.body as string);
       expect(body).toEqual({
-        universalAqi: false,
+        universalAqi: true,
         location: { latitude: 42.87, longitude: -112.58 },
         extraComputations: ['LOCAL_AQI'],
+        customLocalAqis: [{ regionCode: 'US', aqi: 'usa_epa_nowcast' }],
         languageCode: 'en',
       });
     });
@@ -68,9 +69,10 @@ describe('GoogleAirQualityClient', () => {
 
       const body = JSON.parse(init.body as string);
       expect(body).toEqual({
-        universalAqi: false,
+        universalAqi: true,
         location: { latitude: 42.87, longitude: -112.58 },
         extraComputations: ['LOCAL_AQI'],
+        customLocalAqis: [{ regionCode: 'US', aqi: 'usa_epa_nowcast' }],
         languageCode: 'en',
         period: {
           startTime: '2026-04-28T21:00:00.000Z',
