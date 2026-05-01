@@ -1298,16 +1298,16 @@ export interface LocationForecast {
   longitude: number;
   /** Elevation at the location, sourced from the Google Elevation API. */
   elevation?: string;
-  /** The date this forecast is for (YYYY-MM-DD) in the athlete's timezone. */
-  date?: string;
-  /** Sunrise time at the location on the forecast date, ISO 8601. */
+  /** The date this forecast is for (YYYY-MM-DD) in the location's timezone. */
+  forecast_date?: string;
+  /** Sunrise time at the location on the forecast date. */
   sunrise?: string;
-  /** Sunset time at the location on the forecast date, ISO 8601. */
+  /** Sunset time at the location on the forecast date. */
   sunset?: string;
-  /** Daily forecast summary for the date. */
-  daily_summary?: DailyForecastSummary;
   /** Current conditions. Only populated when the forecast date is today. */
   current_conditions?: CurrentWeather | null;
+  /** Daily forecast summary for the date. */
+  daily_summary?: DailyForecastSummary;
   hourly_forecast: HourlyForecast[];
   /** Active weather alerts. Only populated when the forecast date is today. */
   alerts?: WeatherAlert[];

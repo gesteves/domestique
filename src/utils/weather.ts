@@ -609,11 +609,11 @@ export function assembleLocationForecast(
     latitude,
     longitude,
     elevation: elevationMeters !== undefined ? formatLength(elevationMeters) : undefined,
-    date: todayLocal,
+    forecast_date: todayLocal,
     sunrise: sunEvents.sunrise,
     sunset: sunEvents.sunset,
-    daily_summary: dailySummary,
     current_conditions: transformCurrentConditions(current, locationTimezone, currentAirQuality),
+    daily_summary: dailySummary,
     hourly_forecast: filteredHours.map((h) => {
       const startTime = h.interval?.startTime;
       const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
@@ -669,7 +669,7 @@ export function assembleFutureLocationForecast(
     latitude,
     longitude,
     elevation: elevationMeters !== undefined ? formatLength(elevationMeters) : undefined,
-    date: targetDate,
+    forecast_date: targetDate,
     sunrise: sunEvents.sunrise,
     sunset: sunEvents.sunset,
     daily_summary: dailySummary,

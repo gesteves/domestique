@@ -764,12 +764,12 @@ const LocationForecastZ = z.object({
   latitude: z.number().optional().describe('Location latitude'),
   longitude: z.number().optional().describe('Location longitude'),
   elevation: z.string().optional().describe('Elevation at the location'),
-  date: z.string().optional().describe("The date this forecast is for (YYYY-MM-DD) in the athlete's timezone"),
+  forecast_date: z.string().optional().describe("The date this forecast is for (YYYY-MM-DD) in the location's timezone"),
   sunrise: z.string().optional().describe('Sunrise time at the location on the forecast date'),
   sunset: z.string().optional().describe('Sunset time at the location on the forecast date'),
-  daily_summary: DailySummaryZ.optional().describe('Daily forecast summary for the date (high/low temps, conditions, precipitation, wind)'),
   current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Only present when the forecast date is today; null if no current data is available'),
-  hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the forecast date in the athlete's timezone — remaining hours of the day when the date is today, all 24 hours otherwise"),
+  daily_summary: DailySummaryZ.optional().describe('Daily forecast summary for the date (high/low temps, conditions, precipitation, wind)'),
+  hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the forecast date in the location's timezone — remaining hours of the day when the date is today, all 24 hours otherwise"),
   alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts for the location. Only present when the forecast date is today'),
   pollen: PollenZ.optional().describe('Pollen forecast for the location on the forecast date. May be absent for dates further out — pollen has a shorter forecast window than the daily/hourly weather'),
 }).passthrough();
@@ -971,7 +971,7 @@ export const todaysSummaryOutputSchema = {
 
 export const forecastInputSchema = {
   date: z.string().optional().describe("Date the forecast is for, accepting ISO YYYY-MM-DD or natural language (e.g., \"tomorrow\", \"in 3 days\"). Defaults to today. Must be within today through 10 days from today"),
-  location: z.string().optional().describe("Free-text place query (e.g., \"San Francisco, CA\", \"Kona, HI\") to forecast for. When omitted, returns forecasts for the user's configured weather locations. The resolved place name is surfaced in the response"),
+  location: z.string().optional().describe("Free-text place query to forecast for. Can be as broad as a city or postal code (\"San Francisco, CA\", \"83001\") or as narrow as a neighborhood or landmark (\"Presidio, San Francisco, CA\", \"Coeur d'Alene City Park, Coeur d'Alene, ID\"). Prefer the most specific form available so the forecast captures the exact spot's microclimate (useful for narrowing to a race start). When omitted, returns forecasts for the user's configured weather locations. The resolved place name is surfaced in the response"),
 } as const;
 
 export const forecastOutputSchema = {

@@ -1795,7 +1795,7 @@ describe('CurrentTools', () => {
         expect(result.forecasts).toHaveLength(1);
         const fc = result.forecasts[0];
         expect(fc.location).toBe('Moose');
-        expect(fc.date).toBe('2026-04-30');
+        expect(fc.forecast_date).toBe('2026-04-30');
         expect(fc.current_conditions).toBeUndefined();
         expect(fc.alerts).toBeUndefined();
         // All hours that fall on the local date 2026-04-30 in Boise (UTC-6 in DST):

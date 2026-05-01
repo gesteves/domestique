@@ -392,6 +392,7 @@ export class ToolRegistry {
 <instructions>
 - For "today's weather" with no other "today" data, call this tool with no arguments. For a complete daily snapshot that already includes today's forecast, prefer get_todays_summary.
 - For a future date or a specific location, pass \`date\` and/or \`location\`. Date input accepts ISO YYYY-MM-DD or natural-language strings (e.g., "tomorrow", "in 3 days").
+- \`location\` can be as broad or as narrow as needed: a city ("San Francisco, CA"), a postal code ("83001"), a neighborhood ("Presidio, San Francisco, CA"), or a specific landmark or venue ("Coeur d'Alene City Park, Coeur d'Alene, ID"). Prefer the most specific form available — narrow it down to the actual race start when known so the forecast reflects that exact spot's microclimate.
 </instructions>
 
 <notes>
