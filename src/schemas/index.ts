@@ -168,7 +168,7 @@ const PlayedSongZ = z.object({
   url: z.string().optional().describe('Last.fm track URL'),
   album_name: z.string().optional().describe('Album name'),
   artist_name: z.string().optional().describe('Artist name'),
-  loved: z.enum(['Yes', 'No']).optional().describe('Whether the user loved this track on Last.fm'),
+  loved: z.literal(true).optional().describe('Set to true when the user has marked this track as loved on Last.fm; omitted otherwise'),
 }).passthrough();
 
 // ============================================

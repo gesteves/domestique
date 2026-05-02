@@ -158,12 +158,15 @@ export class LastFmClient {
 
 function normalizeTrack(track: LastFmTrack): PlayedSong {
   const uts = Number(track.date!.uts);
-  return {
+  const song: PlayedSong = {
     name: track.name,
     played_at: new Date(uts * 1000).toISOString(),
     url: track.url,
     album_name: track.album?.['#text'] ?? '',
     artist_name: track.artist?.['#text'] ?? track.artist?.name ?? '',
-    loved: track.loved === '1' ? 'Yes' : 'No',
   };
+  if (track.loved === '1') {
+    song.loved = true;
+  }
+  return song;
 }

@@ -852,7 +852,7 @@ describe('HistoricalTools', () => {
           url: 'https://www.last.fm/music/Neil+Young/_/Old+Man',
           album_name: 'Harvest',
           artist_name: 'Neil Young',
-          loved: 'Yes' as const,
+          loved: true as const,
         },
       ];
       vi.mocked(mockIntervalsClient.getActivityPlayedSongs).mockResolvedValue(songs);

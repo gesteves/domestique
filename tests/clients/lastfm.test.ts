@@ -260,18 +260,19 @@ describe('LastFmClient', () => {
       expect(neil!.played_at).toBe(new Date(1776535049 * 1000).toISOString());
     });
 
-    it('normalizes loved=1 to "Yes" and loved=0 to "No"', async () => {
+    it('sets loved=true when the API reports loved=1 and omits it otherwise', async () => {
       mockFetch.mockResolvedValueOnce(createMockResponse(sampleResponse));
 
       const result = await client.getPlayedSongsDuring(0, 9999999999999);
       const loved = result.find((s) => s.name === 'Old Man');
       const notLoved = result.find((s) => s.name === 'Crawling - One More Light Live');
 
-      expect(loved!.loved).toBe('Yes');
-      expect(notLoved!.loved).toBe('No');
+      expect(loved!.loved).toBe(true);
+      expect(notLoved!.loved).toBeUndefined();
+      expect('loved' in notLoved!).toBe(false);
     });
 
-    it('defaults loved to "No" when the field is missing', async () => {
+    it('omits loved when the API omits the field', async () => {
       mockFetch.mockResolvedValueOnce(
         createMockResponse({
           recenttracks: {
@@ -290,7 +291,8 @@ describe('LastFmClient', () => {
 
       const result = await client.getPlayedSongsDuring(0, 9999999999999);
 
-      expect(result[0].loved).toBe('No');
+      expect(result[0].loved).toBeUndefined();
+      expect('loved' in result[0]).toBe(false);
     });
 
     it('handles empty album text', async () => {
