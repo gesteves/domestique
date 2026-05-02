@@ -131,6 +131,19 @@ function formatPressure(hpa: number | undefined): string | undefined {
   return withUnit(hpa, 'mb', 1);
 }
 
+/**
+ * Format Google's enum-style precipitation type ("RAIN_AND_SNOW") as sentence
+ * case ("Rain and snow"). Returns undefined for missing/empty input. Unknown
+ * values still pass through normalized — anything Google adds in the future
+ * renders sensibly without a code change.
+ */
+function formatPrecipitationType(type: string | undefined): string | undefined {
+  if (!type) return undefined;
+  const normalized = type.replace(/_/g, ' ').trim().toLowerCase();
+  if (!normalized) return undefined;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function formatPrecipitationAmount(qpf: { quantity?: number; unit?: string } | undefined): string | undefined {
   if (!qpf || qpf.quantity === undefined || qpf.quantity === null) return undefined;
   const unit = (qpf.unit ?? 'MILLIMETERS').toUpperCase();
@@ -300,10 +313,8 @@ function formatPollenDate(date: GooglePollenDailyInfo['date']): string | undefin
  * decisions hinge on the pollen value, not the calendar — if it's elevated,
  * that's what matters).
  *
- * Health recommendations attach only to pollen types in Google's response
- * (plants don't carry them), and the lower bands are generic "great day to be
- * outside" boilerplate, so we surface only the deduplicated recommendations
- * from the highest UPI level present on the target date.
+ * Levels are sorted in descending order by UPI value so the worst conditions
+ * surface first.
  *
  * Returns `undefined` if no entry matches the date, or if every entry has a
  * UPI value of 0 (no signal worth surfacing).
@@ -352,7 +363,7 @@ function buildPollenForDate(
   if (byValue.size === 0) return undefined;
 
   const universal_pollen_index: PollenIndexLevel[] = [...byValue.entries()]
-    .sort(([a], [b]) => a - b)
+    .sort(([a], [b]) => b - a)
     .map(([value, bucket]) => ({
       value,
       category: bucket.category,
@@ -361,18 +372,9 @@ function buildPollenForDate(
       plants: bucket.plants.length > 0 ? bucket.plants : undefined,
     }));
 
-  const maxValue = Math.max(...byValue.keys());
-  const recs = new Set<string>();
-  for (const t of match.pollenTypeInfo ?? []) {
-    if (t.indexInfo?.value !== maxValue) continue;
-    for (const r of t.healthRecommendations ?? []) recs.add(r);
-  }
-  const health_recommendations = recs.size > 0 ? [...recs] : undefined;
-
   return {
     date: targetDate,
     universal_pollen_index,
-    health_recommendations,
   };
 }
 
@@ -430,7 +432,7 @@ export function transformCurrentConditions(
     precipitation_amount: formatPrecipitationAmount(precip?.qpf),
     precipitation_chance:
       precip?.probability?.percent !== undefined ? formatPercent(precip.probability.percent) : undefined,
-    precipitation_type: precip?.probability?.type,
+    precipitation_type: formatPrecipitationType(precip?.probability?.type),
     thunderstorm_probability:
       current.thunderstormProbability !== undefined ? formatPercent(current.thunderstormProbability) : undefined,
     uv_index: current.uvIndex,
@@ -464,7 +466,7 @@ export function transformForecastHour(
     precipitation_amount: formatPrecipitationAmount(precip?.qpf),
     precipitation_chance:
       precip?.probability?.percent !== undefined ? formatPercent(precip.probability.percent) : undefined,
-    precipitation_type: precip?.probability?.type,
+    precipitation_type: formatPrecipitationType(precip?.probability?.type),
     thunderstorm_probability:
       hour.thunderstormProbability !== undefined ? formatPercent(hour.thunderstormProbability) : undefined,
     pressure: formatPressure(hour.airPressure?.meanSeaLevelMillibars),
@@ -597,7 +599,7 @@ function buildDailySummary(day: GoogleForecastDay | undefined): DailyForecastSum
       precip?.probability?.percent !== undefined
         ? formatPercent(precip.probability.percent)
         : undefined,
-    precipitation_type: precip?.probability?.type,
+    precipitation_type: formatPrecipitationType(precip?.probability?.type),
     thunderstorm_probability:
       dayPart?.thunderstormProbability !== undefined
         ? formatPercent(dayPart.thunderstormProbability)

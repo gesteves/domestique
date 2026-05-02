@@ -354,7 +354,7 @@ const WhoopSleepZ = z.object({
   sleep_performance: z.string().optional().describe('Time asleep ÷ sleep needed (Optimal: ≥85%, Sufficient: 70-85%, Poor: <70%)'),
   sleep_consistency: z.string().optional().describe('Similarity of this sleep/wake times to the previous day'),
   sleep_efficiency: z.string().optional().describe('Share of time in bed actually asleep'),
-  sleep_performance_level: z.string().optional().describe("Whoop's label for sleep performance: OPTIMAL, SUFFICIENT, or POOR"),
+  sleep_performance_level: z.string().optional().describe("Whoop's label for sleep performance: Optimal, Sufficient, or Poor"),
   sleep_performance_level_description: z.string().optional().describe("Whoop's official description for this sleep performance level"),
   sleep_start: z.string().optional().describe("The approximate time the user fell asleep, in the user's local timezone"),
   sleep_end: z.string().optional().describe("The approximate time the user woke up, in the user's local timezone"),
@@ -364,7 +364,7 @@ const WhoopSleepZ = z.object({
 const WhoopRecoveryZ = z.object({
   date: z.string().optional().describe('Date of recovery data (ISO 8601)'),
   recovery_score: z.string().optional().describe("Reflects the body's readiness for strain. Sufficient: ≥67%, Adequate: 34-66%, Low: <34%"),
-  recovery_level: z.string().optional().describe("Whoop's label: SUFFICIENT, ADEQUATE, or LOW"),
+  recovery_level: z.string().optional().describe("Whoop's label: Sufficient, Adequate, or Low"),
   recovery_level_description: z.string().optional().describe("Whoop's official description for this recovery level"),
   hrv_rmssd: z.string().optional().describe('Heart Rate Variability (RMSSD)'),
   resting_heart_rate: z.string().optional().describe('Resting heart rate, measured during slow wave sleep'),
@@ -402,7 +402,7 @@ const StrainActivityZ = z.object({
 const StrainDataZ = z.object({
   date: z.string().optional(),
   strain_score: z.number().optional().describe('Whoop cardiovascular strain score (0-21, logarithmic). Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21'),
-  strain_level: z.string().optional().describe("Whoop's label for strain: LIGHT, MODERATE, HIGH, or ALL_OUT"),
+  strain_level: z.string().optional().describe("Whoop's label for strain: Light, Moderate, High, or All out"),
   strain_level_description: z.string().optional().describe("Whoop's official description for this strain level"),
   average_heart_rate: z.string().optional().describe('Average heart rate during the activity'),
   max_heart_rate: z.string().optional().describe('Max heart rate during the activity'),
@@ -682,8 +682,7 @@ const PollenIndexLevelZ = z.object({
 
 const PollenZ = z.object({
   date: z.string().describe("Date the pollen forecast applies to, in YYYY-MM-DD format in the athlete's timezone"),
-  universal_pollen_index: z.array(PollenIndexLevelZ).describe('Pollen activity grouped by UPI value, sorted by value ascending. Only levels with at least one entry are present'),
-  health_recommendations: z.array(z.string()).optional().describe("Deduplicated health recommendations from entries at today's highest UPI level"),
+  universal_pollen_index: z.array(PollenIndexLevelZ).describe('Pollen activity grouped by UPI value, sorted by value descending (worst conditions first). Only levels with at least one entry are present'),
 }).passthrough();
 
 const CurrentWeatherZ = z.object({
@@ -700,7 +699,7 @@ const CurrentWeatherZ = z.object({
   pressure: z.string().optional().describe('Sea-level air pressure'),
   precipitation_amount: z.string().optional().describe('Recent precipitation total'),
   precipitation_chance: z.string().optional().describe('Probability of precipitation'),
-  precipitation_type: z.string().optional().describe('Expected precipitation type (RAIN, SNOW, etc.)'),
+  precipitation_type: z.string().optional().describe('Expected precipitation type (e.g., "Rain", "Snow", "Rain and snow")'),
   thunderstorm_probability: z.string().optional().describe('Probability of thunderstorm activity'),
   uv_index: z.number().optional().describe('UV index (unitless 0–11+ scale)'),
   visibility: z.string().optional().describe('Horizontal visibility'),
@@ -719,7 +718,7 @@ const HourlyForecastZ = z.object({
   humidity: z.string().optional().describe('Relative humidity'),
   precipitation_amount: z.string().optional().describe('Expected precipitation total for the hour'),
   precipitation_chance: z.string().optional().describe('Probability of any precipitation'),
-  precipitation_type: z.string().optional().describe('Expected precipitation type (RAIN, SNOW, etc.)'),
+  precipitation_type: z.string().optional().describe('Expected precipitation type (e.g., "Rain", "Snow", "Rain and snow")'),
   thunderstorm_probability: z.string().optional().describe('Probability of thunderstorm activity'),
   pressure: z.string().optional().describe('Sea-level air pressure'),
   temperature: z.string().optional().describe('Air temperature'),
@@ -754,7 +753,7 @@ const DailySummaryZ = z.object({
   humidity: z.string().optional().describe('Daytime relative humidity'),
   precipitation_amount: z.string().optional().describe('Expected daytime precipitation total'),
   precipitation_chance: z.string().optional().describe('Daytime probability of any precipitation'),
-  precipitation_type: z.string().optional().describe('Expected daytime precipitation type (RAIN, SNOW, etc.)'),
+  precipitation_type: z.string().optional().describe('Expected daytime precipitation type (e.g., "Rain", "Snow", "Rain and snow")'),
   thunderstorm_probability: z.string().optional().describe('Daytime probability of thunderstorm activity'),
   uv_index: z.number().optional().describe('Daytime UV index'),
   wind_direction: z.string().optional().describe('Daytime direction the wind is blowing from'),

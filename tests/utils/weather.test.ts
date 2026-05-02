@@ -70,7 +70,7 @@ describe('transformCurrentConditions', () => {
       pressure: '1019.2 mb',
       precipitation_amount: '0.00 mm',
       precipitation_chance: '0%',
-      precipitation_type: 'RAIN',
+      precipitation_type: 'Rain',
       thunderstorm_probability: '0%',
       uv_index: 1,
       visibility: '16.0 km',
@@ -203,6 +203,25 @@ describe('transformCurrentConditions', () => {
       });
     });
   });
+
+  describe('precipitation type formatting', () => {
+    const tz = 'America/Boise';
+    const withPrecipType = (type: string) => ({
+      precipitation: { probability: { percent: 50, type } },
+    });
+
+    it('renders Google enum-style precipitation types as sentence case', () => {
+      expect(transformCurrentConditions(withPrecipType('RAIN'), tz)?.precipitation_type).toBe('Rain');
+      expect(transformCurrentConditions(withPrecipType('SNOW'), tz)?.precipitation_type).toBe('Snow');
+      expect(transformCurrentConditions(withPrecipType('RAIN_AND_SNOW'), tz)?.precipitation_type).toBe('Rain and snow');
+      expect(transformCurrentConditions(withPrecipType('LIGHT_RAIN'), tz)?.precipitation_type).toBe('Light rain');
+    });
+
+    it('returns undefined for missing or empty precipitation type', () => {
+      expect(transformCurrentConditions({ precipitation: {} }, tz)?.precipitation_type).toBeUndefined();
+      expect(transformCurrentConditions(withPrecipType(''), tz)?.precipitation_type).toBeUndefined();
+    });
+  });
 });
 
 describe('transformForecastHour', () => {
@@ -252,7 +271,7 @@ describe('transformForecastHour', () => {
     expect(result.pressure).toBe('1019.1 mb');
     expect(result.thunderstorm_probability).toBe('5%');
     expect(result.precipitation_chance).toBe('0%');
-    expect(result.precipitation_type).toBe('RAIN');
+    expect(result.precipitation_type).toBe('Rain');
     expect(result.uv_index).toBe(1);
   });
 });
@@ -795,7 +814,7 @@ describe('assembleLocationForecast', () => {
       ],
     };
 
-    it("groups pollen by UPI level (sorted ascending) with deduped health recs from the highest level", () => {
+    it("groups pollen by UPI level, sorted descending (worst first)", () => {
       const result = assembleLocationForecast(
         'Pocatello,Idaho,US',
         42.87,
@@ -816,24 +835,19 @@ describe('assembleLocationForecast', () => {
         date: '2026-04-28',
         universal_pollen_index: [
           {
-            value: 1,
-            category: 'Very Low',
-            description: 'Sensitive people may have symptoms.',
-            pollen_types: ['Grass'],
-            plants: ['Oak'],
-          },
-          {
             value: 3,
             category: 'Moderate',
             description: 'Moderately allergic people may experience symptoms.',
             pollen_types: ['Tree'],
             plants: ['Birch'],
           },
-        ],
-        // Only recs from the highest active level (UPI 3 = Tree); Grass recs (UPI 1) are dropped.
-        health_recommendations: [
-          'Keep windows closed and use AC if possible.',
-          'Consider wearing sunglasses to keep pollen out of your eyes.',
+          {
+            value: 1,
+            category: 'Very Low',
+            description: 'Sensitive people may have symptoms.',
+            pollen_types: ['Grass'],
+            plants: ['Oak'],
+          },
         ],
       });
     });
@@ -866,53 +880,10 @@ describe('assembleLocationForecast', () => {
         lopsided
       );
       expect(result.pollen?.universal_pollen_index).toEqual([
-        { value: 2, category: 'Low', description: undefined, pollen_types: ['Grass'], plants: undefined },
         { value: 4, category: 'High', description: undefined, pollen_types: undefined, plants: ['Birch'] },
+        { value: 2, category: 'Low', description: undefined, pollen_types: ['Grass'], plants: undefined },
       ]);
-      // No pollen type at the top level (UPI 4) → no health recommendations.
-      expect(result.pollen?.health_recommendations).toBeUndefined();
-    });
-
-    it('deduplicates health recommendations across multiple types at the highest level', () => {
-      const sameRecs: GooglePollenForecastResponse = {
-        dailyInfo: [
-          {
-            date: { year: 2026, month: 4, day: 28 },
-            pollenTypeInfo: [
-              {
-                code: 'GRASS',
-                displayName: 'Grass',
-                indexInfo: { value: 4, category: 'High' },
-                healthRecommendations: ['Stay indoors when possible.', 'Wear a mask outdoors.'],
-              },
-              {
-                code: 'TREE',
-                displayName: 'Tree',
-                indexInfo: { value: 4, category: 'High' },
-                healthRecommendations: ['Wear a mask outdoors.', 'Use antihistamines as needed.'],
-              },
-            ],
-          },
-        ],
-      };
-      const result = assembleLocationForecast(
-        'Pocatello,Idaho,US',
-        42.87,
-        -112.58,
-        current,
-        hourly,
-        alerts,
-        tz,
-        now,
-        undefined,
-        undefined,
-        sameRecs
-      );
-      expect(result.pollen?.health_recommendations).toEqual([
-        'Stay indoors when possible.',
-        'Wear a mask outdoors.',
-        'Use antihistamines as needed.',
-      ]);
+      expect((result.pollen as unknown as { health_recommendations?: unknown })?.health_recommendations).toBeUndefined();
     });
 
     it("omits pollen when no dailyInfo entry matches today in the athlete's timezone", () => {

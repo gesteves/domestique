@@ -68,7 +68,7 @@ describe('CurrentTools', () => {
         need_from_recent_nap: '0:00:00',
       },
       sleep_performance_percentage: 90,
-      sleep_performance_level: 'OPTIMAL',
+      sleep_performance_level: 'Optimal',
       sleep_performance_level_description: 'Your sleep performance is optimal',
     };
 
@@ -76,7 +76,7 @@ describe('CurrentTools', () => {
       recovery_score: 85,
       hrv_rmssd: 65,
       resting_heart_rate: 52,
-      recovery_level: 'SUFFICIENT',
+      recovery_level: 'Sufficient',
       recovery_level_description: 'Your recovery is sufficient',
     };
 
@@ -144,7 +144,7 @@ describe('CurrentTools', () => {
     const mockStrain: StrainData = {
       date: '2024-12-15',
       strain_score: 15.5,
-      strain_level: 'HIGH',
+      strain_level: 'High',
       strain_level_description: 'High strain',
       average_heart_rate: 75,
       max_heart_rate: 185,
@@ -663,7 +663,7 @@ describe('CurrentTools', () => {
         need_from_recent_nap: '0:00:00',
       },
       sleep_performance_percentage: 90,
-      sleep_performance_level: 'OPTIMAL',
+      sleep_performance_level: 'Optimal',
       sleep_performance_level_description: 'Your sleep performance is optimal',
     };
 
@@ -671,7 +671,7 @@ describe('CurrentTools', () => {
       recovery_score: 85,
       hrv_rmssd: 65,
       resting_heart_rate: 52,
-      recovery_level: 'SUFFICIENT',
+      recovery_level: 'Sufficient',
       recovery_level_description: 'Your recovery is sufficient',
     };
 
@@ -684,7 +684,7 @@ describe('CurrentTools', () => {
     const mockStrain: StrainData = {
       date: '2024-12-15',
       strain_score: 15.5,
-      strain_level: 'HIGH',
+      strain_level: 'High',
       strain_level_description: 'High strain',
       average_heart_rate: 75,
       max_heart_rate: 185,
@@ -1501,7 +1501,6 @@ describe('CurrentTools', () => {
       expect((fc.current_conditions as unknown as { pollen?: unknown })?.pollen).toBeUndefined();
       expect(fc.pollen?.date).toBe('2026-04-28');
       expect(fc.pollen?.universal_pollen_index).toEqual([
-        { value: 1, category: 'Very Low', description: undefined, pollen_types: undefined, plants: ['Birch'] },
         {
           value: 3,
           category: 'Moderate',
@@ -1509,8 +1508,9 @@ describe('CurrentTools', () => {
           pollen_types: ['Grass'],
           plants: undefined,
         },
+        { value: 1, category: 'Very Low', description: undefined, pollen_types: undefined, plants: ['Birch'] },
       ]);
-      expect(fc.pollen?.health_recommendations).toEqual(['Keep windows closed and use AC if possible.']);
+      expect((fc.pollen as unknown as { health_recommendations?: unknown })?.health_recommendations).toBeUndefined();
     });
 
     it('keeps the forecast when the Pollen call fails', async () => {

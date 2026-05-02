@@ -199,7 +199,7 @@ describe('WhoopClient', () => {
       expect(result[0].recovery.resting_heart_rate).toBe('55 bpm');
       expect(result[0].recovery.spo2).toBe('96.5%');
       expect(result[0].recovery.skin_temp).toBe('33.2 °C');
-      expect(result[0].recovery.recovery_level).toBe('SUFFICIENT');
+      expect(result[0].recovery.recovery_level).toBe('Sufficient');
       // Sleep performance metrics (nested under sleep)
       expect(result[0].sleep.sleep_performance).toBe('95%');
       expect(result[0].sleep.sleep_consistency).toBe('88%');

@@ -310,8 +310,8 @@ export interface WhoopSleepData {
   sleep_consistency?: string;
   /** Sleep efficiency (e.g., "92%") */
   sleep_efficiency?: string;
-  /** Sleep performance level: OPTIMAL (≥85%), SUFFICIENT (70-85%), POOR (<70%) */
-  sleep_performance_level: 'OPTIMAL' | 'SUFFICIENT' | 'POOR';
+  /** Sleep performance level: Optimal (≥85%), Sufficient (70-85%), Poor (<70%) */
+  sleep_performance_level: 'Optimal' | 'Sufficient' | 'Poor';
   /** Human-readable sleep performance description from Whoop */
   sleep_performance_level_description: string;
   /** The approximate time the user fell asleep, in the user's local timezone */
@@ -328,8 +328,8 @@ export interface WhoopSleepData {
 export interface WhoopRecoveryData {
   /** Recovery score (e.g., "82%") */
   recovery_score: string;
-  /** Recovery level: SUFFICIENT (≥67%), ADEQUATE (34-66%), LOW (<34%) */
-  recovery_level: 'SUFFICIENT' | 'ADEQUATE' | 'LOW';
+  /** Recovery level: Sufficient (≥67%), Adequate (34-66%), Low (<34%) */
+  recovery_level: 'Sufficient' | 'Adequate' | 'Low';
   /** Human-readable description from Whoop */
   recovery_level_description: string;
   /** Heart Rate Variability — RMSSD (e.g., "55 ms") */
@@ -356,8 +356,8 @@ export interface WhoopRecoveryTrendEntry {
 export interface StrainData {
   date: string;
   strain_score: number;
-  /** Strain level: LIGHT (0-9), MODERATE (10-13), HIGH (14-17), ALL_OUT (18-21) */
-  strain_level: 'LIGHT' | 'MODERATE' | 'HIGH' | 'ALL_OUT';
+  /** Strain level: Light (0-9), Moderate (10-13), High (14-17), All out (18-21) */
+  strain_level: 'Light' | 'Moderate' | 'High' | 'All out';
   /** Human-readable description from Whoop */
   strain_level_description: string;
   average_heart_rate?: string;
@@ -1179,14 +1179,8 @@ export interface PollenIndexLevel {
 export interface Pollen {
   /** Date the forecast applies to, in YYYY-MM-DD format (athlete's timezone). */
   date: string;
-  /** Pollen activity grouped by UPI value, sorted by value ascending. */
+  /** Pollen activity grouped by UPI value, sorted by value descending (worst first). */
   universal_pollen_index: PollenIndexLevel[];
-  /**
-   * Deduplicated health recommendations from the entries at today's highest
-   * UPI level. Only the worst-band recommendations are surfaced — the lower
-   * bands say the same generic "great day to be outside" thing every time.
-   */
-  health_recommendations?: string[];
 }
 
 /**
