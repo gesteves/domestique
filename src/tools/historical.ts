@@ -44,7 +44,6 @@ import type {
   ZoneTotalEntry,
   SportTotals,
 } from '../types/index.js';
-import { filterWhoopDuplicateFieldsFromTrends } from '../types/index.js';
 import type {
   GetWorkoutHistoryInput,
   GetRecoveryTrendsInput,
@@ -168,13 +167,7 @@ export class HistoricalTools {
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
 
-    const trends = await this.intervals.getWellnessTrends(startDate, endDate);
-
-    // Filter out Whoop-duplicate fields when Whoop is connected
-    // Whoop provides more detailed sleep/HRV metrics
-    return this.whoop
-      ? filterWhoopDuplicateFieldsFromTrends(trends)
-      : trends;
+    return await this.intervals.getWellnessTrends(startDate, endDate);
   }
 
   // ============================================

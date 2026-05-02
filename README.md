@@ -18,7 +18,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ## Available Tools
 
 ### Today's Data
-- `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness, completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured)
+- `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness (every metric Intervals.icu has for today — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, etc., completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured).
 - `get_todays_workouts` - Today's completed (with full per-activity details) and planned workouts only. A leaner alternative to `get_todays_summary` when only workout data is needed.
 
 ### Profile & Settings
@@ -29,7 +29,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_strain_history` - Whoop strain scores and activities for a date range
 - `get_workout_history` - Historical workouts with matched Whoop strain data
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time
-- `get_wellness_trends` - Wellness data trends (weight) over a date range
+- `get_wellness_trends` - Daily Intervals.icu wellness over a date range. Returns every recorded field (HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, steps, etc.)
 - `get_activity_totals` - Aggregated activity totals over a date range, including duration, distance, training load, and zone distributions by sport
 
 ### Planning
@@ -360,6 +360,7 @@ Once connected, you can ask Claude:
 - "Show me my fitness trends for the last month"
 - "What workouts do I have planned this week?"
 - "How has my HRV trended compared to my training load?"
+- "How does my Intervals.icu HRV compare to Whoop's this week, and where do they disagree?"
 - "What workout do I have scheduled for next Wednesday?"
 - "Show me my workouts from last Friday"
 - "How many workouts did I complete in the last 2 weeks?"

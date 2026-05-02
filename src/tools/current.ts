@@ -26,7 +26,6 @@ import type {
   LocationForecast,
   Race,
 } from '../types/index.js';
-import { filterWhoopDuplicateFields } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
 /** Maximum forecast horizon supported by Google Weather (days). */
@@ -633,12 +632,6 @@ export class CurrentTools {
     // Get current datetime in user's timezone for context
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
-    // Filter out Whoop-duplicate fields from wellness when Whoop is connected
-    // Whoop provides more detailed sleep/HRV metrics
-    const filteredWellness = this.whoop
-      ? filterWhoopDuplicateFields(wellness)
-      : wellness;
-
     return {
       current_time: currentDateTime,
       whoop: {
@@ -648,7 +641,7 @@ export class CurrentTools {
         recovery,
       },
       fitness,
-      wellness: filteredWellness,
+      wellness,
       planned_workouts: plannedWorkouts,
       completed_workouts: completedWorkouts,
       scheduled_race: todaysRace,

@@ -120,6 +120,13 @@ interface IntervalsAthleteData {
   height_units?: 'CM' | 'FEET'; // athlete physical-stature height unit override
   // Date of birth (only available at root endpoint, not /profile)
   icu_date_of_birth?: string; // ISO date (YYYY-MM-DD)
+  // Per-provider wellness key configuration: which wellness fields each
+  // connected platform is configured to feed into Intervals.icu. Each entry is
+  // an API field name (e.g., "restingHR", "hrv", "sleepSecs"). Used to attach
+  // a `sources` map to wellness records.
+  icu_garmin_wellness_keys?: string[];
+  whoop_wellness_keys?: string[];
+  oura_wellness_keys?: string[];
 }
 
 // Profile endpoint returns nested structure (used for timezone caching)
@@ -371,6 +378,9 @@ interface IntervalsWellness {
 
   // Nutrition
   kcalConsumed?: number;
+  carbohydrates?: number; // grams
+  protein?: number; // grams
+  fatTotal?: number; // grams
 
   // Sleep
   sleepSecs?: number;
@@ -407,6 +417,39 @@ interface IntervalsWellness {
   steps?: number;
   comments?: string;
 }
+
+/**
+ * Maps Intervals.icu wellness API field names (as they appear in
+ * `IntervalsWellness` and in the `*_wellness_keys` configuration arrays on
+ * the athlete root endpoint) to the snake_case output keys we emit in
+ * `WellnessFields`. Used to label each wellness field with its configured
+ * provider (garmin/whoop/oura) via `attachWellnessSources`.
+ *
+ * Identity entries are kept for clarity and to make the surface explicit when
+ * adding new fields. Keys that already match (e.g., `weight`, `soreness`) need
+ * no entry — the helper falls back to the API key as-is for those.
+ */
+const WELLNESS_API_TO_OUTPUT_KEY: Record<string, string> = {
+  restingHR: 'resting_hr',
+  hrvSDNN: 'hrv_sdnn',
+  menstrualPhase: 'menstrual_phase',
+  menstrualPhasePredicted: 'menstrual_phase_predicted',
+  kcalConsumed: 'kcal_consumed',
+  fatTotal: 'fat_total',
+  sleepSecs: 'sleep_duration',
+  sleepScore: 'sleep_score',
+  sleepQuality: 'sleep_quality',
+  avgSleepingHR: 'avg_sleeping_hr',
+  spO2: 'spo2',
+  hydrationVolume: 'hydration_volume',
+  baevskySI: 'baevsky_si',
+  bloodGlucose: 'blood_glucose',
+  bodyFat: 'body_fat',
+  // Diastolic isn't an emitted output field on its own — both sides combine
+  // into `blood_pressure`. Map both API keys to the same output for sourcing.
+  systolic: 'blood_pressure',
+  diastolic: 'blood_pressure',
+};
 
 interface IntervalsEvent {
   id: number;
@@ -637,6 +680,27 @@ export class IntervalsClient {
       athlete.rain,
       athlete.height_units
     );
+  });
+  // Build a map from output wellness field name (e.g., "hrv", "sleep_duration")
+  // to its configured provider ("garmin" | "whoop" | "oura"). Inferred from
+  // the athlete's `*_wellness_keys` arrays on the root endpoint. Resolution
+  // order on overlap (rare in practice — Intervals.icu's UI assigns each field
+  // to one provider): whoop > garmin > oura, achieved by writing whoop last so
+  // it wins.
+  private fetchWellnessSourcesCached = memoize(async () => {
+    const athlete = await this.fetch<IntervalsAthleteData>('');
+    const sources: Record<string, 'garmin' | 'whoop' | 'oura'> = {};
+    const assign = (apiKeys: string[] | undefined, source: 'garmin' | 'whoop' | 'oura') => {
+      if (!apiKeys) return;
+      for (const apiKey of apiKeys) {
+        const outputKey = WELLNESS_API_TO_OUTPUT_KEY[apiKey] ?? apiKey;
+        sources[outputKey] = source;
+      }
+    };
+    assign(athlete.oura_wellness_keys, 'oura');
+    assign(athlete.icu_garmin_wellness_keys, 'garmin');
+    assign(athlete.whoop_wellness_keys, 'whoop');
+    return sources;
   });
   private fetchWeatherConfigCached = memoize(async () => {
     const response = await this.fetch<IntervalsWeatherConfig>('/weather-config');
@@ -1826,6 +1890,15 @@ export class IntervalsClient {
     if (data.kcalConsumed != null) {
       result.kcal_consumed = data.kcalConsumed;
     }
+    if (data.carbohydrates != null) {
+      result.carbohydrates = withUnit(data.carbohydrates, 'g');
+    }
+    if (data.protein != null) {
+      result.protein = withUnit(data.protein, 'g');
+    }
+    if (data.fatTotal != null) {
+      result.fat_total = withUnit(data.fatTotal, 'g');
+    }
 
     // Sleep
     if (data.sleepSecs != null) {
@@ -1920,6 +1993,35 @@ export class IntervalsClient {
   }
 
   /**
+   * Attach a `sources` map to a wellness object, labeling each present output
+   * field with its configured provider (garmin/whoop/oura). Mutates and
+   * returns the input. Skips fields with no configured source (likely manual
+   * entry); skips the entire `sources` field when no providers contribute.
+   * The `date` key on `DailyWellness` is excluded since it's not a metric.
+   */
+  private async attachWellnessSources<T extends WellnessData>(wellness: T): Promise<T> {
+    let sourceMap: Record<string, 'garmin' | 'whoop' | 'oura'>;
+    try {
+      sourceMap = await this.fetchWellnessSourcesCached();
+    } catch (error) {
+      // Source attribution is best-effort: never let a profile-fetch failure
+      // sink the whole wellness call. Surface the wellness data without sources.
+      console.error('Error fetching wellness source configuration:', error);
+      return wellness;
+    }
+    const sources: Record<string, string> = {};
+    for (const key of Object.keys(wellness)) {
+      if (key === 'date' || key === 'sources') continue;
+      const source = sourceMap[key];
+      if (source) sources[key] = source;
+    }
+    if (Object.keys(sources).length > 0) {
+      wellness.sources = sources;
+    }
+    return wellness;
+  }
+
+  /**
    * Get today's wellness data using the athlete's timezone.
    * Uses the single-date endpoint which returns actual values.
    */
@@ -1931,7 +2033,8 @@ export class IntervalsClient {
       // Use single-date endpoint - returns actual values, not null
       const data = await this.fetch<IntervalsWellness>(`/wellness/${today}`);
       const wellness = this.mapWellnessData(data);
-      return this.hasWellnessData(wellness) ? wellness : null;
+      if (!this.hasWellnessData(wellness)) return null;
+      return await this.attachWellnessSources(wellness);
     } catch {
       // No wellness data for today
       return null;
@@ -1949,12 +2052,17 @@ export class IntervalsClient {
     });
 
     // Map all entries and filter to only those with wellness data
-    const data: DailyWellness[] = wellness
+    const mapped: DailyWellness[] = wellness
       .map((w) => ({
         date: w.id,
         ...this.mapWellnessData(w),
       }))
       .filter((w) => Object.keys(w).length > 1); // More than just 'date'
+
+    // Attach per-day source map. The provider-keys config is constant for the
+    // range (one HTTP call, memoized), but the *present-fields* subset varies
+    // per day, so build the per-day map individually.
+    const data = await Promise.all(mapped.map((entry) => this.attachWellnessSources(entry)));
 
     // Calculate period days
     const start = new Date(startDate);

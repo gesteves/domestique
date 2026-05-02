@@ -458,6 +458,9 @@ const WellnessFieldsShape = {
   menstrual_phase: z.string().optional().describe('Current menstrual cycle phase'),
   menstrual_phase_predicted: z.string().optional().describe('Predicted menstrual cycle phase'),
   kcal_consumed: z.number().optional().describe('Calories consumed'),
+  carbohydrates: z.string().optional().describe('Carbohydrates consumed'),
+  protein: z.string().optional().describe('Protein consumed'),
+  fat_total: z.string().optional().describe('Total fat consumed'),
   sleep_duration: z.string().optional().describe('Sleep duration (e.g., "8h 10m")'),
   sleep_score: z.number().optional().describe('Sleep score (0-100)'),
   sleep_quality: z.number().optional().describe('Subjective sleep quality: 1=GREAT, 2=GOOD, 3=AVG, 4=POOR'),
@@ -482,6 +485,7 @@ const WellnessFieldsShape = {
   vo2max: z.string().optional().describe('Estimated VO2max'),
   steps: z.number().optional().describe('Step count for the day'),
   comments: z.string().optional().describe('User notes/comments for the day'),
+  sources: z.record(z.string(), z.string()).optional().describe('Per-field data source inferred from the athlete\'s configured wellness providers. Maps a present wellness field name (e.g., "hrv", "sleep_duration") to the provider feeding it ("garmin", "whoop", or "oura"). Inferred from the athlete\'s provider configuration, not stamped on the record — manually entered values may still appear with a configured source. Fields not in any provider\'s configured key list are omitted from this map (likely manual entry). Use this to compare same-name fields against the parallel whoop.* data in the daily summary.'),
 } as const;
 
 const DailyWellnessZ = z.object({
@@ -963,7 +967,7 @@ export const todaysSummaryOutputSchema = {
     recovery: WhoopRecoveryZ.nullable().optional().describe("Today's Whoop recovery data. Null if unavailable"),
   }).passthrough().optional().describe("Today's Whoop data"),
   fitness: FitnessMetricsZ.nullable().optional().describe("Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu. Null if unavailable"),
-  wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data (weight, etc.) from Intervals.icu. Null if unavailable"),
+  wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data from Intervals.icu — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, and more. Includes a `sources` map naming each field's configured provider (garmin/whoop/oura). Some fields overlap with whoop.* and are shown in parallel intentionally so the same metric can be reconciled across sources. Null if no wellness data was recorded."),
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
   completed_workouts: z.array(WorkoutZ).optional().describe('Workouts completed so far today, with matched Whoop data'),
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),

@@ -1068,6 +1068,97 @@ describe('IntervalsClient', () => {
       expect(result?.steps).toBe(8500);
       expect(result?.comments).toBe('Feeling good today');
     });
+
+    it('maps nutrition macros (carbohydrates, protein, fat_total) and omits null ones', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        kcalConsumed: 2400,
+        carbohydrates: 280,
+        protein: 150,
+        fatTotal: null, // explicitly null — should be omitted
+      };
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.kcal_consumed).toBe(2400);
+      expect(result?.carbohydrates).toBe('280 g');
+      expect(result?.protein).toBe('150 g');
+      expect(result?.fat_total).toBeUndefined();
+    });
+
+    it('attaches a per-field sources map from configured wellness providers', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        weight: 74.5,
+        restingHR: 51,
+        hrv: 35.47,
+        sleepSecs: 29400,
+        sleepScore: 87,
+        soreness: 1,
+      };
+      const mockAthlete = {
+        id: 'test',
+        icu_garmin_wellness_keys: ['weight', 'restingHR', 'hrv'],
+        whoop_wellness_keys: ['sleepSecs', 'sleepScore'],
+        oura_wellness_keys: [],
+      };
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAthlete) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.sources).toEqual({
+        weight: 'garmin',
+        resting_hr: 'garmin',
+        hrv: 'garmin',
+        sleep_duration: 'whoop',
+        sleep_score: 'whoop',
+      });
+      // soreness wasn't in any provider's keys → omitted (manual entry)
+      expect(result?.sources?.soreness).toBeUndefined();
+    });
+
+    it('resolves overlapping provider keys with whoop > garmin > oura priority', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = { id: '2024-12-15', hrv: 40 };
+      const mockAthlete = {
+        id: 'test',
+        // Same key configured under multiple providers — Whoop should win.
+        oura_wellness_keys: ['hrv'],
+        icu_garmin_wellness_keys: ['hrv'],
+        whoop_wellness_keys: ['hrv'],
+      };
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAthlete) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.sources?.hrv).toBe('whoop');
+    });
+
+    it('omits sources when no providers have configured wellness keys', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = { id: '2024-12-15', weight: 74.5 };
+      const mockAthlete = { id: 'test' }; // No *_wellness_keys arrays at all
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAthlete) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.weight).toBe('74.5 kg');
+      expect(result?.sources).toBeUndefined();
+    });
   });
 
   describe('getWellnessTrends', () => {

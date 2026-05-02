@@ -629,18 +629,21 @@ Get the activity_id from:
     register({
       name: 'get_wellness_trends',
       title: 'Wellness Trends',
-      description: `Fetches wellness data over a date range from Intervals.icu.
+      description: `Fetches daily wellness data over a date range from Intervals.icu — every metric the athlete has recorded, regardless of source.
 
 <use-cases>
-- Tracking weight trends over time to monitor body composition changes.
-- Correlating weight changes with training load and performance.
-- Identifying patterns in weight fluctuations that may affect performance.
-- Understanding long-term wellness trends as part of overall fitness assessment.
+- Tracking HRV (rMSSD and SDNN), resting HR, and sleep (duration/score/quality/avg HR) trends to spot recovery patterns.
+- Monitoring SpO2, blood pressure, respiration, and other vitals over time.
+- Following body composition (weight, body fat, abdomen, VO2max) changes alongside training load.
+- Reviewing subjective scores (mood, fatigue, soreness, stress, motivation, injury, hydration) to correlate with performance.
+- Watching nutrition (kcal, carbs, protein, fat) and step count.
+- **Cross-source comparison:** when Whoop is also connected, the same metric (HRV, RHR, SpO2, sleep, etc.) often appears in both Intervals.icu wellness (typically fed from Garmin/Oura/manual) and Whoop. Each present field carries an entry in the per-day \`sources\` map naming its configured provider, so you can compare the readings and reconcile differences between platforms.
 </use-cases>
 
 <notes>
 - Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
 - Only returns days on which wellness data was recorded.
+- The \`sources\` map is inferred from the athlete's per-provider wellness key configuration in Intervals.icu, not stamped on each record. Manually entered values may still show a configured source.
 </notes>`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),

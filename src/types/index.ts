@@ -860,6 +860,9 @@ interface WellnessFields {
 
   // Nutrition
   kcal_consumed?: number;
+  carbohydrates?: string; // e.g., "180 g"
+  protein?: string; // e.g., "120 g"
+  fat_total?: string; // e.g., "60 g"
 
   // Sleep
   sleep_duration?: string; // e.g., "8h 10m"
@@ -894,6 +897,12 @@ interface WellnessFields {
   // Activity and notes
   steps?: number;
   comments?: string;
+
+  // Per-field source attribution: which configured provider feeds each
+  // present wellness field (garmin/whoop/oura). Only populated when at least
+  // one provider is configured. See attachWellnessSources in the Intervals
+  // client; manually entered values may still appear with a configured source.
+  sources?: Record<string, string>;
 }
 
 /**
@@ -917,62 +926,6 @@ export interface WellnessTrends {
   start_date: string;
   end_date: string;
   data: DailyWellness[];
-}
-
-/**
- * Fields that duplicate Whoop metrics and should be excluded when Whoop is connected.
- * Whoop provides more detailed versions of these metrics.
- */
-const WHOOP_DUPLICATE_FIELDS: (keyof WellnessFields)[] = [
-  'resting_hr',
-  'hrv',
-  'hrv_sdnn',
-  'sleep_duration',
-  'sleep_score',
-  'sleep_quality',
-  'avg_sleeping_hr',
-  'readiness',
-  'respiration',
-  'spo2',
-];
-
-/**
- * Filter out wellness fields that duplicate Whoop metrics.
- * Used when Whoop is connected since Whoop provides more detailed data.
- */
-export function filterWhoopDuplicateFields<T extends WellnessFields>(
-  wellness: T | null
-): T | null {
-  if (!wellness) return null;
-
-  const filtered = { ...wellness };
-  for (const field of WHOOP_DUPLICATE_FIELDS) {
-    delete filtered[field];
-  }
-
-  // Check if any fields remain (excluding 'date' for DailyWellness)
-  const remainingKeys = Object.keys(filtered).filter((k) => k !== 'date');
-  if (remainingKeys.length === 0) {
-    return null;
-  }
-
-  return filtered;
-}
-
-/**
- * Filter Whoop-duplicate fields from wellness trends data.
- */
-export function filterWhoopDuplicateFieldsFromTrends(
-  trends: WellnessTrends
-): WellnessTrends {
-  const filteredData = trends.data
-    .map((entry) => filterWhoopDuplicateFields(entry))
-    .filter((entry): entry is DailyWellness => entry !== null);
-
-  return {
-    ...trends,
-    data: filteredData,
-  };
 }
 
 // ============================================
