@@ -245,11 +245,12 @@ export class CurrentTools {
     const aqHoursNeeded = Math.min(hoursToCoverDate, MAX_AIR_QUALITY_FORECAST_HOURS);
 
     try {
-      const [hourly, daily, hourlyAq, pollenForecast, elevation] = await Promise.all([
+      const [hourly, daily, alerts, hourlyAq, pollenForecast, elevation] = await Promise.all([
         this.safeFetch(loc.label, 'hourly forecast', () =>
           gw.getHourlyForecast(loc.latitude, loc.longitude, hoursToCoverDate)
         ),
         this.safeFetch(loc.label, 'daily forecast', () => gw.getDailyForecast(loc.latitude, loc.longitude)),
+        this.safeFetch(loc.label, 'weather alerts', () => gw.getWeatherAlerts(loc.latitude, loc.longitude)),
         fetchAirQuality && aq
           ? this.safeFetch(loc.label, 'hourly air quality', () =>
               aq.getHourlyAirQualityForecast(loc.latitude, loc.longitude, aqHoursNeeded)
@@ -274,7 +275,8 @@ export class CurrentTools {
         loc.timezone,
         hourlyAq,
         pollenForecast,
-        elevation
+        elevation,
+        alerts
       );
     } catch (e) {
       console.error(`Error fetching forecast for "${loc.label}":`, e);

@@ -737,7 +737,11 @@ const HourlyForecastZ = z.object({
 const WeatherAlertZ = z.object({
   title: z.string().optional().describe('Short, human-readable alert headline (e.g., "Flash Flood Warning")'),
   description: z.string().optional().describe('Full description of the alert with hazards, impacts, and instructions'),
-  severity: z.string().optional().describe('Severity level (e.g., EXTREME, SEVERE, MODERATE, MINOR, UNKNOWN)'),
+  event_type: z.string().optional().describe('Category of weather event (e.g., "Tornado", "Flood", "Heat", "Wildfire")'),
+  area_name: z.string().optional().describe('Geographic area the alert applies to'),
+  severity: z.string().optional().describe('Threat level of the alert (e.g., "Extreme", "Severe", "Moderate", "Minor")'),
+  urgency: z.string().optional().describe('How quickly action should be taken (e.g., "Immediate", "Expected", "Future")'),
+  certainty: z.string().optional().describe('Confidence that the event will occur (e.g., "Observed", "Likely", "Possible")'),
   start_time: z.string().optional().describe('When the alert goes into effect'),
   expiration_time: z.string().optional().describe('When the alert expires'),
   source: z.string().optional().describe('Issuing organization (e.g., "National Weather Service")'),
@@ -772,7 +776,7 @@ const LocationForecastZ = z.object({
   current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Only present when the forecast date is today; null if no current data is available'),
   daily_summary: DailySummaryZ.optional().describe('Daily forecast summary for the date (high/low temps, conditions, precipitation, wind)'),
   hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the forecast date in the location's timezone — remaining hours of the day when the date is today, all 24 hours otherwise"),
-  alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts for the location. Only present when the forecast date is today'),
+  alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts whose effective window overlaps the forecast date, sorted with the most severe first'),
   pollen: PollenZ.optional().describe('Pollen forecast for the location on the forecast date. May be absent for dates further out — pollen has a shorter forecast window than the daily/hourly weather'),
 }).passthrough();
 
@@ -973,7 +977,7 @@ export const todaysSummaryOutputSchema = {
 
 export const forecastInputSchema = {
   date: z.string().optional().describe("Date the forecast is for, accepting ISO YYYY-MM-DD or natural language (e.g., \"tomorrow\", \"in 3 days\"). Defaults to today. Must be within today through 10 days from today"),
-  location: z.string().optional().describe("Free-text place query to forecast for. Can be as broad as a city or postal code (\"San Francisco, CA\", \"83001\") or as narrow as a neighborhood or landmark (\"Presidio, San Francisco, CA\", \"Coeur d'Alene City Park, Coeur d'Alene, ID\"). Prefer the most specific form available so the forecast captures the exact spot's microclimate (useful for narrowing to a race start). When omitted, returns forecasts for the user's configured weather locations. The resolved place name is surfaced in the response"),
+  location: z.string().optional().describe("Free-text place query to forecast for. Can be as broad as a city or postal code (\"San Francisco, CA\", \"83001\") or as narrow as a neighborhood, landmark or even an exact address (\"Presidio, San Francisco, CA\", \"Coeur d'Alene City Park, Coeur d'Alene, ID\"). Prefer the most specific form available so the forecast captures the exact spot's microclimate (useful for narrowing to a race start). When omitted, returns forecasts for the user's configured weather locations. The resolved place name is surfaced in the response"),
 } as const;
 
 export const forecastOutputSchema = {

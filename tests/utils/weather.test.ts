@@ -4,6 +4,7 @@ import {
   transformForecastHour,
   filterHourlyToRestOfDay,
   assembleLocationForecast,
+  assembleFutureLocationForecast,
 } from '../../src/utils/weather.js';
 import { runWithUnitPreferences } from '../../src/utils/unit-context.js';
 import type { UnitPreferences } from '../../src/types/index.js';
@@ -423,7 +424,11 @@ describe('assembleLocationForecast', () => {
       {
         title: 'Freeze Watch',
         description: 'Temperatures dropping below freezing tonight.',
-        severity: 'MODERATE',
+        event_type: undefined,
+        area_name: undefined,
+        severity: 'Moderate',
+        urgency: undefined,
+        certainty: undefined,
         start_time: 'Tuesday, April 28, 2026 at 6:00 PM MDT', // 2026-04-29T00:00 UTC = 18:00 MDT prior day
         expiration_time: 'Wednesday, April 29, 2026 at 6:00 AM MDT', // 12:00 UTC = 06:00 MDT
         source: 'National Weather Service',
@@ -1078,5 +1083,243 @@ describe('assembleLocationForecast', () => {
       );
       expect(result.elevation).toBeUndefined();
     });
+  });
+});
+
+describe('assembleLocationForecast — alert filtering and sorting', () => {
+  const tz = 'America/Boise'; // MDT (UTC-6) on 2026-04-28
+  const now = new Date('2026-04-28T14:49:34Z');
+  const baseArgs = (alerts: GoogleWeatherAlertsResponse) =>
+    [
+      'Pocatello,Idaho,US',
+      42.87,
+      -112.58,
+      undefined,
+      undefined,
+      alerts,
+      tz,
+      now,
+    ] as const;
+
+  it('surfaces event_type, area_name, urgency, certainty in sentence case', () => {
+    const alerts: GoogleWeatherAlertsResponse = {
+      weatherAlerts: [
+        {
+          alertTitle: { text: 'Tornado Warning' },
+          description: 'Take shelter immediately.',
+          eventType: 'TORNADO',
+          areaName: 'Bannock County',
+          severity: 'EXTREME',
+          urgency: 'IMMEDIATE',
+          certainty: 'OBSERVED',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-28T22:00:00Z',
+          dataSource: { name: 'NWS Pocatello' },
+        },
+      ],
+    };
+
+    const result = assembleLocationForecast(...baseArgs(alerts));
+
+    expect(result.alerts).toEqual([
+      {
+        title: 'Tornado Warning',
+        description: 'Take shelter immediately.',
+        event_type: 'Tornado',
+        area_name: 'Bannock County',
+        severity: 'Extreme',
+        urgency: 'Immediate',
+        certainty: 'Observed',
+        start_time: 'Tuesday, April 28, 2026 at 12:00 PM MDT',
+        expiration_time: 'Tuesday, April 28, 2026 at 4:00 PM MDT',
+        source: 'NWS Pocatello',
+      },
+    ]);
+  });
+
+  it('drops alerts whose urgency is PAST', () => {
+    const alerts: GoogleWeatherAlertsResponse = {
+      weatherAlerts: [
+        {
+          alertTitle: { text: 'Wind Advisory' },
+          severity: 'MINOR',
+          urgency: 'PAST',
+          startTime: '2026-04-28T06:00:00Z',
+          expirationTime: '2026-04-28T20:00:00Z',
+        },
+        {
+          alertTitle: { text: 'Heat Advisory' },
+          severity: 'MODERATE',
+          urgency: 'EXPECTED',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-28T22:00:00Z',
+        },
+      ],
+    };
+
+    const result = assembleLocationForecast(...baseArgs(alerts));
+
+    expect(result.alerts).toHaveLength(1);
+    expect(result.alerts?.[0].title).toBe('Heat Advisory');
+  });
+
+  it('sorts alerts by severity descending (EXTREME → MINOR)', () => {
+    const alerts: GoogleWeatherAlertsResponse = {
+      weatherAlerts: [
+        {
+          alertTitle: { text: 'Frost' },
+          severity: 'MINOR',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-28T22:00:00Z',
+        },
+        {
+          alertTitle: { text: 'Tornado' },
+          severity: 'EXTREME',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-28T22:00:00Z',
+        },
+        {
+          alertTitle: { text: 'Heat' },
+          severity: 'MODERATE',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-28T22:00:00Z',
+        },
+        {
+          alertTitle: { text: 'Storm' },
+          severity: 'SEVERE',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-28T22:00:00Z',
+        },
+      ],
+    };
+
+    const result = assembleLocationForecast(...baseArgs(alerts));
+
+    expect(result.alerts?.map((a) => a.title)).toEqual(['Tornado', 'Storm', 'Heat', 'Frost']);
+  });
+
+  it('normalizes *_UNKNOWN sentinels to undefined', () => {
+    const alerts: GoogleWeatherAlertsResponse = {
+      weatherAlerts: [
+        {
+          alertTitle: { text: 'Special Statement' },
+          severity: 'SEVERITY_UNKNOWN',
+          urgency: 'URGENCY_UNKNOWN',
+          certainty: 'CERTAINTY_UNKNOWN',
+          eventType: 'UNKNOWN',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-28T22:00:00Z',
+        },
+      ],
+    };
+
+    const result = assembleLocationForecast(...baseArgs(alerts));
+
+    expect(result.alerts?.[0]).toMatchObject({
+      title: 'Special Statement',
+      severity: undefined,
+      urgency: undefined,
+      certainty: undefined,
+      event_type: undefined,
+    });
+  });
+});
+
+describe('assembleFutureLocationForecast — alert overlap filtering', () => {
+  const tz = 'America/Boise'; // MDT (UTC-6) on the dates below
+
+  it('includes alerts whose window overlaps the target date', () => {
+    // Target: 2026-04-30 (MDT). Local day spans 2026-04-30T06:00Z to 2026-05-01T06:00Z.
+    const alerts: GoogleWeatherAlertsResponse = {
+      weatherAlerts: [
+        // Issued today (28th), expires on the target date — overlaps.
+        {
+          alertTitle: { text: 'Multi-day Heat' },
+          severity: 'SEVERE',
+          startTime: '2026-04-28T18:00:00Z',
+          expirationTime: '2026-04-30T18:00:00Z',
+        },
+        // Window entirely before the target — exclude.
+        {
+          alertTitle: { text: 'Past Wind' },
+          severity: 'MODERATE',
+          startTime: '2026-04-28T00:00:00Z',
+          expirationTime: '2026-04-29T00:00:00Z',
+        },
+        // Window entirely after the target — exclude.
+        {
+          alertTitle: { text: 'Future Storm' },
+          severity: 'MODERATE',
+          startTime: '2026-05-02T00:00:00Z',
+          expirationTime: '2026-05-03T00:00:00Z',
+        },
+        // Starts mid-target-day — include.
+        {
+          alertTitle: { text: 'Afternoon Advisory' },
+          severity: 'MINOR',
+          startTime: '2026-04-30T20:00:00Z',
+          expirationTime: '2026-05-01T02:00:00Z',
+        },
+      ],
+    };
+
+    const result = assembleFutureLocationForecast(
+      'Pocatello,Idaho,US',
+      42.87,
+      -112.58,
+      '2026-04-30',
+      undefined,
+      undefined,
+      tz,
+      undefined,
+      undefined,
+      undefined,
+      alerts
+    );
+
+    expect(result.alerts?.map((a) => a.title)).toEqual(['Multi-day Heat', 'Afternoon Advisory']);
+  });
+
+  it('returns an empty array when no alerts overlap the target date', () => {
+    const alerts: GoogleWeatherAlertsResponse = {
+      weatherAlerts: [
+        {
+          alertTitle: { text: 'Past Wind' },
+          severity: 'MODERATE',
+          startTime: '2026-04-28T00:00:00Z',
+          expirationTime: '2026-04-29T00:00:00Z',
+        },
+      ],
+    };
+
+    const result = assembleFutureLocationForecast(
+      'Pocatello,Idaho,US',
+      42.87,
+      -112.58,
+      '2026-05-15',
+      undefined,
+      undefined,
+      tz,
+      undefined,
+      undefined,
+      undefined,
+      alerts
+    );
+
+    expect(result.alerts).toEqual([]);
+  });
+
+  it('omits alerts arg gracefully', () => {
+    const result = assembleFutureLocationForecast(
+      'Pocatello,Idaho,US',
+      42.87,
+      -112.58,
+      '2026-04-30',
+      undefined,
+      undefined,
+      tz
+    );
+
+    expect(result.alerts).toEqual([]);
   });
 });

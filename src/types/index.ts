@@ -1245,7 +1245,11 @@ export interface HourlyForecast {
 export interface WeatherAlert {
   title?: string;
   description?: string;
+  event_type?: string;
+  area_name?: string;
   severity?: string;
+  urgency?: string;
+  certainty?: string;
   start_time?: string;
   expiration_time?: string;
   source?: string;
@@ -1312,7 +1316,7 @@ export interface LocationForecast {
   /** Daily forecast summary for the date. */
   daily_summary?: DailyForecastSummary;
   hourly_forecast: HourlyForecast[];
-  /** Active weather alerts. Only populated when the forecast date is today. */
+  /** Active weather alerts whose effective window overlaps the forecast date. */
   alerts?: WeatherAlert[];
   /** Pollen forecast for the location on the forecast date. */
   pollen?: Pollen;

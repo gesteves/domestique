@@ -1,7 +1,8 @@
-import { formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { formatTemperature, formatPercent, formatLength, withUnit } from './format-units.js';
 import { getCurrentUnitPreferences } from './unit-context.js';
 import { formatDateTimeHumanReadable } from './date-formatting.js';
+import { addDaysToYMD } from './tz.js';
 import type {
   GoogleCurrentConditionsResponse,
   GoogleDailyForecastResponse,
@@ -132,16 +133,23 @@ function formatPressure(hpa: number | undefined): string | undefined {
 }
 
 /**
- * Format Google's enum-style precipitation type ("RAIN_AND_SNOW") as sentence
- * case ("Rain and snow"). Returns undefined for missing/empty input. Unknown
- * values still pass through normalized — anything Google adds in the future
- * renders sensibly without a code change.
+ * Format a Google enum value ("RAIN_AND_SNOW", "EXTREME", "URGENCY_IMMEDIATE")
+ * as sentence case ("Rain and snow", "Extreme", "Urgency immediate"). Returns
+ * undefined for missing/empty input and for `*_UNKNOWN` sentinels (e.g.,
+ * `SEVERITY_UNKNOWN`, `URGENCY_UNKNOWN`) — those carry no information and just
+ * add noise. Unknown values still pass through normalized, so anything Google
+ * adds in the future renders sensibly without a code change.
  */
-function formatPrecipitationType(type: string | undefined): string | undefined {
-  if (!type) return undefined;
-  const normalized = type.replace(/_/g, ' ').trim().toLowerCase();
-  if (!normalized) return undefined;
+function formatEnumLabel(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const upper = value.trim().toUpperCase();
+  if (!upper || upper === 'UNKNOWN' || upper.endsWith('_UNKNOWN')) return undefined;
+  const normalized = upper.replace(/_/g, ' ').toLowerCase();
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatPrecipitationType(type: string | undefined): string | undefined {
+  return formatEnumLabel(type);
 }
 
 function formatPrecipitationAmount(qpf: { quantity?: number; unit?: string } | undefined): string | undefined {
@@ -618,11 +626,75 @@ function transformAlert(alert: GoogleWeatherAlert, locationTimezone: string): We
   return {
     title: alert.alertTitle?.text,
     description: alert.description,
-    severity: alert.severity,
+    event_type: formatEnumLabel(alert.eventType),
+    area_name: alert.areaName,
+    severity: formatEnumLabel(alert.severity),
+    urgency: formatEnumLabel(alert.urgency),
+    certainty: formatEnumLabel(alert.certainty),
     start_time: formatLocalDateTime(alert.startTime, locationTimezone),
     expiration_time: formatLocalDateTime(alert.expirationTime, locationTimezone),
     source: alert.dataSource?.name,
   };
+}
+
+// Higher number = more severe. Used to sort alerts EXTREME → MINOR.
+const SEVERITY_RANK: Record<string, number> = {
+  EXTREME: 4,
+  SEVERE: 3,
+  MODERATE: 2,
+  MINOR: 1,
+};
+
+function severityRank(severity: string | undefined): number {
+  if (!severity) return 0;
+  return SEVERITY_RANK[severity.trim().toUpperCase()] ?? 0;
+}
+
+/**
+ * Build the alert list for a forecast date in the location's timezone.
+ *
+ * - Drops alerts whose urgency is `PAST` (no action needed).
+ * - Keeps only alerts whose `[startTime, expirationTime]` window intersects
+ *   the target local day. For today this matches what most active alerts cover
+ *   anyway; for future dates this is the gating that lets a Heat Advisory
+ *   issued today for tomorrow show up on tomorrow's forecast.
+ * - Sorts by severity descending so the most severe alert reads first.
+ */
+function selectAlerts(
+  alerts: GoogleWeatherAlertsResponse | undefined,
+  targetDate: string,
+  locationTimezone: string
+): WeatherAlert[] {
+  const raw = alerts?.weatherAlerts ?? [];
+  if (raw.length === 0) return [];
+
+  // Local-day boundaries as UTC instants. `targetDate` is a YYYY-MM-DD in
+  // `locationTimezone`; the day starts at 00:00 local on that date and ends at
+  // 00:00 local on the following date. Computing both endpoints via
+  // `fromZonedTime` handles DST (a local day can span 23 or 25 hours).
+  const dayStartUtc = localDayStartToUtcMs(targetDate, locationTimezone);
+  const dayEndUtc = localDayStartToUtcMs(addDaysToYMD(targetDate, 1), locationTimezone);
+
+  const filtered = raw.filter((a) => {
+    if (a.urgency && a.urgency.trim().toUpperCase() === 'PAST') return false;
+    const startMs = a.startTime ? Date.parse(a.startTime) : Number.NEGATIVE_INFINITY;
+    const endMs = a.expirationTime ? Date.parse(a.expirationTime) : Number.POSITIVE_INFINITY;
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) return true;
+    // Overlap: alert window and target day must intersect.
+    return startMs < dayEndUtc && endMs > dayStartUtc;
+  });
+
+  filtered.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+
+  return filtered.map((a) => transformAlert(a, locationTimezone));
+}
+
+/**
+ * UTC millisecond instant of 00:00 local on `targetDate` in `timezone`.
+ * Handles DST correctly via date-fns-tz's `fromZonedTime`.
+ */
+function localDayStartToUtcMs(targetDate: string, timezone: string): number {
+  return fromZonedTime(`${targetDate}T00:00:00`, timezone).getTime();
 }
 
 /**
@@ -684,7 +756,7 @@ export function assembleLocationForecast(
       const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
       return transformForecastHour(h, locationTimezone, aqEntry);
     }),
-    alerts: (alerts?.weatherAlerts ?? []).map((a) => transformAlert(a, locationTimezone)),
+    alerts: selectAlerts(alerts, todayLocal, locationTimezone),
     pollen: pollenForToday,
   };
 }
@@ -693,7 +765,9 @@ export function assembleLocationForecast(
  * Build a per-location forecast for a specific future date.
  *
  * Differences from {@link assembleLocationForecast}:
- * - No `current_conditions` or `alerts` — both are inherently near-term.
+ * - No `current_conditions` — N/A for future dates.
+ * - `alerts` are filtered to those whose effective window intersects the
+ *   target local day; advisories issued today for tomorrow show up here.
  * - `hourly_forecast` covers the full 24 hours of the target date in the
  *   athlete's timezone.
  * - `pollen` is included only when the caller passes a response that contains
@@ -717,7 +791,8 @@ export function assembleFutureLocationForecast(
   locationTimezone: string,
   hourlyAirQuality?: GoogleAirQualityHourlyResponse,
   pollen?: GooglePollenForecastResponse,
-  elevation?: GoogleElevationResponse
+  elevation?: GoogleElevationResponse,
+  alerts?: GoogleWeatherAlertsResponse
 ): LocationForecast {
   const filteredHours = filterHourlyToDate(hourly?.forecastHours, locationTimezone, targetDate);
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
@@ -743,6 +818,7 @@ export function assembleFutureLocationForecast(
       const aqEntry = startTime ? aqByHour.get(startTime) : undefined;
       return transformForecastHour(h, locationTimezone, aqEntry);
     }),
+    alerts: selectAlerts(alerts, targetDate, locationTimezone),
     pollen: pollenForDate,
   };
 }

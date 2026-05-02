@@ -1229,12 +1229,17 @@ describe('CurrentTools', () => {
       // athlete's tz (America/Boise = MDT, UTC-6). 20:00 UTC = 14:00 MDT.
       expect(fc.hourly_forecast).toHaveLength(1);
       expect(fc.hourly_forecast[0].forecast_start).toMatch(/at 2:00 PM MDT$/);
-      // Alerts pass through with the slimmed shape; datetimes pre-formatted.
+      // Alerts pass through with the slimmed shape; datetimes pre-formatted
+      // and enum values normalized to sentence case.
       expect(fc.alerts).toEqual([
         {
           title: 'Freeze Warning',
           description: 'Freezing temperatures expected.',
-          severity: 'MODERATE',
+          event_type: undefined,
+          area_name: undefined,
+          severity: 'Moderate',
+          urgency: undefined,
+          certainty: undefined,
           start_time: 'Tuesday, April 28, 2026 at 6:00 PM MDT', // 2026-04-29T00:00 UTC = 18:00 MDT prior day
           expiration_time: 'Wednesday, April 29, 2026 at 6:00 AM MDT',
           source: 'National Weather Service',
@@ -1788,16 +1793,18 @@ describe('CurrentTools', () => {
 
         const result = await tools.getWeatherForecast({ date: '2026-04-30' });
 
-        // No current_conditions or alerts on future-date forecast
+        // No current_conditions on future-date forecast — current weather is N/A.
+        // Alerts are still fetched: a publisher may issue an alert today whose
+        // window covers a future date, and selectAlerts gates by overlap.
         expect(mockGoogleWeatherClient.getCurrentConditions).not.toHaveBeenCalled();
-        expect(mockGoogleWeatherClient.getWeatherAlerts).not.toHaveBeenCalled();
+        expect(mockGoogleWeatherClient.getWeatherAlerts).toHaveBeenCalledWith(43.65, -110.71);
 
         expect(result.forecasts).toHaveLength(1);
         const fc = result.forecasts[0];
         expect(fc.location).toBe('Moose');
         expect(fc.forecast_date).toBe('2026-04-30');
         expect(fc.current_conditions).toBeUndefined();
-        expect(fc.alerts).toBeUndefined();
+        expect(fc.alerts).toEqual([]);
         // All hours that fall on the local date 2026-04-30 in Boise (UTC-6 in DST):
         // - 2026-04-30T06:00Z = 00:00 local (keep)
         // - 2026-04-30T18:00Z = 12:00 local (keep)
