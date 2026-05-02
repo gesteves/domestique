@@ -435,6 +435,7 @@ const WELLNESS_API_TO_OUTPUT_KEY: Record<string, string> = {
   menstrualPhase: 'menstrual_phase',
   menstrualPhasePredicted: 'menstrual_phase_predicted',
   kcalConsumed: 'kcal_consumed',
+  carbohydrates: 'carbs',
   fatTotal: 'fat_total',
   sleepSecs: 'sleep_duration',
   sleepScore: 'sleep_score',
@@ -1891,7 +1892,7 @@ export class IntervalsClient {
       result.kcal_consumed = data.kcalConsumed;
     }
     if (data.carbohydrates != null) {
-      result.carbohydrates = withUnit(data.carbohydrates, 'g');
+      result.carbs = withUnit(data.carbohydrates, 'g');
     }
     if (data.protein != null) {
       result.protein = withUnit(data.protein, 'g');
@@ -2254,6 +2255,19 @@ export class IntervalsClient {
     const atlAtActivity = activity.icu_atl ?? activity.atl;
     const joulesTotal = activity.icu_joules ?? activity.joules;
 
+    // Carbohydrate intake rate (g/h). Gated on both intake and usage being
+    // logged and positive: a partial CHO record (one missing) tends to mean
+    // the athlete didn't track fueling for this activity, so the rate would
+    // mislead. Always grams per hour, regardless of unit preferences.
+    const carbsUsed = activity.carbs_used;
+    const carbsIngested = activity.carbs_ingested;
+    const carbsPerHour =
+      carbsUsed != null && carbsUsed > 0 &&
+      carbsIngested != null && carbsIngested > 0 &&
+      activity.moving_time != null && activity.moving_time > 0
+        ? `${Math.round((carbsIngested / activity.moving_time) * 3600)} g/h`
+        : undefined;
+
     return {
       id: activity.id,
       start_time: localStringToISO8601WithTimezone(activity.start_date_local, timezone),
@@ -2336,8 +2350,9 @@ export class IntervalsClient {
 
       // Energy (handle both API field naming conventions)
       work: joulesTotal != null ? formatEnergyKJ(joulesTotal / 1000) : undefined,
-      cho_used: activity.carbs_used != null ? formatMass(activity.carbs_used) : undefined,
-      cho_intake: activity.carbs_ingested != null ? formatMass(activity.carbs_ingested) : undefined,
+      carbs_used: activity.carbs_used != null ? formatMass(activity.carbs_used) : undefined,
+      carbs_intake: activity.carbs_ingested != null ? formatMass(activity.carbs_ingested) : undefined,
+      carbs_per_hour: carbsPerHour,
 
       // Athlete metrics at time of activity
       weight: activity.icu_weight != null ? formatWeight(activity.icu_weight) : undefined,

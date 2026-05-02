@@ -93,8 +93,9 @@ export interface NormalizedWorkout {
 
   // Energy expenditure
   work?: string; // e.g., "1234 kJ"
-  cho_used?: string; // e.g., "180 g"
-  cho_intake?: string;
+  carbs_used?: string; // e.g., "180 g"
+  carbs_intake?: string;
+  carbs_per_hour?: string; // e.g., "75 g/h"; only emitted when both used and intake are > 0
 
   // Athlete metrics at time of activity
   weight?: string; // e.g., "74.5 kg"
@@ -860,7 +861,7 @@ interface WellnessFields {
 
   // Nutrition
   kcal_consumed?: number;
-  carbohydrates?: string; // e.g., "180 g"
+  carbs?: string; // e.g., "180 g"
   protein?: string; // e.g., "120 g"
   fat_total?: string; // e.g., "60 g"
 

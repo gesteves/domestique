@@ -263,8 +263,9 @@ const WorkoutZ = z.object({
   max_altitude: z.string().optional().describe('Maximum altitude'),
 
   calories: z.number().optional().describe('Estimated calories burned'),
-  cho_used: z.string().optional().describe('Estimated carbohydrates used'),
-  cho_intake: z.string().optional().describe("Carbohydrates consumed during activity. Absence doesn't imply lack of consumption"),
+  carbs_used: z.string().optional().describe('Estimated carbohydrates used'),
+  carbs_intake: z.string().optional().describe("Carbohydrates consumed during activity. Absence doesn't imply lack of consumption"),
+  carbs_per_hour: z.string().optional().describe('Carbohydrate intake rate during the activity. Only present when both intake and usage were logged and positive'),
 
   weight: z.string().optional().describe('Athlete weight at time of activity'),
   resting_hr: z.string().optional().describe('Resting heart rate at time of activity'),
@@ -458,7 +459,7 @@ const WellnessFieldsShape = {
   menstrual_phase: z.string().optional().describe('Current menstrual cycle phase'),
   menstrual_phase_predicted: z.string().optional().describe('Predicted menstrual cycle phase'),
   kcal_consumed: z.number().optional().describe('Calories consumed'),
-  carbohydrates: z.string().optional().describe('Carbohydrates consumed'),
+  carbs: z.string().optional().describe('Carbohydrates consumed'),
   protein: z.string().optional().describe('Protein consumed'),
   fat_total: z.string().optional().describe('Total fat consumed'),
   sleep_duration: z.string().optional().describe('Sleep duration (e.g., "8h 10m")'),

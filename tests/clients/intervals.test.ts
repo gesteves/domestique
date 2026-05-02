@@ -457,6 +457,78 @@ describe('IntervalsClient', () => {
       expect(result[0].zwift_url).toBeUndefined();
     });
 
+    it('emits carbs_per_hour as g/h when both intake and usage are positive', async () => {
+      const fueledActivity = [{
+        id: 'fueled1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride',
+        name: 'Long Ride',
+        moving_time: 7200, // 2 hours
+        distance: 60000,
+        carbs_used: 600,
+        carbs_ingested: 150, // 75 g/h
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(fueledActivity) })
+        .mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSportSettings) });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].carbs_per_hour).toBe('75 g/h');
+    });
+
+    it('omits carbs_per_hour when carbs_ingested is missing or zero', async () => {
+      // mockActivities[0] has carbs_used: 241, carbs_ingested: null → no rate
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockActivities) })
+        .mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSportSettings) });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].carbs_used).toBe('241 g');
+      expect(result[0].carbs_per_hour).toBeUndefined();
+
+      const zeroIntake = [{
+        id: 'zero1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride',
+        name: 'Untracked Ride',
+        moving_time: 3600,
+        carbs_used: 200,
+        carbs_ingested: 0,
+      }];
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(zeroIntake) })
+        .mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSportSettings) });
+
+      const zeroResult = await client.getActivities('2024-12-14', '2024-12-15');
+      expect(zeroResult[0].carbs_per_hour).toBeUndefined();
+    });
+
+    it('omits carbs_per_hour when carbs_used is missing (partial fueling record)', async () => {
+      const intakeOnly = [{
+        id: 'intake1',
+        start_date_local: '2024-12-14T08:00:00',
+        start_date: '2024-12-14T15:00:00Z',
+        type: 'Ride',
+        name: 'Intake Only',
+        moving_time: 3600,
+        carbs_ingested: 60,
+      }];
+
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(intakeOnly) })
+        .mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSportSettings) });
+
+      const result = await client.getActivities('2024-12-14', '2024-12-15');
+
+      expect(result[0].carbs_intake).toBe('60 g');
+      expect(result[0].carbs_per_hour).toBeUndefined();
+    });
+
     it('should include zone thresholds and time in zones', async () => {
       mockFetch
         .mockResolvedValueOnce({
@@ -1069,7 +1141,7 @@ describe('IntervalsClient', () => {
       expect(result?.comments).toBe('Feeling good today');
     });
 
-    it('maps nutrition macros (carbohydrates, protein, fat_total) and omits null ones', async () => {
+    it('maps nutrition macros (carbs, protein, fat_total) and omits null ones', async () => {
       const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
       const mockWellness = {
         id: '2024-12-15',
@@ -1085,7 +1157,7 @@ describe('IntervalsClient', () => {
       const result = await client.getTodayWellness();
 
       expect(result?.kcal_consumed).toBe(2400);
-      expect(result?.carbohydrates).toBe('280 g');
+      expect(result?.carbs).toBe('280 g');
       expect(result?.protein).toBe('150 g');
       expect(result?.fat_total).toBeUndefined();
     });
