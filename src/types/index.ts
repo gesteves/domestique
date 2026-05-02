@@ -183,8 +183,8 @@ export interface PlayedSong {
   name: string;
   played_at: string; // ISO 8601 UTC; formatResponseDates converts to user's timezone
   url: string;
-  album_name: string;
-  artist_name: string;
+  album: string;
+  artist: string;
   loved?: true;
 }
 

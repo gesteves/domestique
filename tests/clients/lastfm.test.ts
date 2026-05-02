@@ -254,8 +254,8 @@ describe('LastFmClient', () => {
       const neil = result.find((s) => s.name === 'Old Man');
 
       expect(neil).toBeDefined();
-      expect(neil!.artist_name).toBe('Neil Young');
-      expect(neil!.album_name).toBe('Harvest (50th Anniversary Edition)');
+      expect(neil!.artist).toBe('Neil Young');
+      expect(neil!.album).toBe('Harvest (50th Anniversary Edition)');
       expect(neil!.url).toBe('https://www.last.fm/music/Neil+Young/_/Old+Man');
       expect(neil!.played_at).toBe(new Date(1776535049 * 1000).toISOString());
     });
@@ -314,7 +314,7 @@ describe('LastFmClient', () => {
 
       const result = await client.getPlayedSongsDuring(0, 9999999999999);
 
-      expect(result[0].album_name).toBe('');
+      expect(result[0].album).toBe('');
     });
 
     it('falls back to artist.name when #text is absent', async () => {
@@ -336,7 +336,7 @@ describe('LastFmClient', () => {
 
       const result = await client.getPlayedSongsDuring(0, 9999999999999);
 
-      expect(result[0].artist_name).toBe('Alt Format Artist');
+      expect(result[0].artist).toBe('Alt Format Artist');
     });
 
     it('returns an empty array when Last.fm returns no tracks', async () => {

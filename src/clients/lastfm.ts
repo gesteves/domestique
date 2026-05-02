@@ -162,8 +162,8 @@ function normalizeTrack(track: LastFmTrack): PlayedSong {
     name: track.name,
     played_at: new Date(uts * 1000).toISOString(),
     url: track.url,
-    album_name: track.album?.['#text'] ?? '',
-    artist_name: track.artist?.['#text'] ?? track.artist?.name ?? '',
+    album: track.album?.['#text'] ?? '',
+    artist: track.artist?.['#text'] ?? track.artist?.name ?? '',
   };
   if (track.loved === '1') {
     song.loved = true;

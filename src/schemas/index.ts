@@ -166,8 +166,8 @@ const PlayedSongZ = z.object({
   name: z.string().optional().describe('Track title'),
   played_at: z.string().optional().describe("When the song was scrobbled, in the user's local timezone"),
   url: z.string().optional().describe('Last.fm track URL'),
-  album_name: z.string().optional().describe('Album name'),
-  artist_name: z.string().optional().describe('Artist name'),
+  album: z.string().optional().describe('Album name'),
+  artist: z.string().optional().describe('Artist name'),
   loved: z.literal(true).optional().describe('Set to true when the user has marked this track as loved on Last.fm; omitted otherwise'),
 }).passthrough();
 

@@ -850,8 +850,8 @@ describe('HistoricalTools', () => {
           name: 'Old Man',
           played_at: '2024-12-10T10:01:00.000Z',
           url: 'https://www.last.fm/music/Neil+Young/_/Old+Man',
-          album_name: 'Harvest',
-          artist_name: 'Neil Young',
+          album: 'Harvest',
+          artist: 'Neil Young',
           loved: true as const,
         },
       ];
