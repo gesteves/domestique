@@ -41,6 +41,13 @@ const MODIFIES_EXTERNAL: ToolAnnotations = {
   idempotentHint: true,
   openWorldHint: true,
 };
+
+// Boilerplate inlined into tool descriptions. Centralized so tool-name
+// references survive renames in one place, not four.
+const STRAVA_LIMITATION_NOTE =
+  'Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_details.';
+const SCHEDULED_ORDERING_NOTE =
+  'Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.';
 import { HistoricalTools } from './historical.js';
 import { PlanningTools } from './planning.js';
 import * as schemas from '../schemas/index.js';
@@ -350,35 +357,7 @@ export class ToolRegistry {
     register({
       name: 'get_todays_summary',
       title: "Today's Summary",
-      description: `Fetches a complete snapshot of the user's current status today in a single call. This is the tool to call to get all of "today's" data.
-
-**Includes:**
-- Whoop recovery, sleep performance, and strain (including HRV, sleep stages, and strain score)
-- Fitness metrics: CTL (fitness), ATL (fatigue), TSB (form), plus today's training load
-- Wellness metrics, such as vitals and subjective status
-- All workouts and fitness activities completed so far today (with matched Whoop strain data)
-- All workouts and fitness activities scheduled for today (from both TrainerRoad and Intervals.icu)
-- Today's scheduled race, if any
-
-<use-cases>
-- Getting today's recovery and readiness data (recovery score, HRV, sleep quality/duration)
-- Checking today's accumulated strain and stress
-- Reviewing completed workouts and their metrics
-- Viewing planned/scheduled workouts for today
-- Assessing readiness for training by combining recovery, fitness, and planned workouts
-- Understanding the balance between completed and planned training load
-- Providing a complete daily status report in a single call
-</use-cases>
-
-<instructions>
-- **ALWAYS** use this tool when you need any "today's" data: recovery, sleep, strain, completed workouts, or planned workouts.
-- Metrics and activities (completed and scheduled) can change over the course of the day; agents are encouraged to call this tool as the day progresses to get up-to-the-minute data rather than rely on the results of a previous call.
-</instructions>
-
-<notes>
-- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_details.
-</notes>`,
+      description: `One-shot snapshot of the user's status today: Whoop recovery / sleep / strain, Intervals.icu fitness metrics (CTL, ATL, TSB) and wellness, completed and planned workouts (with matched Whoop strain), today's scheduled race, and the weather forecast for the user's configured locations. Always prefer this for any "today's" data question — recovery, sleep, strain, workouts, or readiness — over assembling the same picture from individual tools. State changes throughout the day, so re-call rather than relying on a previous response. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {},
       outputSchema: schemas.todaysSummaryOutputSchema,
       annotations: READ_ONLY,
@@ -390,36 +369,7 @@ export class ToolRegistry {
       register({
         name: 'get_weather_forecast',
         title: 'Weather Forecast',
-        description: `Fetches a weather forecast for a date and (optionally) a location. Supports up to 10 days from today.
-
-**Includes (per location):**
-- Location label, coordinates, and elevation
-- The forecast date
-- Daily summary: high/low temperatures, peak heat index, conditions, precipitation, thunderstorm probability, wind, humidity, UV, cloud cover, and sun/moon events (sunrise, sunset, moonrise, moonset, lunar phase)
-- Hourly forecast — remaining hours of the day when the date is today, all 24 hours otherwise. Includes wet-bulb temperature for heat-stress assessment; each hour may include local AQI
-- Pollen forecast (Universal Pollen Index level with pollen types, plants, and health recommendations) when available for the date
-- When the date is today: current conditions and active weather alerts (warnings, watches, advisories)
-
-<use-cases>
-- Deciding whether to ride/run outside today (no args).
-- Picking a workout window based on temperature, precipitation, wind, or air quality.
-- Race-week planning: forecast for an upcoming race location 1–10 days out.
-- Surfacing safety-relevant weather alerts for today (heat, cold, wind, storms, flooding).
-- Adjusting fueling, hydration, gear, and pacing for hot or cold conditions on race day.
-- Adjusting training intensity based on air quality (AQI band, dominant pollutant).
-- Flagging pollen exposure for athletes with seasonal allergies.
-</use-cases>
-
-<instructions>
-- For "today's weather" with no other "today" data, call this tool with no arguments. For a complete daily snapshot that already includes today's forecast, prefer get_todays_summary.
-- For a future date or a specific location, pass \`date\` and/or \`location\`. Date input accepts ISO YYYY-MM-DD or natural-language strings (e.g., "tomorrow", "in 3 days").
-- \`location\` can be as broad or as narrow as needed: a city ("San Francisco, CA"), a postal code ("83001"), a neighborhood ("Presidio, San Francisco, CA"), a specific landmark or venue ("Coeur d'Alene City Park, Coeur d'Alene, ID"), or even an exact address ("123 Main Street, San Francisco, CA"). Prefer the most specific form available — narrow it down to the actual race start when known so the forecast reflects that exact spot's microclimate.
-</instructions>
-
-<notes>
-- Pollen and hourly air quality may be absent for dates further out; they have shorter forecast windows than the daily/hourly weather.
-- Current conditions and active alerts are included only when the date is today.
-</notes>`,
+        description: `Weather forecast for a single date (today through 10 days out) at one or more locations. Returns a daily summary, hourly forecast, sun/moon events, and (where available) pollen and air quality; when the date is today, also includes current conditions and active alerts. Pass no arguments for today at the user's configured weather locations; pass \`date\` and/or \`location\` for race-week or destination planning. The daily snapshot from get_todays_summary already embeds today's forecast for configured locations — only call this directly when the user asks specifically about weather, a future date, or a custom location.`,
         inputSchema: schemas.forecastInputSchema,
         outputSchema: schemas.forecastOutputSchema,
         annotations: READ_ONLY,
@@ -430,27 +380,7 @@ export class ToolRegistry {
     register({
       name: 'get_todays_workouts',
       title: "Today's Workouts",
-      description: `Fetches today's workouts only — both completed (with full per-activity details) and planned. A leaner alternative to get_todays_summary when you only need workout data and don't need recovery, sleep, strain, fitness, wellness, or race information.
-
-**Includes:**
-- All workouts and fitness activities completed so far today, with full details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data
-- All workouts and fitness activities scheduled for today (from both TrainerRoad and Intervals.icu)
-
-<use-cases>
-- Quickly checking what the user has done and has planned for today without the overhead of recovery/wellness data.
-- Reviewing completed workouts with full detail in a single call (no need to follow up with get_workout_details).
-- Viewing today's planned workouts to assess remaining training load.
-</use-cases>
-
-<instructions>
-- Use this tool when the user only asks about today's workouts (completed or planned) and not about recovery, sleep, strain, or fitness metrics. For a complete daily snapshot, use get_todays_summary instead.
-- Workouts (completed and scheduled) can change over the course of the day; call this tool again as the day progresses rather than relying on a previous call's results.
-</instructions>
-
-<notes>
-- Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_details.
-</notes>`,
+      description: `Today's completed and planned workouts only, with completed workouts in full detail (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — get_todays_summary covers the wider snapshot but returns workout summaries only. Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {},
       outputSchema: schemas.todaysWorkoutsOutputSchema,
       annotations: READ_ONLY,
@@ -462,16 +392,7 @@ export class ToolRegistry {
     register({
       name: 'get_athlete_profile',
       title: 'Athlete Profile',
-      description: `Returns the athlete's profile from Intervals.icu including name, location, timezone, gender, date of birth, and age.
-
-<use-cases>
-- Fetching the user's name, which may be useful to identify the user's notes from a workout.
-- Fetching the user's age, which may be important to interpret their fitness and performance trends over time.
-</use-cases>
-
-<notes>
-- Domestique formats every unit-bearing field server-side per the athlete's Intervals.icu settings. Values arrive ready to use — do not re-convert them unless asked to.
-</notes>`,
+      description: `Returns the athlete's static profile from Intervals.icu — name, location, timezone, gender, date of birth, age, and unit preferences. Useful for personalizing references to the user (e.g., distinguishing their workout notes from a coach's), framing age-relative fitness or HR zones, and confirming the unit system in use. Domestique already formats every unit-bearing field server-side per the athlete's preferences, so do not re-convert returned values unless asked.`,
       inputSchema: {},
       outputSchema: schemas.athleteProfileOutputSchema,
       annotations: READ_ONLY,
@@ -481,22 +402,7 @@ export class ToolRegistry {
     register({
       name: 'get_sports_settings',
       title: 'Sport Settings',
-      description: `Fetches settings from Intervals.icu for one or more sports, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
-
-<use-cases>
-- Understanding the user's current FTP, power zones, or pace zones for interpreting workout data.
-- Determining appropriate training zones when analyzing workout intensity.
-- Comparing current zones with historical workout performance to assess fitness changes.
-- Providing context for zone-based training recommendations.
-</use-cases>
-
-<instructions>
-- Pass an array of sports to fetch only the ones you need; omit the argument to fetch all three in one call.
-</instructions>
-
-<notes>
-- This returns the athlete's **current** zones, which may not match the zones in historical workouts.
-</notes>`,
+      description: `Sport-specific configuration from Intervals.icu — FTP, threshold pace, max/threshold HR, and the corresponding HR/power/pace zones — for cycling, running, and/or swimming. Use this to interpret workout intensity, compare effort to current capability, or recommend zone-based targets. Pass a \`sports\` array to fetch a subset; omit it to fetch all three in one call. These are the athlete's **current** zones; workouts from the past may have used different zones, which appear inline on those workouts.`,
       inputSchema: {
         sports: z
           .array(z.enum(['cycling', 'running', 'swimming']))
@@ -514,19 +420,7 @@ export class ToolRegistry {
       register({
         name: 'get_strain_history',
         title: 'Strain History',
-        description: `Fetches Whoop strain data for a date range, including activities logged by the user in the Whoop app.
-
-<use-cases>
-- Analyzing strain patterns over time to identify trends in training intensity.
-- Correlating strain with recovery trends to understand training-recovery balance.
-- Identifying periods of high or low strain to assess training consistency.
-- Comparing strain across different time periods to evaluate training progression.
-</use-cases>
-
-<notes>
-- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
-- If you only need today's strain data, use get_todays_summary instead.
-</notes>`,
+        description: `Daily Whoop strain (0-21, logarithmic) over a date range, plus the per-day list of activities the user logged in the Whoop app. Use this to spot strain trends, correlate strain against recovery (via get_recovery_trends), or identify high- or low-load periods. Date parameters accept ISO YYYY-MM-DD or natural language ("yesterday", "7 days ago", "last week"). For today only, prefer get_todays_summary.`,
         inputSchema: {
           oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
           newest: z.string().optional().describe('End date (defaults to today)'),
@@ -542,23 +436,7 @@ export class ToolRegistry {
     register({
       name: 'get_workout_history',
       title: 'Workout History',
-      description: `Fetches all completed workouts and fitness activities in the given date range, with comprehensive metrics.
-
-<use-cases>
-- Analyzing training patterns and consistency over a specific time period in the past.
-- Reviewing workout volume, intensity, and frequency for a date range.
-- Identifying specific workouts for detailed analysis via get_workout_details.
-- Correlating workout history with recovery trends to understand training impact.
-- Filtering workouts by sport to analyze sport-specific training patterns.
-- Understanding total time in zones for the period (power, pace, heart rate, and/or heat zones).
-</use-cases>
-
-<notes>
-- **NEVER** use this tool to get workouts for the current day; use get_todays_summary for that. This tool is for historical data, not the current day. Passing today's date as either oldest or newest will return an error.
-- Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
-- You can optionally filter activities by sport, as needed.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_details.
-</notes>`,
+      description: `Completed workouts and fitness activities in a past date range, with comprehensive summary metrics and matched Whoop strain. Use for training-pattern analysis, volume/intensity review, or to find activity IDs for deeper inspection via get_workout_details (intervals, notes, weather, music). Date parameters accept ISO YYYY-MM-DD or natural language ("30 days ago", "last Monday", "December 1"); optional \`sport\` filters by discipline. **Never** pass today's date — historical only; use get_todays_summary or get_todays_workouts for today. ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago"). Cannot be today.'),
         newest: z.string().optional().describe('End date (defaults to yesterday). Cannot be today.'),
@@ -575,23 +453,7 @@ export class ToolRegistry {
     register({
       name: 'get_workout_details',
       title: 'Workout Details',
-      description: `Fetches the details of a single completed workout by its activity ID.
-
-<use-cases>
-- Getting all available metrics for a specific workout in one call
-</use-cases>
-
-<instructions>
-Get the activity_id from:
-- get_workout_history (for past workouts)
-- get_todays_summary or get_todays_workouts (for today's workouts)
-</instructions>
-
-<notes>
-- This returns more detailed data than what's included in get_workout_history results.
-- Includes athlete notes, detailed intervals, interval groups, weather during the activity, power/pace/heart-rate/heat zones, scrobbled music (when Last.fm is configured), and matched Whoop strain data — all in a single call.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions.
-</notes>`,
+      description: `Full per-workout drill-down for a single activity by ID — interval-by-interval power/HR/cadence, interval groups, athlete and coach notes, weather, power/pace/HR/heat zones, scrobbled music (when Last.fm is configured), and matched Whoop strain — all in one call. Source the \`activity_id\` from get_workout_history (past) or get_todays_summary / get_todays_workouts (today). Returns substantially more data than a history list entry, so call only when the user wants depth on a specific workout. ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
@@ -606,20 +468,7 @@ Get the activity_id from:
       register({
         name: 'get_recovery_trends',
         title: 'Recovery Trends',
-        description: `Fetches Whoop recovery and sleep data over a date range.
-
-<use-cases>
-- Analyzing recovery patterns over time to identify trends in sleep and HRV.
-- Correlating recovery with training load to understand training-recovery balance.
-- Identifying periods of poor recovery that may indicate overtraining or other issues.
-- Understanding average recovery metrics to establish baseline expectations.
-- Comparing recovery across different time periods to assess improvement or decline.
-</use-cases>
-
-<notes>
-- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
-- If you only need today's recovery and sleep data, use get_todays_summary instead.
-</notes>`,
+        description: `Daily Whoop recovery, sleep, and HRV over a date range, plus per-period summary statistics. Use to spot recovery trends, correlate recovery against training load (via get_training_load_trends or get_workout_history), or flag periods of poor recovery that suggest overtraining. Date parameters accept ISO YYYY-MM-DD or natural language ("yesterday", "7 days ago", "last week"). For today only, prefer get_todays_summary.`,
         inputSchema: {
           oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
           newest: z.string().optional().describe('End date (defaults to today)'),
@@ -634,22 +483,7 @@ Get the activity_id from:
     register({
       name: 'get_wellness_trends',
       title: 'Wellness Trends',
-      description: `Fetches daily wellness data over a date range from Intervals.icu — every metric the athlete has recorded, regardless of source.
-
-<use-cases>
-- Tracking HRV (rMSSD and SDNN), resting HR, and sleep (duration/score/quality/avg HR) trends to spot recovery patterns.
-- Monitoring SpO2, blood pressure, respiration, and other vitals over time.
-- Following body composition (weight, body fat, abdomen, VO2max) changes alongside training load.
-- Reviewing subjective scores (mood, fatigue, soreness, stress, motivation, injury, hydration) to correlate with performance.
-- Watching nutrition (kcal, carbs, protein, fat) and step count.
-- **Cross-source comparison:** when Whoop is also connected, the same metric (HRV, RHR, SpO2, sleep, etc.) often appears in both Intervals.icu wellness (typically fed from Garmin/Oura/manual) and Whoop. Each present field carries an entry in the per-day \`sources\` map naming its configured provider, so you can compare the readings and reconcile differences between platforms.
-</use-cases>
-
-<notes>
-- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("Yesterday", "7 days ago", "last week", "2 weeks ago", etc.)
-- Only returns days on which wellness data was recorded.
-- The \`sources\` map is inferred from the athlete's per-provider wellness key configuration in Intervals.icu, not stamped on each record. Manually entered values may still show a configured source.
-</notes>`,
+      description: `Daily Intervals.icu wellness over a date range: HRV, resting HR, sleep (duration / score / quality), SpO2, blood pressure, body composition, subjective scores (mood, fatigue, soreness, stress), nutrition, steps, and any other metric the athlete has recorded. Each day carries a \`sources\` map naming the provider feeding each present field (typically garmin / oura / whoop), so when Whoop is also connected you can reconcile the same metric across platforms against the parallel \`whoop.*\` data in get_todays_summary or get_recovery_trends. Date parameters accept ISO YYYY-MM-DD or natural language; only days with recorded data are returned.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
@@ -663,20 +497,7 @@ Get the activity_id from:
     register({
       name: 'get_activity_totals',
       title: 'Activity Totals',
-      description: `Fetches aggregated activity totals over a date range, including duration, distance, training load, calories, and zone distributions.
-
-<use-cases>
-- Summarizing training volume and load over a specific period (e.g., last year, last 90 days).
-- Understanding how training time is distributed across different sports.
-- Analyzing zone distribution to ensure proper polarized or threshold training balance.
-- Comparing training metrics across different sports (cycling, running, swimming, etc.).
-- Getting a high-level overview of training patterns without individual workout details.
-</use-cases>
-
-<notes>
-- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("365 days ago", "last year", etc.)
-- Zone names come from the athlete's sport settings (e.g., "Recovery", "Endurance", "Tempo", "Sweet Spot").
-</notes>`,
+      description: `Aggregate training totals over a date range — duration, distance, climbing, training load, calories — broken down per sport, with HR/power/pace zone distributions for each. Use for volume summaries (last 90 days, last year), polarized-vs-threshold balance checks, or cross-sport comparisons. Optional \`sports\` array filters which disciplines are included. Zone names reflect the athlete's current sport settings (e.g., "Endurance", "Sweet Spot"); date parameters accept ISO YYYY-MM-DD or natural language.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
@@ -692,20 +513,7 @@ Get the activity_id from:
     register({
       name: 'get_upcoming_workouts',
       title: 'Upcoming Workouts',
-      description: `Fetches planned workouts and fitness activity for a future date range, with an optional sport filter.
-
-<use-cases>
-- Viewing the user's training schedule for the upcoming week or month.
-- Understanding expected training load over a future period.
-- Planning training adjustments based on upcoming workout schedule.
-- Filtering upcoming workouts by sport to see sport-specific training plans.
-- Assessing training volume and intensity distribution across upcoming days.
-</use-cases>
-
-<notes>
-- Date parameters accept ISO format (YYYY-MM-DD) or natural language ("today", "tomorrow", "next Monday", etc.)
-- Scheduled workouts in a given day may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-</notes>`,
+      description: `Planned workouts in a future date range, merged from TrainerRoad and Intervals.icu calendars (TrainerRoad wins on duplicates because it carries more detail). Use for weekly/monthly schedule views, expected-load summaries, or to surface untriaged TrainerRoad runs that should sync to Intervals.icu. Defaults to today through 7 days out; \`oldest\` and \`newest\` accept ISO YYYY-MM-DD or natural language; optional \`sport\` filter narrows by discipline. ${SCHEDULED_ORDERING_NOTE}`,
       inputSchema: {
         oldest: z.string().optional().describe('Start date (defaults to today; e.g., "2024-01-01", "tomorrow")'),
         newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
@@ -722,17 +530,7 @@ Get the activity_id from:
       register({
         name: 'get_upcoming_races',
         title: 'Upcoming Races',
-        description: `Fetches upcoming races from the TrainerRoad calendar.
-
-<use-cases>
-- Viewing the user's upcoming race schedule.
-- Understanding when the user has races planned so training can be periodized accordingly.
-- Checking what races are coming up to discuss taper strategies.
-</use-cases>
-
-<instructions>
-- The description of the race may contain important details about the race, including if it's an A, B or C race; and details about the course.
-</instructions>`,
+        description: `Upcoming races detected on the TrainerRoad calendar (an all-day event paired with workout legs of the same name). Use this for race-schedule context, periodization decisions, and taper conversations. Race \`description\` often carries the race priority (A/B/C) and course notes — read it before recommending training adjustments.`,
         inputSchema: {},
         outputSchema: schemas.upcomingRacesOutputSchema,
         annotations: READ_ONLY,
@@ -749,23 +547,7 @@ Get the activity_id from:
     register({
       name: 'create_workout',
       title: 'Create Workout',
-      description: `Creates a structured workout in Intervals.icu. Cycling and running workouts sync to Zwift and Garmin.
-
-<use-cases>
-- Creating a structured workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
-- Syncing run workouts from TrainerRoad to be executable on Zwift or Garmin.
-</use-cases>
-
-<instructions>
-- The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
-- If syncing a TrainerRoad run, set sport to "running" and include the trainerroad_uid, which enables orphan tracking. trainerroad_uid is ignored for other sports.
-</instructions>
-
-<notes>
-- This creates the workout directly in Intervals.icu and will appear on the user's calendar.
-- The workout will be tagged with 'domestique' for tracking.
-- If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
-</notes>`,
+      description: `Creates a structured workout on the user's Intervals.icu calendar; cycling and running workouts then sync to Zwift and Garmin. The caller is responsible for generating valid Intervals.icu workout-doc syntax — there is no schema validation, so a malformed doc will create a broken workout. When mirroring a TrainerRoad run, set \`sport\` to "running" and pass the TR workout UID as \`trainerroad_uid\` so orphan tracking can detect later changes; the field is ignored for other sports. Created workouts are tagged \`domestique\` so they can be updated or deleted via update_workout / delete_workout — fix mistakes by deleting and recreating.`,
       inputSchema: {
         sport: z.enum(['cycling', 'running', 'swimming']).describe('Sport for the workout'),
         scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
@@ -783,24 +565,7 @@ Get the activity_id from:
     register({
       name: 'delete_workout',
       title: 'Delete Workout',
-      description: `Deletes a Domestique-created workout from Intervals.icu.
-
-<use-cases>
-- Removing orphaned workouts when TrainerRoad plans change.
-- Deleting incorrectly synced workouts before recreating with fixes.
-- Cleaning up test workouts.
-</use-cases>
-
-<instructions>
-- Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
-- Use this to remove incorrect workouts before recreating with fixes.
-- Get the event_id from get_upcoming_workouts, get_todays_summary, or get_todays_workouts.
-</instructions>
-
-<notes>
-- This permanently deletes the workout from Intervals.icu.
-- Cannot delete workouts not created by Domestique.
-</notes>`,
+      description: `Permanently removes a Domestique-created planned workout from the user's Intervals.icu calendar. Only works on events tagged \`domestique\` (those created by create_workout or sync_trainerroad_runs); attempts to delete other events fail. Source the \`event_id\` from get_upcoming_workouts, get_todays_summary, or get_todays_workouts. Use to fix incorrect workouts (delete then recreate) or to clear orphans when a TrainerRoad plan changes.`,
       inputSchema: {
         event_id: z.string().describe('Intervals.icu event ID to delete'),
       },
@@ -813,25 +578,7 @@ Get the activity_id from:
     register({
       name: 'update_workout',
       title: 'Update Workout',
-      description: `Updates a Domestique-created workout in Intervals.icu.
-
-<use-cases>
-- Modifying the name or description of a synced workout.
-- Changing the scheduled date of a workout.
-- Updating the structured workout definition (workout_doc).
-</use-cases>
-
-<instructions>
-- Only works on workouts tagged with 'domestique' (i.e. created by Domestique).
-- Get the event_id from get_upcoming_workouts, get_todays_summary, or get_todays_workouts.
-- Only provide the fields you want to update; omitted fields remain unchanged.
-</instructions>
-
-<notes>
-- The 'domestique' tag is automatically preserved.
-- Changing the type (e.g., Run to Ride) without updating workout_doc may result in invalid syntax.
-- Cannot update workouts not created by Domestique.
-</notes>`,
+      description: `Updates a Domestique-created planned workout (name, description, scheduled date, sport \`type\`, or structured \`workout_doc\`). Only works on events tagged \`domestique\`; the tag is preserved on update. Pass only the fields you want to change — omitted fields are left intact. Changing \`type\` (e.g., Run to Ride) without also updating \`workout_doc\` can leave the doc in a syntax invalid for the new sport. Source the \`event_id\` from get_upcoming_workouts, get_todays_summary, or get_todays_workouts.`,
       inputSchema: {
         event_id: z.string().describe('Intervals.icu event ID to update'),
         name: z.string().optional().describe('New workout name'),
@@ -850,25 +597,7 @@ Get the activity_id from:
       register({
         name: 'sync_trainerroad_runs',
         title: 'Sync TrainerRoad Runs',
-        description: `Syncs TrainerRoad running workouts to Intervals.icu.
-
-<use-cases>
-- Bulk syncing all TrainerRoad runs for a date range to Intervals.icu.
-- Detecting and cleaning up orphaned workouts when TrainerRoad plans change.
-- Initial setup of TrainerRoad run sync.
-</use-cases>
-
-<instructions>
-1. Call this tool to get the list of TR runs that need syncing.
-2. For each TrainerRoad run in runs_to_sync, use create_workout (sport: "running") to create it.
-3. Orphaned workouts (i.e the TrainerRoad source workout got deleted) are automatically removed.
-</instructions>
-
-<notes>
-- Only syncs running workouts (not cycling or swimming).
-- Created workouts are tagged with 'domestique' for tracking.
-- The runs_to_sync array contains TR runs that need to be converted and created.
-</notes>`,
+        description: `Reconciles TrainerRoad running workouts against the Intervals.icu calendar over a date range (defaults today through 30 days out). Runs only — TrainerRoad cycling and swimming are not synced. The response splits into \`runs_to_sync\` (new TR runs not yet on Intervals.icu — call create_workout with sport "running" for each), \`runs_to_update\` (TR runs whose source has changed), and \`deleted\` (orphans whose TR source was removed, cleaned up automatically). Call this when the user asks to sync TrainerRoad, before showing this week's plan, or when adjusting after a TR plan change.`,
         inputSchema: {
           oldest: z.string().optional().describe('Start date (defaults to today)'),
           newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
@@ -884,32 +613,7 @@ Get the activity_id from:
     register({
       name: 'set_workout_intervals',
       title: 'Set Workout Intervals',
-      description: `Sets intervals on a completed activity in Intervals.icu.
-
-<use-cases>
-- Matching completed workout intervals to a TrainerRoad workout structure.
-- Defining custom interval boundaries on a completed workout.
-- Re-analyzing a workout with corrected interval timing.
-</use-cases>
-
-<instructions>
-1. Determine the interval data from the information given by the user:
-   - Extract start time, end time, and an optional label for each interval
-   - You may need to convert timestamps to seconds (e.g., "0:05:00" = 300 seconds, "1:15:00" = 4500 seconds)
-2. Determine WORK vs RECOVERY type using the power_zones embedded in the workout:
-   - Generally speaking, Zone 1 is RECOVERY, and anything else is WORK
-   - That said, use your best judgement: A Zone 2 interval after a Zone 4 or 5 interval could reasonably be considered a RECOVERY interval
-3. Call this tool with the activity_id and parsed intervals array.
-4. Set the replace_existing_intervals, as needed, depending on the user's instructions
-</instructions>
-
-<notes>
-- By default, all existing intervals on the activity will be replaced.
-- Set replace_existing_intervals to false to merge new intervals with existing ones.
-- Intervals.icu will recalculate all metrics (power, HR, cadence, TSS, etc.) from the recorded activity data.
-- Times are in seconds from the start of the activity.
-- Use the workout's power_zones (not current athlete sport settings) for type inference, as FTP may have changed since the workout.
-</notes>`,
+      description: `Stamps interval boundaries onto a completed activity so Intervals.icu can recompute per-interval power, HR, cadence, TSS, etc. Each interval needs \`start_time\` and \`end_time\` in seconds from activity start (convert HH:MM:SS first — e.g., "0:05:00" → 300) and a \`type\` of WORK or RECOVERY. Infer type from the workout's own embedded \`power_zones\` (not current athlete sport settings, since FTP may have shifted): Zone 1 is typically RECOVERY, higher zones WORK, but use judgement (e.g., a Zone 2 effort right after a Zone 5 surge can read as recovery). \`replace_existing_intervals\` defaults to true (wipe and replace); pass false to merge with existing intervals.`,
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID'),
         intervals: z
@@ -944,26 +648,7 @@ Get the activity_id from:
     register({
       name: 'update_activity',
       title: 'Update Activity',
-      description: `Updates the name and/or description of a completed activity in Intervals.icu.
-
-<use-cases>
-- Renaming a completed workout to something more descriptive or memorable.
-- Adding or editing a description or notes on a completed workout.
-- Correcting the auto-generated name of a recorded activity.
-</use-cases>
-
-<instructions>
-Get the activity_id from:
-- get_workout_history (for past workouts)
-- get_todays_summary or get_todays_workouts (for today's workouts)
-- get_workout_details (for a specific workout)
-Only provide the fields you want to update; omitted fields remain unchanged.
-</instructions>
-
-<notes>
-- This updates completed/recorded activities, not planned workouts on the calendar. To update planned workouts, use update_workout instead.
-- At least one of name or description must be provided.
-</notes>`,
+      description: `Renames a completed activity or rewrites its description in Intervals.icu — useful for fixing auto-generated names or capturing post-workout notes. At least one of \`name\` or \`description\` must be provided; omitted fields are left intact. This affects completed/recorded activities only; for planned-workout edits use update_workout. Source the \`activity_id\` from get_workout_history, get_workout_details, get_todays_summary, or get_todays_workouts.`,
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID'),
         name: z.string().optional().describe('New name for the activity'),
@@ -982,15 +667,7 @@ Only provide the fields you want to update; omitted fields remain unchanged.
     register({
       name: 'get_training_load_trends',
       title: 'Training Load Trends',
-      description: `Returns training load metrics, including CTL, ATL, TSB, ramp rate, and ACWR, over a specified period of time.
-
-<use-cases>
-- Assessing fitness (CTL), fatigue (ATL), and form (TSB) trends over time.
-- Identifying injury risk through ACWR (Acute:Chronic Workload Ratio) analysis.
-- Evaluating training progression and ramp rate to ensure safe load increases.
-- Understanding how training load has evolved and its impact on performance.
-- Correlating training load with recovery trends to optimize training balance.
-</use-cases>`,
+      description: `Daily CTL (fitness), ATL (fatigue), and TSB (form) over a date range, plus ramp rate and ACWR (acute:chronic workload ratio) for injury-risk assessment. Use this to spot fitness/form/fatigue trends, gate training progression on safe ramp rates, or correlate load against recovery (via get_recovery_trends) and completed work (via get_workout_history). Date parameters accept ISO YYYY-MM-DD or natural language ("42 days ago", "last quarter"); newest defaults to today.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "42 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
@@ -1008,24 +685,7 @@ Only provide the fields you want to update; omitted fields remain unchanged.
     register({
       name: 'get_power_curve',
       title: 'Power Curve',
-      description: `Fetches cycling power curves showing best power output at various durations for a given date range.
-
-<use-cases>
-- Analyzing power output capabilities across different durations (sprint, VO2 max, threshold, endurance).
-- Tracking power improvements over time at various durations.
-- Comparing current power curve to previous periods to assess fitness progression.
-- Estimating FTP from best 20-minute power (95% of 20min power).
-- Identifying strengths and weaknesses across different power durations.
-</use-cases>
-
-<instructions>
-- This tool returns data for the following durations: 5s, 30s, 1min, 5min, 20min, 60min, 2hr. If you need data for a different set of durations, use the optional durations input.
-- Optional: Use compare_to_oldest and compare_to_newest if you need to compare changes to a previous period.
-</instructions>
-
-<notes>
-- All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
-</notes>`,
+      description: `Cycling power curve over a date range — best sustained power for each canonical duration (5s, 30s, 1min, 5min, 20min, 60min, 2hr by default; pass \`durations\` in seconds to customize). Each best includes the source activity ID and date, plus W/kg and an estimated FTP from best 20-minute power. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas per duration; the \`comparison\` field is always present, null when no comparison range was supplied. All date parameters accept ISO YYYY-MM-DD or natural language.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
@@ -1043,28 +703,7 @@ Only provide the fields you want to update; omitted fields remain unchanged.
     register({
       name: 'get_pace_curve',
       title: 'Pace Curve',
-      description: `Fetches pace curves for swimming or running, showing best times at various distances for a given date range.
-
-<use-cases>
-- Analyzing pace capabilities across different distances (sprint, middle distance, endurance).
-- Tracking pace improvements over time at various distances.
-- Comparing current pace curve to previous periods to assess fitness progression.
-- Using gradient-adjusted pace (GAP) for running to normalize for hilly terrain.
-- Identifying strengths and weaknesses across different pace distances.
-</use-cases>
-
-<instructions>
-- This tool returns data for the following distances:
-  - Running: 400m, 1km, 1 mile, 5km, 10km, half marathon, marathon.
-  - Swimming: 100m, 200m, 400m, 800m, 1500m, half iron swim, iron swim,
-  - If you need data for a different set of distances, use the optional distances input.
-- Optional: Use compare_to_oldest and compare_to_newest if you need to compare changes to a previous period
-- Optional: Use the GAP setting to use gradient-adjusted pace, which normalizes for hills (only applicable for running)
-</instructions>
-
-<notes>
-- All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
-</notes>`,
+      description: `Pace curve for running or swimming over a date range — best time achieved at each canonical race distance, with the source activity ID and date. Defaults span 400 m through marathon for running and 100 m through Ironman swim for swimming; pass \`distances\` in meters to customize. Set \`gap: true\` for running to use gradient-adjusted pace (normalizes for hills); irrelevant for swimming. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas; \`comparison\` is always present, null when no comparison range was supplied.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
@@ -1084,24 +723,7 @@ Only provide the fields you want to update; omitted fields remain unchanged.
     register({
       name: 'get_hr_curve',
       title: 'Heart Rate Curve',
-      description: `Fetches HR curves showing maximum sustained heart rate at various durations for a given date range.
-
-<use-cases>
-- Analyzing maximum heart rate capabilities across different durations.
-- Tracking HR improvements or changes over time at various effort durations.
-- Comparing current HR curve to previous periods to assess cardiovascular fitness changes.
-- Understanding heart rate response patterns across different intensity levels.
-- Filtering by sport to analyze sport-specific heart rate characteristics.
-</use-cases>
-
-<instructions>
-- This tool returns data for the following durations: 5s, 30s, 1min, 5min, 20min, 60min, 2hr. If you need data for a different set of durations, use the optional durations input.
-- Optional: Use compare_to_oldest and compare_to_newest if you need to compare changes to a previous period
-</instructions>
-
-<notes>
-- All date parameters accept ISO format (YYYY-MM-DD) or natural language ("90 days ago", "last month", etc.)
-</notes>`,
+      description: `Heart rate curve over a date range — maximum sustained HR for each canonical duration (5s, 30s, 1min, 5min, 20min, 60min, 2hr by default; pass \`durations\` to customize), with the source activity ID and date. Optional \`sport\` narrows to a single discipline so HR responses can be compared against sport-specific demands. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas; \`comparison\` is always present, null when no comparison range was supplied.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
