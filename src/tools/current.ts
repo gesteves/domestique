@@ -441,16 +441,25 @@ export class CurrentTools {
 
   /**
    * Get today's completed workouts from Intervals.icu with matched Whoop data
-   * and current date/time in user's timezone
+   * and current date/time in user's timezone.
+   *
+   * Pass `skipExpensiveCalls: true` to get summary-shape workouts only — the
+   * caller (e.g., get_todays_summary) doesn't want the per-activity API calls
+   * for intervals, notes, weather, music, etc.
    */
-  async getTodaysCompletedWorkouts(): Promise<TodaysCompletedWorkoutsResponse> {
+  async getTodaysCompletedWorkouts(opts?: { skipExpensiveCalls?: boolean }): Promise<TodaysCompletedWorkoutsResponse> {
     // Use athlete's timezone to determine "today" and get current date/time
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
     // Fetch Intervals.icu activities
-    const workouts = await this.intervals.getActivities(today, today);
+    const workouts = await this.intervals.getActivities(
+      today,
+      today,
+      undefined,
+      opts?.skipExpensiveCalls ? { skipExpensiveCalls: true } : undefined
+    );
 
     // Enrich with matched Whoop data
     const enrichedWorkouts = await enrichWorkoutsWithWhoop(workouts, this.whoop, today, today);
@@ -589,7 +598,7 @@ export class CurrentTools {
         console.error('Error fetching wellness for daily summary:', e);
         return null;
       }),
-      this.getTodaysCompletedWorkouts().catch((e) => {
+      this.getTodaysCompletedWorkouts({ skipExpensiveCalls: true }).catch((e) => {
         console.error('Error fetching completed workouts for daily summary:', e);
         return { current_time: getCurrentTimeInTimezone(timezone), workouts: [] };
       }),

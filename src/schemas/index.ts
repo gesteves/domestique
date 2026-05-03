@@ -163,10 +163,15 @@ const WhoopMatchedDataZ = z.object({
 }).passthrough();
 
 // ============================================
-// Workout (NormalizedWorkout + WorkoutWithWhoop)
+// Workout (summary vs detail)
 // ============================================
+//
+// WorkoutSummaryZ is the always-present field set returned by list endpoints
+// (get_workout_history, get_todays_summary.completed_workouts). WorkoutDetailZ
+// extends it with the heavier fields that only get fetched for single-workout
+// detail views (get_workout_details, get_todays_workouts.completed_workouts).
 
-const WorkoutZ = z.object({
+const WorkoutSummaryZ = z.object({
   id: z.string().optional().describe('Unique ID of the completed activity in Intervals.icu'),
   start_time: z.string().optional().describe("Activity start time in the user's local timezone"),
   activity_type: z.string().optional().describe('Sport or discipline of the activity'),
@@ -264,7 +269,12 @@ const WorkoutZ = z.object({
 
   notes: z.array(WorkoutNoteZ).optional().describe('Notes/messages left by the athlete or others (e.g., a coach) for this activity'),
 
-  // Detail-only fields (present when calling get_workout_details)
+  // Whoop match data — present in summary too because matching is cheap and high-signal
+  whoop: WhoopMatchedDataZ.nullable().optional().describe('Matched Whoop activity data. Null when Whoop is not configured or no match was found'),
+  whoop_unavailable: z.boolean().optional().describe('True when the Whoop fetch failed for this date range; absence does not mean no Whoop activity'),
+}).passthrough();
+
+const WorkoutDetailZ = WorkoutSummaryZ.extend({
   intervals: z.array(WorkoutIntervalZ).optional().describe('Individual workout intervals with detailed metrics (power, HR, cadence, duration, timing)'),
   interval_groups: z.array(IntervalGroupZ).optional().describe('Grouped intervals showing repeated efforts (e.g., "4x 5m @ 200w")'),
   rolling_ftp: z.string().optional().describe('Rolling FTP estimate from recent activities'),
@@ -279,10 +289,6 @@ const WorkoutZ = z.object({
   compliance: z.string().optional().describe('Workout compliance against the planned target. "0%" means no planned workout was matched'),
   weather_description: z.string().optional().describe('Weather summary for outdoor activities. Not included for indoor activities'),
   played_songs: z.array(PlayedSongZ).optional().describe('Songs scrobbled to Last.fm during the activity, in chronological order'),
-
-  // Whoop match data
-  whoop: WhoopMatchedDataZ.nullable().optional().describe('Matched Whoop activity data. Null when Whoop is not configured or no match was found'),
-  whoop_unavailable: z.boolean().optional().describe('True when the Whoop fetch failed for this date range; absence does not mean no Whoop activity'),
 }).passthrough();
 
 // ============================================
@@ -794,7 +800,7 @@ export const strainHistoryOutputSchema = {
 } as const;
 
 export const workoutHistoryOutputSchema = {
-  workouts: z.array(WorkoutZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available'),
+  workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Use get_workout_details for full per-activity detail (intervals, notes, weather, music)'),
   hints: hintsField,
 } as const;
 
@@ -850,7 +856,7 @@ export const upcomingRacesOutputSchema = {
 } as const;
 
 export const workoutDetailsOutputSchema = {
-  workout: WorkoutZ.describe('Detailed workout including intervals, notes, weather, zones, heat zones, and matched Whoop strain data'),
+  workout: WorkoutDetailZ.describe('Detailed workout including intervals, notes, weather, zones, heat zones, music, and matched Whoop strain data'),
 } as const;
 
 export const trainingLoadTrendsOutputSchema = {
@@ -923,7 +929,7 @@ export const todaysSummaryOutputSchema = {
   fitness: FitnessMetricsZ.nullable().optional().describe("Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu. Null if unavailable"),
   wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data from Intervals.icu — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, and more. Includes a `sources` map naming each field's configured provider (garmin/whoop/oura). Some fields overlap with whoop.* and are shown in parallel intentionally so the same metric can be reconciled across sources. Null if no wellness data was recorded."),
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
-  completed_workouts: z.array(WorkoutZ).optional().describe('Workouts completed so far today, with matched Whoop data'),
+  completed_workouts: z.array(WorkoutSummaryZ).optional().describe('Workouts completed so far today, with matched Whoop data. Use get_todays_workouts for full per-activity detail (intervals, notes, weather, music)'),
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
   forecast: z.array(LocationForecastZ).optional().describe("Today's weather forecast for each of the user's configured weather locations. Empty when no weather provider is configured or no locations are configured"),
   workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
@@ -945,7 +951,7 @@ export const forecastOutputSchema = {
 
 export const todaysWorkoutsOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
-  completed_workouts: z.array(WorkoutZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
+  completed_workouts: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
   planned_workouts: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
   workouts_completed: z.number().optional().describe('Number of workouts completed today'),
   workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
