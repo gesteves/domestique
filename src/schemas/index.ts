@@ -806,7 +806,7 @@ export const strainHistoryOutputSchema = {
 } as const;
 
 export const workoutHistoryOutputSchema = {
-  workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Use get_workout_details for full per-activity detail (intervals, notes, weather, music)'),
+  workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Full per-activity detail (intervals, notes, weather, music) is available separately by activity ID.'),
   hints: hintsField,
 } as const;
 
@@ -932,7 +932,7 @@ export const todaysSummaryOutputSchema = {
   fitness: FitnessMetricsZ.nullable().optional().describe("Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu. Null if unavailable"),
   wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data from Intervals.icu — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, and more. Includes a `sources` map naming each field's configured provider (garmin/whoop/oura). Some fields overlap with whoop.* and are shown in parallel intentionally so the same metric can be reconciled across sources. Null if no wellness data was recorded."),
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
-  completed_workouts: z.array(WorkoutSummaryZ).optional().describe('Workouts completed so far today, with matched Whoop data. Use get_todays_workouts for full per-activity detail (intervals, notes, weather, music)'),
+  completed_workouts: z.array(WorkoutSummaryZ).optional().describe('Workouts completed so far today, with matched Whoop data. Full per-activity detail (intervals, notes, weather, music) is available separately for today.'),
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
   forecast: z.array(LocationForecastZ).optional().describe("Today's weather forecast for each of the user's configured weather locations. Empty when no weather provider is configured or no locations are configured"),
   workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
@@ -999,7 +999,7 @@ export const syncTrainerRoadRunsOutputSchema = {
     scheduled_for: z.string().optional().describe('Scheduled date/time'),
     expected_tss: z.number().optional().describe('Expected TSS'),
     expected_duration: z.string().optional().describe('Expected duration'),
-  }).passthrough()).describe('TR runs that need to be created in Intervals.icu via create_workout with sport "running"'),
+  }).passthrough()).describe('TR runs that need to be created in Intervals.icu — caller is expected to create each as a structured running workout.'),
   runs_to_update: z.array(z.object({
     tr_uid: z.string().optional(),
     tr_name: z.string().optional(),
@@ -1010,7 +1010,7 @@ export const syncTrainerRoadRunsOutputSchema = {
     icu_event_id: z.string().optional().describe('Intervals.icu event ID of the existing workout to update'),
     icu_name: z.string().optional().describe('Current name of the ICU workout'),
     changes: z.array(z.string()).optional().describe('List of changed fields (e.g., ["name", "date", "description"])'),
-  }).passthrough()).describe('TR runs that need to be updated via update_workout'),
+  }).passthrough()).describe('TR runs that need to be updated to reflect changes from the TrainerRoad source.'),
   deleted: z.array(z.object({
     name: z.string().optional(),
     reason: z.string().optional(),
