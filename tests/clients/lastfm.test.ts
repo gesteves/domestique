@@ -154,7 +154,7 @@ describe('LastFmClient', () => {
       },
     };
 
-    it('widens the query by 10 minutes on each side of the workout window', async () => {
+    it('widens the query by 10 minutes only on the pre-buffer side', async () => {
       mockFetch.mockResolvedValueOnce(createMockResponse({ recenttracks: { track: [] } }));
 
       const startMs = 1776530000500;
@@ -163,25 +163,179 @@ describe('LastFmClient', () => {
       await client.getPlayedSongsDuring(startMs, endMs);
 
       const url = mockFetch.mock.calls[0][0] as string;
-      // from = floor((start - 10min) / 1000); to = ceil((end + 10min) / 1000)
+      // from = floor((start - 10min) / 1000); to = ceil(end / 1000) — no post-buffer
       expect(url).toContain(`from=${Math.floor((startMs - BUFFER_MS) / 1000)}`);
-      expect(url).toContain(`to=${Math.ceil((endMs + BUFFER_MS) / 1000)}`);
+      expect(url).toContain(`to=${Math.ceil(endMs / 1000)}`);
     });
 
-    it('keeps songs scrobbled in the pre-buffer (likely bridging workout start)', async () => {
+    it('keeps a pre-buffer song whose duration reaches into the workout', async () => {
       const startMs = 1_776_000_000_000;
       const endMs = startMs + 3600 * 1000;
       const preBufferUts = Math.floor((startMs - 180 * 1000) / 1000); // 3 min before start
+      mockFetch
+        .mockResolvedValueOnce(
+          createMockResponse({
+            recenttracks: {
+              track: [
+                {
+                  name: 'Pre-Buffer Song',
+                  url: 'https://www.last.fm/music/x',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'Album' },
+                  date: { uts: String(preBufferUts) },
+                },
+              ],
+            },
+          })
+        )
+        // track.getInfo: 5 min duration — bridges into the workout
+        .mockResolvedValueOnce(
+          createMockResponse({ track: { name: 'Pre-Buffer Song', duration: '300000' } })
+        );
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Pre-Buffer Song');
+      // verify track.getInfo was called for the pre-buffer track
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch.mock.calls[1][0]).toContain('method=track.getInfo');
+    });
+
+    it('drops a pre-buffer song whose duration does not reach the workout', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000;
+      const preBufferUts = Math.floor((startMs - 180 * 1000) / 1000); // 3 min before start
+      mockFetch
+        .mockResolvedValueOnce(
+          createMockResponse({
+            recenttracks: {
+              track: [
+                {
+                  name: 'Short Jingle',
+                  url: 'https://www.last.fm/music/jingle',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'Album' },
+                  date: { uts: String(preBufferUts) },
+                },
+              ],
+            },
+          })
+        )
+        // track.getInfo: 1 min duration — ended ~2 min before workout started
+        .mockResolvedValueOnce(
+          createMockResponse({ track: { name: 'Short Jingle', duration: '60000' } })
+        );
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result).toEqual([]);
+    });
+
+    it('keeps a pre-buffer song with missing duration (conservative)', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000;
+      const preBufferUts = Math.floor((startMs - 180 * 1000) / 1000);
+      mockFetch
+        .mockResolvedValueOnce(
+          createMockResponse({
+            recenttracks: {
+              track: [
+                {
+                  name: 'Unknown Duration',
+                  url: 'https://www.last.fm/music/u',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'Album' },
+                  date: { uts: String(preBufferUts) },
+                },
+              ],
+            },
+          })
+        )
+        // track.getInfo: no duration field
+        .mockResolvedValueOnce(
+          createMockResponse({ track: { name: 'Unknown Duration' } })
+        );
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Unknown Duration');
+    });
+
+    it('keeps a pre-buffer song with duration "0" (conservative)', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000;
+      const preBufferUts = Math.floor((startMs - 180 * 1000) / 1000);
+      mockFetch
+        .mockResolvedValueOnce(
+          createMockResponse({
+            recenttracks: {
+              track: [
+                {
+                  name: 'Zero Duration',
+                  url: 'https://www.last.fm/music/z',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'Album' },
+                  date: { uts: String(preBufferUts) },
+                },
+              ],
+            },
+          })
+        )
+        .mockResolvedValueOnce(
+          createMockResponse({ track: { name: 'Zero Duration', duration: '0' } })
+        );
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Zero Duration');
+    });
+
+    it('keeps a pre-buffer song when track.getInfo errors (conservative)', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000;
+      const preBufferUts = Math.floor((startMs - 180 * 1000) / 1000);
+      mockFetch
+        .mockResolvedValueOnce(
+          createMockResponse({
+            recenttracks: {
+              track: [
+                {
+                  name: 'Error Lookup',
+                  url: 'https://www.last.fm/music/e',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'Album' },
+                  date: { uts: String(preBufferUts) },
+                },
+              ],
+            },
+          })
+        )
+        // track.getInfo: network failure
+        .mockRejectedValueOnce(new Error('Connection refused'));
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Error Lookup');
+    });
+
+    it('does not call track.getInfo for in-window tracks', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000;
+      const duringUts = Math.floor((startMs + 1000) / 1000);
       mockFetch.mockResolvedValueOnce(
         createMockResponse({
           recenttracks: {
             track: [
               {
-                name: 'Pre-Buffer Song',
-                url: 'https://www.last.fm/music/x',
+                name: 'During Workout',
+                url: 'https://www.last.fm/music/d',
                 artist: { '#text': 'Artist' },
                 album: { '#text': 'Album' },
-                date: { uts: String(preBufferUts) },
+                date: { uts: String(duringUts) },
               },
             ],
           },
@@ -191,7 +345,61 @@ describe('LastFmClient', () => {
       const result = await client.getPlayedSongsDuring(startMs, endMs);
 
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('Pre-Buffer Song');
+      expect(mockFetch).toHaveBeenCalledTimes(1); // only user.getRecentTracks, no track.getInfo
+    });
+
+    it('handles a mix of pre-buffer survivor, dropped pre-buffer, and in-window tracks', async () => {
+      const startMs = 1_776_000_000_000;
+      const endMs = startMs + 3600 * 1000;
+      const preLongUts = Math.floor((startMs - 180 * 1000) / 1000); // 3 min before
+      const preShortUts = Math.floor((startMs - 240 * 1000) / 1000); // 4 min before
+      const duringUts = Math.floor((startMs + 1000) / 1000);
+
+      mockFetch
+        .mockResolvedValueOnce(
+          createMockResponse({
+            recenttracks: {
+              track: [
+                {
+                  name: 'Pre Long',
+                  url: 'https://www.last.fm/music/long',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'A' },
+                  date: { uts: String(preLongUts) },
+                },
+                {
+                  name: 'Pre Short',
+                  url: 'https://www.last.fm/music/short',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'A' },
+                  date: { uts: String(preShortUts) },
+                },
+                {
+                  name: 'During',
+                  url: 'https://www.last.fm/music/during',
+                  artist: { '#text': 'Artist' },
+                  album: { '#text': 'A' },
+                  date: { uts: String(duringUts) },
+                },
+              ],
+            },
+          })
+        )
+        // Pre Long is first in the songs array (sorted by Promise.all input order, which mirrors the response).
+        // 5 min duration → still playing at start.
+        .mockResolvedValueOnce(
+          createMockResponse({ track: { name: 'Pre Long', duration: '300000' } })
+        )
+        // Pre Short — 1 min duration → ended before start.
+        .mockResolvedValueOnce(
+          createMockResponse({ track: { name: 'Pre Short', duration: '60000' } })
+        );
+
+      const result = await client.getPlayedSongsDuring(startMs, endMs);
+
+      expect(result.map((s) => s.name)).toEqual(['Pre Long', 'During']);
+      // 1 recenttracks call + 2 track.getInfo calls (one per pre-buffer track)
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
     it('drops songs scrobbled in the post-buffer (started after workout ended)', async () => {
