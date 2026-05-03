@@ -875,7 +875,7 @@ export const powerCurveOutputSchema = {
     previous_period_end: z.string().optional().describe('End date of comparison period'),
     previous_activity_count: z.number().optional().describe('Number of activities in comparison period'),
     changes: z.array(PowerCurveComparisonZ).optional().describe('Changes at each duration between periods'),
-  }).passthrough().optional().describe('Comparison data vs a previous period (only present when compare_to_* params used)'),
+  }).passthrough().nullable().describe('Comparison data vs a previous period. Null when compare_to_* params were not supplied'),
   hints: hintsField,
 } as const;
 
@@ -892,7 +892,7 @@ export const paceCurveOutputSchema = {
     previous_period_end: z.string().optional(),
     previous_activity_count: z.number().optional(),
     changes: z.array(PaceCurveComparisonZ).optional(),
-  }).passthrough().optional().describe('Comparison data vs a previous period'),
+  }).passthrough().nullable().describe('Comparison data vs a previous period. Null when compare_to_* params were not supplied'),
   hints: hintsField,
 } as const;
 
@@ -908,7 +908,7 @@ export const hrCurveOutputSchema = {
     previous_period_end: z.string().optional(),
     previous_activity_count: z.number().optional(),
     changes: z.array(HRCurveComparisonZ).optional(),
-  }).passthrough().optional().describe('Comparison data vs a previous period'),
+  }).passthrough().nullable().describe('Comparison data vs a previous period. Null when compare_to_* params were not supplied'),
 } as const;
 
 // ============================================

@@ -259,6 +259,7 @@ export class HistoricalTools {
       activity_count: activities.length,
       durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
       summary,
+      comparison: null,
     };
 
     // If comparison period provided, calculate comparison
@@ -450,6 +451,7 @@ export class HistoricalTools {
       activity_count: activities.length,
       distances_analyzed: apiDistances.map((d) => this.formatDistanceLabel(d)),
       summary,
+      comparison: null,
     };
 
     // If comparison period provided, calculate comparison
@@ -623,6 +625,7 @@ export class HistoricalTools {
       activity_count: activities.length,
       durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
       summary,
+      comparison: null,
     };
 
     // If comparison period provided, calculate comparison

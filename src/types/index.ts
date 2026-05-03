@@ -1426,13 +1426,13 @@ export interface PowerCurvesResponse {
   activity_count: number;
   durations_analyzed: string[]; // Human-readable labels
   summary: PowerCurveSummary;
-  // Comparison data (only present when compare_to_* params used)
-  comparison?: {
+  // Always present; null when compare_to_* params were not supplied.
+  comparison: {
     previous_period_start: string;
     previous_period_end: string;
     previous_activity_count: number;
     changes: PowerCurveComparison[];
-  };
+  } | null;
 }
 
 // Pace curve data point for a specific distance
@@ -1496,13 +1496,13 @@ export interface PaceCurvesResponse {
   activity_count: number;
   distances_analyzed: string[];
   summary: PaceCurveSummary;
-  // Comparison data (only present when compare_to_* params used)
-  comparison?: {
+  // Always present; null when compare_to_* params were not supplied.
+  comparison: {
     previous_period_start: string;
     previous_period_end: string;
     previous_activity_count: number;
     changes: PaceCurveComparison[];
-  };
+  } | null;
 }
 
 // HR curve data point for a specific duration
@@ -1554,13 +1554,13 @@ export interface HRCurvesResponse {
   activity_count: number;
   durations_analyzed: string[];
   summary: HRCurveSummary;
-  // Comparison data (only present when compare_to_* params used)
-  comparison?: {
+  // Always present; null when compare_to_* params were not supplied.
+  comparison: {
     previous_period_start: string;
     previous_period_end: string;
     previous_activity_count: number;
     changes: HRCurveComparison[];
-  };
+  } | null;
 }
 
 // ============================================
