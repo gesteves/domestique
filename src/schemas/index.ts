@@ -789,10 +789,15 @@ export const athleteProfileOutputSchema = {
   unit_preferences: UnitPreferencesZ.optional().describe("Athlete's preferred units, sourced from Intervals.icu. Tool responses are already formatted in these units; use them for narrative consistency when restating values"),
 } as const;
 
+const PerSportSettingsZ = z.object({
+  types: z.array(z.string()).optional().describe('Activity types this sport setting applies to (e.g., ["Ride", "VirtualRide"])'),
+  settings: SportSettingsZ.optional().describe('Sport-specific settings (FTP, zones, thresholds)'),
+}).passthrough();
+
 export const sportSettingsOutputSchema = {
-  sport: z.string().optional().describe('The sport queried (cycling, running, or swimming)'),
-  types: z.array(z.string()).optional().describe('Activity types this sport setting applies to'),
-  settings: SportSettingsZ.optional().describe('The sport-specific settings (FTP, zones, thresholds)'),
+  cycling: PerSportSettingsZ.nullable().optional().describe('Cycling settings. Present when "cycling" was requested (or when no sports filter was supplied); null if the athlete has no cycling settings configured'),
+  running: PerSportSettingsZ.nullable().optional().describe('Running settings. Present when "running" was requested (or when no sports filter was supplied); null if the athlete has no running settings configured'),
+  swimming: PerSportSettingsZ.nullable().optional().describe('Swimming settings. Present when "swimming" was requested (or when no sports filter was supplied); null if the athlete has no swimming settings configured'),
 } as const;
 
 export const strainHistoryOutputSchema = {

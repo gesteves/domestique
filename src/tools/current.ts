@@ -556,11 +556,24 @@ export class CurrentTools {
   }
 
   /**
-   * Get sport-specific settings (FTP, zones, etc.) for a specific sport.
-   * @param sport - "cycling", "running", or "swimming"
+   * Get sport-specific settings (FTP, zones, etc.) for one or more sports.
+   * Returns an object keyed by sport name. Each requested sport is present
+   * (null when the athlete has no settings for that sport); unrequested
+   * sports are absent. Omit `sports` to fetch all three.
    */
-  async getSportSettings(sport: 'cycling' | 'running' | 'swimming'): Promise<SportSettingsResponse | null> {
-    return await this.intervals.getSportSettingsForSport(sport);
+  async getSportSettings(
+    sports?: ('cycling' | 'running' | 'swimming')[]
+  ): Promise<Partial<Record<'cycling' | 'running' | 'swimming', { types: string[]; settings: unknown } | null>>> {
+    const requested = sports ?? ['cycling', 'running', 'swimming'];
+    const results = await Promise.all(
+      requested.map((sport) => this.intervals.getSportSettingsForSport(sport))
+    );
+    const out: Partial<Record<'cycling' | 'running' | 'swimming', { types: string[]; settings: unknown } | null>> = {};
+    requested.forEach((sport, i) => {
+      const r = results[i];
+      out[sport] = r ? { types: r.types, settings: r.settings } : null;
+    });
+    return out;
   }
 
   /**

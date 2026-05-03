@@ -23,7 +23,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location
-- `get_sports_settings` - Sport-specific settings (FTP, zones, thresholds) for cycling, running, or swimming
+- `get_sports_settings` - Sport-specific settings (FTP, zones, thresholds) for one or more sports (cycling, running, swimming). Pass a `sports` array to filter, or omit to fetch all three.
 
 ### Historical/Trends
 - `get_strain_history` - Whoop strain scores and activities for a date range

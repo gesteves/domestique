@@ -481,7 +481,7 @@ export class ToolRegistry {
     register({
       name: 'get_sports_settings',
       title: 'Sport Settings',
-      description: `Fetches settings from Intervals.icu for a single sport, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
+      description: `Fetches settings from Intervals.icu for one or more sports, including FTP, power zones, pace zones, HR zones. Supports cycling, running, and swimming.
 
 <use-cases>
 - Understanding the user's current FTP, power zones, or pace zones for interpreting workout data.
@@ -490,18 +490,23 @@ export class ToolRegistry {
 - Providing context for zone-based training recommendations.
 </use-cases>
 
+<instructions>
+- Pass an array of sports to fetch only the ones you need; omit the argument to fetch all three in one call.
+</instructions>
+
 <notes>
 - This returns the athlete's **current** zones, which may not match the zones in historical workouts.
 </notes>`,
       inputSchema: {
-        sport: z.enum(['cycling', 'running', 'swimming']).describe('The sport to get settings for'),
+        sports: z
+          .array(z.enum(['cycling', 'running', 'swimming']))
+          .optional()
+          .describe('Sports to fetch settings for. Omit to fetch all three.'),
       },
       outputSchema: schemas.sportSettingsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { sport: 'cycling' | 'running' | 'swimming' }) => {
-        const result = await this.currentTools.getSportSettings(args.sport);
-        return result ?? { sport: args.sport, types: [], settings: {} };
-      },
+      handler: async (args: { sports?: ('cycling' | 'running' | 'swimming')[] }) =>
+        this.currentTools.getSportSettings(args.sports),
     });
 
     // Historical/Trends Tools
