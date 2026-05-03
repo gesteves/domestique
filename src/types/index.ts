@@ -1185,6 +1185,7 @@ export interface HourlyForecast {
   temperature_dew_point?: string;
   temperature_heat_index?: string;
   temperature_wind_chill?: string;
+  temperature_wet_bulb?: string;
   uv_index?: number;
   visibility?: string;
   wind_direction?: string;
@@ -1210,12 +1211,34 @@ export interface WeatherAlert {
 }
 
 /**
+ * Sunrise / sunset for a forecast date. Both fields are pre-formatted in the
+ * location's timezone. Either may be absent in polar regions where the sun
+ * doesn't rise or set during the local day.
+ */
+export interface SunEvents {
+  sunrise?: string;
+  sunset?: string;
+}
+
+/**
+ * Lunar events for a forecast date: phase + the first moonrise/moonset of the
+ * local day. Times are pre-formatted in the location's timezone. `moon_phase`
+ * is sentence-cased (e.g., "Waxing crescent", "Full moon"); rise/set may be
+ * absent when the moon doesn't cross the horizon during the local day.
+ */
+export interface MoonEvents {
+  moon_phase?: string;
+  moonrise?: string;
+  moonset?: string;
+}
+
+/**
  * Daily forecast summary surfaced for race-week planning.
  *
- * All fields come from the daytime half of Google's daily forecast (the half
- * that matters for outdoor training); high/low temps span the full 24-hour
- * day. Reuses the unit-in-value formatting convention from
- * {@link CurrentWeather} and {@link HourlyForecast}.
+ * Most fields come from the daytime half of Google's daily forecast (the half
+ * that matters for outdoor training); high/low temps and the daily heat-index
+ * peak span the full 24-hour day. Reuses the unit-in-value formatting
+ * convention from {@link CurrentWeather} and {@link HourlyForecast}.
  *
  * Distinct from {@link DailySummary} (today's-data summary response) — this
  * type is a forecast block embedded inside {@link LocationForecast}.
@@ -1226,6 +1249,7 @@ export interface DailyForecastSummary {
   temperature_min?: string;
   temperature_max_apparent?: string;
   temperature_min_apparent?: string;
+  temperature_heat_index_max?: string;
   cloud_cover?: string;
   humidity?: string;
   precipitation_amount?: string;
@@ -1236,6 +1260,8 @@ export interface DailyForecastSummary {
   wind_direction?: string;
   wind_speed?: string;
   wind_gust?: string;
+  sun_events?: SunEvents;
+  moon_events?: MoonEvents;
 }
 
 /**
@@ -1261,10 +1287,6 @@ export interface LocationForecast {
   elevation?: string;
   /** The date this forecast is for (YYYY-MM-DD) in the location's timezone. */
   forecast_date?: string;
-  /** Sunrise time at the location on the forecast date. */
-  sunrise?: string;
-  /** Sunset time at the location on the forecast date. */
-  sunset?: string;
   /** Current conditions. Only populated when the forecast date is today. */
   current_conditions?: CurrentWeather | null;
   /** Daily forecast summary for the date. */

@@ -163,6 +163,17 @@ export interface GoogleSunEvents {
 }
 
 /**
+ * Lunar events for a daily forecast entry. `moonriseTimes` and `moonsetTimes`
+ * are arrays — usually one entry, but may be empty (the moon doesn't rise/set
+ * during the local day) or contain multiples in polar regions.
+ */
+export interface GoogleMoonEvents {
+  moonPhase?: string;
+  moonriseTimes?: string[];
+  moonsetTimes?: string[];
+}
+
+/**
  * Sub-period of a daily forecast (`daytimeForecast` or `nighttimeForecast`).
  * Shape mirrors {@link GoogleForecastHour} minus per-hour fields the daily
  * endpoint doesn't compute (visibility, temperature, dew point, etc.).
@@ -193,12 +204,14 @@ export interface GoogleForecastDay {
     day?: number;
   };
   sunEvents?: GoogleSunEvents;
+  moonEvents?: GoogleMoonEvents;
   daytimeForecast?: GoogleForecastDayPeriod;
   nighttimeForecast?: GoogleForecastDayPeriod;
   maxTemperature?: GoogleTemperature;
   minTemperature?: GoogleTemperature;
   feelsLikeMaxTemperature?: GoogleTemperature;
   feelsLikeMinTemperature?: GoogleTemperature;
+  maxHeatIndex?: GoogleTemperature;
   [key: string]: unknown;
 }
 

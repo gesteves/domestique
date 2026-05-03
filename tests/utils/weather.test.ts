@@ -241,6 +241,7 @@ describe('transformForecastHour', () => {
       dewPoint: { degrees: 2.7, unit: 'CELSIUS' },
       heatIndex: { degrees: 12.7, unit: 'CELSIUS' },
       windChill: { degrees: 12, unit: 'CELSIUS' },
+      wetBulbTemperature: { degrees: 7.4, unit: 'CELSIUS' },
       relativeHumidity: 51,
       uvIndex: 1,
       precipitation: {
@@ -274,6 +275,15 @@ describe('transformForecastHour', () => {
     expect(result.precipitation_chance).toBe('0%');
     expect(result.precipitation_type).toBe('Rain');
     expect(result.uv_index).toBe(1);
+    expect(result.temperature_wet_bulb).toBe('7.4 °C');
+  });
+
+  it('omits temperature_wet_bulb when wetBulbTemperature is absent', () => {
+    const hour: GoogleForecastHour = {
+      interval: { startTime: '2025-02-05T23:00:00Z', endTime: '2025-02-06T00:00:00Z' },
+      temperature: { degrees: 12.7, unit: 'CELSIUS' },
+    };
+    expect(transformForecastHour(hour, 'America/Boise').temperature_wet_bulb).toBeUndefined();
   });
 });
 
@@ -444,8 +454,6 @@ describe('assembleLocationForecast', () => {
       longitude: 0,
       elevation: undefined,
       forecast_date: '2026-04-28',
-      sunrise: undefined,
-      sunset: undefined,
       current_conditions: null,
       daily_summary: undefined,
       hourly_forecast: [],
@@ -629,8 +637,8 @@ describe('assembleLocationForecast', () => {
     });
   });
 
-  describe('sun events integration', () => {
-    it("attaches today's sunrise/sunset from the daily forecast", () => {
+  describe('daily summary integration', () => {
+    it("attaches today's sun and moon events from the daily forecast", () => {
       const daily: GoogleDailyForecastResponse = {
         forecastDays: [
           // Yesterday — should be ignored
@@ -648,6 +656,13 @@ describe('assembleLocationForecast', () => {
               sunriseTime: '2026-04-28T12:30:00.123Z',
               sunsetTime: '2026-04-29T02:15:00.456Z',
             },
+            moonEvents: {
+              moonPhase: 'WAXING_CRESCENT',
+              moonriseTimes: ['2026-04-28T15:00:00Z'], // 09:00 MDT
+              moonsetTimes: ['2026-04-29T03:30:00Z'], // 21:30 MDT (same local day)
+            },
+            maxHeatIndex: { degrees: 33.4, unit: 'CELSIUS' },
+            maxTemperature: { degrees: 31.2, unit: 'CELSIUS' },
           },
           // Tomorrow — should be ignored
           {
@@ -677,11 +692,19 @@ describe('assembleLocationForecast', () => {
 
       // Pre-formatted in the location's tz (Boise = MDT, UTC-6 in DST).
       // 12:30 UTC = 06:30 MDT; 02:15 UTC next day = 20:15 MDT today.
-      expect(result.sunrise).toMatch(/at 6:30 AM MDT$/);
-      expect(result.sunset).toMatch(/at 8:15 PM MDT$/);
+      expect(result.daily_summary?.sun_events?.sunrise).toMatch(/at 6:30 AM MDT$/);
+      expect(result.daily_summary?.sun_events?.sunset).toMatch(/at 8:15 PM MDT$/);
+      expect(result.daily_summary?.moon_events?.moon_phase).toBe('Waxing crescent');
+      expect(result.daily_summary?.moon_events?.moonrise).toMatch(/at 9:00 AM MDT$/);
+      expect(result.daily_summary?.moon_events?.moonset).toMatch(/at 9:30 PM MDT$/);
+      expect(result.daily_summary?.temperature_heat_index_max).toBe('33.4 °C');
+      expect(result.daily_summary?.temperature_max).toBe('31.2 °C');
+      // No top-level sunrise/sunset on the LocationForecast anymore.
+      expect((result as unknown as { sunrise?: unknown }).sunrise).toBeUndefined();
+      expect((result as unknown as { sunset?: unknown }).sunset).toBeUndefined();
     });
 
-    it("omits sunrise/sunset when no daily entry matches today in the athlete's timezone", () => {
+    it("omits daily_summary when no daily entry matches today in the athlete's timezone", () => {
       const tomorrowOnly: GoogleDailyForecastResponse = {
         forecastDays: [
           {
@@ -707,11 +730,10 @@ describe('assembleLocationForecast', () => {
         undefined,
         tomorrowOnly
       );
-      expect(result.sunrise).toBeUndefined();
-      expect(result.sunset).toBeUndefined();
+      expect(result.daily_summary).toBeUndefined();
     });
 
-    it('omits sunrise/sunset when no daily forecast is provided', () => {
+    it('omits daily_summary when no daily forecast is provided', () => {
       const result = assembleLocationForecast(
         'Pocatello,Idaho,US',
         42.87,
@@ -722,15 +744,15 @@ describe('assembleLocationForecast', () => {
         tz,
         now
       );
-      expect(result.sunrise).toBeUndefined();
-      expect(result.sunset).toBeUndefined();
+      expect(result.daily_summary).toBeUndefined();
     });
 
-    it('handles a matching day with no sunEvents block', () => {
-      const noSunEvents: GoogleDailyForecastResponse = {
+    it('omits sun_events / moon_events on a matching day with neither block', () => {
+      const empty: GoogleDailyForecastResponse = {
         forecastDays: [
           {
             displayDate: { year: 2026, month: 4, day: 28 },
+            maxTemperature: { degrees: 22, unit: 'CELSIUS' },
           },
         ],
       };
@@ -746,10 +768,124 @@ describe('assembleLocationForecast', () => {
         undefined,
         undefined,
         undefined,
-        noSunEvents
+        empty
       );
-      expect(result.sunrise).toBeUndefined();
-      expect(result.sunset).toBeUndefined();
+      expect(result.daily_summary?.temperature_max).toBe('22.0 °C');
+      expect(result.daily_summary?.sun_events).toBeUndefined();
+      expect(result.daily_summary?.moon_events).toBeUndefined();
+    });
+
+    it('emits sun_events with only the present field when one is missing', () => {
+      const partial: GoogleDailyForecastResponse = {
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+            sunEvents: { sunriseTime: '2026-04-28T12:30:00Z' },
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        partial
+      );
+      expect(result.daily_summary?.sun_events?.sunrise).toMatch(/at 6:30 AM MDT$/);
+      expect(result.daily_summary?.sun_events?.sunset).toBeUndefined();
+    });
+
+    it('drops moon_events when only an UNKNOWN phase is reported and no rise/set times', () => {
+      const unknownPhase: GoogleDailyForecastResponse = {
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+            moonEvents: { moonPhase: 'MOON_PHASE_UNKNOWN' },
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        unknownPhase
+      );
+      expect(result.daily_summary?.moon_events).toBeUndefined();
+    });
+
+    it('keeps moon_events when only rise/set times are present (no phase)', () => {
+      const riseOnly: GoogleDailyForecastResponse = {
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+            moonEvents: { moonriseTimes: ['2026-04-28T15:00:00Z'] },
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        riseOnly
+      );
+      expect(result.daily_summary?.moon_events?.moonrise).toMatch(/at 9:00 AM MDT$/);
+      expect(result.daily_summary?.moon_events?.moonset).toBeUndefined();
+      expect(result.daily_summary?.moon_events?.moon_phase).toBeUndefined();
+    });
+
+    it('uses the first moonrise/moonset entry when Google returns multiples (polar regions)', () => {
+      const polar: GoogleDailyForecastResponse = {
+        forecastDays: [
+          {
+            displayDate: { year: 2026, month: 4, day: 28 },
+            moonEvents: {
+              moonPhase: 'FULL_MOON',
+              moonriseTimes: ['2026-04-28T15:00:00Z', '2026-04-29T01:00:00Z'],
+              moonsetTimes: ['2026-04-29T03:30:00Z', '2026-04-29T13:00:00Z'],
+            },
+          },
+        ],
+      };
+      const result = assembleLocationForecast(
+        'Pocatello,Idaho,US',
+        42.87,
+        -112.58,
+        current,
+        hourly,
+        alerts,
+        tz,
+        now,
+        undefined,
+        undefined,
+        undefined,
+        polar
+      );
+      expect(result.daily_summary?.moon_events?.moon_phase).toBe('Full moon');
+      expect(result.daily_summary?.moon_events?.moonrise).toMatch(/at 9:00 AM MDT$/);
+      expect(result.daily_summary?.moon_events?.moonset).toMatch(/at 9:30 PM MDT$/);
     });
   });
 

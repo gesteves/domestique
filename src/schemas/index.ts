@@ -731,6 +731,7 @@ const HourlyForecastZ = z.object({
   temperature_dew_point: z.string().optional().describe('Dew point temperature'),
   temperature_heat_index: z.string().optional().describe('Heat index temperature'),
   temperature_wind_chill: z.string().optional().describe('Wind chill temperature'),
+  temperature_wet_bulb: z.string().optional().describe('Wet bulb temperature — the temperature a parcel of air would reach if cooled to saturation by evaporation. A standard heat-stress indicator for endurance athletes; values above ~28 °C / 82 °F mark serious heat-stress risk'),
   uv_index: z.number().optional().describe('UV index'),
   visibility: z.string().optional().describe('Horizontal visibility'),
   wind_direction: z.string().optional().describe('Direction the wind is blowing from'),
@@ -752,12 +753,24 @@ const WeatherAlertZ = z.object({
   source: z.string().optional().describe('Issuing organization (e.g., "National Weather Service")'),
 }).passthrough();
 
+const SunEventsZ = z.object({
+  sunrise: z.string().optional().describe("Sunrise time at the location on the forecast date in the location's timezone. May be absent in polar regions when the sun does not rise during the local day"),
+  sunset: z.string().optional().describe("Sunset time at the location on the forecast date in the location's timezone. May be absent in polar regions when the sun does not set during the local day"),
+}).passthrough();
+
+const MoonEventsZ = z.object({
+  moon_phase: z.string().optional().describe('Lunar phase on the forecast date (e.g., "New moon", "Waxing crescent", "First quarter", "Waxing gibbous", "Full moon", "Waning gibbous", "Last quarter", "Waning crescent")'),
+  moonrise: z.string().optional().describe("Moonrise time at the location on the forecast date in the location's timezone. Absent when the moon does not rise during the local day"),
+  moonset: z.string().optional().describe("Moonset time at the location on the forecast date in the location's timezone. Absent when the moon does not set during the local day"),
+}).passthrough();
+
 const DailySummaryZ = z.object({
   condition: z.string().optional().describe('Human-readable description of the dominant daytime condition (e.g., "Sunny", "Mostly cloudy", "Light rain")'),
   temperature_max: z.string().optional().describe('Maximum air temperature for the day'),
   temperature_min: z.string().optional().describe('Minimum air temperature for the day'),
   temperature_max_apparent: z.string().optional().describe('Maximum feels-like temperature for the day'),
   temperature_min_apparent: z.string().optional().describe('Minimum feels-like temperature for the day'),
+  temperature_heat_index_max: z.string().optional().describe('Peak heat-index temperature reached during the day'),
   cloud_cover: z.string().optional().describe('Daytime cloud cover fraction'),
   humidity: z.string().optional().describe('Daytime relative humidity'),
   precipitation_amount: z.string().optional().describe('Expected daytime precipitation total'),
@@ -768,6 +781,8 @@ const DailySummaryZ = z.object({
   wind_direction: z.string().optional().describe('Daytime direction the wind is blowing from'),
   wind_speed: z.string().optional().describe('Daytime sustained wind speed'),
   wind_gust: z.string().optional().describe('Daytime peak wind gust speed'),
+  sun_events: SunEventsZ.optional().describe('Sunrise and sunset times at the location on the forecast date'),
+  moon_events: MoonEventsZ.optional().describe('Lunar phase and moonrise/moonset times at the location on the forecast date'),
 }).passthrough();
 
 const LocationForecastZ = z.object({
@@ -776,8 +791,6 @@ const LocationForecastZ = z.object({
   longitude: z.number().optional().describe('Location longitude'),
   elevation: z.string().optional().describe('Elevation at the location'),
   forecast_date: z.string().optional().describe("The date this forecast is for (YYYY-MM-DD) in the location's timezone"),
-  sunrise: z.string().optional().describe('Sunrise time at the location on the forecast date'),
-  sunset: z.string().optional().describe('Sunset time at the location on the forecast date'),
   current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Only present when the forecast date is today; null if no current data is available'),
   daily_summary: DailySummaryZ.optional().describe('Daily forecast summary for the date (high/low temps, conditions, precipitation, wind)'),
   hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the forecast date in the location's timezone — remaining hours of the day when the date is today, all 24 hours otherwise"),

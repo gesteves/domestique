@@ -1482,7 +1482,7 @@ describe('CurrentTools', () => {
       expect(fc.current_conditions?.temperature).toBe('4.1 °C');
     });
 
-    it("attaches today's sunrise/sunset from the daily forecast", async () => {
+    it("attaches today's sun and moon events from the daily forecast", async () => {
       const toolsWithWeather = new CurrentTools(
         mockIntervalsClient,
         mockWhoopClient,
@@ -1504,6 +1504,12 @@ describe('CurrentTools', () => {
               sunriseTime: '2026-04-28T12:30:00Z',
               sunsetTime: '2026-04-29T02:15:00Z',
             },
+            moonEvents: {
+              moonPhase: 'WAXING_CRESCENT',
+              moonriseTimes: ['2026-04-28T15:00:00Z'],
+              moonsetTimes: ['2026-04-29T03:30:00Z'],
+            },
+            maxHeatIndex: { degrees: 33.4, unit: 'CELSIUS' },
           },
         ],
       });
@@ -1514,8 +1520,12 @@ describe('CurrentTools', () => {
       const fc = result.forecasts[0];
       // Pre-formatted in the location's tz (Boise = MDT, UTC-6 in DST).
       // 12:30 UTC = 06:30 MDT; 02:15 UTC next day = 20:15 MDT today.
-      expect(fc.sunrise).toMatch(/at 6:30 AM MDT$/);
-      expect(fc.sunset).toMatch(/at 8:15 PM MDT$/);
+      expect(fc.daily_summary?.sun_events?.sunrise).toMatch(/at 6:30 AM MDT$/);
+      expect(fc.daily_summary?.sun_events?.sunset).toMatch(/at 8:15 PM MDT$/);
+      expect(fc.daily_summary?.moon_events?.moon_phase).toBe('Waxing crescent');
+      expect(fc.daily_summary?.moon_events?.moonrise).toMatch(/at 9:00 AM MDT$/);
+      expect(fc.daily_summary?.moon_events?.moonset).toMatch(/at 9:30 PM MDT$/);
+      expect(fc.daily_summary?.temperature_heat_index_max).toBe('33.4 °C');
     });
 
     it('keeps the forecast when the daily forecast call fails', async () => {
@@ -1537,8 +1547,7 @@ describe('CurrentTools', () => {
       const result = await toolsWithWeather.getWeatherForecast();
       const fc = result.forecasts[0];
       expect(fc.location).toBe('Moose');
-      expect(fc.sunrise).toBeUndefined();
-      expect(fc.sunset).toBeUndefined();
+      expect(fc.daily_summary).toBeUndefined();
       expect(fc.current_conditions?.temperature).toBe('4.1 °C');
     });
 

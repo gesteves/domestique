@@ -33,8 +33,10 @@ import type {
   CurrentWeather,
   DailyForecastSummary,
   HourlyForecast,
+  MoonEvents,
   Pollen,
   PollenIndexLevel,
+  SunEvents,
   WeatherAlert,
   LocationForecast,
 } from '../types/index.js';
@@ -483,6 +485,7 @@ export function transformForecastHour(
     temperature_dew_point: formatGoogleTemperature(hour.dewPoint),
     temperature_heat_index: formatGoogleTemperature(hour.heatIndex),
     temperature_wind_chill: formatGoogleTemperature(hour.windChill),
+    temperature_wet_bulb: formatGoogleTemperature(hour.wetBulbTemperature),
     uv_index: hour.uvIndex,
     visibility: formatGoogleVisibility(hour.visibility),
     wind_direction: formatWindDirection(hour.wind),
@@ -568,28 +571,50 @@ function findDailyForecastForDate(
 }
 
 /**
- * Build the {sunrise, sunset} pair from a matched daily-forecast entry.
- * Pre-formats both in the location's tz.
+ * Build the {sunrise, sunset} object from a matched daily-forecast entry.
+ * Pre-formats both in the location's tz. Returns undefined when neither value
+ * is present so the parent object can omit the field rather than emit `{}`.
  */
-function pickSunEvents(
+function buildSunEvents(
   day: GoogleForecastDay | undefined,
   locationTimezone: string
-): { sunrise?: string; sunset?: string } {
-  if (!day?.sunEvents) return {};
-  return {
-    sunrise: formatLocalDateTime(day.sunEvents.sunriseTime, locationTimezone),
-    sunset: formatLocalDateTime(day.sunEvents.sunsetTime, locationTimezone),
-  };
+): SunEvents | undefined {
+  const sunrise = formatLocalDateTime(day?.sunEvents?.sunriseTime, locationTimezone);
+  const sunset = formatLocalDateTime(day?.sunEvents?.sunsetTime, locationTimezone);
+  if (!sunrise && !sunset) return undefined;
+  return { sunrise, sunset };
+}
+
+/**
+ * Build the moon-events object from a matched daily-forecast entry. Picks the
+ * first entry from `moonriseTimes` / `moonsetTimes` (typically a single value;
+ * polar regions occasionally return multiples) and sentence-cases the lunar
+ * phase via {@link formatEnumLabel}. Returns undefined when nothing usable.
+ */
+function buildMoonEvents(
+  day: GoogleForecastDay | undefined,
+  locationTimezone: string
+): MoonEvents | undefined {
+  const me = day?.moonEvents;
+  if (!me) return undefined;
+  const moon_phase = formatEnumLabel(me.moonPhase);
+  const moonrise = formatLocalDateTime(me.moonriseTimes?.[0], locationTimezone);
+  const moonset = formatLocalDateTime(me.moonsetTimes?.[0], locationTimezone);
+  if (!moon_phase && !moonrise && !moonset) return undefined;
+  return { moon_phase, moonrise, moonset };
 }
 
 /**
  * Assemble the daytime-period summary for a daily-forecast entry. The daytime
  * half is the relevant one for outdoor training decisions; whole-day fields
- * (max/min temperature) come from the day root, half-day fields (humidity,
- * wind, condition, etc.) come from `daytimeForecast`. Returns undefined if
- * neither set carries any signal.
+ * (max/min temperature, peak heat index, sun/moon events) come from the day
+ * root, half-day fields (humidity, wind, condition, etc.) come from
+ * `daytimeForecast`. Returns undefined if neither set carries any signal.
  */
-function buildDailySummary(day: GoogleForecastDay | undefined): DailyForecastSummary | undefined {
+function buildDailySummary(
+  day: GoogleForecastDay | undefined,
+  locationTimezone: string
+): DailyForecastSummary | undefined {
   if (!day) return undefined;
   const dayPart: GoogleForecastDayPeriod | undefined = day.daytimeForecast;
   const precip = dayPart?.precipitation;
@@ -599,6 +624,7 @@ function buildDailySummary(day: GoogleForecastDay | undefined): DailyForecastSum
     temperature_min: formatGoogleTemperature(day.minTemperature),
     temperature_max_apparent: formatGoogleTemperature(day.feelsLikeMaxTemperature),
     temperature_min_apparent: formatGoogleTemperature(day.feelsLikeMinTemperature),
+    temperature_heat_index_max: formatGoogleTemperature(day.maxHeatIndex),
     cloud_cover: dayPart?.cloudCover !== undefined ? formatPercent(dayPart.cloudCover) : undefined,
     humidity:
       dayPart?.relativeHumidity !== undefined ? formatPercent(dayPart.relativeHumidity) : undefined,
@@ -616,6 +642,8 @@ function buildDailySummary(day: GoogleForecastDay | undefined): DailyForecastSum
     wind_direction: formatWindDirection(dayPart?.wind),
     wind_speed: formatGoogleSpeed(dayPart?.wind?.speed),
     wind_gust: formatGoogleSpeed(dayPart?.wind?.gust),
+    sun_events: buildSunEvents(day, locationTimezone),
+    moon_events: buildMoonEvents(day, locationTimezone),
   };
   // Drop entirely if every field is undefined — nothing useful to surface.
   const hasAny = Object.values(summary).some((v) => v !== undefined);
@@ -735,8 +763,7 @@ export function assembleLocationForecast(
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
   const pollenForToday = buildPollenForDate(pollen, todayLocal);
   const dailyForToday = findDailyForecastForDate(daily, todayLocal);
-  const sunEvents = pickSunEvents(dailyForToday, locationTimezone);
-  const dailySummary = buildDailySummary(dailyForToday);
+  const dailySummary = buildDailySummary(dailyForToday, locationTimezone);
   const elevationMeters =
     elevation?.status === 'OK' && typeof elevation.results?.[0]?.elevation === 'number'
       ? elevation.results[0].elevation
@@ -747,8 +774,6 @@ export function assembleLocationForecast(
     longitude,
     elevation: elevationMeters !== undefined ? formatLength(elevationMeters) : undefined,
     forecast_date: todayLocal,
-    sunrise: sunEvents.sunrise,
-    sunset: sunEvents.sunset,
     current_conditions: transformCurrentConditions(current, locationTimezone, currentAirQuality),
     daily_summary: dailySummary,
     hourly_forecast: filteredHours.map((h) => {
@@ -798,8 +823,7 @@ export function assembleFutureLocationForecast(
   const aqByHour = indexHourlyAirQuality(hourlyAirQuality);
   const pollenForDate = buildPollenForDate(pollen, targetDate);
   const dailyForDate = findDailyForecastForDate(daily, targetDate);
-  const sunEvents = pickSunEvents(dailyForDate, locationTimezone);
-  const dailySummary = buildDailySummary(dailyForDate);
+  const dailySummary = buildDailySummary(dailyForDate, locationTimezone);
   const elevationMeters =
     elevation?.status === 'OK' && typeof elevation.results?.[0]?.elevation === 'number'
       ? elevation.results[0].elevation
@@ -810,8 +834,6 @@ export function assembleFutureLocationForecast(
     longitude,
     elevation: elevationMeters !== undefined ? formatLength(elevationMeters) : undefined,
     forecast_date: targetDate,
-    sunrise: sunEvents.sunrise,
-    sunset: sunEvents.sunset,
     daily_summary: dailySummary,
     hourly_forecast: filteredHours.map((h) => {
       const startTime = h.interval?.startTime;

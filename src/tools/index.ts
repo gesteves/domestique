@@ -394,9 +394,9 @@ export class ToolRegistry {
 
 **Includes (per location):**
 - Location label, coordinates, and elevation
-- The forecast date, sunrise, and sunset
-- Daily summary: high/low temperatures, conditions, precipitation, thunderstorm probability, wind, humidity, UV, cloud cover
-- Hourly forecast — remaining hours of the day when the date is today, all 24 hours otherwise. Each hour may include local AQI
+- The forecast date
+- Daily summary: high/low temperatures, peak heat index, conditions, precipitation, thunderstorm probability, wind, humidity, UV, cloud cover, and sun/moon events (sunrise, sunset, moonrise, moonset, lunar phase)
+- Hourly forecast — remaining hours of the day when the date is today, all 24 hours otherwise. Includes wet-bulb temperature for heat-stress assessment; each hour may include local AQI
 - Pollen forecast (Universal Pollen Index level with pollen types, plants, and health recommendations) when available for the date
 - When the date is today: current conditions and active weather alerts (warnings, watches, advisories)
 
