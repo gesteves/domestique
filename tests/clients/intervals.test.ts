@@ -2031,6 +2031,32 @@ describe('IntervalsClient', () => {
       expect(result?.settings.hr_zones).toBeDefined();
       expect(result?.settings.power_zones).toBeDefined();
     });
+
+    it('should handle null sweet_spot bounds (e.g., for non-cycling sports)', async () => {
+      const runningSettings = [{
+        id: 2,
+        athlete_id: 'i12345',
+        types: ['Run'],
+        sweet_spot_min: null,
+        sweet_spot_max: null,
+        lthr: 165,
+        max_hr: 195,
+        hr_zone_names: ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'],
+        hr_zones: [130, 145, 160, 175, 195],
+      }];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(runningSettings),
+      });
+
+      const result = await client.getSportSettingsForSport('running');
+
+      expect(result?.settings.sweet_spot_min).toBeUndefined();
+      expect(result?.settings.sweet_spot_max).toBeUndefined();
+      expect(result?.settings.lthr).toBe('165 bpm');
+      expect(result?.settings.max_hr).toBe('195 bpm');
+    });
   });
 
   describe('getActivityHeatMetrics', () => {

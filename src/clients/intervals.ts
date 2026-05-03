@@ -160,8 +160,8 @@ interface IntervalsSportSettings {
   types: string[];
   ftp?: number;
   indoor_ftp?: number;
-  sweet_spot_min?: number;
-  sweet_spot_max?: number;
+  sweet_spot_min?: number | null;
+  sweet_spot_max?: number | null;
   lthr?: number;
   max_hr?: number;
   hr_zones?: number[];
@@ -957,10 +957,10 @@ export class IntervalsClient {
     }
 
     // Sweet spot (% of FTP)
-    if (settings.sweet_spot_min !== undefined) {
+    if (settings.sweet_spot_min != null) {
       result.sweet_spot_min = formatPercent(settings.sweet_spot_min);
     }
-    if (settings.sweet_spot_max !== undefined) {
+    if (settings.sweet_spot_max != null) {
       result.sweet_spot_max = formatPercent(settings.sweet_spot_max);
     }
 
@@ -1196,8 +1196,8 @@ export class IntervalsClient {
     zoneNames: string[] | undefined,
     ftp: number | undefined,
     zoneTimes: ZoneTime[] | undefined,
-    sweetSpotMin: number | undefined,
-    sweetSpotMax: number | undefined
+    sweetSpotMin: number | null | undefined,
+    sweetSpotMax: number | null | undefined
   ): PowerZone[] | undefined {
     if (!zoneBoundaries || !zoneNames || !ftp) {
       return undefined;
@@ -1221,7 +1221,7 @@ export class IntervalsClient {
 
       // Add sweet spot zone if there's time in it
       const sweetSpotSeconds = timeMap.get('SS');
-      if (sweetSpotSeconds && sweetSpotSeconds > 0 && sweetSpotMin !== undefined && sweetSpotMax !== undefined) {
+      if (sweetSpotSeconds && sweetSpotSeconds > 0 && sweetSpotMin != null && sweetSpotMax != null) {
         zones.push({
           name: 'Sweet Spot',
           low_pct: formatPercent(sweetSpotMin),
