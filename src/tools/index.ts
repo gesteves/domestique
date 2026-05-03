@@ -987,16 +987,13 @@ Only provide the fields you want to update; omitted fields remain unchanged.
 - Correlating training load with recovery trends to optimize training balance.
 </use-cases>`,
       inputSchema: {
-        days: z
-          .number()
-          .optional()
-          .default(42)
-          .describe('Number of days of history to analyze (default: 42, max: 365)'),
+        oldest: z.string().describe('Start date (e.g., "2024-01-01", "42 days ago")'),
+        newest: z.string().optional().describe('End date (defaults to today)'),
       },
       outputSchema: schemas.trainingLoadTrendsOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { days?: number }) =>
-        this.historicalTools.getTrainingLoadTrends(args.days),
+      handler: async (args: { oldest: string; newest?: string }) =>
+        this.historicalTools.getTrainingLoadTrends(args),
     });
 
     // ============================================

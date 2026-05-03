@@ -462,28 +462,31 @@ describe('HistoricalTools', () => {
       },
     };
 
-    it('should fetch training load trends with default days', async () => {
+    it('should fetch training load trends for an oldest-only range (defaults newest to today)', async () => {
       vi.mocked(mockIntervalsClient.getTrainingLoadTrends).mockResolvedValue(mockTrainingLoadTrends);
 
-      const result = await tools.getTrainingLoadTrends();
+      const result = await tools.getTrainingLoadTrends({ oldest: '2024-12-01' });
 
       expect(result).toEqual(mockTrainingLoadTrends);
-      expect(mockIntervalsClient.getTrainingLoadTrends).toHaveBeenCalledWith(42);
+      expect(mockIntervalsClient.getTrainingLoadTrends).toHaveBeenCalledWith(
+        '2024-12-01',
+        expect.any(String)
+      );
     });
 
-    it('should fetch training load trends with custom days', async () => {
+    it('should fetch training load trends for an explicit oldest/newest range', async () => {
       vi.mocked(mockIntervalsClient.getTrainingLoadTrends).mockResolvedValue(mockTrainingLoadTrends);
 
-      const result = await tools.getTrainingLoadTrends(90);
+      const result = await tools.getTrainingLoadTrends({ oldest: '2024-09-01', newest: '2024-12-01' });
 
       expect(result).toEqual(mockTrainingLoadTrends);
-      expect(mockIntervalsClient.getTrainingLoadTrends).toHaveBeenCalledWith(90);
+      expect(mockIntervalsClient.getTrainingLoadTrends).toHaveBeenCalledWith('2024-09-01', '2024-12-01');
     });
 
     it('should propagate errors from client', async () => {
       vi.mocked(mockIntervalsClient.getTrainingLoadTrends).mockRejectedValue(new Error('API error'));
 
-      await expect(tools.getTrainingLoadTrends()).rejects.toThrow('API error');
+      await expect(tools.getTrainingLoadTrends({ oldest: '2024-12-01' })).rejects.toThrow('API error');
     });
   });
 

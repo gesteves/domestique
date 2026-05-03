@@ -173,8 +173,10 @@ export class HistoricalTools {
   /**
    * Get training load trends (CTL/ATL/TSB) with ACWR analysis
    */
-  async getTrainingLoadTrends(days: number = 42): Promise<TrainingLoadTrends> {
-    return await this.intervals.getTrainingLoadTrends(days);
+  async getTrainingLoadTrends(params: { oldest: string; newest?: string }): Promise<TrainingLoadTrends> {
+    const timezone = await this.intervals.getAthleteTimezone();
+    const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
+    return await this.intervals.getTrainingLoadTrends(startDate, endDate);
   }
 
   // ============================================

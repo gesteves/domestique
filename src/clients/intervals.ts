@@ -2482,14 +2482,10 @@ export class IntervalsClient {
 
   /**
    * Get training load trends (CTL/ATL/TSB over time)
-   * @param days - Number of days of history
+   * @param startDate - Start date (YYYY-MM-DD) of the analysis range
+   * @param endDate - End date (YYYY-MM-DD) of the analysis range
    */
-  async getTrainingLoadTrends(days: number = 42): Promise<TrainingLoadTrends> {
-    const endDate = new Date().toISOString().split('T')[0];
-    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split('T')[0];
-
+  async getTrainingLoadTrends(startDate: string, endDate: string): Promise<TrainingLoadTrends> {
     const wellness = await this.fetch<IntervalsWellness[]>('/wellness', {
       oldest: startDate,
       newest: endDate,
@@ -2508,8 +2504,13 @@ export class IntervalsClient {
     // Calculate summary
     const summary = this.calculateTrainingLoadSummary(data);
 
+    // Inclusive day count between the two dates
+    const startMs = new Date(`${startDate}T00:00:00Z`).getTime();
+    const endMs = new Date(`${endDate}T00:00:00Z`).getTime();
+    const periodDays = Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1;
+
     return {
-      period_days: days,
+      period_days: periodDays,
       sport: 'all',
       data,
       summary,
