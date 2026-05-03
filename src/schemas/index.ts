@@ -31,36 +31,10 @@ const hintsField = z
   .describe('Actionable next-step suggestions based on the data. Read these and consider following them when relevant.');
 
 // ============================================
-// Heat zones summary (always included; previously appended dynamically)
+// Heat zones summary (HSI bands and what they mean)
 // ============================================
 
-const HEAT_ZONES_SUMMARY = `
-
-Heat Zones Summary
-
-Zone 1: No Heat Strain (0-0.9 HSI)
-Impact on the Body: You are not experiencing heat strain. While core temperature may be elevated, skin temperature is neutral, allowing you to cool down and perform.
-Impact on Performance: Optimal power/pace during training and racing.
-Guidelines for Pacing: Pacing Not Affected - Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
-Guidelines for Heat Training: No Heat Training - Training in this zone does not result in heat adaptations.
-
-Zone 2: Moderate Heat Strain (1-2.9 HSI)
-Impact on the Body: Both core and skin temperatures are elevated. Heart rate may be slightly higher than usual. You may feel warm.
-Impact on Performance: Potential Performance Decline - Performance may be lower than usual.
-Guidelines for Pacing: Use Discretion - Adjust pacing if needed, hydrate, and cool.
-Guidelines for Heat Training: Partial Heat Training - Training in this zone may result in partial heat adaptations.
-
-Zone 3: High Heat Strain (3-6.9 HSI)
-Impact on the Body: You have high core and skin temperatures. You are sweating heavily, and more blood is transported to the skin to cool down. To maintain the same power/pace, your heart will have to pump faster to maintain oxygen supply to the muscles. This means you will have a higher heart rate than usual. You are feeling hot, and perhaps less motivated to exercise.
-Impact on Performance: Performance Decline - Your exercise capacity is substantially reduced. A higher effort is required to maintain a given power/pace. Exhaustion will occur earlier.
-Guidelines for Pacing: Adjust Pacing, Hydrate, and Cool - Take into account that for a given power/pace, your heart rate will be higher. Adjust pacing according to your heart rate and subjective feeling. Good hydration and cooling can help you finish faster.
-Guidelines for Heat Training: Optimal Heat Training - Training in this zone results in optimal heat adaptations. To gain adaptations, you need to feel hot and sweat heavily.
-
-Zone 4: Extremely High Heat Strain (>7 HSI)
-Impact on the Body: Exercising in this zone for too long may have severe consequences for your health and may place you at risk for heat-related illness. Warning signals are muscle cramps, dizziness, nausea, headache and/or collapse.
-Impact on Performance: Dangerous - Exercising in this zone for too long can cause serious health problems. Performance will be drastically reduced, and you may even need to stop exercising.
-Guidelines for Pacing: Reduce HSI Rapidly - Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.
-Guidelines for Heat Training: Harmful - Training in this zone may cause harm. Reduce intensity or stop exercise, and cool down rapidly. Consult a medical expert if you are experiencing symptoms.`;
+const HEAT_ZONES_SUMMARY = `\n\nZones: Z1 (0-0.9): no heat strain; optimal performance; no adaptation. Z2 (1-2.9): moderate strain; mild performance dip; partial adaptation. Z3 (3-6.9): high strain; substantial performance decline; optimal heat-adaptation training. Z4 (>=7): dangerous; reduce intensity, hydrate, and cool immediately.`;
 
 // ============================================
 // Zones (heart rate, power, pace, heat)
