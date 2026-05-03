@@ -416,6 +416,9 @@ interface IntervalsWellness {
   // Activity and notes
   steps?: number;
   comments?: string;
+
+  // Custom metrics
+  HeatAdaptationScore?: number;
 }
 
 /**
@@ -450,6 +453,7 @@ const WELLNESS_API_TO_OUTPUT_KEY: Record<string, string> = {
   // into `blood_pressure`. Map both API keys to the same output for sourcing.
   systolic: 'blood_pressure',
   diastolic: 'blood_pressure',
+  HeatAdaptationScore: 'heat_adaptation_score',
 };
 
 interface IntervalsEvent {
@@ -1968,6 +1972,11 @@ export class IntervalsClient {
       result.comments = data.comments;
     }
 
+    // Custom metrics
+    if (data.HeatAdaptationScore != null) {
+      result.heat_adaptation_score = formatPercent(data.HeatAdaptationScore);
+    }
+
     return result;
   }
 
@@ -2000,6 +2009,9 @@ export class IntervalsClient {
       if (key === 'date' || key === 'sources') continue;
       const source = sourceMap[key];
       if (source) sources[key] = source;
+    }
+    if (wellness.heat_adaptation_score != null && !sources.heat_adaptation_score) {
+      sources.heat_adaptation_score = 'core body temperature sensor';
     }
     if (Object.keys(sources).length > 0) {
       wellness.sources = sources;

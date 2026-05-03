@@ -460,7 +460,8 @@ const WellnessFieldsShape = {
   vo2max: z.string().optional().describe('Estimated VO2max'),
   steps: z.number().optional().describe('Step count for the day'),
   comments: z.string().optional().describe('User notes/comments for the day'),
-  sources: z.record(z.string(), z.string()).optional().describe('Maps each present wellness field to the provider feeding it ("garmin", "whoop", "oura"), inferred from the athlete\'s provider configuration. Fields outside any configured provider are omitted (likely manual entry, though manually entered values may still appear with a configured source).'),
+  heat_adaptation_score: z.string().optional().describe('Heat adaptation score from CORE body temperature sensor'),
+  sources: z.record(z.string(), z.string()).optional().describe('Maps each present wellness field to the provider feeding it ("garmin", "whoop", "oura", "core body temperature sensor"), inferred from the athlete\'s provider configuration. Fields outside any configured provider are omitted (likely manual entry, though manually entered values may still appear with a configured source).'),
 } as const;
 
 const DailyWellnessZ = z.object({

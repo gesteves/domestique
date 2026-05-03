@@ -1231,6 +1231,106 @@ describe('IntervalsClient', () => {
       expect(result?.weight).toBe('74.5 kg');
       expect(result?.sources).toBeUndefined();
     });
+
+    it('surfaces heat_adaptation_score when present', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        weight: 74.5,
+        HeatAdaptationScore: 72,
+      };
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.heat_adaptation_score).toBe('72%');
+    });
+
+    it('omits heat_adaptation_score when null', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        weight: 74.5,
+        HeatAdaptationScore: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.heat_adaptation_score).toBeUndefined();
+    });
+
+    it('attributes heat_adaptation_score to the core body temperature sensor', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        weight: 74.5,
+        HeatAdaptationScore: 72,
+      };
+      const mockAthlete = {
+        id: 'test',
+        icu_garmin_wellness_keys: ['weight'],
+        whoop_wellness_keys: [],
+        oura_wellness_keys: [],
+      };
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAthlete) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.sources).toEqual({
+        weight: 'garmin',
+        heat_adaptation_score: 'core body temperature sensor',
+      });
+    });
+
+    it('emits sources map with only heat_adaptation_score when no providers contribute', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        HeatAdaptationScore: 72,
+      };
+      const mockAthlete = { id: 'test' }; // No *_wellness_keys configured
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAthlete) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.heat_adaptation_score).toBe('72%');
+      expect(result?.sources).toEqual({
+        heat_adaptation_score: 'core body temperature sensor',
+      });
+    });
+
+    it('lets a configured provider override the heat_adaptation_score fallback', async () => {
+      const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
+      const mockWellness = {
+        id: '2024-12-15',
+        HeatAdaptationScore: 72,
+      };
+      const mockAthlete = {
+        id: 'test',
+        icu_garmin_wellness_keys: ['HeatAdaptationScore'],
+        whoop_wellness_keys: [],
+        oura_wellness_keys: [],
+      };
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockWellness) });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockAthlete) });
+
+      const result = await client.getTodayWellness();
+
+      expect(result?.sources?.heat_adaptation_score).toBe('garmin');
+    });
   });
 
   describe('getWellnessTrends', () => {

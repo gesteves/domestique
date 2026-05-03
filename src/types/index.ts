@@ -873,6 +873,9 @@ interface WellnessFields {
   steps?: number;
   comments?: string;
 
+  // Custom metrics
+  heat_adaptation_score?: string;
+
   // Per-field source attribution: which configured provider feeds each
   // present wellness field (garmin/whoop/oura). Only populated when at least
   // one provider is configured. See attachWellnessSources in the Intervals
