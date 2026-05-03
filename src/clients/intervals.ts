@@ -69,6 +69,11 @@ import {
   formatStrokeLength,
   formatRpe,
   formatFeel,
+  formatSoreness,
+  formatFatigue,
+  formatMood,
+  formatMotivation,
+  formatInjury,
 } from '../utils/format-units.js';
 import { getTodayInTimezone } from '../utils/tz.js';
 import { localStringToISO8601WithTimezone } from '../utils/date-formatting.js';
@@ -1906,22 +1911,27 @@ export class IntervalsClient {
 
     // Subjective metrics (1-4 scale)
     if (data.soreness != null) {
-      result.soreness = data.soreness;
+      const formatted = formatSoreness(data.soreness);
+      if (formatted) result.soreness = formatted;
     }
     if (data.fatigue != null) {
-      result.fatigue = data.fatigue;
+      const formatted = formatFatigue(data.fatigue);
+      if (formatted) result.fatigue = formatted;
     }
     if (data.stress != null) {
       result.stress = data.stress;
     }
     if (data.mood != null) {
-      result.mood = data.mood;
+      const formatted = formatMood(data.mood);
+      if (formatted) result.mood = formatted;
     }
     if (data.motivation != null) {
-      result.motivation = data.motivation;
+      const formatted = formatMotivation(data.motivation);
+      if (formatted) result.motivation = formatted;
     }
     if (data.injury != null) {
-      result.injury = data.injury;
+      const formatted = formatInjury(data.injury);
+      if (formatted) result.injury = formatted;
     }
     if (data.hydration != null) {
       result.hydration = data.hydration;

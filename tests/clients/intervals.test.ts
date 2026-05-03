@@ -1070,8 +1070,8 @@ describe('IntervalsClient', () => {
       expect(result?.hrv).toBe('39 ms');
       expect(result?.sleep_duration).toBe('8h');
       expect(result?.sleep_quality).toBe(1);
-      expect(result?.soreness).toBe(2);
-      expect(result?.fatigue).toBe(2);
+      expect(result?.soreness).toBe('2 - Avg');
+      expect(result?.fatigue).toBe('2 - Avg');
     });
 
     it('should return complete wellness data with all fields', async () => {
@@ -1124,12 +1124,12 @@ describe('IntervalsClient', () => {
       expect(result?.sleep_score).toBe(87);
       expect(result?.sleep_quality).toBe(1);
       expect(result?.avg_sleeping_hr).toBe('48 bpm');
-      expect(result?.soreness).toBe(1);
-      expect(result?.fatigue).toBe(2);
+      expect(result?.soreness).toBe('1 - Low');
+      expect(result?.fatigue).toBe('2 - Avg');
       expect(result?.stress).toBe(1);
-      expect(result?.mood).toBe(2);
-      expect(result?.motivation).toBe(2);
-      expect(result?.injury).toBe(1);
+      expect(result?.mood).toBe('2 - Good');
+      expect(result?.motivation).toBe('2 - High');
+      expect(result?.injury).toBe('1 - None');
       expect(result?.hydration).toBe(2);
       expect(result?.spo2).toBe('98.0%');
       expect(result?.blood_pressure).toBe('120/80 mmHg');
@@ -1399,8 +1399,8 @@ describe('IntervalsClient', () => {
       expect(result.data[0].sleep_duration).toBe('7h 30m');
       expect(result.data[0].sleep_score).toBe(85);
       expect(result.data[0].sleep_quality).toBe(1);
-      expect(result.data[0].soreness).toBe(2);
-      expect(result.data[0].fatigue).toBe(2);
+      expect(result.data[0].soreness).toBe('2 - Avg');
+      expect(result.data[0].fatigue).toBe('2 - Avg');
       expect(result.data[0].readiness).toBe(70);
     });
 

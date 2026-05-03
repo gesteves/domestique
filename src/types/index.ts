@@ -846,12 +846,12 @@ interface WellnessFields {
   avg_sleeping_hr?: string;
 
   // Subjective metrics (1-4 scale)
-  soreness?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
-  fatigue?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  soreness?: string; // e.g., "1 - Low"
+  fatigue?: string; // e.g., "2 - Avg"
   stress?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
-  mood?: number; // 1=GREAT, 2=GOOD, 3=OK, 4=GRUMPY
-  motivation?: number; // 1=EXTREME, 2=HIGH, 3=AVG, 4=LOW
-  injury?: number; // 1=NONE, 2=NIGGLE, 3=POOR, 4=INJURED
+  mood?: string; // e.g., "1 - Great"
+  motivation?: string; // e.g., "2 - High"
+  injury?: string; // e.g., "1 - None"
   hydration?: number; // 1=GOOD, 2=OK, 3=POOR, 4=BAD
 
   // Vitals

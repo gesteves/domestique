@@ -447,3 +447,69 @@ export function formatFeel(value: number): string | undefined {
   const label = FEEL_LABELS[n];
   return label ? `${n} - ${label}` : undefined;
 }
+
+const SORENESS_LABELS: Record<number, string> = {
+  1: 'Low',
+  2: 'Avg',
+  3: 'High',
+  4: 'Extreme',
+};
+
+const FATIGUE_LABELS: Record<number, string> = {
+  1: 'Low',
+  2: 'Avg',
+  3: 'High',
+  4: 'Extreme',
+};
+
+const MOOD_LABELS: Record<number, string> = {
+  1: 'Great',
+  2: 'Good',
+  3: 'OK',
+  4: 'Grumpy',
+};
+
+const MOTIVATION_LABELS: Record<number, string> = {
+  1: 'Extreme',
+  2: 'High',
+  3: 'Avg',
+  4: 'Low',
+};
+
+const INJURY_LABELS: Record<number, string> = {
+  1: 'None',
+  2: 'Niggle',
+  3: 'Poor',
+  4: 'Injured',
+};
+
+function formatScale(value: number, labels: Record<number, string>): string | undefined {
+  const n = Math.round(value);
+  const label = labels[n];
+  return label ? `${n} - ${label}` : undefined;
+}
+
+/** Format a pre-training soreness value (1–4) as "[number] - label". */
+export function formatSoreness(value: number): string | undefined {
+  return formatScale(value, SORENESS_LABELS);
+}
+
+/** Format a pre-training fatigue value (1–4) as "[number] - label". */
+export function formatFatigue(value: number): string | undefined {
+  return formatScale(value, FATIGUE_LABELS);
+}
+
+/** Format a mood value (1–4) as "[number] - label". */
+export function formatMood(value: number): string | undefined {
+  return formatScale(value, MOOD_LABELS);
+}
+
+/** Format a motivation value (1–4) as "[number] - label". */
+export function formatMotivation(value: number): string | undefined {
+  return formatScale(value, MOTIVATION_LABELS);
+}
+
+/** Format an injury status value (1–4) as "[number] - label". */
+export function formatInjury(value: number): string | undefined {
+  return formatScale(value, INJURY_LABELS);
+}

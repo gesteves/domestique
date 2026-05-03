@@ -27,6 +27,11 @@ import {
   formatStrokeLength,
   formatRpe,
   formatFeel,
+  formatSoreness,
+  formatFatigue,
+  formatMood,
+  formatMotivation,
+  formatInjury,
 } from '../../src/utils/format-units.js';
 import { runWithUnitPreferences } from '../../src/utils/unit-context.js';
 import type { UnitPreferences } from '../../src/types/index.js';
@@ -557,6 +562,82 @@ describe('format-units', () => {
       expect(formatFeel(0)).toBeUndefined();
       expect(formatFeel(6)).toBeUndefined();
       expect(formatFeel(-1)).toBeUndefined();
+    });
+  });
+
+  describe('formatSoreness', () => {
+    it('maps every value 1-4 to its label', () => {
+      expect(formatSoreness(1)).toBe('1 - Low');
+      expect(formatSoreness(2)).toBe('2 - Avg');
+      expect(formatSoreness(3)).toBe('3 - High');
+      expect(formatSoreness(4)).toBe('4 - Extreme');
+    });
+
+    it('rounds fractional values', () => {
+      expect(formatSoreness(2.4)).toBe('2 - Avg');
+      expect(formatSoreness(2.6)).toBe('3 - High');
+    });
+
+    it('returns undefined for out-of-range values', () => {
+      expect(formatSoreness(0)).toBeUndefined();
+      expect(formatSoreness(5)).toBeUndefined();
+      expect(formatSoreness(-1)).toBeUndefined();
+    });
+  });
+
+  describe('formatFatigue', () => {
+    it('maps every value 1-4 to its label', () => {
+      expect(formatFatigue(1)).toBe('1 - Low');
+      expect(formatFatigue(2)).toBe('2 - Avg');
+      expect(formatFatigue(3)).toBe('3 - High');
+      expect(formatFatigue(4)).toBe('4 - Extreme');
+    });
+
+    it('returns undefined for out-of-range values', () => {
+      expect(formatFatigue(0)).toBeUndefined();
+      expect(formatFatigue(5)).toBeUndefined();
+    });
+  });
+
+  describe('formatMood', () => {
+    it('maps every value 1-4 to its label', () => {
+      expect(formatMood(1)).toBe('1 - Great');
+      expect(formatMood(2)).toBe('2 - Good');
+      expect(formatMood(3)).toBe('3 - OK');
+      expect(formatMood(4)).toBe('4 - Grumpy');
+    });
+
+    it('returns undefined for out-of-range values', () => {
+      expect(formatMood(0)).toBeUndefined();
+      expect(formatMood(5)).toBeUndefined();
+    });
+  });
+
+  describe('formatMotivation', () => {
+    it('maps every value 1-4 to its label (1=Extreme, 4=Low)', () => {
+      expect(formatMotivation(1)).toBe('1 - Extreme');
+      expect(formatMotivation(2)).toBe('2 - High');
+      expect(formatMotivation(3)).toBe('3 - Avg');
+      expect(formatMotivation(4)).toBe('4 - Low');
+    });
+
+    it('returns undefined for out-of-range values', () => {
+      expect(formatMotivation(0)).toBeUndefined();
+      expect(formatMotivation(5)).toBeUndefined();
+    });
+  });
+
+  describe('formatInjury', () => {
+    it('maps every value 1-4 to its label', () => {
+      expect(formatInjury(1)).toBe('1 - None');
+      expect(formatInjury(2)).toBe('2 - Niggle');
+      expect(formatInjury(3)).toBe('3 - Poor');
+      expect(formatInjury(4)).toBe('4 - Injured');
+    });
+
+    it('returns undefined for out-of-range values', () => {
+      expect(formatInjury(0)).toBeUndefined();
+      expect(formatInjury(5)).toBeUndefined();
     });
   });
 });
