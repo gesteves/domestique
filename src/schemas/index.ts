@@ -839,10 +839,7 @@ export const activityTotalsOutputSchema = {
     kcal: z.number().optional().describe('Total calories burned'),
     work: z.string().optional().describe('Total work done (only present if > 0)'),
     coasting: z.string().optional().describe('Total coasting/recovery time'),
-    zones: z.object({
-      heart_rate: z.array(ZoneTotalEntryZ).optional().describe('Combined heart rate zone times across all sports'),
-    }).passthrough().optional(),
-  }).passthrough().describe('Aggregated totals across all activities'),
+  }).passthrough().describe('Aggregated totals across all activities. Zone breakdowns are per-sport in by_sport[*].zones, since zones differ by sport'),
   by_sport: z.record(z.string(), SportTotalsZ).describe('Breakdown by sport type. Keys are sport names (cycling, running, swimming, etc.)'),
 } as const;
 

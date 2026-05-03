@@ -920,11 +920,12 @@ export class HistoricalTools {
   }
 
   /**
-   * Aggregate totals across all activities
+   * Aggregate totals across all activities. Zone breakdowns intentionally live
+   * per-sport in `by_sport[*].zones` — zone definitions differ by sport, so an
+   * aggregate view across sports isn't meaningful.
    */
   private aggregateTotals(activities: NormalizedWorkout[]): ActivityTotalsResponse['totals'] {
     const stats = this.accumulateActivityStats(activities);
-    const hrZones = this.calculateZonePercentages(stats.hrZoneSeconds);
 
     const result: ActivityTotalsResponse['totals'] = {
       activities: activities.length,
@@ -933,9 +934,6 @@ export class HistoricalTools {
       load: Math.round(stats.load),
       kcal: Math.round(stats.kcal),
       coasting: formatLargeDuration(stats.coastingSeconds),
-      zones: {
-        heart_rate: hrZones.length > 0 ? hrZones : undefined,
-      },
     };
 
     if (stats.climbingM > 0) {

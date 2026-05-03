@@ -1627,7 +1627,7 @@ export interface ActivityTotalsResponse {
     /** Days with at least one activity */
     active_days: number;
   };
-  /** Aggregated totals across all activities */
+  /** Aggregated totals across all activities. Zone breakdowns live per-sport in by_sport[*].zones. */
   totals: {
     /** Total number of activities */
     activities: number;
@@ -1645,11 +1645,6 @@ export interface ActivityTotalsResponse {
     work?: string;
     /** Total coasting/recovery time (e.g., "3:45:00") */
     coasting: string;
-    /** Combined zone data across all sports */
-    zones: {
-      /** Combined heart rate zone times across all sports */
-      heart_rate?: ZoneTotalEntry[];
-    };
   };
   /** Breakdown by sport type */
   by_sport: {

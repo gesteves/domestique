@@ -1053,9 +1053,8 @@ describe('HistoricalTools', () => {
       expect(result.totals.work).toBe('2600 kJ');
       expect(result.totals.coasting).toBe('0:25:00'); // 0:15 + 0:10
 
-      // Check HR zones are aggregated
-      expect(result.totals.zones.heart_rate).toBeDefined();
-      expect(result.totals.zones.heart_rate!.length).toBeGreaterThan(0);
+      // Zones are per-sport, not aggregated at the top level
+      expect((result.totals as any).zones).toBeUndefined();
 
       // Check by_sport breakdown
       expect(result.by_sport.cycling).toBeDefined();
