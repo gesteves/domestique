@@ -37,9 +37,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_upcoming_races` - Upcoming races from the TrainerRoad calendar
 
 ### Workout Management
-- `create_run_workout` - Creates a structured running workout in Intervals.icu from a workout definition in Intervals.icu syntax
-- `create_cycling_workout` - Creates a structured cycling workout in Intervals.icu from a workout definition in Intervals.icu syntax
-- `create_swimming_workout` - Creates a structured swimming workout in Intervals.icu (WIP, Intervals.icu won't do anything with these until syncing to FORM Goggles is added)
+- `create_workout` - Creates a structured workout (cycling, running, or swimming) in Intervals.icu from a workout definition in Intervals.icu syntax. Cycling and running workouts sync to Zwift and Garmin; swimming is WIP pending FORM Goggles sync.
 - `update_workout` - Updates a Domestique-created workout in Intervals.icu
 - `delete_workout` - Deletes a Domestique-created workout from Intervals.icu
 - `sync_trainerroad_runs` - Syncs running workouts from TrainerRoad to Intervals.icu, creating new workouts, detecting changes, and cleaning up orphans

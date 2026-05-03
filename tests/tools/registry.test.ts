@@ -148,19 +148,15 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_activity_totals');
       // Races
       expect(registeredTools).toContain('get_upcoming_races');
-      // Workout sync tools
-      expect(registeredTools).toContain('create_run_workout');
+      // Workout management tools
+      expect(registeredTools).toContain('create_workout');
       expect(registeredTools).toContain('update_workout');
       expect(registeredTools).toContain('delete_workout');
       expect(registeredTools).toContain('sync_trainerroad_runs');
       expect(registeredTools).toContain('set_workout_intervals');
-      // Cycling workout tools
-      expect(registeredTools).toContain('create_cycling_workout');
-      // Swimming workout tools
-      expect(registeredTools).toContain('create_swimming_workout');
       expect(registeredTools).toContain('update_activity');
       expect(registeredTools).toContain('get_workout_music');
-      expect(registeredTools.length).toBe(29);
+      expect(registeredTools.length).toBe(27);
     });
 
     it('should call server.registerTool for each tool', () => {
@@ -170,7 +166,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(29);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(27);
     });
 
     it('skips Whoop-dependent tools when Whoop is not configured', () => {
@@ -183,7 +179,7 @@ describe('ToolRegistry', () => {
       expect(names).toContain('get_todays_summary');
       expect(names).toContain('get_todays_workouts');
       expect(names).toContain('get_workout_history');
-      expect(names.length).toBe(27);
+      expect(names.length).toBe(25);
     });
 
     it('skips TrainerRoad-dependent tools when TrainerRoad is not configured', () => {
@@ -194,8 +190,8 @@ describe('ToolRegistry', () => {
       expect(names).not.toContain('sync_trainerroad_runs');
       // Planning tools that only need Intervals stay registered
       expect(names).toContain('get_upcoming_workouts');
-      expect(names).toContain('create_run_workout');
-      expect(names.length).toBe(27);
+      expect(names).toContain('create_workout');
+      expect(names.length).toBe(25);
     });
 
     it('skips Last.fm-dependent tools when Last.fm is not configured', () => {
@@ -203,7 +199,7 @@ describe('ToolRegistry', () => {
       const names = collectRegisteredTools(registryNoLastfm);
 
       expect(names).not.toContain('get_workout_music');
-      expect(names.length).toBe(28);
+      expect(names.length).toBe(26);
     });
 
     it('registers only Intervals-only tools when all optional clients are missing', () => {
@@ -220,8 +216,8 @@ describe('ToolRegistry', () => {
       expect(names).not.toContain('get_upcoming_races');
       expect(names).not.toContain('sync_trainerroad_runs');
       expect(names).not.toContain('get_workout_music');
-      // 29 - 5 skipped = 24
-      expect(names.length).toBe(24);
+      // 27 - 5 skipped = 22
+      expect(names.length).toBe(22);
     });
 
     it('should pass config object with title, description, and annotations to each tool', () => {

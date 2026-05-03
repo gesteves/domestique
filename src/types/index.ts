@@ -415,47 +415,21 @@ export interface PlannedWorkout {
 // ============================================
 
 /**
- * Input for creating a run workout in Intervals.icu.
+ * Input for creating a workout in Intervals.icu.
  */
-export interface CreateRunWorkoutInput {
+export interface CreateWorkoutInput {
+  /** Sport for the workout */
+  sport: 'cycling' | 'running' | 'swimming';
   /** Scheduled date in YYYY-MM-DD format or ISO datetime */
   scheduled_for: string;
-  /** Workout name (e.g., "Run Intervals") */
+  /** Workout name */
   name: string;
   /** Optional description/notes */
   description?: string;
   /** Structured workout definition in Intervals.icu syntax */
   workout_doc: string;
-  /** TrainerRoad workout UID for tracking (enables orphan detection) */
+  /** TrainerRoad workout UID for orphan tracking. Only meaningful for runs. */
   trainerroad_uid?: string;
-}
-
-/**
- * Input for creating a cycling workout in Intervals.icu.
- */
-export interface CreateCyclingWorkoutInput {
-  /** Scheduled date in YYYY-MM-DD format or ISO datetime */
-  scheduled_for: string;
-  /** Workout name (e.g., "Sweet Spot Intervals") */
-  name: string;
-  /** Optional description/notes */
-  description?: string;
-  /** Structured workout definition in Intervals.icu syntax */
-  workout_doc: string;
-}
-
-/**
- * Input for creating a swimming workout in Intervals.icu.
- */
-export interface CreateSwimmingWorkoutInput {
-  /** Scheduled date in YYYY-MM-DD format or ISO datetime */
-  scheduled_for: string;
-  /** Workout name (e.g., "Threshold 10x100") */
-  name: string;
-  /** Optional description/notes */
-  description?: string;
-  /** Structured workout definition in Intervals.icu syntax */
-  workout_doc: string;
 }
 
 /**
@@ -518,7 +492,7 @@ export interface SyncTRRunsResult {
   tr_runs_found: number;
   /** Number of orphaned workouts deleted */
   orphans_deleted: number;
-  /** TR runs that need to be synced (LLM should use create_run_workout for each) */
+  /** TR runs that need to be synced (LLM should use create_workout with sport "running" for each) */
   runs_to_sync: Array<{
     tr_uid: string;
     tr_name: string;

@@ -30,7 +30,7 @@ describe('PlanningTools sync operations', () => {
     vi.useRealTimers();
   });
 
-  describe('createRunWorkout', () => {
+  describe('createWorkout (running)', () => {
     it('should create workout with all required fields', async () => {
       vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
         id: 123,
@@ -41,7 +41,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createRunWorkout({
+      const result = await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-16',
         name: 'Test Run',
         workout_doc: 'Warmup\n- 10m Z2 Pace',
@@ -63,7 +64,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createRunWorkout({
+      const result = await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-17',
         name: 'Interval Run',
         description: 'RPE-based intervals',
@@ -95,7 +97,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createRunWorkout({
+      await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-22',
         name: 'Ordered Run',
         description: 'Notes about the run',
@@ -119,7 +122,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createRunWorkout({
+      await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-23',
         name: 'Date Only Run',
         workout_doc: '- 10m Z2 Pace',
@@ -142,7 +146,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createRunWorkout({
+      await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-24T14:30:00',
         name: 'Datetime Run',
         workout_doc: '- 10m Z2 Pace',
@@ -165,7 +170,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createRunWorkout({
+      await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-18',
         name: 'Tagged Run',
         workout_doc: '- 30m Z2 Pace',
@@ -188,7 +194,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createRunWorkout({
+      await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-19',
         name: 'Synced Run',
         workout_doc: '- 20m Z3 Pace',
@@ -208,7 +215,8 @@ describe('PlanningTools sync operations', () => {
       );
 
       await expect(
-        tools.createRunWorkout({
+        tools.createWorkout({
+          sport: 'running',
           scheduled_for: '2024-12-20',
           name: 'Failed Run',
           workout_doc: '- 10m Z1 Pace',
@@ -226,7 +234,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createRunWorkout({
+      const result = await tools.createWorkout({
+        sport: 'running',
         scheduled_for: '2024-12-21',
         name: 'Structure Test',
         workout_doc: '- 15m Z2 Pace',
@@ -240,7 +249,7 @@ describe('PlanningTools sync operations', () => {
     });
   });
 
-  describe('createCyclingWorkout', () => {
+  describe('createWorkout (cycling)', () => {
     it('should create cycling workout with all required fields', async () => {
       vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
         id: 200,
@@ -251,7 +260,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createCyclingWorkout({
+      const result = await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-16',
         name: 'Sweet Spot Intervals',
         workout_doc: 'Warmup\n- 10m ramp 50-75% 90rpm\n\nMain Set 3x\n- 15m 88-92% 85rpm\n- 5m 55% 90rpm\n\nCooldown\n- 10m ramp 55-40% 85rpm',
@@ -273,7 +283,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createCyclingWorkout({
+      const result = await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-17',
         name: 'VO2 Max Workout',
         description: 'High intensity intervals for VO2 max development',
@@ -303,7 +314,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createCyclingWorkout({
+      await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-22',
         name: 'Ordered Ride',
         description: 'Notes about the workout',
@@ -327,7 +339,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createCyclingWorkout({
+      await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-23',
         name: 'Date Only Ride',
         workout_doc: '- 60m 75% 90rpm',
@@ -350,7 +363,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createCyclingWorkout({
+      await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-24T14:30:00',
         name: 'Datetime Ride',
         workout_doc: '- 60m 75% 90rpm',
@@ -373,7 +387,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createCyclingWorkout({
+      await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-18',
         name: 'Tagged Ride',
         workout_doc: '- 90m 65-75% 85-95rpm',
@@ -396,7 +411,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createCyclingWorkout({
+      await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-19',
         name: 'Ride Type Test',
         workout_doc: '- 30m 100% 90rpm',
@@ -419,7 +435,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createCyclingWorkout({
+      await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-20',
         name: 'No External ID',
         workout_doc: '- 45m 80% 90rpm',
@@ -435,7 +452,8 @@ describe('PlanningTools sync operations', () => {
       );
 
       await expect(
-        tools.createCyclingWorkout({
+        tools.createWorkout({
+          sport: 'cycling',
           scheduled_for: '2024-12-20',
           name: 'Failed Ride',
           workout_doc: '- 10m 50% 90rpm',
@@ -453,7 +471,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createCyclingWorkout({
+      const result = await tools.createWorkout({
+        sport: 'cycling',
         scheduled_for: '2024-12-21',
         name: 'Structure Test',
         workout_doc: '- 15m 88% 85rpm',
@@ -467,7 +486,7 @@ describe('PlanningTools sync operations', () => {
     });
   });
 
-  describe('createSwimmingWorkout', () => {
+  describe('createWorkout (swimming)', () => {
     it('should create swimming workout with all required fields', async () => {
       vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
         id: 300,
@@ -478,7 +497,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createSwimmingWorkout({
+      const result = await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-16',
         name: 'Threshold 10x100',
         workout_doc: 'Warmup\n- 400m easy\n\nMain Set 10x\n- 100m Z4 Pace\n- 20s rest\n\nCooldown\n- 200m easy',
@@ -500,7 +520,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createSwimmingWorkout({
+      const result = await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-17',
         name: 'Endurance Swim',
         description: 'Focus on long steady sets',
@@ -530,7 +551,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createSwimmingWorkout({
+      await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-22',
         name: 'Ordered Swim',
         description: 'Notes about the swim',
@@ -554,7 +576,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createSwimmingWorkout({
+      await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-23',
         name: 'Date Only Swim',
         workout_doc: '- 1000m Z2 Pace',
@@ -577,7 +600,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createSwimmingWorkout({
+      await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-24T06:00:00',
         name: 'Datetime Swim',
         workout_doc: '- 1500m Z3 Pace',
@@ -600,7 +624,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createSwimmingWorkout({
+      await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-18',
         name: 'Tagged Swim',
         workout_doc: '- 800m Z2 Pace',
@@ -623,7 +648,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createSwimmingWorkout({
+      await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-19',
         name: 'Swim Type Test',
         workout_doc: '- 500m Z3 Pace',
@@ -646,7 +672,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      await tools.createSwimmingWorkout({
+      await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-20',
         name: 'No External ID',
         workout_doc: '- 1000m Z2 Pace',
@@ -662,7 +689,8 @@ describe('PlanningTools sync operations', () => {
       );
 
       await expect(
-        tools.createSwimmingWorkout({
+        tools.createWorkout({
+          sport: 'swimming',
           scheduled_for: '2024-12-20',
           name: 'Failed Swim',
           workout_doc: '- 400m Z1 Pace',
@@ -680,7 +708,8 @@ describe('PlanningTools sync operations', () => {
         category: 'WORKOUT',
       });
 
-      const result = await tools.createSwimmingWorkout({
+      const result = await tools.createWorkout({
+        sport: 'swimming',
         scheduled_for: '2024-12-21',
         name: 'Structure Test',
         workout_doc: '- 600m Z2 Pace',

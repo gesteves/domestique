@@ -742,18 +742,18 @@ Get the activity_id from:
     // ============================================
 
     register({
-      name: 'create_run_workout',
-      title: 'Create Run Workout',
-      description: `Creates a structured running workout in Intervals.icu that syncs to Zwift or Garmin.
+      name: 'create_workout',
+      title: 'Create Workout',
+      description: `Creates a structured workout in Intervals.icu. Cycling and running workouts sync to Zwift and Garmin.
 
 <use-cases>
-- Creating a structured running workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
+- Creating a structured workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
 - Syncing run workouts from TrainerRoad to be executable on Zwift or Garmin.
 </use-cases>
 
 <instructions>
 - The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
-- If syncing a TrainerRoad run, include the trainerroad_uid, which enables orphan tracking.
+- If syncing a TrainerRoad run, set sport to "running" and include the trainerroad_uid, which enables orphan tracking. trainerroad_uid is ignored for other sports.
 </instructions>
 
 <notes>
@@ -762,77 +762,17 @@ Get the activity_id from:
 - If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
 </notes>`,
       inputSchema: {
+        sport: z.enum(['cycling', 'running', 'swimming']).describe('Sport for the workout'),
         scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
         name: z.string().describe('Workout name'),
         description: z.string().optional().describe('Optional notes/description'),
         workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
-        trainerroad_uid: z.string().optional().describe('TrainerRoad workout UID for tracking'),
+        trainerroad_uid: z.string().optional().describe('TrainerRoad workout UID for orphan tracking. Only meaningful when sport is "running"'),
       },
       outputSchema: schemas.createWorkoutOutputSchema,
       annotations: CREATES_EXTERNAL,
-      handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
-        this.planningTools.createRunWorkout(args),
-    });
-
-    register({
-      name: 'create_cycling_workout',
-      title: 'Create Cycling Workout',
-      description: `Creates a structured cycling workout in Intervals.icu that syncs to Zwift or Garmin.
-
-<use-cases>
-- Creating a structured cycling workout in Intervals.icu from a workout_doc written in Intervals.icu syntax.
-</use-cases>
-
-<instructions>
-- The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
-</instructions>
-
-<notes>
-- This creates the workout directly in Intervals.icu and will appear on the user's calendar.
-- The workout will be tagged with 'domestique' for tracking.
-- If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
-</notes>`,
-      inputSchema: {
-        scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
-        name: z.string().describe('Workout name'),
-        description: z.string().optional().describe('Optional notes/description'),
-        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
-      },
-      outputSchema: schemas.createWorkoutOutputSchema,
-      annotations: CREATES_EXTERNAL,
-      handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
-        this.planningTools.createCyclingWorkout(args),
-    });
-
-    register({
-      name: 'create_swimming_workout',
-      title: 'Create Swimming Workout',
-      description: `Creates a structured swimming workout in Intervals.icu.
-
-<use-cases>
-- Creating a structured swimming workout in Intervals.icu.
-</use-cases>
-
-<instructions>
-- The workout_doc parameter must contain a valid Intervals.icu workout definition. The caller is responsible for generating the correct syntax.
-- The description parameter is plain text notes about the workout (not Intervals.icu syntax).
-</instructions>
-
-<notes>
-- This creates the workout directly in Intervals.icu and will appear on the user's calendar.
-- The workout will be tagged with 'domestique' for tracking.
-- If the workout looks wrong after creation, use delete_workout to remove it and recreate with fixes.
-</notes>`,
-      inputSchema: {
-        scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
-        name: z.string().describe('Workout name'),
-        description: z.string().optional().describe('Optional plain text notes about the workout'),
-        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
-      },
-      outputSchema: schemas.createWorkoutOutputSchema,
-      annotations: CREATES_EXTERNAL,
-      handler: async (args: { scheduled_for: string; name: string; description?: string; workout_doc: string }) =>
-        this.planningTools.createSwimmingWorkout(args),
+      handler: async (args: { sport: 'cycling' | 'running' | 'swimming'; scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
+        this.planningTools.createWorkout(args),
     });
 
     register({
@@ -915,7 +855,7 @@ Get the activity_id from:
 
 <instructions>
 1. Call this tool to get the list of TR runs that need syncing.
-2. For each TrainerRoad run in runs_to_sync, use create_run_workout to create it.
+2. For each TrainerRoad run in runs_to_sync, use create_workout (sport: "running") to create it.
 3. Orphaned workouts (i.e the TrainerRoad source workout got deleted) are automatically removed.
 </instructions>
 

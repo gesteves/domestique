@@ -6,9 +6,7 @@ import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } fro
 import type {
   PlannedWorkout,
   Race,
-  CreateRunWorkoutInput,
-  CreateCyclingWorkoutInput,
-  CreateSwimmingWorkoutInput,
+  CreateWorkoutInput,
   CreateWorkoutResponse,
   UpdateWorkoutInput,
   UpdateWorkoutResponse,
@@ -103,34 +101,22 @@ export class PlanningTools {
   // ============================================
 
   /**
-   * Create a structured running workout in Intervals.icu.
+   * Create a structured workout in Intervals.icu.
    * The workout will be tagged with 'domestique' for tracking.
    */
-  async createRunWorkout(input: CreateRunWorkoutInput): Promise<CreateWorkoutResponse> {
-    return this.createWorkout({
-      ...input,
-      type: 'Run',
-      external_id: input.trainerroad_uid,
+  async createWorkout(input: CreateWorkoutInput): Promise<CreateWorkoutResponse> {
+    const typeMap = { cycling: 'Ride', running: 'Run', swimming: 'Swim' } as const;
+    return this.createWorkoutInternal({
+      scheduled_for: input.scheduled_for,
+      name: input.name,
+      description: input.description,
+      workout_doc: input.workout_doc,
+      type: typeMap[input.sport],
+      external_id: input.sport === 'running' ? input.trainerroad_uid : undefined,
     });
   }
 
-  /**
-   * Create a structured cycling workout in Intervals.icu.
-   * The workout will be tagged with 'domestique' for tracking.
-   */
-  async createCyclingWorkout(input: CreateCyclingWorkoutInput): Promise<CreateWorkoutResponse> {
-    return this.createWorkout({ ...input, type: 'Ride' });
-  }
-
-  /**
-   * Create a structured swimming workout in Intervals.icu.
-   * The workout will be tagged with 'domestique' for tracking.
-   */
-  async createSwimmingWorkout(input: CreateSwimmingWorkoutInput): Promise<CreateWorkoutResponse> {
-    return this.createWorkout({ ...input, type: 'Swim' });
-  }
-
-  private async createWorkout(params: {
+  private async createWorkoutInternal(params: {
     scheduled_for: string;
     name: string;
     description?: string;

@@ -1050,7 +1050,7 @@ export const syncTrainerRoadRunsOutputSchema = {
     scheduled_for: z.string().optional().describe('Scheduled date/time'),
     expected_tss: z.number().optional().describe('Expected TSS'),
     expected_duration: z.string().optional().describe('Expected duration'),
-  }).passthrough()).describe('TR runs that need to be created in Intervals.icu via create_run_workout'),
+  }).passthrough()).describe('TR runs that need to be created in Intervals.icu via create_workout with sport "running"'),
   runs_to_update: z.array(z.object({
     tr_uid: z.string().optional(),
     tr_name: z.string().optional(),

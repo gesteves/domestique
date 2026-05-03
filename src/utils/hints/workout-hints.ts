@@ -56,7 +56,7 @@ export const trainerroadSyncHint: HintGenerator<TodaysPlannedWorkoutsResponse | 
   return (
     `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
     `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
-    `or create_run_workout tools. First fetch the user's running pace zones via get_sports_settings.`
+    `or create_workout (sport: "running") tools. First fetch the user's running pace zones via get_sports_settings.`
   );
 };
 
@@ -70,7 +70,7 @@ export const dailySummarySyncHint: HintGenerator<DailySummary> = (data) => {
   return (
     `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
     `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
-    `or create_run_workout tools. First fetch the user's running pace zones via get_sports_settings.`
+    `or create_workout (sport: "running") tools. First fetch the user's running pace zones via get_sports_settings.`
   );
 };
 
@@ -112,7 +112,7 @@ export const todaysWorkoutsSyncHint: HintGenerator<TodaysWorkoutsResponse> = (da
   return (
     `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
     `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
-    `or create_run_workout tools. First fetch the user's running pace zones via get_sports_settings.`
+    `or create_workout (sport: "running") tools. First fetch the user's running pace zones via get_sports_settings.`
   );
 };
 
