@@ -134,6 +134,14 @@ export interface NormalizedWorkout {
   pool_length?: string; // e.g., "25 m"
   lengths?: number; // Number of lengths swam
 
+  // FORM Goggles efficiency scores (swim-only, all 0-100, higher is better; sourced from custom fields on Intervals.icu)
+  form_score?: number; // Overall efficiency
+  form_head_pitch?: number; // Head pitch
+  form_peak_head_roll?: number; // Side-to-side head rotation when breathing
+  form_time_to_neutral?: number; // Time-to-neutral after inhaling
+  form_set_pacing?: number; // Pacing consistency within a set
+  form_interval_pacing?: number; // Pacing consistency within an interval
+
   // Altitude
   average_altitude?: string; // e.g., "1234 m"
   min_altitude?: string;
@@ -578,6 +586,18 @@ export interface UpdateActivityInput {
   name?: string;
   /** New description/notes for the activity */
   description?: string;
+  /** FORM Goggles overall efficiency score (0-100, higher is better) */
+  form_score?: number;
+  /** FORM Goggles head pitch score (0-100, higher is better) */
+  form_head_pitch?: number;
+  /** FORM Goggles peak head roll score (0-100, higher is better) */
+  form_peak_head_roll?: number;
+  /** FORM Goggles time-to-neutral score (0-100, higher is better) */
+  form_time_to_neutral?: number;
+  /** FORM Goggles set pacing score (0-100, higher is better) */
+  form_set_pacing?: number;
+  /** FORM Goggles interval pacing score (0-100, higher is better) */
+  form_interval_pacing?: number;
 }
 
 /**

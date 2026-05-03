@@ -361,6 +361,15 @@ interface IntervalsActivity {
   // Swim-specific (from single activity endpoint)
   pool_length?: number; // Pool length in meters (e.g., 22.86 for a 25yd pool)
   lengths?: number; // Number of pool lengths swum
+
+  // FORM Goggles efficiency scores (swim-specific custom fields manually entered from the FORM app).
+  // All are unitless 0-100 scores; higher is better. Custom-field names use PascalCase per Intervals.icu convention.
+  FormScore?: number; // Overall efficiency: speed, distance per stroke, height, surface-only swimming
+  FormHeadPitch?: number; // Head pitch — peaks near a 30-37° angle
+  FormPeakHeadRoll?: number; // Side-to-side head rotation when breathing — lower angles score higher
+  FormTimeToNeutral?: number; // Time spent returning head to neutral after inhaling, vs the swimmer's 5-swim average
+  FormSetPacing?: number; // Pacing consistency within a set
+  FormIntervalPacing?: number; // Pacing consistency within an interval
 }
 
 interface IntervalsWellness {
@@ -2406,6 +2415,14 @@ export class IntervalsClient {
       // Swimming metrics (only present for pool swims)
       pool_length: poolLengthM != null ? formatPoolLength(poolLengthM) : undefined,
       lengths: activity.lengths,
+
+      // FORM Goggles efficiency scores (only present when manually filled in for swims; all 0-100, higher is better)
+      form_score: activity.FormScore,
+      form_head_pitch: activity.FormHeadPitch,
+      form_peak_head_roll: activity.FormPeakHeadRoll,
+      form_time_to_neutral: activity.FormTimeToNeutral,
+      form_set_pacing: activity.FormSetPacing,
+      form_interval_pacing: activity.FormIntervalPacing,
 
       // Altitude
       average_altitude: activity.average_altitude != null ? formatLength(activity.average_altitude) : undefined,

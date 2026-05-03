@@ -78,7 +78,9 @@ describe('PlanningTools updateActivity', () => {
     it('should throw when no fields are provided', async () => {
       await expect(
         tools.updateActivity({ activity_id: 'i12345' })
-      ).rejects.toThrow('No fields provided to update. Specify at least one of: name, description');
+      ).rejects.toThrow(
+        'No fields provided to update. Specify at least one of: name, description, form_score, form_head_pitch, form_peak_head_roll, form_time_to_neutral, form_set_pacing, form_interval_pacing'
+      );
 
       expect(mockIntervalsClient.updateActivity).not.toHaveBeenCalled();
     });
@@ -118,6 +120,98 @@ describe('PlanningTools updateActivity', () => {
       expect(result.updated_fields).toEqual(['description']);
       expect(mockIntervalsClient.updateActivity).toHaveBeenCalledWith('i12345', {
         description: '',
+      });
+    });
+
+    it('should write each FORM Goggles score with the PascalCase API key', async () => {
+      vi.mocked(mockIntervalsClient.updateActivity).mockResolvedValue(undefined);
+
+      const cases: Array<[
+        keyof Parameters<typeof tools.updateActivity>[0],
+        string,
+        number,
+      ]> = [
+        ['form_score', 'FormScore', 30],
+        ['form_head_pitch', 'FormHeadPitch', 100],
+        ['form_peak_head_roll', 'FormPeakHeadRoll', 65],
+        ['form_time_to_neutral', 'FormTimeToNeutral', 52],
+        ['form_set_pacing', 'FormSetPacing', 89],
+        ['form_interval_pacing', 'FormIntervalPacing', 51],
+      ];
+
+      for (const [inputKey, apiKey, value] of cases) {
+        vi.mocked(mockIntervalsClient.updateActivity).mockClear();
+
+        const result = await tools.updateActivity({
+          activity_id: 'i144885455',
+          [inputKey]: value,
+        } as Parameters<typeof tools.updateActivity>[0]);
+
+        expect(result.updated_fields).toEqual([inputKey]);
+        expect(mockIntervalsClient.updateActivity).toHaveBeenCalledWith('i144885455', {
+          [apiKey]: value,
+        });
+      }
+    });
+
+    it('should update name and a FORM score together', async () => {
+      vi.mocked(mockIntervalsClient.updateActivity).mockResolvedValue(undefined);
+
+      const result = await tools.updateActivity({
+        activity_id: 'i144885455',
+        name: 'Lunch Swim',
+        form_score: 42,
+      });
+
+      expect(result.updated_fields).toEqual(['name', 'form_score']);
+      expect(mockIntervalsClient.updateActivity).toHaveBeenCalledWith('i144885455', {
+        name: 'Lunch Swim',
+        FormScore: 42,
+      });
+    });
+
+    it('should update only FORM scores without throwing on missing name/description', async () => {
+      vi.mocked(mockIntervalsClient.updateActivity).mockResolvedValue(undefined);
+
+      const result = await tools.updateActivity({
+        activity_id: 'i144885455',
+        form_score: 29,
+        form_head_pitch: 58,
+        form_peak_head_roll: 65,
+        form_time_to_neutral: 52,
+        form_set_pacing: 89,
+        form_interval_pacing: 51,
+      });
+
+      expect(result.updated_fields).toEqual([
+        'form_score',
+        'form_head_pitch',
+        'form_peak_head_roll',
+        'form_time_to_neutral',
+        'form_set_pacing',
+        'form_interval_pacing',
+      ]);
+      expect(mockIntervalsClient.updateActivity).toHaveBeenCalledWith('i144885455', {
+        FormScore: 29,
+        FormHeadPitch: 58,
+        FormPeakHeadRoll: 65,
+        FormTimeToNeutral: 52,
+        FormSetPacing: 89,
+        FormIntervalPacing: 51,
+      });
+    });
+
+    it('should allow setting a FORM score to 0', async () => {
+      vi.mocked(mockIntervalsClient.updateActivity).mockResolvedValue(undefined);
+
+      const result = await tools.updateActivity({
+        activity_id: 'i144885455',
+        form_score: 0,
+      });
+
+      expect(result.updated_fields).toEqual(['form_score']);
+      expect(mockIntervalsClient.updateActivity).toHaveBeenCalledWith('i144885455', {
+        FormScore: 0,
       });
     });
   });

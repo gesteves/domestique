@@ -867,6 +867,67 @@ describe('IntervalsClient', () => {
       // is_indoor should be true since source is 'ZWIFT'
       expect(result.is_indoor).toBe(true);
     });
+
+    it('should surface FORM Goggles efficiency scores on swim activities', async () => {
+      const mockSwimActivity = {
+        id: 'i144885455',
+        start_date_local: '2026-05-02T12:34:29',
+        start_date: '2026-05-02T18:34:29Z',
+        type: 'Swim',
+        name: 'Lunch Swim',
+        moving_time: 2932,
+        distance: 2194.56,
+        icu_training_load: 37,
+        pool_length: 22.86,
+        lengths: 96,
+        FormScore: 29,
+        FormHeadPitch: 58,
+        FormPeakHeadRoll: 65,
+        FormTimeToNeutral: 52,
+        FormSetPacing: 89,
+        FormIntervalPacing: 51,
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockSwimActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivity('i144885455');
+
+      expect(result.form_score).toBe(29);
+      expect(result.form_head_pitch).toBe(58);
+      expect(result.form_peak_head_roll).toBe(65);
+      expect(result.form_time_to_neutral).toBe(52);
+      expect(result.form_set_pacing).toBe(89);
+      expect(result.form_interval_pacing).toBe(51);
+    });
+
+    it('should leave FORM Goggles fields undefined when not present on the activity', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockActivity),
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(mockSportSettings),
+        });
+
+      const result = await client.getActivity('i113367711');
+
+      expect(result.form_score).toBeUndefined();
+      expect(result.form_head_pitch).toBeUndefined();
+      expect(result.form_peak_head_roll).toBeUndefined();
+      expect(result.form_time_to_neutral).toBeUndefined();
+      expect(result.form_set_pacing).toBeUndefined();
+      expect(result.form_interval_pacing).toBeUndefined();
+    });
   });
 
   describe('getFitnessMetrics', () => {

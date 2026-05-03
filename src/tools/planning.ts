@@ -429,26 +429,46 @@ export class PlanningTools {
   }
 
   /**
-   * Update a completed activity's name and/or description in Intervals.icu.
+   * Update a completed activity in Intervals.icu.
+   *
+   * Supports both native fields (name, description — snake_case keys on the PUT body)
+   * and FORM Goggles efficiency scores stored as custom fields (PascalCase keys on
+   * the PUT body). The casing is per-field, not uniform: the explicit map below
+   * encodes the convention rather than relying on a transform.
    */
   async updateActivity(input: UpdateActivityInput): Promise<UpdateActivityResponse> {
-    const { activity_id, name, description } = input;
+    const { activity_id, ...rest } = input;
+
+    const fieldMap: Record<keyof Omit<UpdateActivityInput, 'activity_id'>, string> = {
+      name: 'name',
+      description: 'description',
+      form_score: 'FormScore',
+      form_head_pitch: 'FormHeadPitch',
+      form_peak_head_roll: 'FormPeakHeadRoll',
+      form_time_to_neutral: 'FormTimeToNeutral',
+      form_set_pacing: 'FormSetPacing',
+      form_interval_pacing: 'FormIntervalPacing',
+    };
 
     const updates: Record<string, unknown> = {};
     const updatedFields: string[] = [];
 
-    if (name !== undefined) {
-      updates.name = name;
-      updatedFields.push('name');
-    }
-
-    if (description !== undefined) {
-      updates.description = description;
-      updatedFields.push('description');
+    for (const [key, apiKey] of Object.entries(fieldMap) as Array<[
+      keyof typeof fieldMap,
+      string,
+    ]>) {
+      const value = rest[key];
+      if (value !== undefined) {
+        updates[apiKey] = value;
+        updatedFields.push(key);
+      }
     }
 
     if (updatedFields.length === 0) {
-      throw new Error('No fields provided to update. Specify at least one of: name, description');
+      throw new Error(
+        'No fields provided to update. Specify at least one of: ' +
+          (Object.keys(fieldMap) as Array<keyof typeof fieldMap>).join(', '),
+      );
     }
 
     await this.intervals.updateActivity(activity_id, updates);

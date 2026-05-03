@@ -249,6 +249,13 @@ const WorkoutSummaryZ = z.object({
   pool_length: z.string().optional().describe('Length of the pool'),
   lengths: z.number().optional().describe('Number of pool lengths swum'),
 
+  form_score: z.number().optional().describe('FORM Goggles overall efficiency score (0-100, higher is better) — combines speed, distance per stroke, height, and surface-only swimming'),
+  form_head_pitch: z.number().optional().describe('FORM Goggles head pitch score (0-100, higher is better) — angle the swimmer looks up or down in the water, peaking near 30-37°'),
+  form_peak_head_roll: z.number().optional().describe('FORM Goggles peak head roll score (0-100, higher is better) — side-to-side head rotation when breathing; lower angles score higher'),
+  form_time_to_neutral: z.number().optional().describe("FORM Goggles time-to-neutral score (0-100, higher is better) — how quickly the head returns to neutral after inhaling, vs the swimmer's 5-swim average"),
+  form_set_pacing: z.number().optional().describe('FORM Goggles set pacing score (0-100, higher is better) — pacing consistency within a set'),
+  form_interval_pacing: z.number().optional().describe('FORM Goggles interval pacing score (0-100, higher is better) — pacing consistency within an interval'),
+
   is_indoor: z.boolean().optional().describe('Whether activity was indoor'),
   is_commute: z.boolean().optional().describe('Whether activity was marked as a commute'),
   is_race: z.boolean().optional().describe('Whether activity was marked as a race'),

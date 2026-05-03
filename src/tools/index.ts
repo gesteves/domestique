@@ -55,7 +55,7 @@ import { buildToolResponse, type ToolResponse } from '../utils/response-builder.
 import { formatResponseDates } from '../utils/date-formatting.js';
 import { type HintGenerator, generateHints } from '../utils/hints.js';
 import { runWithUnitPreferences, METRIC_DEFAULTS } from '../utils/unit-context.js';
-import type { UnitPreferences } from '../types/index.js';
+import type { UnitPreferences, UpdateActivityInput } from '../types/index.js';
 import {
   trainerroadSyncHint,
   dailySummarySyncHint,
@@ -648,16 +648,21 @@ export class ToolRegistry {
     register({
       name: 'update_activity',
       title: 'Update Activity',
-      description: `Renames a completed activity or rewrites its description in Intervals.icu — useful for fixing auto-generated names or capturing post-workout notes. At least one of \`name\` or \`description\` must be provided; omitted fields are left intact. This affects completed/recorded activities only — planned (future) workouts have a separate edit path. Activity IDs are surfaced anywhere completed workouts are listed.`,
+      description: `Updates a completed activity in Intervals.icu — fix auto-generated names, capture post-workout notes, or write FORM Goggles efficiency scores back to swim activities (e.g. transcribed from a screenshot of the FORM app). At least one field must be provided; omitted fields are left intact. Affects completed/recorded activities only — planned (future) workouts have a separate edit path. Activity IDs are surfaced anywhere completed workouts are listed. The FORM scores are unitless 0-100 values (higher is better); they're stored as custom fields on Intervals.icu and surface back through \`get_workout_details\` for swims.`,
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID'),
         name: z.string().optional().describe('New name for the activity'),
         description: z.string().optional().describe('New description/notes for the activity'),
+        form_score: z.number().int().min(0).max(100).optional().describe('FORM Goggles overall efficiency score (0-100, higher is better)'),
+        form_head_pitch: z.number().int().min(0).max(100).optional().describe('FORM Goggles head pitch score (0-100, higher is better)'),
+        form_peak_head_roll: z.number().int().min(0).max(100).optional().describe('FORM Goggles peak head roll score (0-100, higher is better)'),
+        form_time_to_neutral: z.number().int().min(0).max(100).optional().describe('FORM Goggles time-to-neutral score (0-100, higher is better)'),
+        form_set_pacing: z.number().int().min(0).max(100).optional().describe('FORM Goggles set pacing score (0-100, higher is better)'),
+        form_interval_pacing: z.number().int().min(0).max(100).optional().describe('FORM Goggles interval pacing score (0-100, higher is better)'),
       },
       outputSchema: schemas.updateActivityOutputSchema,
       annotations: MODIFIES_EXTERNAL,
-      handler: async (args: { activity_id: string; name?: string; description?: string }) =>
-        this.planningTools.updateActivity(args),
+      handler: async (args: UpdateActivityInput) => this.planningTools.updateActivity(args),
     });
 
     // ============================================
