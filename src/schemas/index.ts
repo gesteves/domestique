@@ -31,12 +31,6 @@ const hintsField = z
   .describe('Actionable next-step suggestions based on the data. Read these and consider following them when relevant.');
 
 // ============================================
-// Heat zones summary (HSI bands and what they mean)
-// ============================================
-
-const HEAT_ZONES_SUMMARY = `\n\nZones: Z1 (0-0.9): no heat strain; optimal performance; no adaptation. Z2 (1-2.9): moderate strain; mild performance dip; partial adaptation. Z3 (3-6.9): high strain; substantial performance decline; optimal heat-adaptation training. Z4 (>=7): dangerous; reduce intensity, hydrate, and cool immediately.`;
-
-// ============================================
 // Zones (heart rate, power, pace, heat)
 // ============================================
 
@@ -258,7 +252,7 @@ const WorkoutZ = z.object({
   power_zones: z.array(PowerZoneZ).optional().describe('Power zone objects for the time of activity (may differ from current athlete profile zones)'),
   pace_zones: z.array(PaceZoneZ).optional().describe('Pace zone objects for the time of activity (may differ from current athlete profile zones)'),
 
-  heat_zones: z.array(HeatZoneZ).optional().describe(`Heat zone objects based on the Heat Strain Index (HSI). Only present when heat strain data from a CORE body temperature sensor is available.${HEAT_ZONES_SUMMARY}`),
+  heat_zones: z.array(HeatZoneZ).optional().describe('Heat zone objects based on the Heat Strain Index (HSI). Only present when heat strain data from a CORE body temperature sensor is available.'),
   max_heat_strain_index: z.number().optional().describe('Maximum Heat Strain Index (HSI) reached during the activity, recorded by a CORE body temperature sensor'),
   median_heat_strain_index: z.number().optional().describe('Median Heat Strain Index (HSI) throughout the activity, recorded by a CORE body temperature sensor'),
 
@@ -864,34 +858,6 @@ export const trainingLoadTrendsOutputSchema = {
   sport: z.string().optional().describe('Sport scope of the analysis'),
   data: z.array(DailyTrainingLoadZ).describe('Daily training load metrics, sorted oldest to newest'),
   summary: TrainingLoadSummaryZ.describe('Summary of training load over the period including current values, trends, peak, and ACWR'),
-} as const;
-
-export const workoutIntervalsOutputSchema = {
-  activity_id: z.string().optional().describe('Unique ID of the activity in Intervals.icu'),
-  intervals: z.array(WorkoutIntervalZ).describe('Individual intervals in chronological order'),
-  groups: z.array(IntervalGroupZ).describe('Summary of repeated interval sets (e.g., "5 x 56s @ 314w")'),
-} as const;
-
-export const workoutNotesOutputSchema = {
-  activity_id: z.string().optional().describe('Unique ID of the activity in Intervals.icu'),
-  notes: z.array(WorkoutNoteZ).describe('Notes/messages left by the athlete or others (e.g., a coach) for this activity'),
-} as const;
-
-export const workoutWeatherOutputSchema = {
-  activity_id: z.string().optional().describe('Unique ID of the activity in Intervals.icu'),
-  weather_description: z.string().nullable().optional().describe('Weather summary for the activity. Null for indoor activities or when unavailable'),
-} as const;
-
-export const workoutHeatZonesOutputSchema = {
-  activity_id: z.string().optional().describe('Unique ID of the activity in Intervals.icu'),
-  heat_zones: z.array(HeatZoneZ).optional().describe(`Heat zone objects based on the Heat Strain Index (HSI). Only present if heat strain data from a CORE body temperature sensor is available.${HEAT_ZONES_SUMMARY}`),
-  max_heat_strain_index: z.number().optional().describe('Maximum Heat Strain Index reached during the activity'),
-  median_heat_strain_index: z.number().optional().describe('Median Heat Strain Index throughout the activity'),
-} as const;
-
-export const workoutMusicOutputSchema = {
-  activity_id: z.string().optional().describe('Unique ID of the activity in Intervals.icu'),
-  played_songs: z.array(PlayedSongZ).describe('Songs scrobbled to Last.fm during the activity, in chronological order'),
 } as const;
 
 export const powerCurveOutputSchema = {

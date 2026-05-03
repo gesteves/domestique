@@ -89,10 +89,7 @@ export const workoutHistoryHint: HintGenerator<WorkoutHistoryResponse | WorkoutW
 
   const workoutIds = workouts.map((w) => w.id).join(', ');
 
-  return [
-    `For full workout analysis, use get_workout_details with activity_id to get intervals, notes, weather, and zones. Available IDs: ${workoutIds}`,
-    `For specific data only, use get_workout_intervals, get_workout_notes, or get_workout_weather with activity_id.`,
-  ];
+  return `For full workout analysis (intervals, notes, weather, zones, music), call get_workout_details with activity_id. Available IDs: ${workoutIds}`;
 };
 
 /**
@@ -116,22 +113,10 @@ export const todaysWorkoutsSyncHint: HintGenerator<TodaysWorkoutsResponse> = (da
   );
 };
 
-/**
- * Hint for drilling into completed workouts from today's workouts response.
- */
-export const todaysWorkoutsDetailsHint: HintGenerator<TodaysWorkoutsResponse> = (data) => {
-  if (data.completed_workouts.length === 0) return undefined;
-
-  const workoutIds = data.completed_workouts.map((w) => w.id).join(', ');
-  return [
-    `For specific data only, use get_workout_intervals, get_workout_notes, or get_workout_weather with activity_id. Available IDs: ${workoutIds}`,
-  ];
-};
 
 /**
  * Combined hint generators for today's workouts.
  */
 export const todaysWorkoutsHints: HintGenerator<TodaysWorkoutsResponse>[] = [
   todaysWorkoutsSyncHint,
-  todaysWorkoutsDetailsHint,
 ];

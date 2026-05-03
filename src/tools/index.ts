@@ -377,7 +377,7 @@ export class ToolRegistry {
 
 <notes>
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_details.
 </notes>`,
       inputSchema: {},
       outputSchema: schemas.todaysSummaryOutputSchema,
@@ -449,7 +449,7 @@ export class ToolRegistry {
 
 <notes>
 - Scheduled workouts may not necessarily be in the order the user intends to do them; ask them for clarification if necessary.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_details.
 </notes>`,
       inputSchema: {},
       outputSchema: schemas.todaysWorkoutsOutputSchema,
@@ -542,7 +542,7 @@ export class ToolRegistry {
 <use-cases>
 - Analyzing training patterns and consistency over a specific time period in the past.
 - Reviewing workout volume, intensity, and frequency for a date range.
-- Identifying specific workouts for detailed analysis via get_workout_intervals.
+- Identifying specific workouts for detailed analysis via get_workout_details.
 - Correlating workout history with recovery trends to understand training impact.
 - Filtering workouts by sport to analyze sport-specific training patterns.
 - Understanding total time in zones for the period (power, pace, heart rate, and/or heat zones).
@@ -552,7 +552,7 @@ export class ToolRegistry {
 - **NEVER** use this tool to get workouts for the current day; use get_todays_summary for that. This tool is for historical data, not the current day. Passing today's date as either oldest or newest will return an error.
 - Date parameters accept ISO dates (YYYY-MM-DD) or natural language ("30 days ago", "last Monday", "December 1", "last month", etc.)
 - You can optionally filter activities by sport, as needed.
-- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_intervals or any of the other analysis tools.
+- Workouts imported from Strava are unavailable due to Strava API Agreement restrictions, and **CANNOT** be analyzed via get_workout_details.
 </notes>`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago"). Cannot be today.'),
@@ -584,7 +584,7 @@ Get the activity_id from:
 
 <notes>
 - This returns more detailed data than what's included in get_workout_history results.
-- Includes athlete notes, detailed intervals, weather during the activity (if available), power zones, pace zones, heart rate zones, heat zones, and matched Whoop strain data (if available).
+- Includes athlete notes, detailed intervals, interval groups, weather during the activity, power/pace/heart-rate/heat zones, scrobbled music (when Last.fm is configured), and matched Whoop strain data — all in a single call.
 - Workouts imported from Strava are unavailable due to Strava API Agreement restrictions.
 </notes>`,
       inputSchema: {
@@ -998,133 +998,6 @@ Only provide the fields you want to update; omitted fields remain unchanged.
       handler: async (args: { days?: number }) =>
         this.historicalTools.getTrainingLoadTrends(args.days),
     });
-
-    register({
-      name: 'get_workout_intervals',
-      title: 'Workout Intervals',
-      description: `Fetches a detailed interval breakdown for a specific workout.
-
-<use-cases>
-- Analyzing the structure and intensity of interval-based workouts.
-- Understanding power, pace, or heart rate distribution across workout intervals.
-- Understanding the Heat Strain Index (HSI) distribution across workout intervals.
-- Identifying specific intervals that were particularly challenging or successful.
-- Reviewing interval targets vs. actual performance to assess workout execution.
-- Providing detailed feedback on interval training quality and pacing.
-</use-cases>
-
-<instructions>
-Get the activity_id from:
-- get_workout_history (for past workouts)
-- get_todays_workouts (for today's workouts)
-</instructions>`,
-      inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-      },
-      outputSchema: schemas.workoutIntervalsOutputSchema,
-      annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) =>
-        this.historicalTools.getWorkoutIntervals(args.activity_id),
-    });
-
-    register({
-      name: 'get_workout_notes',
-      title: 'Workout Notes',
-      description: `Fetches notes attached to a specific workout, which may be comments made by the user, or other Intervals.icu users, like a coach.
-
-<use-cases>
-- Understanding how the user may have subjectively felt during a workout, and anything else not captured by objective fitness metrics.
-- Reading feedback left by other Intervals.icu users, which could be a coach or a follower.
-</use-cases>
-
-<instructions>
-- Get the activity_id from get_workout_history.
-- Make sure to fetch attachments and follow links left in the notes.
-- Make sure to identify which comments are coming from the user when interpreting the data. Ask the user for clarification if there are comments left by other people.
-</instructions>`,
-      inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-      },
-      outputSchema: schemas.workoutNotesOutputSchema,
-      annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) =>
-        this.historicalTools.getWorkoutNotes(args.activity_id),
-    });
-
-    register({
-      name: 'get_workout_weather',
-      title: 'Workout Weather',
-      description: `Fetches the weather conditions during a given outdoor workout.
-
-<use-cases>
-- Understanding how weather conditions may or may not have impacted the user's performance during outdoor workouts or fitness activities.
-</use-cases>
-
-<instructions>
-- For past workouts, get the activity_id from get_workout_history. For today's workouts, get the activity_id from get_todays_summary or get_todays_workouts.
-</instructions>`,
-      inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-      },
-      outputSchema: schemas.workoutWeatherOutputSchema,
-      annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) =>
-        this.historicalTools.getWorkoutWeather(args.activity_id),
-    });
-
-    register({
-      name: 'get_workout_heat_zones',
-      title: 'Workout Heat Zones',
-      description: `Fetches heat zone data for a specific workout, showing time spent in each heat strain zone.
-
-<use-cases>
-- Understanding how heat stress affected the user during a workout.
-- Analyzing heat training adaptations and heat strain exposure.
-- Evaluating whether the user trained in optimal heat zones for heat acclimation.
-</use-cases>
-
-<instructions>
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary or get_todays_workouts (for today's workouts).
-- Returns null if heat strain data is not available for this activity.
-</instructions>
-
-<notes>
-- Heat zones are based on the Heat Strain Index (HSI) metric recorded with a CORE body temperature sensor.
-- Heat strain data may not be available for every activity.
-</notes>`,
-      inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-      },
-      outputSchema: schemas.workoutHeatZonesOutputSchema,
-      annotations: READ_ONLY,
-      handler: async (args: { activity_id: string }) =>
-        this.historicalTools.getWorkoutHeatZones(args.activity_id),
-    });
-
-    if (this.hasLastFm) {
-      register({
-        name: 'get_workout_music',
-        title: 'Workout Music',
-        description: `Fetches songs scrobbled to Last.fm during a specific workout, in chronological order.
-
-<use-cases>
-- Reviewing what music the user listened to during a workout.
-- Correlating music choices with workout intensity or perceived effort.
-</use-cases>
-
-<instructions>
-- Get the activity_id from get_workout_history (for past workouts) or get_todays_summary or get_todays_workouts (for today's workouts).
-- Returns an empty array if no scrobbles fall within the activity's time window.
-</instructions>`,
-        inputSchema: {
-          activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
-        },
-        outputSchema: schemas.workoutMusicOutputSchema,
-        annotations: READ_ONLY,
-        handler: async (args: { activity_id: string }) =>
-          this.historicalTools.getWorkoutMusic(args.activity_id),
-      });
-    }
 
     // ============================================
     // Performance Curves

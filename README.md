@@ -46,12 +46,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Analysis
 - `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR
-- `get_workout_details` - Get all the details for a single workout, including intervals, notes, weather, zones, and matched Whoop strain data
-- `get_workout_intervals` - Detailed interval breakdown for a specific workout including power, HR, cadence, and timing data
-- `get_workout_notes` - Notes and comments written by the athlete about a specific workout in Intervals.icu
-- `get_workout_weather` - Weather conditions during a specific outdoor workout
-- `get_workout_heat_zones` - Heat zone analysis for a specific workout showing time spent in each heat strain zone
-- `get_workout_music` - List of songs listened to during the workout, fetched from [Last.fm](https://www.last.fm)
+- `get_workout_details` - Get all the details for a single workout in one call: intervals (with power, HR, cadence, timing), interval groups, athlete and coach notes, weather conditions, power/pace/HR/heat zones, scrobbled music (when Last.fm is configured), and matched Whoop strain data
 
 ### Performance Curves
 - `get_power_curve` - Cycling power curve analysis showing best watts at various durations with W/kg, estimated FTP, and period comparison
@@ -108,7 +103,7 @@ For Last.fm integration (optional):
 - `LASTFM_USERNAME` - Your Last.fm username (the account that scrobbles your listening history)
 - `LASTFM_API_KEY` - A Last.fm API key. Create one at https://www.last.fm/api/account/create. Only the API key is needed — Domestique only reads public scrobbles via `user.getRecentTracks`, so no shared secret or OAuth flow is required.
 
-When both are set, `get_workout_music` returns the songs scrobbled during a workout, and per-workout details from `get_workout_details` and `get_todays_workouts` include the matched tracks.
+When both are set, per-workout details from `get_workout_details` and `get_todays_workouts` include the matched tracks scrobbled during the workout.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Bugsnag API key for error reporting. When set, upstream API failures (Intervals.icu, Whoop, TrainerRoad) are reported to Bugsnag with full context including HTTP method, URL, status code, and response body.

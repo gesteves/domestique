@@ -209,10 +209,9 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(27);
+      expect(registeredHandlers.size).toBe(22);
 
       // Verify key tools are registered
-      expect(registeredHandlers.has('get_workout_music')).toBe(true);
       expect(registeredHandlers.has('get_todays_summary')).toBe(true);
       expect(registeredHandlers.has('get_todays_workouts')).toBe(true);
       expect(registeredHandlers.has('get_athlete_profile')).toBe(true);
@@ -225,15 +224,11 @@ describe('Tool Response Wrapper', () => {
       expect(registeredHandlers.has('get_upcoming_workouts')).toBe(true);
       expect(registeredHandlers.has('get_upcoming_races')).toBe(true);
       expect(registeredHandlers.has('get_training_load_trends')).toBe(true);
-      expect(registeredHandlers.has('get_workout_intervals')).toBe(true);
-      expect(registeredHandlers.has('get_workout_notes')).toBe(true);
-      expect(registeredHandlers.has('get_workout_weather')).toBe(true);
-      expect(registeredHandlers.has('get_workout_heat_zones')).toBe(true);
       expect(registeredHandlers.has('get_workout_details')).toBe(true);
       expect(registeredHandlers.has('get_power_curve')).toBe(true);
       expect(registeredHandlers.has('get_pace_curve')).toBe(true);
       expect(registeredHandlers.has('get_hr_curve')).toBe(true);
-      // Workout sync tools
+      // Workout management tools
       expect(registeredHandlers.has('create_workout')).toBe(true);
       expect(registeredHandlers.has('delete_workout')).toBe(true);
       expect(registeredHandlers.has('sync_trainerroad_runs')).toBe(true);

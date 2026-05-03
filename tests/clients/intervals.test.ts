@@ -2856,60 +2856,6 @@ describe('IntervalsClient', () => {
     });
   });
 
-  describe('getActivityPlayedSongs', () => {
-    const mockActivity = {
-      id: 'i140000000',
-      start_date_local: '2026-04-18T10:00:00',
-      start_date: '2026-04-18T10:00:00Z',
-      type: 'Run',
-      name: 'Test Run',
-      moving_time: 1800,
-    };
-
-    it('returns [] when no getter is configured', async () => {
-      const result = await client.getActivityPlayedSongs('i140000000');
-      expect(result).toEqual([]);
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('calls the getter with correct start/end ms', async () => {
-      const songs = [
-        {
-          name: 'Song',
-          played_at: '2026-04-18T10:15:00.000Z',
-          url: 'https://www.last.fm/x',
-          album: 'Album',
-          artist: 'Artist',
-        },
-      ];
-      const getter = vi.fn().mockResolvedValue(songs);
-      client.setPlayedSongsGetter(getter);
-
-      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockActivity) });
-
-      const result = await client.getActivityPlayedSongs('i140000000');
-
-      const expectedStartMs = new Date('2026-04-18T10:00:00Z').getTime();
-      const expectedEndMs = expectedStartMs + 1800 * 1000;
-      expect(getter).toHaveBeenCalledWith(expectedStartMs, expectedEndMs);
-      expect(result).toEqual(songs);
-    });
-
-    it('falls back to elapsed_time when moving_time is missing', async () => {
-      const activityWithoutMovingTime = { ...mockActivity, moving_time: undefined, elapsed_time: 2400 };
-      const getter = vi.fn().mockResolvedValue([]);
-      client.setPlayedSongsGetter(getter);
-
-      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(activityWithoutMovingTime) });
-
-      await client.getActivityPlayedSongs('i140000000');
-
-      const expectedStartMs = new Date('2026-04-18T10:00:00Z').getTime();
-      const expectedEndMs = expectedStartMs + 2400 * 1000;
-      expect(getter).toHaveBeenCalledWith(expectedStartMs, expectedEndMs);
-    });
-  });
-
   describe('getActivityIntervals with temperature metrics', () => {
     it('should include temperature metrics in intervals when temperature data is available', async () => {
       const mockIntervalsResponse = {

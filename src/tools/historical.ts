@@ -21,8 +21,6 @@ import type {
   TrainingLoadTrends,
   WorkoutWithWhoop,
   NormalizedWorkout,
-  WorkoutIntervalsResponse,
-  WorkoutNotesResponse,
   PowerCurvesResponse,
   PowerBest,
   PowerCurveSummary,
@@ -49,8 +47,6 @@ import type {
   GetRecoveryTrendsInput,
   GetActivityTotalsInput,
 } from './types.js';
-import type { HeatZone, PlayedSong } from '../types/index.js';
-
 export class HistoricalTools {
   constructor(
     private intervals: IntervalsClient,
@@ -195,88 +191,6 @@ export class HistoricalTools {
     const workoutDate = workout.start_time.split('T')[0];
     const [enriched] = await enrichWorkoutsWithWhoop([workout], this.whoop, workoutDate, workoutDate);
     return enriched;
-  }
-
-  // ============================================
-  // Workout Intervals
-  // ============================================
-
-  /**
-   * Get detailed intervals for a specific workout
-   */
-  async getWorkoutIntervals(activityId: string): Promise<WorkoutIntervalsResponse> {
-    return await this.intervals.getActivityIntervals(activityId);
-  }
-
-  // ============================================
-  // Workout Notes
-  // ============================================
-
-  /**
-   * Get notes/messages for a specific workout
-   */
-  async getWorkoutNotes(activityId: string): Promise<WorkoutNotesResponse> {
-    return await this.intervals.getActivityNotes(activityId);
-  }
-
-  // ============================================
-  // Workout Weather
-  // ============================================
-
-  /**
-   * Get weather summary for a specific workout.
-   * Only relevant for outdoor activities.
-   */
-  async getWorkoutWeather(activityId: string): Promise<{ activity_id: string; weather_description: string | null }> {
-    return await this.intervals.getActivityWeather(activityId);
-  }
-
-  // ============================================
-  // Heat Zones
-  // ============================================
-
-  /**
-   * Get heat zones for a specific workout.
-   * Returns null if heat strain data is not available for this activity.
-   */
-  async getWorkoutHeatZones(activityId: string): Promise<{
-    activity_id: string;
-    heat_zones: HeatZone[] | null;
-    max_heat_strain_index?: number;
-    median_heat_strain_index?: number;
-  }> {
-    const heatMetrics = await this.intervals.getActivityHeatMetrics(activityId);
-    if (!heatMetrics) {
-      return {
-        activity_id: activityId,
-        heat_zones: null,
-      };
-    }
-    return {
-      activity_id: activityId,
-      heat_zones: heatMetrics.zones,
-      max_heat_strain_index: heatMetrics.max_heat_strain_index,
-      median_heat_strain_index: heatMetrics.median_heat_strain_index,
-    };
-  }
-
-  // ============================================
-  // Workout Music
-  // ============================================
-
-  /**
-   * Get songs scrobbled to Last.fm during a specific workout, in chronological order.
-   * Returns an empty array if Last.fm is not configured.
-   */
-  async getWorkoutMusic(activityId: string): Promise<{
-    activity_id: string;
-    played_songs: PlayedSong[];
-  }> {
-    const songs = await this.intervals.getActivityPlayedSongs(activityId);
-    return {
-      activity_id: activityId,
-      played_songs: songs,
-    };
   }
 
   // ============================================

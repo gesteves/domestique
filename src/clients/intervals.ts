@@ -1369,8 +1369,7 @@ export class IntervalsClient {
    * Pass `activityType` so cadence values use the correct unit (rpm for cycling,
    * spm for running/swimming) and `poolLengthM` so swim interval distances pick
    * the right unit (yards for SCY/LCY pools, meters otherwise). When either is
-   * omitted (e.g., the standalone `get_workout_intervals` tool), the activity
-   * is fetched once to look them up.
+   * omitted, the activity is fetched once to look them up.
    */
   async getActivityIntervals(
     activityId: string,
@@ -1403,8 +1402,7 @@ export class IntervalsClient {
 
     // Only fetch the activity when the caller didn't tell us the type.
     // If the caller passed `activityType` but no `poolLengthM`, we trust them —
-    // most non-swim activities have no pool length, and the standalone
-    // `get_workout_intervals` tool is the only path that needs the lookup.
+    // most non-swim activities have no pool length.
     let resolvedActivityType = activityType ?? '';
     let resolvedPoolLength = poolLengthM;
     if (!resolvedActivityType) {
@@ -1489,19 +1487,6 @@ export class IntervalsClient {
         weather_description: null,
       };
     }
-  }
-
-  /**
-   * Get songs played during a specific activity from Last.fm.
-   * Returns [] if no Last.fm getter is configured.
-   */
-  async getActivityPlayedSongs(activityId: string): Promise<PlayedSong[]> {
-    if (!this.playedSongsGetter) {
-      return [];
-    }
-    const activity = await this.fetchActivity<IntervalsActivity>(activityId, '');
-    const { startMs, endMs } = computeActivityTimeRange(activity);
-    return this.playedSongsGetter(startMs, endMs);
   }
 
   /**
