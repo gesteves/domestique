@@ -56,7 +56,7 @@ export class PlanningTools {
     }
 
     // Fetch, merge, and deduplicate from both sources; fetch overlapping annotations in parallel
-    const [mergedWorkouts, annotations] = await Promise.all([
+    const [mergedWorkouts, intervalsAnnotations, trainerroadAnnotations] = await Promise.all([
       fetchAndMergePlannedWorkouts(
         this.intervals,
         this.trainerroad,
@@ -65,10 +65,20 @@ export class PlanningTools {
         timezone
       ),
       this.intervals.getAnnotations(startDateStr, endDateStr).catch((e) => {
-        console.error('Error fetching annotations for upcoming workouts:', e);
+        console.error('Error fetching Intervals.icu annotations for upcoming workouts:', e);
         return [] as Annotation[];
       }),
+      this.trainerroad
+        ? this.trainerroad.getAnnotations(startDateStr, endDateStr, timezone).catch((e) => {
+            console.error('Error fetching TrainerRoad annotations for upcoming workouts:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
     ]);
+
+    const annotations = [...intervalsAnnotations, ...trainerroadAnnotations].sort(
+      (a, b) => a.start_date.localeCompare(b.start_date)
+    );
 
     let workouts = mergedWorkouts;
 

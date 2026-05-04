@@ -304,7 +304,7 @@ export class ToolRegistry {
       googleGeocodingClient,
       googleTimezoneClient
     );
-    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient);
+    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient, trainerroadClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
   }
 
@@ -357,7 +357,7 @@ export class ToolRegistry {
     register({
       name: 'get_todays_summary',
       title: "Today's Summary",
-      description: `One-shot snapshot of the user's status today: Whoop recovery / sleep / strain, Intervals.icu fitness metrics (CTL, ATL, TSB) and wellness, completed and planned workouts (with matched Whoop strain), active calendar annotations (sickness, injury, holiday, freeform note) overlapping today, today's scheduled race, and the weather forecast for the user's configured locations. Always prefer this for any "today's" data question — recovery, sleep, strain, workouts, or readiness — over assembling the same picture from individual tools. State changes throughout the day, so re-call rather than relying on a previous response. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
+      description: `One-shot snapshot of the user's status today: Whoop recovery / sleep / strain, Intervals.icu fitness metrics (CTL, ATL, TSB) and wellness, completed and planned workouts (with matched Whoop strain), active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today, today's scheduled race, and the weather forecast for the user's configured locations. Always prefer this for any "today's" data question — recovery, sleep, strain, workouts, or readiness — over assembling the same picture from individual tools. State changes throughout the day, so re-call rather than relying on a previous response. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {},
       outputSchema: schemas.todaysSummaryOutputSchema,
       annotations: READ_ONLY,
@@ -380,7 +380,7 @@ export class ToolRegistry {
     register({
       name: 'get_todays_workouts',
       title: "Today's Workouts",
-      description: `Today's completed and planned workouts only, with completed workouts in full detail (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain. Also surfaces active calendar annotations (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
+      description: `Today's completed and planned workouts only, with completed workouts in full detail (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain. Also surfaces active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {},
       outputSchema: schemas.todaysWorkoutsOutputSchema,
       annotations: READ_ONLY,
@@ -436,7 +436,7 @@ export class ToolRegistry {
     register({
       name: 'get_workout_history',
       title: 'Workout History',
-      description: `Completed workouts and fitness activities in a past date range, with comprehensive summary metrics and matched Whoop strain. Also returns calendar annotations (sickness, injury, holiday, freeform note) overlapping the range so volume changes can be interpreted. Use for training-pattern analysis, volume/intensity review, or to find activity IDs to drive deeper per-workout inspection (intervals, notes, weather, music are fetched separately). Date parameters accept ISO YYYY-MM-DD or natural language ("30 days ago", "last Monday", "December 1"); optional \`sport\` filters by discipline. **Never** pass today's date — past dates only. ${STRAVA_LIMITATION_NOTE}`,
+      description: `Completed workouts and fitness activities in a past date range, with comprehensive summary metrics and matched Whoop strain. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so volume changes can be interpreted. Use for training-pattern analysis, volume/intensity review, or to find activity IDs to drive deeper per-workout inspection (intervals, notes, weather, music are fetched separately). Date parameters accept ISO YYYY-MM-DD or natural language ("30 days ago", "last Monday", "December 1"); optional \`sport\` filters by discipline. **Never** pass today's date — past dates only. ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago"). Cannot be today.'),
         newest: z.string().optional().describe('End date (defaults to yesterday). Cannot be today.'),
@@ -512,7 +512,7 @@ export class ToolRegistry {
     register({
       name: 'get_upcoming_workouts',
       title: 'Upcoming Workouts',
-      description: `Planned workouts in a future date range, merged from TrainerRoad and Intervals.icu calendars (TrainerRoad wins on duplicates because it carries more detail). Also returns calendar annotations (sickness, injury, holiday, freeform note) overlapping the range so the schedule can be interpreted in light of upcoming vacations or ongoing injuries. Use for weekly/monthly schedule views, expected-load summaries, or to surface untriaged TrainerRoad runs that should sync to Intervals.icu. Defaults to today through 7 days out; \`oldest\` and \`newest\` accept ISO YYYY-MM-DD or natural language; optional \`sport\` filter narrows by discipline. ${SCHEDULED_ORDERING_NOTE}`,
+      description: `Planned workouts in a future date range, merged from TrainerRoad and Intervals.icu calendars (TrainerRoad wins on duplicates because it carries more detail). Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so the schedule can be interpreted in light of upcoming vacations or ongoing injuries. Use for weekly/monthly schedule views, expected-load summaries, or to surface untriaged TrainerRoad runs that should sync to Intervals.icu. Defaults to today through 7 days out; \`oldest\` and \`newest\` accept ISO YYYY-MM-DD or natural language; optional \`sport\` filter narrows by discipline. ${SCHEDULED_ORDERING_NOTE}`,
       inputSchema: {
         oldest: z.string().optional().describe('Start date (defaults to today; e.g., "2024-01-01", "tomorrow")'),
         newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
