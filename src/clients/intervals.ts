@@ -391,6 +391,11 @@ interface IntervalsActivity {
   FormTimeToNeutral?: number; // Time spent returning head to neutral after inhaling, vs the swimmer's 5-swim average
   FormSetPacing?: number; // Pacing consistency within a set
   FormIntervalPacing?: number; // Pacing consistency within an interval
+
+  // Carb intake rate (g/h), computed by an Intervals.icu custom field as
+  // carbs_ingested / (elapsed_time / 3600). Null when intake or elapsed time
+  // isn't recorded.
+  CarbIntakeRate?: number;
 }
 
 interface IntervalsWellness {
@@ -2343,19 +2348,6 @@ export class IntervalsClient {
     const atlAtActivity = activity.icu_atl ?? activity.atl;
     const joulesTotal = activity.icu_joules ?? activity.joules;
 
-    // Carbohydrate intake rate (g/h). Gated on both intake and usage being
-    // logged and positive: a partial CHO record (one missing) tends to mean
-    // the athlete didn't track fueling for this activity, so the rate would
-    // mislead. Always grams per hour, regardless of unit preferences.
-    const carbsUsed = activity.carbs_used;
-    const carbsIngested = activity.carbs_ingested;
-    const carbsPerHour =
-      carbsUsed != null && carbsUsed > 0 &&
-      carbsIngested != null && carbsIngested > 0 &&
-      activity.moving_time != null && activity.moving_time > 0
-        ? `${Math.round((carbsIngested / activity.moving_time) * 3600)} g/h`
-        : undefined;
-
     return {
       id: activity.id,
       start_time: localStringToISO8601WithTimezone(activity.start_date_local, timezone),
@@ -2440,7 +2432,9 @@ export class IntervalsClient {
       work: joulesTotal != null ? formatEnergyKJ(joulesTotal / 1000) : undefined,
       carbs_used: activity.carbs_used != null ? formatMass(activity.carbs_used) : undefined,
       carbs_intake: activity.carbs_ingested != null ? formatMass(activity.carbs_ingested) : undefined,
-      carbs_per_hour: carbsPerHour,
+      carb_intake_rate: activity.CarbIntakeRate != null
+        ? `${Math.round(activity.CarbIntakeRate)} g/h`
+        : undefined,
 
       // Athlete metrics at time of activity
       weight: activity.icu_weight != null ? formatWeight(activity.icu_weight) : undefined,

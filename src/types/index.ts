@@ -95,7 +95,7 @@ export interface NormalizedWorkout {
   work?: string; // e.g., "1234 kJ"
   carbs_used?: string; // e.g., "180 g"
   carbs_intake?: string;
-  carbs_per_hour?: string; // e.g., "75 g/h"; only emitted when both used and intake are > 0
+  carb_intake_rate?: string; // e.g., "75 g/h"; sourced from the Intervals.icu CarbIntakeRate custom field
 
   // Athlete metrics at time of activity
   weight?: string; // e.g., "74.5 kg"
