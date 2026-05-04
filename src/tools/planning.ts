@@ -3,6 +3,7 @@ import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone } from '../utils/tz.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
+import { mergeAnnotations } from '../utils/annotation-utils.js';
 import type {
   PlannedWorkout,
   Annotation,
@@ -76,9 +77,7 @@ export class PlanningTools {
         : Promise.resolve([] as Annotation[]),
     ]);
 
-    const annotations = [...intervalsAnnotations, ...trainerroadAnnotations].sort(
-      (a, b) => a.start_date.localeCompare(b.start_date)
-    );
+    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
 
     let workouts = mergedWorkouts;
 

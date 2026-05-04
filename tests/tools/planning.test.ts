@@ -206,6 +206,37 @@ describe('PlanningTools', () => {
       expect(runningResult.workouts[0].sport).toBe('Running');
     });
 
+    it('should deduplicate annotations by name+overlap with Intervals.icu winning over TrainerRoad', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'icu-vac',
+          category: 'Holiday',
+          name: 'Vacation',
+          start_date: '2024-12-16',
+          end_date: '2024-12-20',
+          training_availability: 'Unavailable',
+        },
+      ]);
+      vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'tr-vac',
+          category: 'Note',
+          name: 'Vacation',
+          start_date: '2024-12-17',
+          end_date: '2024-12-19',
+        },
+      ]);
+
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+
+      expect(result.annotations).toHaveLength(1);
+      expect(result.annotations[0].id).toBe('icu-vac');
+      expect(result.annotations[0].category).toBe('Holiday');
+      expect(result.annotations[0].training_availability).toBe('Unavailable');
+    });
+
     it('should concatenate annotations from Intervals.icu and TrainerRoad sorted by start_date', async () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);

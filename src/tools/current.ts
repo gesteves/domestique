@@ -11,6 +11,7 @@ import { fromZonedTime } from 'date-fns-tz';
 import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
+import { mergeAnnotations } from '../utils/annotation-utils.js';
 import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
 import type {
   StrainData,
@@ -542,9 +543,7 @@ export class CurrentTools {
         : Promise.resolve([] as Annotation[]),
     ]);
 
-    const annotations = [...intervalsAnnotations, ...trainerroadAnnotations].sort(
-      (a, b) => a.start_date.localeCompare(b.start_date)
-    );
+    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
 
     const completed = completedResponse.workouts;
     const planned = plannedResponse.workouts;
@@ -667,9 +666,7 @@ export class CurrentTools {
     const { strain } = strainResponse.whoop;
     const completedWorkouts = completedWorkoutsResponse.workouts;
     const plannedWorkouts = plannedWorkoutsResponse.workouts;
-    const annotations = [...intervalsAnnotations, ...trainerroadAnnotations].sort(
-      (a, b) => a.start_date.localeCompare(b.start_date)
-    );
+    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
 
     // Calculate TSS totals
     const tssCompleted = completedWorkouts.reduce(

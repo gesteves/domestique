@@ -4,6 +4,7 @@ import { LastFmClient } from '../clients/lastfm.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone, parseDateRangeInTimezone, getTodayInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
+import { mergeAnnotations } from '../utils/annotation-utils.js';
 import {
   parseDurationToHours,
   parseDurationToSeconds,
@@ -99,9 +100,7 @@ export class HistoricalTools {
         : Promise.resolve([] as Annotation[]),
     ]);
 
-    const annotations = [...intervalsAnnotations, ...trainerroadAnnotations].sort(
-      (a, b) => a.start_date.localeCompare(b.start_date)
-    );
+    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
     const workouts = await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate);
     return { workouts, annotations };
   }
