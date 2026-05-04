@@ -41,6 +41,7 @@ import type {
   ActivityTotalsResponse,
   ZoneTotalEntry,
   SportTotals,
+  Annotation,
 } from '../types/index.js';
 import type {
   GetWorkoutHistoryInput,
@@ -55,11 +56,13 @@ export class HistoricalTools {
   ) {}
 
   /**
-   * Get workout history with flexible date ranges, including matched Whoop data
+   * Get workout history with flexible date ranges, including matched Whoop data.
+   * Also returns calendar annotations (sickness, injury, holiday, note) whose
+   * date span overlaps the queried range, so volume changes can be interpreted.
    */
   async getWorkoutHistory(
     params: GetWorkoutHistoryInput
-  ): Promise<WorkoutWithWhoop[]> {
+  ): Promise<{ workouts: WorkoutWithWhoop[]; annotations: Annotation[] }> {
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
@@ -75,15 +78,21 @@ export class HistoricalTools {
       );
     }
 
-    // Fetch Intervals.icu activities
+    // Fetch Intervals.icu activities and annotations in parallel.
     // Use skipExpensiveCalls since historical queries can return many activities
-    // and per-activity API calls (heat zones, notes) would cause rate limiting
-    const workouts = await this.intervals.getActivities(startDate, endDate, params.sport, {
-      skipExpensiveCalls: true,
-    });
+    // and per-activity API calls (heat zones, notes) would cause rate limiting.
+    const [rawWorkouts, annotations] = await Promise.all([
+      this.intervals.getActivities(startDate, endDate, params.sport, {
+        skipExpensiveCalls: true,
+      }),
+      this.intervals.getAnnotations(startDate, endDate).catch((e) => {
+        console.error('Error fetching annotations for workout history:', e);
+        return [] as Annotation[];
+      }),
+    ]);
 
-    // Enrich with matched Whoop data
-    return enrichWorkoutsWithWhoop(workouts, this.whoop, startDate, endDate);
+    const workouts = await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate);
+    return { workouts, annotations };
   }
 
   /**

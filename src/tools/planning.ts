@@ -5,6 +5,7 @@ import { parseDateStringInTimezone } from '../utils/tz.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import type {
   PlannedWorkout,
+  Annotation,
   Race,
   CreateWorkoutInput,
   CreateWorkoutResponse,
@@ -23,6 +24,7 @@ import type { GetUpcomingWorkoutsInput } from './types.js';
  */
 export interface UpcomingWorkoutsResponse {
   workouts: PlannedWorkout[];
+  annotations: Annotation[];
 }
 
 export class PlanningTools {
@@ -53,14 +55,22 @@ export class PlanningTools {
       endDateStr = format(endDate, 'yyyy-MM-dd');
     }
 
-    // Fetch, merge, and deduplicate from both sources
-    let workouts = await fetchAndMergePlannedWorkouts(
-      this.intervals,
-      this.trainerroad,
-      startDateStr,
-      endDateStr,
-      timezone
-    );
+    // Fetch, merge, and deduplicate from both sources; fetch overlapping annotations in parallel
+    const [mergedWorkouts, annotations] = await Promise.all([
+      fetchAndMergePlannedWorkouts(
+        this.intervals,
+        this.trainerroad,
+        startDateStr,
+        endDateStr,
+        timezone
+      ),
+      this.intervals.getAnnotations(startDateStr, endDateStr).catch((e) => {
+        console.error('Error fetching annotations for upcoming workouts:', e);
+        return [] as Annotation[];
+      }),
+    ]);
+
+    let workouts = mergedWorkouts;
 
     // Filter by sport if specified
     if (sport) {
@@ -74,6 +84,7 @@ export class PlanningTools {
 
     return {
       workouts: sortedWorkouts,
+      annotations,
     };
   }
 

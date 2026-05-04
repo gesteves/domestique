@@ -418,6 +418,27 @@ export interface PlannedWorkout {
   external_id?: string;
 }
 
+export type AnnotationCategory = 'Sick' | 'Injured' | 'Holiday' | 'Note';
+
+export type TrainingAvailability = 'Normal' | 'Limited' | 'Unavailable';
+
+/**
+ * A non-workout calendar annotation from Intervals.icu — a sickness, injury,
+ * holiday, or freeform note. Spans one or more days via start_date / end_date.
+ */
+export interface Annotation {
+  id: string;
+  category: AnnotationCategory;
+  name?: string;
+  description?: string;
+  /** Local start date (YYYY-MM-DD) */
+  start_date: string;
+  /** Local end date (YYYY-MM-DD); absent for single-day annotations */
+  end_date?: string;
+  /** Training availability flag set on the annotation (Normal / Limited / Unavailable) */
+  training_availability?: TrainingAvailability;
+}
+
 // ============================================
 // Workout Creation Types
 // ============================================
@@ -1055,6 +1076,8 @@ export interface DailySummary {
   planned_workouts: PlannedWorkout[];
   /** Completed workouts from Intervals.icu with matched Whoop data */
   completed_workouts: WorkoutWithWhoop[];
+  /** Active calendar annotations (sickness, injury, holiday, note) overlapping today */
+  annotations: Annotation[];
   /** Race scheduled for today (if any) */
   scheduled_race: Race | null;
   /** Per-location weather forecasts for today (empty if Google Weather is not configured) */
@@ -1381,6 +1404,8 @@ export interface TodaysWorkoutsResponse {
   completed_workouts: WorkoutWithWhoop[];
   /** Planned workouts from TrainerRoad and Intervals.icu */
   planned_workouts: PlannedWorkout[];
+  /** Active calendar annotations (sickness, injury, holiday, note) overlapping today */
+  annotations: Annotation[];
   /** Number of workouts completed today */
   workouts_completed: number;
   /** Number of workouts planned for today */

@@ -2,6 +2,9 @@ import type {
   NormalizedWorkout,
   FitnessMetrics,
   PlannedWorkout,
+  Annotation,
+  AnnotationCategory,
+  TrainingAvailability,
   IntervalsConfig,
   DailyTrainingLoad,
   TrainingLoadTrends,
@@ -88,8 +91,26 @@ import {
 import { IntervalsApiError, type ErrorContext } from '../errors/index.js';
 import { httpRequestJson, httpRequestVoid } from './http.js';
 import { memoize } from '../utils/memo.js';
+import { subDays, format, parseISO } from 'date-fns';
 
 const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
+
+// Intervals.icu API uses uppercase category and training_availability values.
+// Domestique normalizes both to sentence case in tool responses.
+const ANNOTATION_API_CATEGORIES = ['SICK', 'INJURED', 'HOLIDAY', 'NOTE'] as const;
+type AnnotationApiCategory = (typeof ANNOTATION_API_CATEGORIES)[number];
+const ANNOTATION_CATEGORY_MAP: Record<AnnotationApiCategory, AnnotationCategory> = {
+  SICK: 'Sick',
+  INJURED: 'Injured',
+  HOLIDAY: 'Holiday',
+  NOTE: 'Note',
+};
+const TRAINING_AVAILABILITY_MAP: Record<string, TrainingAvailability> = {
+  NORMAL: 'Normal',
+  LIMITED: 'Limited',
+  UNAVAILABLE: 'Unavailable',
+};
+const ANNOTATION_LOOKBACK_DAYS = 30;
 
 const WIND_UNIT_MAP: Record<'KMH' | 'MPS' | 'KNOTS' | 'MPH' | 'BFT', WindUnit> = {
   KMH: 'kmh',
@@ -474,6 +495,7 @@ interface IntervalsEvent {
   id: number;
   uid?: string;
   start_date_local: string;
+  end_date_local?: string;
   name: string;
   description?: string;
   type: string;
@@ -484,6 +506,7 @@ interface IntervalsEvent {
   duration?: number;
   tags?: string[];
   external_id?: string;
+  training_availability?: string;
   // Intervals.icu parses structured workout syntax out of `description` into
   // this field. `workout_doc.description` is the prose-only prefix.
   workout_doc?: {
@@ -1832,6 +1855,55 @@ export class IntervalsClient {
     const timezone = await this.getAthleteTimezone();
 
     return events.map((e) => this.normalizePlannedEvent(e, timezone));
+  }
+
+  /**
+   * Get non-workout calendar annotations (SICK, INJURED, HOLIDAY, NOTE) whose
+   * date span overlaps the given range. The Intervals.icu /events endpoint
+   * filters strictly by start_date_local, so a multi-day annotation that began
+   * before `rangeStart` would be missed by a naive query. Workaround: extend
+   * `oldest` backward by 30 days and overlap-filter client-side.
+   */
+  async getAnnotations(rangeStart: string, rangeEnd: string): Promise<Annotation[]> {
+    const lookbackStart = subDays(parseISO(rangeStart), ANNOTATION_LOOKBACK_DAYS);
+    const oldest = format(lookbackStart, 'yyyy-MM-dd');
+
+    const events = await this.fetch<IntervalsEvent[]>('/events', {
+      oldest,
+      newest: rangeEnd,
+      category: ANNOTATION_API_CATEGORIES.join(','),
+    });
+
+    return events
+      .filter((e) => {
+        const start = e.start_date_local?.slice(0, 10);
+        if (!start) return false;
+        const end = (e.end_date_local ?? e.start_date_local).slice(0, 10);
+        return start <= rangeEnd && end >= rangeStart;
+      })
+      .map((e) => this.normalizeAnnotation(e))
+      .filter((a): a is Annotation => a !== null);
+  }
+
+  private normalizeAnnotation(event: IntervalsEvent): Annotation | null {
+    const apiCategory = event.category as AnnotationApiCategory | undefined;
+    if (!apiCategory || !ANNOTATION_CATEGORY_MAP[apiCategory]) {
+      return null;
+    }
+    const start = event.start_date_local.slice(0, 10);
+    const endRaw = event.end_date_local?.slice(0, 10);
+    const availability = event.training_availability
+      ? TRAINING_AVAILABILITY_MAP[event.training_availability]
+      : undefined;
+    return {
+      id: event.uid ?? String(event.id),
+      category: ANNOTATION_CATEGORY_MAP[apiCategory],
+      name: event.name,
+      description: event.description,
+      start_date: start,
+      end_date: endRaw && endRaw !== start ? endRaw : undefined,
+      training_availability: availability,
+    };
   }
 
   /**

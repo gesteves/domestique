@@ -496,6 +496,18 @@ const PlannedWorkoutZ = z.object({
   external_id: z.string().optional().describe('External ID linking to source (e.g., TrainerRoad UID)'),
 }).passthrough();
 
+const AnnotationZ = z.object({
+  id: z.string().optional().describe('Unique annotation identifier'),
+  category: z.enum(['Sick', 'Injured', 'Holiday', 'Note']).describe('Annotation category. Sick and Injured explain training gaps; Holiday marks vacation; Note is a freeform calendar note'),
+  name: z.string().optional().describe('Annotation title'),
+  description: z.string().optional().describe('Annotation body / details'),
+  start_date: z.string().describe('Local start date (YYYY-MM-DD)'),
+  end_date: z.string().optional().describe('Local end date (YYYY-MM-DD); absent for single-day annotations'),
+  training_availability: z.enum(['Normal', 'Limited', 'Unavailable']).optional().describe('Training availability set on the annotation. Limited means the athlete can train in a reduced capacity; Unavailable means no training is possible'),
+}).passthrough();
+
+const annotationsField = z.array(AnnotationZ).optional().describe('Non-workout calendar annotations (sickness, injury, holiday, freeform note) whose date span overlaps the queried range. Use these to interpret training-volume changes and to know when the athlete is unavailable to train');
+
 const RaceZ = z.object({
   scheduled_for: z.string().optional().describe('Scheduled date/time in ISO 8601 format. Midnight means the start has not been set'),
   name: z.string().optional().describe('Name of the race'),
@@ -814,6 +826,7 @@ export const strainHistoryOutputSchema = {
 
 export const workoutHistoryOutputSchema = {
   workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Full per-activity detail (intervals, notes, weather, music) is available separately by activity ID.'),
+  annotations: annotationsField,
   hints: hintsField,
 } as const;
 
@@ -858,6 +871,7 @@ export const activityTotalsOutputSchema = {
 
 export const upcomingWorkoutsOutputSchema = {
   workouts: z.array(PlannedWorkoutZ).describe('Planned workouts and fitness activities for the requested future range, from both TrainerRoad and Intervals.icu'),
+  annotations: annotationsField,
   hints: hintsField,
 } as const;
 
@@ -940,6 +954,7 @@ export const todaysSummaryOutputSchema = {
   wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data from Intervals.icu — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, and more. Includes a `sources` map naming each field's configured provider (garmin/whoop/oura). Some fields overlap with whoop.* and are shown in parallel intentionally so the same metric can be reconciled across sources. Null if no wellness data was recorded."),
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
   completed_workouts: z.array(WorkoutSummaryZ).optional().describe('Workouts completed so far today, with matched Whoop data. Full per-activity detail (intervals, notes, weather, music) is available separately for today.'),
+  annotations: annotationsField,
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
   forecast: z.array(LocationForecastZ).optional().describe("Today's weather forecast for each of the user's configured weather locations. Empty when no weather provider is configured or no locations are configured"),
   workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
@@ -963,6 +978,7 @@ export const todaysWorkoutsOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
   completed_workouts: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
   planned_workouts: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
+  annotations: annotationsField,
   workouts_completed: z.number().optional().describe('Number of workouts completed today'),
   workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
   tss_completed: z.number().optional().describe('Total TSS from completed workouts'),

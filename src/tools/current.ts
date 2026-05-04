@@ -25,6 +25,7 @@ import type {
   ForecastResponse,
   LocationForecast,
   Race,
+  Annotation,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -517,9 +518,10 @@ export class CurrentTools {
    */
   async getTodaysWorkouts(): Promise<TodaysWorkoutsResponse> {
     const timezone = await this.intervals.getAthleteTimezone();
+    const today = getTodayInTimezone(timezone);
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
-    const [completedResponse, plannedResponse] = await Promise.all([
+    const [completedResponse, plannedResponse, annotations] = await Promise.all([
       this.getTodaysCompletedWorkouts().catch((e) => {
         console.error('Error fetching completed workouts for todays workouts:', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysCompletedWorkoutsResponse;
@@ -527,6 +529,10 @@ export class CurrentTools {
       this.getTodaysPlannedWorkouts().catch((e) => {
         console.error('Error fetching planned workouts for todays workouts:', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysPlannedWorkoutsResponse;
+      }),
+      this.intervals.getAnnotations(today, today).catch((e) => {
+        console.error('Error fetching annotations for todays workouts:', e);
+        return [] as Annotation[];
       }),
     ]);
 
@@ -540,6 +546,7 @@ export class CurrentTools {
       current_time: currentDateTime,
       completed_workouts: completed,
       planned_workouts: planned,
+      annotations,
       workouts_completed: completed.length,
       workouts_planned: planned.length,
       tss_completed: Math.round(tssCompleted),
@@ -590,7 +597,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, todaysRace, forecast] = await Promise.all([
+    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, annotations, todaysRace, forecast] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return { current_time: getCurrentTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
@@ -618,6 +625,10 @@ export class CurrentTools {
       this.getTodaysPlannedWorkouts().catch((e) => {
         console.error('Error fetching planned workouts for daily summary:', e);
         return { current_time: getCurrentTimeInTimezone(timezone), workouts: [] };
+      }),
+      this.intervals.getAnnotations(today, today).catch((e) => {
+        console.error('Error fetching annotations for daily summary:', e);
+        return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getUpcomingRaces(timezone).then((races) => {
@@ -666,6 +677,7 @@ export class CurrentTools {
       wellness,
       planned_workouts: plannedWorkouts,
       completed_workouts: completedWorkouts,
+      annotations,
       scheduled_race: todaysRace,
       forecast,
       workouts_planned: plannedWorkouts.length,

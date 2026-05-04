@@ -36,6 +36,8 @@ describe('HistoricalTools', () => {
 
     // Default timezone mock for all tests
     vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
+    // Default annotations to empty so getWorkoutHistory doesn't choke on auto-mocks.
+    vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
 
     tools = new HistoricalTools(mockIntervalsClient, mockWhoopClient);
   });
@@ -87,18 +89,20 @@ describe('HistoricalTools', () => {
         newest: '2024-12-14',
       });
 
-      expect(result).toHaveLength(2);
+      expect(result.workouts).toHaveLength(2);
       // First workout should have matched Whoop data
-      expect(result[0].whoop).not.toBeNull();
-      expect(result[0].whoop?.strain_score).toBe(12.5);
+      expect(result.workouts[0].whoop).not.toBeNull();
+      expect(result.workouts[0].whoop?.strain_score).toBe(12.5);
       // Second workout should not have matched Whoop data
-      expect(result[1].whoop).toBeNull();
+      expect(result.workouts[1].whoop).toBeNull();
+      expect(result.annotations).toEqual([]);
       expect(mockIntervalsClient.getActivities).toHaveBeenCalledWith(
         '2024-12-01',
         '2024-12-14',
         undefined,
         { skipExpensiveCalls: true }
       );
+      expect(mockIntervalsClient.getAnnotations).toHaveBeenCalledWith('2024-12-01', '2024-12-14');
     });
 
     it('should parse natural language start date', async () => {
@@ -158,9 +162,9 @@ describe('HistoricalTools', () => {
         oldest: '2024-12-01',
       });
 
-      expect(result).toHaveLength(2);
-      expect(result[0].whoop).toBeNull();
-      expect(result[1].whoop).toBeNull();
+      expect(result.workouts).toHaveLength(2);
+      expect(result.workouts[0].whoop).toBeNull();
+      expect(result.workouts[1].whoop).toBeNull();
     });
 
     it('should reject oldest set to today (ISO)', async () => {
@@ -956,8 +960,8 @@ describe('HistoricalTools', () => {
         oldest: '2024-12-01',
       });
 
-      expect(result).toHaveLength(1);
-      expect(result[0].whoop).toBeNull();
+      expect(result.workouts).toHaveLength(1);
+      expect(result.workouts[0].whoop).toBeNull();
     });
   });
 

@@ -1003,6 +1003,174 @@ describe('IntervalsClient', () => {
     });
   });
 
+  describe('getAnnotations', () => {
+    const rangeStart = '2025-05-10';
+    const rangeEnd = '2025-05-10';
+
+    function mockApi(events: unknown[]) {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(events),
+      });
+    }
+
+    it('queries with the correct lookback window and category list', async () => {
+      mockApi([]);
+
+      await client.getAnnotations(rangeStart, rangeEnd);
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('/athlete/i12345/events');
+      // 30-day lookback: 2025-05-10 - 30d = 2025-04-10
+      expect(callUrl).toContain('oldest=2025-04-10');
+      expect(callUrl).toContain('newest=2025-05-10');
+      // Categories sent uppercase to the API
+      const decoded = decodeURIComponent(callUrl);
+      expect(decoded).toContain('category=SICK,INJURED,HOLIDAY,NOTE');
+    });
+
+    it('includes a single-day annotation that starts inside the range', async () => {
+      mockApi([
+        {
+          id: 1,
+          uid: 'note-1',
+          start_date_local: '2025-05-10',
+          name: 'Felt great',
+          type: 'Note',
+          category: 'NOTE',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        id: 'note-1',
+        category: 'Note',
+        name: 'Felt great',
+        description: undefined,
+        start_date: '2025-05-10',
+        end_date: undefined,
+        training_availability: undefined,
+      });
+    });
+
+    it('includes a multi-day annotation whose start_date is before the range but end_date overlaps it (the bug being fixed)', async () => {
+      mockApi([
+        {
+          id: 2,
+          uid: 'holiday-1',
+          start_date_local: '2025-05-05',
+          end_date_local: '2025-05-12',
+          name: 'Beach trip',
+          type: 'Holiday',
+          category: 'HOLIDAY',
+          training_availability: 'LIMITED',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: 'holiday-1',
+        category: 'Holiday',
+        start_date: '2025-05-05',
+        end_date: '2025-05-12',
+        training_availability: 'Limited',
+      });
+    });
+
+    it('excludes an annotation that ended before the range', async () => {
+      mockApi([
+        {
+          id: 3,
+          uid: 'sick-old',
+          start_date_local: '2025-04-20',
+          end_date_local: '2025-04-25',
+          name: 'Cold',
+          type: 'Sick',
+          category: 'SICK',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result).toHaveLength(0);
+    });
+
+    it('excludes an annotation that starts after the range', async () => {
+      mockApi([
+        {
+          id: 4,
+          uid: 'future-holiday',
+          start_date_local: '2025-05-20',
+          end_date_local: '2025-05-25',
+          name: 'Future trip',
+          type: 'Holiday',
+          category: 'HOLIDAY',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result).toHaveLength(0);
+    });
+
+    it('drops the end_date when it equals the start_date', async () => {
+      mockApi([
+        {
+          id: 5,
+          uid: 'one-day',
+          start_date_local: '2025-05-10',
+          end_date_local: '2025-05-10',
+          name: 'Single day',
+          type: 'Note',
+          category: 'NOTE',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result[0].end_date).toBeUndefined();
+    });
+
+    it('handles datetime-format start_date_local values', async () => {
+      mockApi([
+        {
+          id: 6,
+          uid: 'dt-event',
+          start_date_local: '2025-05-08T09:00:00',
+          end_date_local: '2025-05-12T18:00:00',
+          name: 'Injury flare',
+          type: 'Injured',
+          category: 'INJURED',
+          training_availability: 'UNAVAILABLE',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        category: 'Injured',
+        start_date: '2025-05-08',
+        end_date: '2025-05-12',
+        training_availability: 'Unavailable',
+      });
+    });
+
+    it('skips events whose category is not an annotation category', async () => {
+      mockApi([
+        {
+          id: 7,
+          uid: 'workout-1',
+          start_date_local: '2025-05-10',
+          name: 'Bonus ride',
+          type: 'Ride',
+          category: 'WORKOUT',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result).toHaveLength(0);
+    });
+  });
+
   describe('getTodayFitness', () => {
     it('should return today\'s fitness metrics', async () => {
       const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };

@@ -40,6 +40,9 @@ describe('CurrentTools', () => {
     });
     mockTrainerRoadClient = new TrainerRoadClient({ calendarUrl: 'https://test.com' });
 
+    // Default annotations to empty so list-style tools that fetch them don't choke on auto-mocks.
+    vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
+
     tools = new CurrentTools(mockIntervalsClient, mockWhoopClient, mockTrainerRoadClient);
   });
 
