@@ -238,7 +238,7 @@ const WorkoutSummaryZ = z.object({
   calories: z.number().optional().describe('Estimated calories burned'),
   carbs_used: z.string().optional().describe('Estimated carbohydrates used'),
   carbs_intake: z.string().optional().describe("Carbohydrates consumed during activity. Absence doesn't imply lack of consumption"),
-  carbs_per_hour: z.string().optional().describe('Carbohydrate intake rate during the activity. Only present when both intake and usage were logged and positive'),
+  carb_intake_rate: z.string().optional().describe('Rate of carbohydrate intake during the activity'),
 
   weight: z.string().optional().describe('Athlete weight at time of activity'),
   resting_hr: z.string().optional().describe('Resting heart rate at time of activity'),
