@@ -106,6 +106,12 @@ TRAINERROAD_CALENDAR_URL=  # Private iCal feed URL
 # Google APIs (Weather API + Air Quality API + Pollen API + Elevation API + Geocoding API + Time Zone API; same key, all six must be enabled on the GCP project)
 GOOGLE_API_KEY=             # Google Cloud API key (used for Weather API, Air Quality API, Pollen API, Elevation API, Geocoding API, Time Zone API, and other Google services)
 
+# Anthropic API (optional). Enables:
+#   - Claude Haiku categorization of TrainerRoad annotations into
+#     Sick/Injured/Holiday/Note (results cached in Redis when configured).
+#   - Token counting in tool responses (development mode only).
+ANTHROPIC_API_KEY=
+
 # Error Reporting
 BUGSNAG_API_KEY=            # Bugsnag API key for error reporting (optional)
 ```
@@ -190,6 +196,7 @@ Unit-bearing formatters consult the athlete's Intervals.icu unit preferences via
 5. When making changes, ensure that @README.md is up to date.
 6. When adding new tools or modifying existing ones, ensure that the tool descriptions and the field descriptions are up to date.
 7. Always ensure tests pass with `nvm use && npm test` and always add tests for new functionality.
+8. **TrainerRoad annotation categorization** - TR's iCal feed only carries title + description, so by default annotations land as `Note`. When `ANTHROPIC_API_KEY` is set, `src/utils/annotation-categorizer.ts` uses Claude Haiku 4.5 with structured outputs to classify each TR annotation into `Sick`/`Injured`/`Holiday`/`Note`, cached by content hash in Redis. `mergeAnnotations` (`src/utils/annotation-utils.ts`) then dedupes TR vs. Intervals.icu by category + date overlap for Sick/Injured/Holiday, and falls back to name + date overlap for Note.
 
 ## MCP Client Compatibility Notes
 

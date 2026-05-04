@@ -105,6 +105,11 @@ For Last.fm integration (optional):
 
 When both are set, per-workout details from `get_workout_details` and `get_todays_workouts` include the matched tracks scrobbled during the workout.
 
+For Anthropic API integration (optional):
+- `ANTHROPIC_API_KEY` - Anthropic API key. Enables two features when set:
+  - **TrainerRoad annotation categorization** — TrainerRoad's iCal feed doesn't expose annotation type, so by default every TR annotation is surfaced as a `Note`. With this key set, Claude Haiku 4.5 classifies each TR annotation into `Sick`, `Injured`, `Holiday`, or `Note` based on its title and description, which lets `mergeAnnotations` deduplicate against Intervals.icu by category instead of by brittle title matching. Results are cached in Redis (when configured) by content hash with a 30-day TTL, so each unique annotation is classified once.
+  - **Debug token counting** in development mode (see [Debug Token Counting](#debug-token-counting) below).
+
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Bugsnag API key for error reporting. When set, upstream API failures (Intervals.icu, Whoop, TrainerRoad) are reported to Bugsnag with full context including HTTP method, URL, status code, and response body.
 

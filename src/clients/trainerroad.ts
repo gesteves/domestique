@@ -6,6 +6,7 @@ import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
 import { httpRequestText } from './http.js';
+import { categorizeAnnotation } from '../utils/annotation-categorizer.js';
 
 interface CalendarEvent {
   uid: string;
@@ -383,7 +384,7 @@ export class TrainerRoadClient {
     // duration prefix that match a race umbrella's name) stay classified as
     // workouts rather than falling through to annotations. Race umbrellas are
     // filtered separately below.
-    return events
+    const inRange = events
       .filter((event) => !this.isWorkout(event))
       .filter((event) => !this.isRaceUmbrella(event, events, timezone))
       .map((event) => this.normalizeAnnotation(event, timezone))
@@ -392,6 +393,16 @@ export class TrainerRoadClient {
         const end = a.end_date ?? a.start_date;
         return a.start_date <= endDate && end >= startDate;
       });
+
+    // Optionally classify each annotation via Claude (no-op when
+    // ANTHROPIC_API_KEY is unset). Default to 'Note' when categorization is
+    // unavailable or returns null, preserving the prior behavior.
+    const categories = await Promise.all(
+      inRange.map((a) =>
+        categorizeAnnotation({ name: a.name, description: a.description })
+      )
+    );
+    return inRange.map((a, i) => ({ ...a, category: categories[i] ?? 'Note' }));
   }
 
   private normalizeAnnotation(
