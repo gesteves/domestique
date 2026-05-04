@@ -24,6 +24,7 @@ describe('PlanningTools', () => {
     vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
     // Default annotations to empty so getUpcomingWorkouts doesn't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
+    vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
 
     tools = new PlanningTools(mockIntervalsClient, mockTrainerRoadClient);
   });
@@ -203,6 +204,70 @@ describe('PlanningTools', () => {
       const runningResult = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'running' });
       expect(runningResult.workouts).toHaveLength(1);
       expect(runningResult.workouts[0].sport).toBe('Running');
+    });
+
+    it('should deduplicate annotations by name+overlap with Intervals.icu winning over TrainerRoad', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'icu-vac',
+          category: 'Holiday',
+          name: 'Vacation',
+          start_date: '2024-12-16',
+          end_date: '2024-12-20',
+          training_availability: 'Unavailable',
+        },
+      ]);
+      vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'tr-vac',
+          category: 'Note',
+          name: 'Vacation',
+          start_date: '2024-12-17',
+          end_date: '2024-12-19',
+        },
+      ]);
+
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+
+      expect(result.annotations).toHaveLength(1);
+      expect(result.annotations[0].id).toBe('icu-vac');
+      expect(result.annotations[0].category).toBe('Holiday');
+      expect(result.annotations[0].training_availability).toBe('Unavailable');
+    });
+
+    it('should concatenate annotations from Intervals.icu and TrainerRoad sorted by start_date', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'icu-1',
+          category: 'Sick',
+          name: 'Cold',
+          start_date: '2024-12-18',
+        },
+      ]);
+      vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'tr-1',
+          category: 'Note',
+          name: 'Vacation',
+          start_date: '2024-12-16',
+          end_date: '2024-12-17',
+        },
+      ]);
+
+      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+
+      expect(result.annotations).toHaveLength(2);
+      expect(result.annotations[0].id).toBe('tr-1');
+      expect(result.annotations[1].id).toBe('icu-1');
+      expect(mockTrainerRoadClient.getAnnotations).toHaveBeenCalledWith(
+        '2024-12-15',
+        '2024-12-22',
+        'UTC'
+      );
     });
 
     it('should return empty array when sport filter has no match', async () => {

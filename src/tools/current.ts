@@ -11,6 +11,7 @@ import { fromZonedTime } from 'date-fns-tz';
 import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
+import { mergeAnnotations } from '../utils/annotation-utils.js';
 import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
 import type {
   StrainData,
@@ -521,7 +522,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
-    const [completedResponse, plannedResponse, annotations] = await Promise.all([
+    const [completedResponse, plannedResponse, intervalsAnnotations, trainerroadAnnotations] = await Promise.all([
       this.getTodaysCompletedWorkouts().catch((e) => {
         console.error('Error fetching completed workouts for todays workouts:', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysCompletedWorkoutsResponse;
@@ -531,10 +532,18 @@ export class CurrentTools {
         return { current_time: currentDateTime, workouts: [] } as TodaysPlannedWorkoutsResponse;
       }),
       this.intervals.getAnnotations(today, today).catch((e) => {
-        console.error('Error fetching annotations for todays workouts:', e);
+        console.error('Error fetching Intervals.icu annotations for todays workouts:', e);
         return [] as Annotation[];
       }),
+      this.trainerroad
+        ? this.trainerroad.getAnnotations(today, today, timezone).catch((e) => {
+            console.error('Error fetching TrainerRoad annotations for todays workouts:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
     ]);
+
+    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
 
     const completed = completedResponse.workouts;
     const planned = plannedResponse.workouts;
@@ -597,7 +606,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, annotations, todaysRace, forecast] = await Promise.all([
+    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, intervalsAnnotations, trainerroadAnnotations, todaysRace, forecast] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return { current_time: getCurrentTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
@@ -627,9 +636,15 @@ export class CurrentTools {
         return { current_time: getCurrentTimeInTimezone(timezone), workouts: [] };
       }),
       this.intervals.getAnnotations(today, today).catch((e) => {
-        console.error('Error fetching annotations for daily summary:', e);
+        console.error('Error fetching Intervals.icu annotations for daily summary:', e);
         return [] as Annotation[];
       }),
+      this.trainerroad
+        ? this.trainerroad.getAnnotations(today, today, timezone).catch((e) => {
+            console.error('Error fetching TrainerRoad annotations for daily summary:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getUpcomingRaces(timezone).then((races) => {
             // Filter for today's race only
@@ -651,6 +666,7 @@ export class CurrentTools {
     const { strain } = strainResponse.whoop;
     const completedWorkouts = completedWorkoutsResponse.workouts;
     const plannedWorkouts = plannedWorkoutsResponse.workouts;
+    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
 
     // Calculate TSS totals
     const tssCompleted = completedWorkouts.reduce(

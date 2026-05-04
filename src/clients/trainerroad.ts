@@ -1,7 +1,7 @@
 import ical from 'node-ical';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
-import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race } from '../types/index.js';
+import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race, Annotation } from '../types/index.js';
 import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
@@ -325,6 +325,109 @@ export class TrainerRoadClient {
     races.sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for));
 
     return races;
+  }
+
+  /**
+   * Determine if a calendar event is the umbrella for a race — a DATE
+   * (all-day) event without a duration prefix that has at least one matching
+   * leg event (same name, same day) registered as a workout/sub-event. Mirrors
+   * the matching rules used in findRaces().
+   */
+  private isRaceUmbrella(
+    event: CalendarEvent,
+    allEvents: CalendarEvent[],
+    timezone?: string
+  ): boolean {
+    if (event.dateType !== 'date' || this.parseDurationFromName(event.summary) !== undefined) {
+      return false;
+    }
+    const raceName = event.summary;
+    const raceDate = format(event.start, 'yyyy-MM-dd');
+    return allEvents.some((leg) => {
+      if (leg === event) return false;
+      if (leg.dateType === 'date') {
+        if (this.parseDurationFromName(leg.summary) === undefined) return false;
+        const legDate = format(leg.start, 'yyyy-MM-dd');
+        const legName = this.stripDurationFromName(leg.summary);
+        return legDate === raceDate && legName === raceName;
+      } else {
+        const durationMinutes = (leg.end.getTime() - leg.start.getTime()) / (1000 * 60);
+        if (durationMinutes >= 720) return false;
+        const legDate = timezone
+          ? formatInTimeZone(leg.start, timezone, 'yyyy-MM-dd')
+          : format(leg.start, 'yyyy-MM-dd');
+        return legDate === raceDate && leg.summary === raceName;
+      }
+    });
+  }
+
+  /**
+   * Get non-workout calendar annotations whose date span overlaps the given
+   * range. TrainerRoad's iCal feed has no category metadata, so anything that
+   * isn't a workout and isn't a race (umbrella or leg) is surfaced as a
+   * "Note". Multi-day events whose start_date precedes `startDate` but whose
+   * end_date overlaps the range are included; the full feed is already in
+   * memory after fetchCalendar(), so no lookback query is needed.
+   * @param startDate - Range start in YYYY-MM-DD format
+   * @param endDate - Range end in YYYY-MM-DD format
+   * @param timezone - IANA timezone for DATE-TIME event date extraction
+   */
+  async getAnnotations(
+    startDate: string,
+    endDate: string,
+    timezone?: string
+  ): Promise<Annotation[]> {
+    const events = await this.fetchCalendar();
+
+    // Pass `undefined` for raceEventNames so race legs (DATE events with a
+    // duration prefix that match a race umbrella's name) stay classified as
+    // workouts rather than falling through to annotations. Race umbrellas are
+    // filtered separately below.
+    return events
+      .filter((event) => !this.isWorkout(event))
+      .filter((event) => !this.isRaceUmbrella(event, events, timezone))
+      .map((event) => this.normalizeAnnotation(event, timezone))
+      .filter((a): a is Annotation => {
+        if (!a) return false;
+        const end = a.end_date ?? a.start_date;
+        return a.start_date <= endDate && end >= startDate;
+      });
+  }
+
+  private normalizeAnnotation(
+    event: CalendarEvent,
+    timezone?: string
+  ): Annotation | null {
+    let startDate: string;
+    let endDate: string;
+
+    if (event.dateType === 'date') {
+      startDate = format(event.start, 'yyyy-MM-dd');
+      // iCal DTEND is exclusive for DATE events; the inclusive last day is
+      // end - 1 day. node-ical sets end = start when DTEND is omitted, in
+      // which case start_date and end_date are the same.
+      if (event.end.getTime() > event.start.getTime()) {
+        endDate = format(subDays(event.end, 1), 'yyyy-MM-dd');
+      } else {
+        endDate = startDate;
+      }
+    } else {
+      startDate = timezone
+        ? formatInTimeZone(event.start, timezone, 'yyyy-MM-dd')
+        : format(event.start, 'yyyy-MM-dd');
+      endDate = timezone
+        ? formatInTimeZone(event.end, timezone, 'yyyy-MM-dd')
+        : format(event.end, 'yyyy-MM-dd');
+    }
+
+    return {
+      id: event.uid,
+      category: 'Note',
+      name: event.summary,
+      description: this.cleanDescription(event.description),
+      start_date: startDate,
+      end_date: endDate !== startDate ? endDate : undefined,
+    };
   }
 
   private normalizeEvent(event: CalendarEvent, timezone?: string): PlannedWorkout {

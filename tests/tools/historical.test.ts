@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HistoricalTools } from '../../src/tools/historical.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { WhoopClient } from '../../src/clients/whoop.js';
+import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
 import type {
   NormalizedWorkout,
   WhoopRecoveryTrendEntry,
@@ -15,6 +16,7 @@ import type {
 
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/whoop.js');
+vi.mock('../../src/clients/trainerroad.js');
 
 describe('HistoricalTools', () => {
   let tools: HistoricalTools;
@@ -103,6 +105,50 @@ describe('HistoricalTools', () => {
         { skipExpensiveCalls: true }
       );
       expect(mockIntervalsClient.getAnnotations).toHaveBeenCalledWith('2024-12-01', '2024-12-14');
+    });
+
+    it('should concatenate annotations from Intervals.icu and TrainerRoad when a TR client is configured', async () => {
+      const mockTrainerRoadClient = new TrainerRoadClient({ calendarUrl: 'https://test.com' });
+      vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'tr-1',
+          category: 'Note',
+          name: 'Travel',
+          start_date: '2024-12-05',
+          end_date: '2024-12-08',
+        },
+      ]);
+      vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'icu-1',
+          category: 'Sick',
+          name: 'Cold',
+          start_date: '2024-12-10',
+        },
+      ]);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+
+      const toolsWithTr = new HistoricalTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        null,
+        mockTrainerRoadClient
+      );
+
+      const result = await toolsWithTr.getWorkoutHistory({
+        oldest: '2024-12-01',
+        newest: '2024-12-14',
+      });
+
+      expect(result.annotations).toHaveLength(2);
+      expect(result.annotations[0].id).toBe('tr-1');
+      expect(result.annotations[1].id).toBe('icu-1');
+      expect(mockTrainerRoadClient.getAnnotations).toHaveBeenCalledWith(
+        '2024-12-01',
+        '2024-12-14',
+        'UTC'
+      );
     });
 
     it('should parse natural language start date', async () => {

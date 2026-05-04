@@ -1309,4 +1309,224 @@ END:VCALENDAR`;
       vi.useRealTimers();
     });
   });
+
+  describe('getAnnotations', () => {
+    it('returns single-day all-day events without duration prefix as Note annotations', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:vacation-day@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:Day off
+DESCRIPTION:Description: Resting today
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        id: 'vacation-day@trainerroad.com',
+        category: 'Note',
+        name: 'Day off',
+        description: 'Resting today',
+        start_date: '2024-12-18',
+        end_date: undefined,
+      });
+    });
+
+    it('includes a multi-day all-day event whose start_date is before the range but overlaps it', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:vacation@trainerroad.com
+DTSTART;VALUE=DATE:20241210
+DTEND;VALUE=DATE:20241220
+SUMMARY:Beach trip
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-25');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: 'vacation@trainerroad.com',
+        category: 'Note',
+        name: 'Beach trip',
+        // DTEND is exclusive, so the inclusive last day is the day before.
+        start_date: '2024-12-10',
+        end_date: '2024-12-19',
+      });
+    });
+
+    it('excludes a multi-day all-day event that ended before the range', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:past-vacation@trainerroad.com
+DTSTART;VALUE=DATE:20241201
+DTEND;VALUE=DATE:20241210
+SUMMARY:Past trip
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('excludes a multi-day all-day event that starts after the range', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:future-vacation@trainerroad.com
+DTSTART;VALUE=DATE:20250101
+DTEND;VALUE=DATE:20250110
+SUMMARY:Future trip
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('excludes race umbrellas (DATE event without duration prefix that has matching duration-prefixed legs on the same day)', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:race-umbrella@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:Escape from Alcatraz
+DESCRIPTION:Triathlon
+END:VEVENT
+BEGIN:VEVENT
+UID:race-leg-1@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:0:45 - Escape from Alcatraz
+DESCRIPTION:Swim leg
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('excludes ordinary workouts (DATE-TIME events with normal duration)', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:workout@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241218T090000Z
+DTEND;VALUE=DATE-TIME:20241218T100000Z
+SUMMARY:Easy spin
+DESCRIPTION:60 min
+END:VEVENT
+BEGIN:VEVENT
+UID:date-workout@trainerroad.com
+DTSTART;VALUE=DATE:20241219
+DTEND;VALUE=DATE:20241220
+SUMMARY:1:00 - Recovery ride
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('treats DATE-TIME events spanning >= 24 hours as annotations', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:multi-day-event@trainerroad.com
+DTSTART;VALUE=DATE-TIME:20241217T080000Z
+DTEND;VALUE=DATE-TIME:20241219T170000Z
+SUMMARY:Conference
+DESCRIPTION:Out of town
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20', 'UTC');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        category: 'Note',
+        name: 'Conference',
+        description: 'Out of town',
+        start_date: '2024-12-17',
+        end_date: '2024-12-19',
+      });
+    });
+
+    it('includes a DATE event without duration prefix that has no matching legs (orphan all-day event)', async () => {
+      // Important: distinguishes from race umbrellas. Same input shape as a
+      // potential race name, but no leg has a matching stripped-name on the
+      // same day, so it should be surfaced as an annotation.
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:orphan@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:Travel day
+END:VEVENT
+BEGIN:VEVENT
+UID:unrelated-workout@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:0:30 - Recovery spin
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Travel day');
+    });
+  });
 });

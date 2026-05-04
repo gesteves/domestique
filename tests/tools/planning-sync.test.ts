@@ -24,6 +24,7 @@ describe('PlanningTools sync operations', () => {
     vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
     // Default annotations to empty so getUpcomingWorkouts doesn't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
+    vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
 
     tools = new PlanningTools(mockIntervalsClient, mockTrainerRoadClient);
   });

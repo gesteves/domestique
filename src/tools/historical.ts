@@ -1,8 +1,10 @@
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { LastFmClient } from '../clients/lastfm.js';
+import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone, parseDateRangeInTimezone, getTodayInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
+import { mergeAnnotations } from '../utils/annotation-utils.js';
 import {
   parseDurationToHours,
   parseDurationToSeconds,
@@ -52,7 +54,8 @@ export class HistoricalTools {
   constructor(
     private intervals: IntervalsClient,
     private whoop: WhoopClient | null,
-    private lastfm: LastFmClient | null = null
+    private lastfm: LastFmClient | null = null,
+    private trainerroad: TrainerRoadClient | null = null
   ) {}
 
   /**
@@ -78,19 +81,26 @@ export class HistoricalTools {
       );
     }
 
-    // Fetch Intervals.icu activities and annotations in parallel.
+    // Fetch Intervals.icu activities and annotations (from both calendars) in parallel.
     // Use skipExpensiveCalls since historical queries can return many activities
     // and per-activity API calls (heat zones, notes) would cause rate limiting.
-    const [rawWorkouts, annotations] = await Promise.all([
+    const [rawWorkouts, intervalsAnnotations, trainerroadAnnotations] = await Promise.all([
       this.intervals.getActivities(startDate, endDate, params.sport, {
         skipExpensiveCalls: true,
       }),
       this.intervals.getAnnotations(startDate, endDate).catch((e) => {
-        console.error('Error fetching annotations for workout history:', e);
+        console.error('Error fetching Intervals.icu annotations for workout history:', e);
         return [] as Annotation[];
       }),
+      this.trainerroad
+        ? this.trainerroad.getAnnotations(startDate, endDate, timezone).catch((e) => {
+            console.error('Error fetching TrainerRoad annotations for workout history:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
     ]);
 
+    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
     const workouts = await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate);
     return { workouts, annotations };
   }
