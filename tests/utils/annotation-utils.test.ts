@@ -112,4 +112,102 @@ describe('mergeAnnotations', () => {
 
     expect(merged).toHaveLength(2);
   });
+
+  describe('category-based dedup (Sick/Injured/Holiday)', () => {
+    it('drops a TR Sick annotation when ICU has an overlapping Sick annotation, even if names differ', () => {
+      const icu: Annotation[] = [
+        {
+          id: 'icu-1',
+          category: 'Sick',
+          name: 'Sick - flu',
+          start_date: '2025-05-08',
+          end_date: '2025-05-12',
+          training_availability: 'Unavailable',
+        },
+      ];
+      const tr: Annotation[] = [
+        { id: 'tr-1', category: 'Sick', name: 'Cold', start_date: '2025-05-10' },
+      ];
+
+      const merged = mergeAnnotations(icu, tr);
+
+      expect(merged).toHaveLength(1);
+      expect(merged[0].id).toBe('icu-1');
+      expect(merged[0].training_availability).toBe('Unavailable');
+    });
+
+    it('drops a TR Holiday annotation when ICU has an overlapping Holiday annotation', () => {
+      const icu: Annotation[] = [
+        {
+          id: 'icu-1',
+          category: 'Holiday',
+          name: 'PTO',
+          start_date: '2025-07-01',
+          end_date: '2025-07-10',
+        },
+      ];
+      const tr: Annotation[] = [
+        { id: 'tr-1', category: 'Holiday', name: 'Italy trip', start_date: '2025-07-05', end_date: '2025-07-08' },
+      ];
+
+      const merged = mergeAnnotations(icu, tr);
+
+      expect(merged).toHaveLength(1);
+      expect(merged[0].id).toBe('icu-1');
+    });
+
+    it('drops a TR Injured annotation when ICU has an overlapping Injured annotation', () => {
+      const icu: Annotation[] = [
+        { id: 'icu-1', category: 'Injured', name: 'Achilles', start_date: '2025-05-10' },
+      ];
+      const tr: Annotation[] = [
+        { id: 'tr-1', category: 'Injured', name: 'Tendon flare', start_date: '2025-05-10' },
+      ];
+
+      const merged = mergeAnnotations(icu, tr);
+
+      expect(merged).toHaveLength(1);
+      expect(merged[0].id).toBe('icu-1');
+    });
+
+    it('keeps a TR Sick annotation when ICU has only a Holiday on the same day (different categories)', () => {
+      const icu: Annotation[] = [
+        { id: 'icu-1', category: 'Holiday', name: 'PTO', start_date: '2025-05-10' },
+      ];
+      const tr: Annotation[] = [
+        { id: 'tr-1', category: 'Sick', name: 'Cold', start_date: '2025-05-10' },
+      ];
+
+      const merged = mergeAnnotations(icu, tr);
+
+      expect(merged).toHaveLength(2);
+    });
+
+    it('keeps a TR Sick annotation when ICU has a Sick annotation with no date overlap', () => {
+      const icu: Annotation[] = [
+        { id: 'icu-1', category: 'Sick', name: 'Flu', start_date: '2025-01-10', end_date: '2025-01-15' },
+      ];
+      const tr: Annotation[] = [
+        { id: 'tr-1', category: 'Sick', name: 'Cold', start_date: '2025-05-10' },
+      ];
+
+      const merged = mergeAnnotations(icu, tr);
+
+      expect(merged).toHaveLength(2);
+    });
+
+    it('does not require a TR Sick/Injured/Holiday annotation to have a name to be deduped', () => {
+      const icu: Annotation[] = [
+        { id: 'icu-1', category: 'Sick', name: 'Flu', start_date: '2025-05-10' },
+      ];
+      const tr: Annotation[] = [
+        { id: 'tr-1', category: 'Sick', start_date: '2025-05-10' },
+      ];
+
+      const merged = mergeAnnotations(icu, tr);
+
+      expect(merged).toHaveLength(1);
+      expect(merged[0].id).toBe('icu-1');
+    });
+  });
 });

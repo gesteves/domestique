@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
+import { categorizeAnnotation } from '../../src/utils/annotation-categorizer.js';
+
+vi.mock('../../src/utils/annotation-categorizer.js', () => ({
+  categorizeAnnotation: vi.fn().mockResolvedValue(null),
+}));
 
 describe('TrainerRoadClient', () => {
   let client: TrainerRoadClient;
@@ -1527,6 +1532,57 @@ END:VCALENDAR`;
 
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Travel day');
+    });
+
+    it('uses the category returned by the categorizer when one is provided', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:cold@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:Cold
+DESCRIPTION:feeling unwell
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+      vi.mocked(categorizeAnnotation).mockResolvedValueOnce('Sick');
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].category).toBe('Sick');
+      expect(categorizeAnnotation).toHaveBeenCalledWith({
+        name: 'Cold',
+        description: 'feeling unwell',
+      });
+    });
+
+    it("falls back to 'Note' when the categorizer returns null", async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:event@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:Some annotation
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+      vi.mocked(categorizeAnnotation).mockResolvedValueOnce(null);
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].category).toBe('Note');
     });
   });
 });
