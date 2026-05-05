@@ -458,7 +458,7 @@ interface IntervalsWellness {
   comments?: string;
 
   // Custom metrics
-  HeatAdaptationScore?: number;
+  CoreHeatAdaptationScore?: number;
 }
 
 /**
@@ -493,7 +493,7 @@ const WELLNESS_API_TO_OUTPUT_KEY: Record<string, string> = {
   // into `blood_pressure`. Map both API keys to the same output for sourcing.
   systolic: 'blood_pressure',
   diastolic: 'blood_pressure',
-  HeatAdaptationScore: 'heat_adaptation_score',
+  CoreHeatAdaptationScore: 'heat_adaptation_score',
 };
 
 interface IntervalsEvent {
@@ -2069,8 +2069,8 @@ export class IntervalsClient {
     }
 
     // Custom metrics
-    if (data.HeatAdaptationScore != null) {
-      result.heat_adaptation_score = formatPercent(data.HeatAdaptationScore);
+    if (data.CoreHeatAdaptationScore != null) {
+      result.heat_adaptation_score = formatPercent(data.CoreHeatAdaptationScore);
     }
 
     return result;

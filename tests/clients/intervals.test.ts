@@ -1429,7 +1429,7 @@ describe('IntervalsClient', () => {
       const mockWellness = {
         id: '2024-12-15',
         weight: 74.5,
-        HeatAdaptationScore: 72,
+        CoreHeatAdaptationScore: 72,
       };
 
       mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
@@ -1445,7 +1445,7 @@ describe('IntervalsClient', () => {
       const mockWellness = {
         id: '2024-12-15',
         weight: 74.5,
-        HeatAdaptationScore: null,
+        CoreHeatAdaptationScore: null,
       };
 
       mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockProfile) });
@@ -1461,7 +1461,7 @@ describe('IntervalsClient', () => {
       const mockWellness = {
         id: '2024-12-15',
         weight: 74.5,
-        HeatAdaptationScore: 72,
+        CoreHeatAdaptationScore: 72,
       };
       const mockAthlete = {
         id: 'test',
@@ -1486,7 +1486,7 @@ describe('IntervalsClient', () => {
       const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
       const mockWellness = {
         id: '2024-12-15',
-        HeatAdaptationScore: 72,
+        CoreHeatAdaptationScore: 72,
       };
       const mockAthlete = { id: 'test' }; // No *_wellness_keys configured
 
@@ -1506,11 +1506,11 @@ describe('IntervalsClient', () => {
       const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };
       const mockWellness = {
         id: '2024-12-15',
-        HeatAdaptationScore: 72,
+        CoreHeatAdaptationScore: 72,
       };
       const mockAthlete = {
         id: 'test',
-        icu_garmin_wellness_keys: ['HeatAdaptationScore'],
+        icu_garmin_wellness_keys: ['CoreHeatAdaptationScore'],
         whoop_wellness_keys: [],
         oura_wellness_keys: [],
       };
