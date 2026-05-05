@@ -6,6 +6,13 @@ vi.mock('../../src/utils/annotation-categorizer.js', () => ({
   categorizeAnnotation: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock('../../src/utils/training-phase-cache.js', () => ({
+  TRAINING_PHASE_NAMES: ['Base', 'Build', 'Specialty', 'Recovery Week'],
+  loadMarkers: vi.fn().mockResolvedValue([]),
+  rememberMarkers: vi.fn().mockResolvedValue(undefined),
+  _CACHE_KEY_FOR_TESTING: 'domestique:training-phase-markers:v1',
+}));
+
 describe('TrainerRoadClient', () => {
   let client: TrainerRoadClient;
   const mockFetch = vi.fn();
@@ -1583,6 +1590,273 @@ END:VCALENDAR`;
 
       expect(result).toHaveLength(1);
       expect(result[0].category).toBe('Note');
+    });
+
+    it('excludes training-phase-start markers (Base/Build/Specialty/Recovery Week) from annotations', async () => {
+      vi.mocked(categorizeAnnotation).mockClear();
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:phase@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:Build
+END:VEVENT
+BEGIN:VEVENT
+UID:other@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:Travel day
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getAnnotations('2024-12-16', '2024-12-20');
+
+      // Only the Travel day annotation; the Build phase marker is filtered out
+      // and surfaced via getTrainingPhaseStarts instead. The categorizer should
+      // never even see the Build event.
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Travel day');
+      expect(categorizeAnnotation).toHaveBeenCalledTimes(1);
+      expect(categorizeAnnotation).toHaveBeenCalledWith({
+        name: 'Travel day',
+        description: undefined,
+      });
+    });
+  });
+
+  describe('getTrainingPhaseStarts', () => {
+    const phaseIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:phase-base@trainerroad.com
+DTSTART;VALUE=DATE:20241201
+DTEND;VALUE=DATE:20241202
+SUMMARY:Base
+END:VEVENT
+BEGIN:VEVENT
+UID:phase-build@trainerroad.com
+DTSTART;VALUE=DATE:20241229
+DTEND;VALUE=DATE:20241230
+SUMMARY:Build
+END:VEVENT
+BEGIN:VEVENT
+UID:phase-specialty@trainerroad.com
+DTSTART;VALUE=DATE:20250126
+DTEND;VALUE=DATE:20250127
+SUMMARY:Specialty
+END:VEVENT
+BEGIN:VEVENT
+UID:phase-recovery@trainerroad.com
+DTSTART;VALUE=DATE:20250223
+DTEND;VALUE=DATE:20250224
+SUMMARY:Recovery Week
+END:VEVENT
+BEGIN:VEVENT
+UID:workout@trainerroad.com
+DTSTART;VALUE=DATE:20241229
+DTEND;VALUE=DATE:20241230
+SUMMARY:1:00 - Pettit
+END:VEVENT
+BEGIN:VEVENT
+UID:noise@trainerroad.com
+DTSTART;VALUE=DATE:20241229
+DTEND;VALUE=DATE:20241230
+SUMMARY:Travel day
+END:VEVENT
+END:VCALENDAR`;
+
+    it('emits a single-day annotation per phase marker that falls in range', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(phaseIcs),
+      });
+
+      const result = await client.getTrainingPhaseStarts('2024-12-15', '2025-01-31');
+
+      expect(result.map((a) => ({ name: a.name, date: a.start_date }))).toEqual([
+        { name: 'Build', date: '2024-12-29' },
+        { name: 'Specialty', date: '2025-01-26' },
+      ]);
+      for (const a of result) {
+        expect(a.category).toBe('TrainingPhaseStart');
+        expect(a.end_date).toBeUndefined();
+      }
+    });
+
+    it('matches phase names case-insensitively', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:phase@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:  build
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getTrainingPhaseStarts('2024-12-15', '2024-12-20');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Build');
+    });
+
+    it('excludes events with duration prefixes that happen to share a phase name', async () => {
+      // A workout titled "Build" with a duration prefix is just a workout,
+      // not a phase marker. parseDurationFromName guards against this.
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:wk@trainerroad.com
+DTSTART;VALUE=DATE:20241218
+DTEND;VALUE=DATE:20241219
+SUMMARY:1:00 - Build
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getTrainingPhaseStarts('2024-12-15', '2024-12-20');
+
+      expect(result).toEqual([]);
+    });
+
+    it('excludes events outside the requested range', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(phaseIcs),
+      });
+
+      const result = await client.getTrainingPhaseStarts('2025-02-01', '2025-02-28');
+
+      expect(result.map((a) => a.name)).toEqual(['Recovery Week']);
+    });
+  });
+
+  describe('getCurrentTrainingPhase', () => {
+    const phaseIcs = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:phase-build@trainerroad.com
+DTSTART;VALUE=DATE:20241229
+DTEND;VALUE=DATE:20241230
+SUMMARY:Build
+END:VEVENT
+BEGIN:VEVENT
+UID:phase-specialty@trainerroad.com
+DTSTART;VALUE=DATE:20250126
+DTEND;VALUE=DATE:20250127
+SUMMARY:Specialty
+END:VEVENT
+END:VCALENDAR`;
+
+    it('returns the active phase with computed week and weeks_remaining', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(phaseIcs),
+      });
+
+      // 14 days into Build (Dec 29 → Jan 12); next phase Jan 26 → 14 days remain
+      const result = await client.getCurrentTrainingPhase('2025-01-12');
+
+      expect(result).toEqual({
+        name: 'Build',
+        started_on: '2024-12-29',
+        ends_on: '2025-01-26',
+        week: 3, // floor(14/7) + 1
+        weeks_remaining: 2, // floor(14/7)
+      });
+    });
+
+    it('returns null when no marker is on or before the queried date', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(phaseIcs),
+      });
+
+      const result = await client.getCurrentTrainingPhase('2024-12-01');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns ends_on=null and weeks_remaining=null when no next marker is known', async () => {
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:phase-build@trainerroad.com
+DTSTART;VALUE=DATE:20241229
+DTEND;VALUE=DATE:20241230
+SUMMARY:Build
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getCurrentTrainingPhase('2025-01-15');
+
+      expect(result).toEqual({
+        name: 'Build',
+        started_on: '2024-12-29',
+        ends_on: null,
+        week: 3,
+        weeks_remaining: null,
+      });
+    });
+
+    it('uses the cached marker when the active marker is not in the live feed', async () => {
+      const { rememberMarkers } = await import(
+        '../../src/utils/training-phase-cache.js'
+      );
+      vi.mocked(rememberMarkers).mockClear();
+
+      const { loadMarkers } = await import(
+        '../../src/utils/training-phase-cache.js'
+      );
+      vi.mocked(loadMarkers).mockResolvedValueOnce([
+        { date: '2024-12-29', name: 'Build' },
+      ]);
+
+      // Live feed has only the upcoming Specialty marker; Build has rolled out
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:phase-specialty@trainerroad.com
+DTSTART;VALUE=DATE:20250126
+DTEND;VALUE=DATE:20250127
+SUMMARY:Specialty
+END:VEVENT
+END:VCALENDAR`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getCurrentTrainingPhase('2025-01-15');
+
+      expect(result).toEqual({
+        name: 'Build',
+        started_on: '2024-12-29',
+        ends_on: '2025-01-26',
+        week: 3,
+        weeks_remaining: 1, // 11 days remain → floor(11/7) = 1
+      });
     });
   });
 });

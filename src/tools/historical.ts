@@ -84,7 +84,7 @@ export class HistoricalTools {
     // Fetch Intervals.icu activities and annotations (from both calendars) in parallel.
     // Use skipExpensiveCalls since historical queries can return many activities
     // and per-activity API calls (heat zones, notes) would cause rate limiting.
-    const [rawWorkouts, intervalsAnnotations, trainerroadAnnotations] = await Promise.all([
+    const [rawWorkouts, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts] = await Promise.all([
       this.intervals.getActivities(startDate, endDate, params.sport, {
         skipExpensiveCalls: true,
       }),
@@ -98,9 +98,18 @@ export class HistoricalTools {
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
+      this.trainerroad
+        ? this.trainerroad.getTrainingPhaseStarts(startDate, endDate).catch((e) => {
+            console.error('Error fetching TrainerRoad phase starts for workout history:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
     ]);
 
-    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
+    const annotations = mergeAnnotations(intervalsAnnotations, [
+      ...trainerroadAnnotations,
+      ...trainerroadPhaseStarts,
+    ]);
     const workouts = await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate);
     return { workouts, annotations };
   }

@@ -27,6 +27,7 @@ import type {
   LocationForecast,
   Race,
   Annotation,
+  TrainingPhase,
 } from '../types/index.js';
 import type { GetStrainHistoryInput } from './types.js';
 
@@ -522,7 +523,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
-    const [completedResponse, plannedResponse, intervalsAnnotations, trainerroadAnnotations] = await Promise.all([
+    const [completedResponse, plannedResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase] = await Promise.all([
       this.getTodaysCompletedWorkouts().catch((e) => {
         console.error('Error fetching completed workouts for todays workouts:', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysCompletedWorkoutsResponse;
@@ -541,9 +542,24 @@ export class CurrentTools {
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
+      this.trainerroad
+        ? this.trainerroad.getTrainingPhaseStarts(today, today).catch((e) => {
+            console.error('Error fetching TrainerRoad phase starts for todays workouts:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
+      this.trainerroad
+        ? this.trainerroad.getCurrentTrainingPhase(today).catch((e) => {
+            console.error('Error fetching current training phase for todays workouts:', e);
+            return null as TrainingPhase | null;
+          })
+        : Promise.resolve(null as TrainingPhase | null),
     ]);
 
-    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
+    const annotations = mergeAnnotations(intervalsAnnotations, [
+      ...trainerroadAnnotations,
+      ...trainerroadPhaseStarts,
+    ]);
 
     const completed = completedResponse.workouts;
     const planned = plannedResponse.workouts;
@@ -556,6 +572,7 @@ export class CurrentTools {
       completed_workouts: completed,
       planned_workouts: planned,
       annotations,
+      training_phase: trainingPhase,
       workouts_completed: completed.length,
       workouts_planned: planned.length,
       tss_completed: Math.round(tssCompleted),
@@ -606,7 +623,7 @@ export class CurrentTools {
     const today = getTodayInTimezone(timezone);
 
     // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, intervalsAnnotations, trainerroadAnnotations, todaysRace, forecast] = await Promise.all([
+    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, todaysRace, forecast] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
         console.error('Error fetching recovery for daily summary:', e);
         return { current_time: getCurrentTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
@@ -646,6 +663,18 @@ export class CurrentTools {
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
+        ? this.trainerroad.getTrainingPhaseStarts(today, today).catch((e) => {
+            console.error('Error fetching TrainerRoad phase starts for daily summary:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
+      this.trainerroad
+        ? this.trainerroad.getCurrentTrainingPhase(today).catch((e) => {
+            console.error('Error fetching current training phase for daily summary:', e);
+            return null as TrainingPhase | null;
+          })
+        : Promise.resolve(null as TrainingPhase | null),
+      this.trainerroad
         ? this.trainerroad.getUpcomingRaces(timezone).then((races) => {
             // Filter for today's race only
             const todaysRace = races.find((race) => race.scheduled_for.startsWith(today));
@@ -666,7 +695,10 @@ export class CurrentTools {
     const { strain } = strainResponse.whoop;
     const completedWorkouts = completedWorkoutsResponse.workouts;
     const plannedWorkouts = plannedWorkoutsResponse.workouts;
-    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
+    const annotations = mergeAnnotations(intervalsAnnotations, [
+      ...trainerroadAnnotations,
+      ...trainerroadPhaseStarts,
+    ]);
 
     // Calculate TSS totals
     const tssCompleted = completedWorkouts.reduce(
@@ -694,6 +726,7 @@ export class CurrentTools {
       planned_workouts: plannedWorkouts,
       completed_workouts: completedWorkouts,
       annotations,
+      training_phase: trainingPhase,
       scheduled_race: todaysRace,
       forecast,
       workouts_planned: plannedWorkouts.length,

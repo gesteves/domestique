@@ -25,6 +25,8 @@ describe('PlanningTools sync operations', () => {
     // Default annotations to empty so getUpcomingWorkouts doesn't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
+    vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
+    vi.mocked(mockTrainerRoadClient.getCurrentTrainingPhase).mockResolvedValue(null);
 
     tools = new PlanningTools(mockIntervalsClient, mockTrainerRoadClient);
   });

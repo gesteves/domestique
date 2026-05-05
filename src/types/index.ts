@@ -418,7 +418,12 @@ export interface PlannedWorkout {
   external_id?: string;
 }
 
-export type AnnotationCategory = 'Sick' | 'Injured' | 'Holiday' | 'Note';
+export type AnnotationCategory =
+  | 'Sick'
+  | 'Injured'
+  | 'Holiday'
+  | 'Note'
+  | 'TrainingPhaseStart';
 
 export type TrainingAvailability = 'Normal' | 'Limited' | 'Unavailable';
 
@@ -437,6 +442,30 @@ export interface Annotation {
   end_date?: string;
   /** Training availability flag set on the annotation (Normal / Limited / Unavailable) */
   training_availability?: TrainingAvailability;
+}
+
+export type TrainingPhaseName =
+  | 'Base'
+  | 'Build'
+  | 'Specialty'
+  | 'Recovery Week';
+
+/**
+ * Active TrainerRoad training phase as of a given date, with computed
+ * progression (week number, weeks remaining). Derived by finding the most
+ * recent phase-start marker on or before the queried date and looking
+ * forward to the next marker for `ends_on`.
+ */
+export interface TrainingPhase {
+  name: TrainingPhaseName;
+  /** Local YYYY-MM-DD date the phase started */
+  started_on: string;
+  /** Local YYYY-MM-DD date the next phase begins (exclusive). Null if no next marker is known yet. */
+  ends_on: string | null;
+  /** 1-indexed week number of the phase as of the queried date */
+  week: number;
+  /** Whole weeks remaining in the phase as of the queried date. Null if ends_on is null. */
+  weeks_remaining: number | null;
 }
 
 // ============================================
@@ -1076,8 +1105,10 @@ export interface DailySummary {
   planned_workouts: PlannedWorkout[];
   /** Completed workouts from Intervals.icu with matched Whoop data */
   completed_workouts: WorkoutWithWhoop[];
-  /** Active calendar annotations (sickness, injury, holiday, note) overlapping today */
+  /** Active calendar annotations (sickness, injury, holiday, note, training-phase boundary) overlapping today */
   annotations: Annotation[];
+  /** Active TrainerRoad training phase as of today, with computed week / weeks_remaining. Null when no phase marker is known */
+  training_phase: TrainingPhase | null;
   /** Race scheduled for today (if any) */
   scheduled_race: Race | null;
   /** Per-location weather forecasts for today (empty if Google Weather is not configured) */
@@ -1404,8 +1435,10 @@ export interface TodaysWorkoutsResponse {
   completed_workouts: WorkoutWithWhoop[];
   /** Planned workouts from TrainerRoad and Intervals.icu */
   planned_workouts: PlannedWorkout[];
-  /** Active calendar annotations (sickness, injury, holiday, note) overlapping today */
+  /** Active calendar annotations (sickness, injury, holiday, note, training-phase boundary) overlapping today */
   annotations: Annotation[];
+  /** Active TrainerRoad training phase as of today, with computed week / weeks_remaining. Null when no phase marker is known */
+  training_phase: TrainingPhase | null;
   /** Number of workouts completed today */
   workouts_completed: number;
   /** Number of workouts planned for today */

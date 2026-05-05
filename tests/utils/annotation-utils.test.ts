@@ -210,4 +210,48 @@ describe('mergeAnnotations', () => {
       expect(merged[0].id).toBe('icu-1');
     });
   });
+
+  describe('TrainingPhaseStart', () => {
+    it('passes TrainingPhaseStart annotations through unchanged (Intervals.icu has no counterpart)', () => {
+      const tr: Annotation[] = [
+        {
+          id: 'tr-phase-1',
+          category: 'TrainingPhaseStart',
+          name: 'Build',
+          start_date: '2025-05-10',
+        },
+        {
+          id: 'tr-phase-2',
+          category: 'TrainingPhaseStart',
+          name: 'Specialty',
+          start_date: '2025-06-07',
+        },
+      ];
+
+      const merged = mergeAnnotations([], tr);
+
+      expect(merged).toHaveLength(2);
+      expect(merged.map((a) => a.id)).toEqual(['tr-phase-1', 'tr-phase-2']);
+    });
+
+    it('does not collide with an Intervals.icu Note that happens to fall on the same day', () => {
+      const icu: Annotation[] = [
+        { id: 'icu-1', category: 'Note', name: 'Build', start_date: '2025-05-10' },
+      ];
+      const tr: Annotation[] = [
+        {
+          id: 'tr-1',
+          category: 'TrainingPhaseStart',
+          name: 'Build',
+          start_date: '2025-05-10',
+        },
+      ];
+
+      const merged = mergeAnnotations(icu, tr);
+
+      // Different categories — both kept. (Sick/Injured/Holiday/Note dedup
+      // matches only when the categories are equal.)
+      expect(merged).toHaveLength(2);
+    });
+  });
 });

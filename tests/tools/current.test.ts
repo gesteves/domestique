@@ -43,6 +43,8 @@ describe('CurrentTools', () => {
     // Default annotations to empty so list-style tools that fetch them don't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
+    vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
+    vi.mocked(mockTrainerRoadClient.getCurrentTrainingPhase).mockResolvedValue(null);
 
     tools = new CurrentTools(mockIntervalsClient, mockWhoopClient, mockTrainerRoadClient);
   });

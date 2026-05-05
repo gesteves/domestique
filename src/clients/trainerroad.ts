@@ -1,12 +1,17 @@
 import ical from 'node-ical';
 import { format, subDays } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
-import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race, Annotation } from '../types/index.js';
+import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race, Annotation, TrainingPhase, TrainingPhaseName } from '../types/index.js';
 import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
 import { httpRequestText } from './http.js';
 import { categorizeAnnotation } from '../utils/annotation-categorizer.js';
+import {
+  CachedPhaseMarker,
+  loadMarkers,
+  rememberMarkers,
+} from '../utils/training-phase-cache.js';
 
 interface CalendarEvent {
   uid: string;
@@ -86,7 +91,30 @@ export class TrainerRoadClient {
       });
     }
 
+    // Persist any phase markers seen on this fetch so the active phase stays
+    // anchorable after the marker rolls out of the iCal lookback window.
+    // Best-effort: failures are swallowed and logged, never propagated.
+    void this.cachePhaseMarkers(events);
+
     return events;
+  }
+
+  private async cachePhaseMarkers(events: CalendarEvent[]): Promise<void> {
+    try {
+      const seen: CachedPhaseMarker[] = [];
+      for (const event of events) {
+        if (!this.isTrainingPhase(event)) continue;
+        seen.push({
+          date: format(event.start, 'yyyy-MM-dd'),
+          name: this.normalizePhaseName(event.summary),
+        });
+      }
+      if (seen.length > 0) {
+        await rememberMarkers(seen);
+      }
+    } catch (error) {
+      console.error('[TrainerRoad] Failed to cache phase markers:', error);
+    }
   }
 
   /**
@@ -362,6 +390,138 @@ export class TrainerRoadClient {
     });
   }
 
+  private static readonly TRAINING_PHASE_NAMES_LOWER = new Set<string>([
+    'base',
+    'build',
+    'specialty',
+    'recovery week',
+  ]);
+
+  /**
+   * Identify a TrainerRoad training-phase marker — an all-day event whose
+   * summary is exactly `Base`, `Build`, `Specialty`, or `Recovery Week`
+   * (case-insensitive). These mark the start of a training block and are
+   * deterministic strings emitted by TR's plan generator, so no
+   * categorization call is needed.
+   */
+  private isTrainingPhase(event: CalendarEvent): boolean {
+    if (event.dateType !== 'date') return false;
+    if (this.parseDurationFromName(event.summary) !== undefined) return false;
+    return TrainerRoadClient.TRAINING_PHASE_NAMES_LOWER.has(
+      event.summary.trim().toLowerCase()
+    );
+  }
+
+  private normalizePhaseName(summary: string): TrainingPhaseName {
+    const trimmed = summary.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === 'base') return 'Base';
+    if (lower === 'build') return 'Build';
+    if (lower === 'specialty') return 'Specialty';
+    return 'Recovery Week';
+  }
+
+  /**
+   * Get TrainerRoad training-phase-start markers whose date falls within the
+   * given range. Each marker becomes a single-day annotation
+   * (`category: 'TrainingPhaseStart'`). Spans are not synthesized — the
+   * derived `training_phase` object (see `getCurrentTrainingPhase`) carries
+   * the active-phase framing instead.
+   *
+   * @param startDate - Range start in YYYY-MM-DD format
+   * @param endDate - Range end in YYYY-MM-DD format
+   */
+  async getTrainingPhaseStarts(
+    startDate: string,
+    endDate: string
+  ): Promise<Annotation[]> {
+    const events = await this.fetchCalendar();
+    return events
+      .filter((event) => this.isTrainingPhase(event))
+      .map((event): Annotation => {
+        const date = format(event.start, 'yyyy-MM-dd');
+        const name = this.normalizePhaseName(event.summary);
+        return {
+          id: event.uid,
+          category: 'TrainingPhaseStart',
+          name,
+          description: this.cleanDescription(event.description),
+          start_date: date,
+        };
+      })
+      .filter((a) => a.start_date >= startDate && a.start_date <= endDate)
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  }
+
+  /**
+   * Compute the active TrainerRoad training phase as of `asOfDate`.
+   * Combines markers from the current iCal feed with any persisted in the
+   * Redis-backed cache so the phase remains anchorable after the start
+   * marker has rolled out of the feed's lookback window.
+   *
+   * Returns `null` if no marker is known on or before `asOfDate`.
+   *
+   * @param asOfDate - Local YYYY-MM-DD date to evaluate against
+   */
+  async getCurrentTrainingPhase(
+    asOfDate: string
+  ): Promise<TrainingPhase | null> {
+    const events = await this.fetchCalendar();
+    const liveMarkers: CachedPhaseMarker[] = events
+      .filter((event) => this.isTrainingPhase(event))
+      .map((event) => ({
+        date: format(event.start, 'yyyy-MM-dd'),
+        name: this.normalizePhaseName(event.summary),
+      }));
+
+    const cached = await loadMarkers();
+    const byDate = new Map<string, CachedPhaseMarker>();
+    for (const m of cached) byDate.set(m.date, m);
+    // Live feed wins on conflict (e.g. a marker was edited in TR after caching)
+    for (const m of liveMarkers) byDate.set(m.date, m);
+    const merged = [...byDate.values()].sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+
+    let active: CachedPhaseMarker | undefined;
+    let next: CachedPhaseMarker | undefined;
+    for (const marker of merged) {
+      if (marker.date <= asOfDate) {
+        active = marker;
+      } else {
+        next = marker;
+        break;
+      }
+    }
+    if (!active) return null;
+
+    const startedOn = new Date(`${active.date}T00:00:00Z`);
+    const asOf = new Date(`${asOfDate}T00:00:00Z`);
+    const daysSinceStart = Math.floor(
+      (asOf.getTime() - startedOn.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const week = Math.floor(daysSinceStart / 7) + 1;
+
+    let endsOn: string | null = null;
+    let weeksRemaining: number | null = null;
+    if (next) {
+      endsOn = next.date;
+      const endDate = new Date(`${next.date}T00:00:00Z`);
+      const daysRemaining = Math.floor(
+        (endDate.getTime() - asOf.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      weeksRemaining = Math.max(0, Math.floor(daysRemaining / 7));
+    }
+
+    return {
+      name: active.name,
+      started_on: active.date,
+      ends_on: endsOn,
+      week,
+      weeks_remaining: weeksRemaining,
+    };
+  }
+
   /**
    * Get non-workout calendar annotations whose date span overlaps the given
    * range. TrainerRoad's iCal feed has no category metadata, so anything that
@@ -369,6 +529,9 @@ export class TrainerRoadClient {
    * "Note". Multi-day events whose start_date precedes `startDate` but whose
    * end_date overlaps the range are included; the full feed is already in
    * memory after fetchCalendar(), so no lookback query is needed.
+   *
+   * Phase-start markers (Base/Build/Specialty/Recovery Week) are excluded
+   * here and surfaced separately via `getTrainingPhaseStarts`.
    * @param startDate - Range start in YYYY-MM-DD format
    * @param endDate - Range end in YYYY-MM-DD format
    * @param timezone - IANA timezone for DATE-TIME event date extraction
@@ -382,11 +545,12 @@ export class TrainerRoadClient {
 
     // Pass `undefined` for raceEventNames so race legs (DATE events with a
     // duration prefix that match a race umbrella's name) stay classified as
-    // workouts rather than falling through to annotations. Race umbrellas are
-    // filtered separately below.
+    // workouts rather than falling through to annotations. Race umbrellas
+    // and training-phase-start markers are filtered separately.
     const inRange = events
       .filter((event) => !this.isWorkout(event))
       .filter((event) => !this.isRaceUmbrella(event, events, timezone))
+      .filter((event) => !this.isTrainingPhase(event))
       .map((event) => this.normalizeAnnotation(event, timezone))
       .filter((a): a is Annotation => {
         if (!a) return false;

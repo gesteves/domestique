@@ -8,6 +8,7 @@ import type {
   PlannedWorkout,
   Annotation,
   Race,
+  TrainingPhase,
   CreateWorkoutInput,
   CreateWorkoutResponse,
   UpdateWorkoutInput,
@@ -26,6 +27,7 @@ import type { GetUpcomingWorkoutsInput } from './types.js';
 export interface UpcomingWorkoutsResponse {
   workouts: PlannedWorkout[];
   annotations: Annotation[];
+  training_phase: TrainingPhase | null;
 }
 
 export class PlanningTools {
@@ -57,7 +59,7 @@ export class PlanningTools {
     }
 
     // Fetch, merge, and deduplicate from both sources; fetch overlapping annotations in parallel
-    const [mergedWorkouts, intervalsAnnotations, trainerroadAnnotations] = await Promise.all([
+    const [mergedWorkouts, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase] = await Promise.all([
       fetchAndMergePlannedWorkouts(
         this.intervals,
         this.trainerroad,
@@ -75,9 +77,24 @@ export class PlanningTools {
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
+      this.trainerroad
+        ? this.trainerroad.getTrainingPhaseStarts(startDateStr, endDateStr).catch((e) => {
+            console.error('Error fetching TrainerRoad phase starts for upcoming workouts:', e);
+            return [] as Annotation[];
+          })
+        : Promise.resolve([] as Annotation[]),
+      this.trainerroad
+        ? this.trainerroad.getCurrentTrainingPhase(startDateStr).catch((e) => {
+            console.error('Error fetching current training phase for upcoming workouts:', e);
+            return null as TrainingPhase | null;
+          })
+        : Promise.resolve(null as TrainingPhase | null),
     ]);
 
-    const annotations = mergeAnnotations(intervalsAnnotations, trainerroadAnnotations);
+    const annotations = mergeAnnotations(intervalsAnnotations, [
+      ...trainerroadAnnotations,
+      ...trainerroadPhaseStarts,
+    ]);
 
     let workouts = mergedWorkouts;
 
@@ -94,6 +111,7 @@ export class PlanningTools {
     return {
       workouts: sortedWorkouts,
       annotations,
+      training_phase: trainingPhase,
     };
   }
 

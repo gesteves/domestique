@@ -118,6 +118,7 @@ describe('HistoricalTools', () => {
           end_date: '2024-12-08',
         },
       ]);
+      vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([
         {
           id: 'icu-1',
