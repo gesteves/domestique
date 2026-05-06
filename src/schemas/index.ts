@@ -166,10 +166,12 @@ const WhoopMatchedDataZ = z.object({
 // Workout (summary vs detail)
 // ============================================
 //
-// WorkoutSummaryZ is the always-present field set returned by list endpoints
-// (get_workout_history, get_todays_summary.completed_workouts). WorkoutDetailZ
-// extends it with the heavier fields that only get fetched for single-workout
-// detail views (get_workout_details, get_todays_workouts.completed_workouts).
+// WorkoutSummaryZ is the always-present field set returned by bulk list
+// endpoints that intentionally skip per-activity API calls to avoid rate
+// limiting (get_workout_history). WorkoutDetailZ extends it with the heavier
+// fields that get fetched when full per-activity detail is wanted
+// (get_workout_details, get_todays_workouts.completed_workouts,
+// get_todays_summary.completed_workouts).
 
 const WorkoutSummaryZ = z.object({
   id: z.string().optional().describe('Unique ID of the completed activity in Intervals.icu'),
@@ -964,7 +966,7 @@ export const todaysSummaryOutputSchema = {
   fitness: FitnessMetricsZ.nullable().optional().describe("Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu. Null if unavailable"),
   wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data from Intervals.icu — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, and more. Includes a `sources` map naming each field's configured provider (garmin/whoop/oura). Some fields overlap with whoop.* and are shown in parallel intentionally so the same metric can be reconciled across sources. Null if no wellness data was recorded."),
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
-  completed_workouts: z.array(WorkoutSummaryZ).optional().describe('Workouts completed so far today, with matched Whoop data. Full per-activity detail (intervals, notes, weather, music) is available separately for today.'),
+  completed_workouts: z.array(WorkoutDetailZ).optional().describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
   annotations: annotationsField,
   training_phase: trainingPhaseField,
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
