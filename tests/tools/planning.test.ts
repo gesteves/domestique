@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PlanningTools } from '../../src/tools/planning.js';
 import { IntervalsClient } from '../../src/clients/intervals.js';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
-import type { PlannedWorkout } from '../../src/types/index.js';
+import type { PlannedWorkout, Race } from '../../src/types/index.js';
 
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/trainerroad.js');
@@ -22,11 +22,12 @@ describe('PlanningTools', () => {
 
     // Mock getAthleteTimezone to return UTC
     vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
-    // Default annotations to empty so getUpcomingWorkouts doesn't choke on auto-mocks.
+    // Default annotations to empty so getUpcomingActivities doesn't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getCurrentTrainingPhase).mockResolvedValue(null);
+    vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
 
     tools = new PlanningTools(mockIntervalsClient, mockTrainerRoadClient);
   });
@@ -35,7 +36,7 @@ describe('PlanningTools', () => {
     vi.useRealTimers();
   });
 
-  describe('getUpcomingWorkouts', () => {
+  describe('getUpcomingActivities', () => {
     const trainerroadWorkouts: PlannedWorkout[] = [
       {
         id: 'tr-1',
@@ -74,7 +75,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.workouts).toHaveLength(4);
     });
@@ -83,7 +84,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       const dates = result.workouts.map((w) => new Date(w.scheduled_for).getTime());
       for (let i = 1; i < dates.length; i++) {
@@ -103,7 +104,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([duplicateWorkout]);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.workouts).toHaveLength(2); // Only TR workouts, duplicate removed
       expect(result.workouts.find((w) => w.source === 'intervals.icu')).toBeUndefined();
@@ -113,7 +114,7 @@ describe('PlanningTools', () => {
       const toolsWithoutTr = new PlanningTools(mockIntervalsClient, null);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await toolsWithoutTr.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await toolsWithoutTr.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.workouts).toHaveLength(2);
     });
@@ -122,7 +123,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockRejectedValue(new Error('Failed'));
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.workouts).toHaveLength(2);
     });
@@ -131,7 +132,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
         '2024-12-15',
@@ -143,7 +144,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      await tools.getUpcomingWorkouts({ oldest: '2024-12-15', newest: '2024-12-31' });
+      await tools.getUpcomingActivities({ oldest: '2024-12-15', newest: '2024-12-31' });
 
       expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
         '2024-12-15',
@@ -155,7 +156,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      await tools.getUpcomingWorkouts({ oldest: 'today', newest: 'next week' });
+      await tools.getUpcomingActivities({ oldest: 'today', newest: 'next week' });
 
       // System time is set to 2024-12-15, "next week" should resolve to 2024-12-22
       expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
@@ -168,7 +169,7 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      await tools.getUpcomingWorkouts({});
+      await tools.getUpcomingActivities({});
 
       // System time is set to 2024-12-15, should default to today + 7 days
       expect(mockIntervalsClient.getPlannedEvents).toHaveBeenCalledWith(
@@ -199,11 +200,11 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([bikeWorkout]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([runWorkout]);
 
-      const cyclingResult = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'cycling' });
+      const cyclingResult = await tools.getUpcomingActivities({ oldest: '2024-12-15', sport: 'cycling' });
       expect(cyclingResult.workouts).toHaveLength(1);
       expect(cyclingResult.workouts[0].sport).toBe('Cycling');
 
-      const runningResult = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'running' });
+      const runningResult = await tools.getUpcomingActivities({ oldest: '2024-12-15', sport: 'running' });
       expect(runningResult.workouts).toHaveLength(1);
       expect(runningResult.workouts[0].sport).toBe('Running');
     });
@@ -231,7 +232,7 @@ describe('PlanningTools', () => {
         },
       ]);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.annotations).toHaveLength(1);
       expect(result.annotations[0].id).toBe('icu-vac');
@@ -260,7 +261,7 @@ describe('PlanningTools', () => {
         },
       ]);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.annotations).toHaveLength(2);
       expect(result.annotations[0].id).toBe('tr-1');
@@ -285,9 +286,73 @@ describe('PlanningTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([bikeWorkout]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15', sport: 'swimming' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15', sport: 'swimming' });
 
       expect(result.workouts).toEqual([]);
+    });
+
+    it('should include races detected within the requested range', async () => {
+      const inRangeRace: Race = {
+        scheduled_for: '2024-12-20T08:00:00Z',
+        name: 'Local Crit',
+        sport: 'Triathlon',
+      };
+      const outOfRangeRace: Race = {
+        scheduled_for: '2025-01-15T08:00:00Z',
+        name: 'New Year Race',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([inRangeRace, outOfRangeRace]);
+
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15', newest: '2024-12-31' });
+
+      expect(result.races).toEqual([inRangeRace]);
+    });
+
+    it('should return empty races when TrainerRoad client is not configured', async () => {
+      const toolsWithoutTr = new PlanningTools(mockIntervalsClient, null);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      const result = await toolsWithoutTr.getUpcomingActivities({ oldest: '2024-12-15' });
+
+      expect(result.races).toEqual([]);
+    });
+
+    it('should zero out races when type is "workouts"', async () => {
+      const race: Race = {
+        scheduled_for: '2024-12-20T08:00:00Z',
+        name: 'Local Crit',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([race]);
+
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15', type: 'workouts' });
+
+      expect(result.races).toEqual([]);
+      expect(result.workouts.length).toBeGreaterThan(0);
+    });
+
+    it('should zero out workouts when type is "races"', async () => {
+      const race: Race = {
+        scheduled_for: '2024-12-20T08:00:00Z',
+        name: 'Local Crit',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trainerroadWorkouts);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(intervalsWorkouts);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([race]);
+
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15', type: 'races' });
+
+      expect(result.workouts).toEqual([]);
+      expect(result.races).toEqual([race]);
     });
   });
 

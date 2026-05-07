@@ -209,20 +209,21 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(23);
+      expect(registeredHandlers.size).toBe(22);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_todays_summary')).toBe(true);
-      expect(registeredHandlers.has('get_todays_workouts')).toBe(true);
+      expect(registeredHandlers.has('get_todays_activities')).toBe(true);
       expect(registeredHandlers.has('get_athlete_profile')).toBe(true);
       expect(registeredHandlers.has('get_sports_settings')).toBe(true);
       expect(registeredHandlers.has('get_strain_history')).toBe(true);
-      expect(registeredHandlers.has('get_workout_history')).toBe(true);
+      expect(registeredHandlers.has('get_activity_history')).toBe(true);
       expect(registeredHandlers.has('get_recovery_trends')).toBe(true);
       expect(registeredHandlers.has('get_wellness_trends')).toBe(true);
       expect(registeredHandlers.has('get_activity_totals')).toBe(true);
-      expect(registeredHandlers.has('get_upcoming_workouts')).toBe(true);
-      expect(registeredHandlers.has('get_upcoming_races')).toBe(true);
+      expect(registeredHandlers.has('get_upcoming_activities')).toBe(true);
+      // get_upcoming_races was folded into get_upcoming_activities via the type filter
+      expect(registeredHandlers.has('get_upcoming_races')).toBe(false);
       expect(registeredHandlers.has('get_training_load_trends')).toBe(true);
       expect(registeredHandlers.has('get_workout_details')).toBe(true);
       expect(registeredHandlers.has('get_power_curve')).toBe(true);

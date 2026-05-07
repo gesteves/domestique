@@ -38,7 +38,7 @@ describe('HistoricalTools', () => {
 
     // Default timezone mock for all tests
     vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
-    // Default annotations to empty so getWorkoutHistory doesn't choke on auto-mocks.
+    // Default annotations to empty so getActivityHistory doesn't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
 
     tools = new HistoricalTools(mockIntervalsClient, mockWhoopClient);
@@ -48,7 +48,7 @@ describe('HistoricalTools', () => {
     vi.useRealTimers();
   });
 
-  describe('getWorkoutHistory', () => {
+  describe('getActivityHistory', () => {
     const mockWorkouts: NormalizedWorkout[] = [
       {
         id: '1',
@@ -86,7 +86,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue(mockWhoopActivities);
 
-      const result = await tools.getWorkoutHistory({
+      const result = await tools.getActivityHistory({
         oldest: '2024-12-01',
         newest: '2024-12-14',
       });
@@ -137,7 +137,7 @@ describe('HistoricalTools', () => {
         mockTrainerRoadClient
       );
 
-      const result = await toolsWithTr.getWorkoutHistory({
+      const result = await toolsWithTr.getActivityHistory({
         oldest: '2024-12-01',
         newest: '2024-12-14',
       });
@@ -156,7 +156,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
-      await tools.getWorkoutHistory({
+      await tools.getActivityHistory({
         oldest: '30 days ago',
       });
 
@@ -172,7 +172,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
-      await tools.getWorkoutHistory({
+      await tools.getActivityHistory({
         oldest: '2024-12-01',
       });
 
@@ -188,7 +188,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([mockWorkouts[0]]);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
-      await tools.getWorkoutHistory({
+      await tools.getActivityHistory({
         oldest: '2024-12-01',
         sport: 'cycling',
       });
@@ -205,7 +205,7 @@ describe('HistoricalTools', () => {
       const toolsWithoutWhoop = new HistoricalTools(mockIntervalsClient, null);
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
 
-      const result = await toolsWithoutWhoop.getWorkoutHistory({
+      const result = await toolsWithoutWhoop.getActivityHistory({
         oldest: '2024-12-01',
       });
 
@@ -216,36 +216,69 @@ describe('HistoricalTools', () => {
 
     it('should reject oldest set to today (ISO)', async () => {
       await expect(
-        tools.getWorkoutHistory({ oldest: '2024-12-15', newest: '2024-12-15' })
+        tools.getActivityHistory({ oldest: '2024-12-15', newest: '2024-12-15' })
       ).rejects.toThrow(/cannot be used for today's date \(2024-12-15\)/);
       expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
     });
 
     it('should reject oldest set to today (natural language)', async () => {
       await expect(
-        tools.getWorkoutHistory({ oldest: 'today', newest: '2024-12-14' })
+        tools.getActivityHistory({ oldest: 'today', newest: '2024-12-14' })
       ).rejects.toThrow(/cannot be used for today's date/);
       expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
     });
 
     it('should reject newest set to today (ISO)', async () => {
       await expect(
-        tools.getWorkoutHistory({ oldest: '2024-12-01', newest: '2024-12-15' })
+        tools.getActivityHistory({ oldest: '2024-12-01', newest: '2024-12-15' })
       ).rejects.toThrow(/cannot be used for today's date \(2024-12-15\)/);
       expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
     });
 
     it('should reject newest set to today (natural language)', async () => {
       await expect(
-        tools.getWorkoutHistory({ oldest: '2024-12-01', newest: 'today' })
+        tools.getActivityHistory({ oldest: '2024-12-01', newest: 'today' })
       ).rejects.toThrow(/cannot be used for today's date/);
       expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
     });
 
     it('should suggest get_todays_summary in the error message', async () => {
       await expect(
-        tools.getWorkoutHistory({ oldest: '2024-12-01', newest: 'today' })
+        tools.getActivityHistory({ oldest: '2024-12-01', newest: 'today' })
       ).rejects.toThrow(/get_todays_summary/);
+    });
+
+    it('should zero out workouts when type is "races" but still return annotations', async () => {
+      const mockTrainerRoadClient = new TrainerRoadClient({ calendarUrl: 'https://test.com' });
+      vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([
+        {
+          id: 'icu-1',
+          category: 'Sick',
+          name: 'Cold',
+          start_date: '2024-12-10',
+        },
+      ]);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue(mockWhoopActivities);
+
+      const toolsWithTr = new HistoricalTools(
+        mockIntervalsClient,
+        mockWhoopClient,
+        null,
+        mockTrainerRoadClient
+      );
+
+      const result = await toolsWithTr.getActivityHistory({
+        oldest: '2024-12-01',
+        newest: '2024-12-14',
+        type: 'races',
+      });
+
+      expect(result.workouts).toEqual([]);
+      expect(result.annotations).toHaveLength(1);
+      expect(result.annotations[0].id).toBe('icu-1');
     });
   });
 
@@ -988,7 +1021,7 @@ describe('HistoricalTools', () => {
   });
 
   describe('error handling across methods', () => {
-    it('should handle Whoop errors gracefully in getWorkoutHistory', async () => {
+    it('should handle Whoop errors gracefully in getActivityHistory', async () => {
       const mockWorkouts: NormalizedWorkout[] = [
         {
           id: '1',
@@ -1003,7 +1036,7 @@ describe('HistoricalTools', () => {
       vi.mocked(mockWhoopClient.getWorkouts).mockRejectedValue(new Error('Whoop API down'));
 
       // Should not throw, just return workouts without Whoop data
-      const result = await tools.getWorkoutHistory({
+      const result = await tools.getActivityHistory({
         oldest: '2024-12-01',
       });
 

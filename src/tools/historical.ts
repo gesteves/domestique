@@ -46,7 +46,7 @@ import type {
   Annotation,
 } from '../types/index.js';
 import type {
-  GetWorkoutHistoryInput,
+  GetActivityHistoryInput,
   GetRecoveryTrendsInput,
   GetActivityTotalsInput,
 } from './types.js';
@@ -59,12 +59,16 @@ export class HistoricalTools {
   ) {}
 
   /**
-   * Get workout history with flexible date ranges, including matched Whoop data.
-   * Also returns calendar annotations (sickness, injury, holiday, note) whose
-   * date span overlaps the queried range, so volume changes can be interpreted.
+   * Get past activity history with flexible date ranges, including matched Whoop data.
+   * Returns completed workouts plus calendar annotations (sickness, injury, holiday, note)
+   * overlapping the queried range, so volume changes can be interpreted.
+   *
+   * History is workouts-only — past races are not surfaced. The optional `type` filter
+   * is accepted for API symmetry with the today's/upcoming activity tools; when set to
+   * `'races'` workouts are zeroed out (annotations are still returned).
    */
-  async getWorkoutHistory(
-    params: GetWorkoutHistoryInput
+  async getActivityHistory(
+    params: GetActivityHistoryInput
   ): Promise<{ workouts: WorkoutWithWhoop[]; annotations: Annotation[] }> {
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
@@ -76,8 +80,8 @@ export class HistoricalTools {
 
     if (startDate === today || endDate === today) {
       throw new Error(
-        `get_workout_history cannot be used for today's date (${today}); ` +
-        `use get_todays_summary for today's workouts.`
+        `get_activity_history cannot be used for today's date (${today}); ` +
+        `use get_todays_summary or get_todays_activities for today's data.`
       );
     }
 
@@ -89,18 +93,18 @@ export class HistoricalTools {
         skipExpensiveCalls: true,
       }),
       this.intervals.getAnnotations(startDate, endDate).catch((e) => {
-        console.error('Error fetching Intervals.icu annotations for workout history:', e);
+        console.error('Error fetching Intervals.icu annotations for activity history:', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(startDate, endDate, timezone).catch((e) => {
-            console.error('Error fetching TrainerRoad annotations for workout history:', e);
+            console.error('Error fetching TrainerRoad annotations for activity history:', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(startDate, endDate).catch((e) => {
-            console.error('Error fetching TrainerRoad phase starts for workout history:', e);
+            console.error('Error fetching TrainerRoad phase starts for activity history:', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
@@ -110,7 +114,9 @@ export class HistoricalTools {
       ...trainerroadAnnotations,
       ...trainerroadPhaseStarts,
     ]);
-    const workouts = await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate);
+    const workouts = params.type === 'races'
+      ? []
+      : await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate);
     return { workouts, annotations };
   }
 

@@ -22,11 +22,12 @@ describe('PlanningTools sync operations', () => {
 
     // Mock getAthleteTimezone to return UTC
     vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
-    // Default annotations to empty so getUpcomingWorkouts doesn't choke on auto-mocks.
+    // Default annotations to empty so getUpcomingActivities doesn't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getCurrentTrainingPhase).mockResolvedValue(null);
+    vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
 
     tools = new PlanningTools(mockIntervalsClient, mockTrainerRoadClient);
   });
@@ -1021,7 +1022,7 @@ describe('PlanningTools sync operations', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(icuWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       // Should only have 1 workout (deduplicated by external_id)
       expect(result.workouts).toHaveLength(1);
@@ -1051,7 +1052,7 @@ describe('PlanningTools sync operations', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(icuWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.workouts).toHaveLength(1);
     });
@@ -1078,7 +1079,7 @@ describe('PlanningTools sync operations', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trWorkouts);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(icuWorkouts);
 
-      const result = await tools.getUpcomingWorkouts({ oldest: '2024-12-15' });
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15' });
 
       expect(result.workouts).toHaveLength(1);
     });
