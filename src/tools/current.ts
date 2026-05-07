@@ -22,14 +22,14 @@ import type {
   TodaysStrainResponse,
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
-  TodaysWorkoutsResponse,
+  TodaysActivitiesResponse,
   ForecastResponse,
   LocationForecast,
   Race,
   Annotation,
   TrainingPhase,
 } from '../types/index.js';
-import type { GetStrainHistoryInput } from './types.js';
+import type { GetStrainHistoryInput, GetTodaysActivitiesInput } from './types.js';
 
 /** Maximum forecast horizon supported by Google Weather (days). */
 const MAX_FORECAST_DAYS = 10;
@@ -515,45 +515,56 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's workouts — both completed (with full per-activity details) and planned.
-   * A leaner alternative to getTodaysSummary that only returns workout data.
+   * Get today's activities — completed workouts (with full per-activity details),
+   * planned workouts, today's race (if any), and active calendar annotations.
+   * A leaner alternative to getTodaysSummary that only returns activity-and-event data.
+   * Pass `type` to filter to a single event type ('workouts' or 'races').
    */
-  async getTodaysWorkouts(): Promise<TodaysWorkoutsResponse> {
+  async getTodaysActivities(params: GetTodaysActivitiesInput = {}): Promise<TodaysActivitiesResponse> {
+    const { type } = params;
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
     const currentDateTime = getCurrentTimeInTimezone(timezone);
 
-    const [completedResponse, plannedResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase] = await Promise.all([
+    const [completedResponse, plannedResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, todaysRace] = await Promise.all([
       this.getTodaysCompletedWorkouts().catch((e) => {
-        console.error('Error fetching completed workouts for todays workouts:', e);
+        console.error('Error fetching completed workouts for todays activities:', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysCompletedWorkoutsResponse;
       }),
       this.getTodaysPlannedWorkouts().catch((e) => {
-        console.error('Error fetching planned workouts for todays workouts:', e);
+        console.error('Error fetching planned workouts for todays activities:', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysPlannedWorkoutsResponse;
       }),
       this.intervals.getAnnotations(today, today).catch((e) => {
-        console.error('Error fetching Intervals.icu annotations for todays workouts:', e);
+        console.error('Error fetching Intervals.icu annotations for todays activities:', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(today, today, timezone).catch((e) => {
-            console.error('Error fetching TrainerRoad annotations for todays workouts:', e);
+            console.error('Error fetching TrainerRoad annotations for todays activities:', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(today, today).catch((e) => {
-            console.error('Error fetching TrainerRoad phase starts for todays workouts:', e);
+            console.error('Error fetching TrainerRoad phase starts for todays activities:', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getCurrentTrainingPhase(today).catch((e) => {
-            console.error('Error fetching current training phase for todays workouts:', e);
+            console.error('Error fetching current training phase for todays activities:', e);
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
+      this.trainerroad
+        ? this.trainerroad.getUpcomingRaces(timezone).then((races) =>
+            races.find((race) => race.scheduled_for.startsWith(today)) ?? null
+          ).catch((e) => {
+            console.error('Error fetching races for todays activities:', e);
+            return null as Race | null;
+          })
+        : Promise.resolve(null as Race | null),
     ]);
 
     const annotations = mergeAnnotations(intervalsAnnotations, [
@@ -561,8 +572,9 @@ export class CurrentTools {
       ...trainerroadPhaseStarts,
     ]);
 
-    const completed = completedResponse.workouts;
-    const planned = plannedResponse.workouts;
+    const completed = type === 'races' ? [] : completedResponse.workouts;
+    const planned = type === 'races' ? [] : plannedResponse.workouts;
+    const races: Race[] = type === 'workouts' ? [] : (todaysRace ? [todaysRace] : []);
 
     const tssCompleted = completed.reduce((sum, w) => sum + (w.tss || 0), 0);
     const tssPlanned = planned.reduce((sum, w) => sum + (w.expected_tss || 0), 0);
@@ -571,6 +583,7 @@ export class CurrentTools {
       current_time: currentDateTime,
       completed_workouts: completed,
       planned_workouts: planned,
+      races,
       annotations,
       training_phase: trainingPhase,
       workouts_completed: completed.length,

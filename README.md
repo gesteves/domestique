@@ -19,7 +19,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Today's Data
 - `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness (every metric Intervals.icu has for today — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, heat adaptation score from CORE, etc., completed workouts (with full per-activity details and matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), active calendar annotations from Intervals.icu (sickness, injury, holiday, freeform note) overlapping today, and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured).
-- `get_todays_workouts` - Today's completed (with full per-activity details) and planned workouts only, plus active calendar annotations (sickness, injury, holiday, note) overlapping today. A leaner alternative to `get_todays_summary` when only workout data is needed.
+- `get_todays_activities` - Today's completed (with full per-activity details) and planned workouts, today's race (if any), plus active calendar annotations (sickness, injury, holiday, note) overlapping today. A leaner alternative to `get_todays_summary` when only activity-and-event data is needed. Optional `type` filter narrows to a single event type (`workouts` or `races`).
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location
@@ -27,14 +27,13 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Historical/Trends
 - `get_strain_history` - Whoop strain scores and activities for a date range
-- `get_workout_history` - Historical workouts with matched Whoop strain data, plus calendar annotations (sickness, injury, holiday, note) overlapping the range
+- `get_activity_history` - Past completed workouts with matched Whoop strain data, plus calendar annotations (sickness, injury, holiday, note) overlapping the range. History is workouts-only — past races are not surfaced. The `type` filter is accepted for API symmetry with the today's/upcoming activity tools.
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time
 - `get_wellness_trends` - Daily Intervals.icu wellness over a date range. Returns every recorded field (HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, steps, heat adaptation score from CORE, etc.)
 - `get_activity_totals` - Aggregated activity totals over a date range, including duration, distance, training load, and zone distributions by sport
 
 ### Planning
-- `get_upcoming_workouts` - Planned workouts for a future date range from both TrainerRoad and Intervals.icu calendars, plus calendar annotations (sickness, injury, holiday, note) overlapping the range
-- `get_upcoming_races` - Upcoming races from the TrainerRoad calendar
+- `get_upcoming_activities` - Planned workouts (merged from TrainerRoad and Intervals.icu calendars) and races (detected on the TrainerRoad calendar) for a future date range, plus calendar annotations (sickness, injury, holiday, note) overlapping the range. Optional `type` filter narrows to a single event type (`workouts` or `races`).
 
 ### Workout Management
 - `create_workout` - Creates a structured workout (cycling, running, or swimming) in Intervals.icu from a workout definition in Intervals.icu syntax. Cycling and running workouts sync to Zwift and Garmin; swimming is WIP pending FORM Goggles sync.
@@ -103,7 +102,7 @@ For Last.fm integration (optional):
 - `LASTFM_USERNAME` - Your Last.fm username (the account that scrobbles your listening history)
 - `LASTFM_API_KEY` - A Last.fm API key. Create one at https://www.last.fm/api/account/create. Only the API key is needed — Domestique only reads public scrobbles via `user.getRecentTracks`, so no shared secret or OAuth flow is required.
 
-When both are set, per-workout details from `get_workout_details` and `get_todays_workouts` include the matched tracks scrobbled during the workout.
+When both are set, per-workout details from `get_workout_details` and `get_todays_activities` include the matched tracks scrobbled during the workout.
 
 For Anthropic API integration (optional):
 - `ANTHROPIC_API_KEY` - Anthropic API key. Enables two features when set:

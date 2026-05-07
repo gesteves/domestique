@@ -22,13 +22,14 @@ import type {
   UpdateHeatAdaptationScoreInput,
   UpdateHeatAdaptationScoreResponse,
 } from '../types/index.js';
-import type { GetUpcomingWorkoutsInput } from './types.js';
+import type { GetUpcomingActivitiesInput } from './types.js';
 
 /**
- * Response type for upcoming workouts.
+ * Response type for upcoming activities — planned workouts, races, and annotations.
  */
-export interface UpcomingWorkoutsResponse {
+export interface UpcomingActivitiesResponse {
   workouts: PlannedWorkout[];
+  races: Race[];
   annotations: Annotation[];
   training_phase: TrainingPhase | null;
 }
@@ -40,10 +41,13 @@ export class PlanningTools {
   ) {}
 
   /**
-   * Get upcoming planned workouts from both calendars
+   * Get upcoming activities — planned workouts (merged from TrainerRoad and
+   * Intervals.icu) and races (detected from the TrainerRoad calendar) within the
+   * requested range, plus calendar annotations overlapping the range.
+   * Pass `type` to filter to a single event type ('workouts' or 'races').
    */
-  async getUpcomingWorkouts(params: GetUpcomingWorkoutsInput): Promise<UpcomingWorkoutsResponse> {
-    const { oldest, newest, sport } = params;
+  async getUpcomingActivities(params: GetUpcomingActivitiesInput): Promise<UpcomingActivitiesResponse> {
+    const { oldest, newest, sport, type } = params;
 
     // Use athlete's timezone for date calculations
     const timezone = await this.intervals.getAthleteTimezone();
@@ -61,8 +65,8 @@ export class PlanningTools {
       endDateStr = format(endDate, 'yyyy-MM-dd');
     }
 
-    // Fetch, merge, and deduplicate from both sources; fetch overlapping annotations in parallel
-    const [mergedWorkouts, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase] = await Promise.all([
+    // Fetch, merge, and deduplicate from both sources; fetch overlapping annotations and races in parallel
+    const [mergedWorkouts, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, allRaces] = await Promise.all([
       fetchAndMergePlannedWorkouts(
         this.intervals,
         this.trainerroad,
@@ -71,27 +75,33 @@ export class PlanningTools {
         timezone
       ),
       this.intervals.getAnnotations(startDateStr, endDateStr).catch((e) => {
-        console.error('Error fetching Intervals.icu annotations for upcoming workouts:', e);
+        console.error('Error fetching Intervals.icu annotations for upcoming activities:', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(startDateStr, endDateStr, timezone).catch((e) => {
-            console.error('Error fetching TrainerRoad annotations for upcoming workouts:', e);
+            console.error('Error fetching TrainerRoad annotations for upcoming activities:', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(startDateStr, endDateStr).catch((e) => {
-            console.error('Error fetching TrainerRoad phase starts for upcoming workouts:', e);
+            console.error('Error fetching TrainerRoad phase starts for upcoming activities:', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getCurrentTrainingPhase(startDateStr).catch((e) => {
-            console.error('Error fetching current training phase for upcoming workouts:', e);
+            console.error('Error fetching current training phase for upcoming activities:', e);
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
+      this.trainerroad
+        ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
+            console.error('Error fetching upcoming races for upcoming activities:', e);
+            return [] as Race[];
+          })
+        : Promise.resolve([] as Race[]),
     ]);
 
     const annotations = mergeAnnotations(intervalsAnnotations, [
@@ -111,30 +121,18 @@ export class PlanningTools {
       (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
     );
 
+    // TR's getUpcomingRaces is unbounded — range-filter at this layer.
+    const racesInRange = allRaces.filter((race) => {
+      const ymd = race.scheduled_for.slice(0, 10);
+      return ymd >= startDateStr && ymd <= endDateStr;
+    });
+
     return {
-      workouts: sortedWorkouts,
+      workouts: type === 'races' ? [] : sortedWorkouts,
+      races: type === 'workouts' ? [] : racesInRange,
       annotations,
       training_phase: trainingPhase,
     };
-  }
-
-  /**
-   * Get upcoming races from the TrainerRoad calendar.
-   * A race is detected when an all-day event exists alongside workout legs with the same name.
-   */
-  async getUpcomingRaces(): Promise<Race[]> {
-    if (!this.trainerroad) {
-      return [];
-    }
-
-    try {
-      // Use athlete's timezone for date calculations
-      const timezone = await this.intervals.getAthleteTimezone();
-      return await this.trainerroad.getUpcomingRaces(timezone);
-    } catch (error) {
-      console.error('Error fetching upcoming races:', error);
-      return [];
-    }
   }
 
   // ============================================

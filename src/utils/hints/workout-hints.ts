@@ -7,14 +7,14 @@ import type { HintGenerator } from '../hints.js';
 import type {
   PlannedWorkout,
   TodaysPlannedWorkoutsResponse,
-  TodaysWorkoutsResponse,
+  TodaysActivitiesResponse,
   DailySummary,
   WorkoutWithWhoop,
 } from '../../types/index.js';
 import { DOMESTIQUE_TAG, areWorkoutsSimilar } from '../workout-utils.js';
 
-/** Response type for upcoming workouts */
-interface UpcomingWorkoutsResponse {
+/** Response type for upcoming activities (subset used by hints) */
+interface UpcomingActivitiesResponse {
   workouts: PlannedWorkout[];
 }
 
@@ -47,7 +47,7 @@ function findUnsyncedTRRuns(workouts: PlannedWorkout[]): PlannedWorkout[] {
  * Hint for syncing TR runs to ICU.
  * Guides LLM to offer syncing unsynced TrainerRoad runs.
  */
-export const trainerroadSyncHint: HintGenerator<TodaysPlannedWorkoutsResponse | UpcomingWorkoutsResponse> = (
+export const trainerroadSyncHint: HintGenerator<TodaysPlannedWorkoutsResponse | UpcomingActivitiesResponse> = (
   data
 ) => {
   const unsyncedRuns = findUnsyncedTRRuns(data.workouts);
@@ -74,16 +74,16 @@ export const dailySummarySyncHint: HintGenerator<DailySummary> = (data) => {
   );
 };
 
-/** Response type for workout history */
-interface WorkoutHistoryResponse {
+/** Response type for activity history */
+interface ActivityHistoryResponse {
   workouts: WorkoutWithWhoop[];
 }
 
 /**
- * Hint for drilling into workout history details.
+ * Hint for drilling into activity history details.
  * Guides LLM on which tools to call for deeper workout analysis.
  */
-export const workoutHistoryHint: HintGenerator<WorkoutHistoryResponse | WorkoutWithWhoop[]> = (data) => {
+export const activityHistoryHint: HintGenerator<ActivityHistoryResponse | WorkoutWithWhoop[]> = (data) => {
   const workouts = Array.isArray(data) ? data : data.workouts;
   if (workouts.length === 0) return undefined;
 
@@ -93,16 +93,16 @@ export const workoutHistoryHint: HintGenerator<WorkoutHistoryResponse | WorkoutW
 };
 
 /**
- * Combined hint generators for workout history.
+ * Combined hint generators for activity history.
  */
-export const workoutHistoryHints: HintGenerator<WorkoutHistoryResponse | WorkoutWithWhoop[]>[] = [
-  workoutHistoryHint,
+export const activityHistoryHints: HintGenerator<ActivityHistoryResponse | WorkoutWithWhoop[]>[] = [
+  activityHistoryHint,
 ];
 
 /**
- * Hint for syncing TR runs to ICU from today's workouts response.
+ * Hint for syncing TR runs to ICU from today's activities response.
  */
-export const todaysWorkoutsSyncHint: HintGenerator<TodaysWorkoutsResponse> = (data) => {
+export const todaysActivitiesSyncHint: HintGenerator<TodaysActivitiesResponse> = (data) => {
   const unsyncedRuns = findUnsyncedTRRuns(data.planned_workouts);
   if (unsyncedRuns.length === 0) return undefined;
 
@@ -115,8 +115,8 @@ export const todaysWorkoutsSyncHint: HintGenerator<TodaysWorkoutsResponse> = (da
 
 
 /**
- * Combined hint generators for today's workouts.
+ * Combined hint generators for today's activities.
  */
-export const todaysWorkoutsHints: HintGenerator<TodaysWorkoutsResponse>[] = [
-  todaysWorkoutsSyncHint,
+export const todaysActivitiesHints: HintGenerator<TodaysActivitiesResponse>[] = [
+  todaysActivitiesSyncHint,
 ];

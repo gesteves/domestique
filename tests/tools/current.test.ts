@@ -45,6 +45,7 @@ describe('CurrentTools', () => {
     vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getCurrentTrainingPhase).mockResolvedValue(null);
+    vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
 
     tools = new CurrentTools(mockIntervalsClient, mockWhoopClient, mockTrainerRoadClient);
   });
@@ -472,7 +473,7 @@ describe('CurrentTools', () => {
     });
   });
 
-  describe('getTodaysWorkouts', () => {
+  describe('getTodaysActivities', () => {
     beforeEach(() => {
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
     });
@@ -531,7 +532,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(mockPlannedIcu);
 
-      const result = await tools.getTodaysWorkouts();
+      const result = await tools.getTodaysActivities();
 
       expect(result.completed_workouts).toHaveLength(1);
       expect(result.completed_workouts[0].whoop?.strain_score).toBe(12.5);
@@ -551,7 +552,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      await tools.getTodaysWorkouts();
+      await tools.getTodaysActivities();
 
       // The 4th argument (options) should not be passed (or should not have skipExpensiveCalls: true)
       // so per-activity expensive calls (heat zones, notes, weather) are included.
@@ -566,7 +567,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getTodaysWorkouts();
+      const result = await tools.getTodaysActivities();
 
       expect(result.completed_workouts).toEqual([]);
       expect(result.planned_workouts).toEqual([]);
@@ -583,7 +584,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await toolsWithoutWhoop.getTodaysWorkouts();
+      const result = await toolsWithoutWhoop.getTodaysActivities();
 
       expect(result.completed_workouts).toHaveLength(1);
       expect(result.completed_workouts[0].whoop).toBeNull();
@@ -596,7 +597,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(mockPlannedIcu);
 
-      const result = await toolsWithoutTr.getTodaysWorkouts();
+      const result = await toolsWithoutTr.getTodaysActivities();
 
       expect(result.planned_workouts).toHaveLength(1);
       expect(result.planned_workouts[0].source).toBe('intervals.icu');
@@ -609,7 +610,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getTodaysWorkouts();
+      const result = await tools.getTodaysActivities();
 
       expect(result.completed_workouts).toEqual([]);
       expect(result.planned_workouts).toHaveLength(1);
@@ -621,7 +622,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockRejectedValue(new Error('TR down'));
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockRejectedValue(new Error('ICU down'));
 
-      const result = await tools.getTodaysWorkouts();
+      const result = await tools.getTodaysActivities();
 
       expect(result.completed_workouts).toHaveLength(1);
       expect(result.planned_workouts).toEqual([]);
@@ -641,10 +642,101 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(plannedWithFractional);
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
-      const result = await tools.getTodaysWorkouts();
+      const result = await tools.getTodaysActivities();
 
       expect(result.tss_completed).toBe(116); // round(85.4 + 30.7) = round(116.1) = 116
       expect(result.tss_planned).toBe(51); // round(50.6) = 51
+    });
+
+    it('should surface today\'s race in the races array when scheduled for today', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const todaysRace: Race = {
+        scheduled_for: '2024-12-15T08:00:00Z',
+        name: 'Local Crit',
+        sport: 'Triathlon',
+      };
+      const futureRace: Race = {
+        scheduled_for: '2025-01-01T08:00:00Z',
+        name: 'New Year Race',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([todaysRace, futureRace]);
+
+      const result = await tools.getTodaysActivities();
+
+      expect(result.races).toEqual([todaysRace]);
+      vi.useRealTimers();
+    });
+
+    it('should return empty races array when no race is scheduled for today', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
+
+      const result = await tools.getTodaysActivities();
+
+      expect(result.races).toEqual([]);
+    });
+
+    it('should zero out races when type is "workouts"', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const todaysRace: Race = {
+        scheduled_for: '2024-12-15T08:00:00Z',
+        name: 'Local Crit',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockCompletedWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(mockPlannedIcu);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([todaysRace]);
+
+      const result = await tools.getTodaysActivities({ type: 'workouts' });
+
+      expect(result.races).toEqual([]);
+      expect(result.completed_workouts).toHaveLength(1);
+      expect(result.planned_workouts).toHaveLength(2);
+      vi.useRealTimers();
+    });
+
+    it('should zero out workouts when type is "races"', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const todaysRace: Race = {
+        scheduled_for: '2024-12-15T08:00:00Z',
+        name: 'Local Crit',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockCompletedWorkouts);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(mockPlannedTr);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue(mockPlannedIcu);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([todaysRace]);
+
+      const result = await tools.getTodaysActivities({ type: 'races' });
+
+      expect(result.completed_workouts).toEqual([]);
+      expect(result.planned_workouts).toEqual([]);
+      expect(result.workouts_completed).toBe(0);
+      expect(result.workouts_planned).toBe(0);
+      expect(result.tss_completed).toBe(0);
+      expect(result.tss_planned).toBe(0);
+      expect(result.races).toEqual([todaysRace]);
+      vi.useRealTimers();
     });
   });
 

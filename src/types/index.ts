@@ -1444,17 +1444,19 @@ export interface TodaysPlannedWorkoutsResponse {
 }
 
 /**
- * Today's combined completed and planned workouts.
- * Returned by get_todays_workouts tool — a leaner alternative to get_todays_summary
- * that only returns workout data.
+ * Today's combined completed/planned workouts and (when scheduled) today's race.
+ * Returned by get_todays_activities tool — a leaner alternative to get_todays_summary
+ * that only returns activity-and-event data.
  */
-export interface TodaysWorkoutsResponse {
+export interface TodaysActivitiesResponse {
   /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
   current_time: string;
   /** Completed workouts from Intervals.icu with full details and matched Whoop data */
   completed_workouts: WorkoutWithWhoop[];
   /** Planned workouts from TrainerRoad and Intervals.icu */
   planned_workouts: PlannedWorkout[];
+  /** Today's race, if any (zero or one entry, detected from the TrainerRoad calendar) */
+  races: Race[];
   /** Active calendar annotations (sickness, injury, holiday, note, training-phase boundary) overlapping today */
   annotations: Annotation[];
   /** Active TrainerRoad training phase as of today, with computed week / weeks_remaining. Null when no phase marker is known */

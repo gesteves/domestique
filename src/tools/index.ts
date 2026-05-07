@@ -59,9 +59,9 @@ import type { UnitPreferences, UpdateActivityInput, UpdateHeatAdaptationScoreInp
 import {
   trainerroadSyncHint,
   dailySummarySyncHint,
-  workoutHistoryHints,
+  activityHistoryHints,
   dailySummaryHints,
-  todaysWorkoutsHints,
+  todaysActivitiesHints,
   powerCurveProgressHint,
   paceCurveProgressHint,
 } from '../utils/hints/index.js';
@@ -378,14 +378,16 @@ export class ToolRegistry {
     }
 
     register({
-      name: 'get_todays_workouts',
-      title: "Today's Workouts",
-      description: `Today's completed and planned workouts only, with completed workouts in full detail (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain. Also surfaces active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
-      inputSchema: {},
-      outputSchema: schemas.todaysWorkoutsOutputSchema,
+      name: 'get_todays_activities',
+      title: "Today's Activities",
+      description: `Today's activity-and-event data: completed workouts (with full per-activity detail — intervals, notes, weather, zones, heat zones, music — and matched Whoop strain), planned workouts, today's race (if any, detected on the TrainerRoad calendar), and active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Pass \`type\` to narrow to a single event category ('workouts' or 'races'). Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
+      inputSchema: {
+        type: z.enum(['workouts', 'races']).optional().describe("Filter to a single event type. Omit to return all event types."),
+      },
+      outputSchema: schemas.todaysActivitiesOutputSchema,
       annotations: READ_ONLY,
-      handler: async () => this.currentTools.getTodaysWorkouts(),
-      hints: todaysWorkoutsHints,
+      handler: async (args: { type?: 'workouts' | 'races' }) => this.currentTools.getTodaysActivities(args),
+      hints: todaysActivitiesHints,
     });
 
     // Profile and Settings (needed early for context)
@@ -434,19 +436,20 @@ export class ToolRegistry {
     }
 
     register({
-      name: 'get_workout_history',
-      title: 'Workout History',
-      description: `Completed workouts and fitness activities in a past date range, with comprehensive summary metrics and matched Whoop strain. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so volume changes can be interpreted. Use for training-pattern analysis, volume/intensity review, or to find activity IDs to drive deeper per-workout inspection (intervals, notes, weather, music are fetched separately). Date parameters accept ISO YYYY-MM-DD or natural language ("30 days ago", "last Monday", "December 1"); optional \`sport\` filters by discipline. **Never** pass today's date — past dates only. ${STRAVA_LIMITATION_NOTE}`,
+      name: 'get_activity_history',
+      title: 'Activity History',
+      description: `Completed workouts and fitness activities in a past date range, with comprehensive summary metrics and matched Whoop strain. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so volume changes can be interpreted. History is workouts-only — past races are not surfaced. Use for training-pattern analysis, volume/intensity review, or to find activity IDs to drive deeper per-workout inspection (intervals, notes, weather, music are fetched separately). Date parameters accept ISO YYYY-MM-DD or natural language ("30 days ago", "last Monday", "December 1"); optional \`sport\` filters by discipline. The optional \`type\` filter is accepted for symmetry with the today's/upcoming activity tools — passing \`type: 'races'\` returns annotations only with an empty workouts array. **Never** pass today's date — past dates only. ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago"). Cannot be today.'),
         newest: z.string().optional().describe('End date (defaults to yesterday). Cannot be today.'),
         sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
+        type: z.enum(['workouts', 'races']).optional().describe("Filter to a single event type. History is workouts-only, so 'races' yields an empty workouts array (annotations are still returned). Omit to return all available event types."),
       },
-      outputSchema: schemas.workoutHistoryOutputSchema,
+      outputSchema: schemas.activityHistoryOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) =>
-        this.historicalTools.getWorkoutHistory(args),
-      hints: workoutHistoryHints,
+      handler: async (args: { oldest: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength'; type?: 'workouts' | 'races' }) =>
+        this.historicalTools.getActivityHistory(args),
+      hints: activityHistoryHints,
     });
 
     register({
@@ -510,34 +513,21 @@ export class ToolRegistry {
 
     // Planning Tools
     register({
-      name: 'get_upcoming_workouts',
-      title: 'Upcoming Workouts',
-      description: `Planned workouts in a future date range, merged from TrainerRoad and Intervals.icu calendars (TrainerRoad wins on duplicates because it carries more detail). Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so the schedule can be interpreted in light of upcoming vacations or ongoing injuries. Use for weekly/monthly schedule views, expected-load summaries, or to surface untriaged TrainerRoad runs that should sync to Intervals.icu. Defaults to today through 7 days out; \`oldest\` and \`newest\` accept ISO YYYY-MM-DD or natural language; optional \`sport\` filter narrows by discipline. ${SCHEDULED_ORDERING_NOTE}`,
+      name: 'get_upcoming_activities',
+      title: 'Upcoming Activities',
+      description: `Planned workouts and races in a future date range. Workouts are merged from TrainerRoad and Intervals.icu (TrainerRoad wins on duplicates because it carries more detail); races are detected on the TrainerRoad calendar (an all-day event paired with workout legs of the same name) — race \`description\` often carries the race priority (A/B/C) and course notes, so read it before recommending training adjustments. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so the schedule can be interpreted in light of upcoming vacations or ongoing injuries. Use for weekly/monthly schedule views, expected-load summaries, race-schedule context, periodization or taper conversations, or to surface untriaged TrainerRoad runs that should sync to Intervals.icu. Defaults to today through 7 days out; \`oldest\` and \`newest\` accept ISO YYYY-MM-DD or natural language; optional \`sport\` filter narrows workouts by discipline; optional \`type\` filter narrows to a single event category ('workouts' or 'races'). ${SCHEDULED_ORDERING_NOTE}`,
       inputSchema: {
         oldest: z.string().optional().describe('Start date (defaults to today; e.g., "2024-01-01", "tomorrow")'),
         newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
-        sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter by sport type'),
+        sport: z.enum(['cycling', 'running', 'swimming', 'skiing', 'hiking', 'rowing', 'strength']).optional().describe('Filter workouts by sport type'),
+        type: z.enum(['workouts', 'races']).optional().describe("Filter to a single event type. Omit to return all event types."),
       },
-      outputSchema: schemas.upcomingWorkoutsOutputSchema,
+      outputSchema: schemas.upcomingActivitiesOutputSchema,
       annotations: READ_ONLY,
-      handler: async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength' }) =>
-        this.planningTools.getUpcomingWorkouts(args),
+      handler: async (args: { oldest?: string; newest?: string; sport?: 'cycling' | 'running' | 'swimming' | 'skiing' | 'hiking' | 'rowing' | 'strength'; type?: 'workouts' | 'races' }) =>
+        this.planningTools.getUpcomingActivities(args),
       hints: [trainerroadSyncHint],
     });
-
-    if (this.hasTrainerRoad) {
-      register({
-        name: 'get_upcoming_races',
-        title: 'Upcoming Races',
-        description: `Upcoming races detected on the TrainerRoad calendar (an all-day event paired with workout legs of the same name). Use this for race-schedule context, periodization decisions, and taper conversations. Race \`description\` often carries the race priority (A/B/C) and course notes — read it before recommending training adjustments.`,
-        inputSchema: {},
-        outputSchema: schemas.upcomingRacesOutputSchema,
-        annotations: READ_ONLY,
-        handler: async () => ({
-          races: await this.planningTools.getUpcomingRaces(),
-        }),
-      });
-    }
 
     // ============================================
     // Workout Sync Tools

@@ -123,12 +123,12 @@ describe('ToolRegistry', () => {
       registry.registerTools(mockServer as any);
 
       expect(registeredTools).toContain('get_todays_summary');
-      expect(registeredTools).toContain('get_todays_workouts');
+      expect(registeredTools).toContain('get_todays_activities');
       expect(registeredTools).toContain('get_athlete_profile');
       expect(registeredTools).toContain('get_strain_history');
-      expect(registeredTools).toContain('get_workout_history');
+      expect(registeredTools).toContain('get_activity_history');
       expect(registeredTools).toContain('get_recovery_trends');
-      expect(registeredTools).toContain('get_upcoming_workouts');
+      expect(registeredTools).toContain('get_upcoming_activities');
       // Analysis tools
       expect(registeredTools).toContain('get_training_load_trends');
       expect(registeredTools).toContain('get_workout_details');
@@ -142,8 +142,6 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('get_wellness_trends');
       // Activity totals
       expect(registeredTools).toContain('get_activity_totals');
-      // Races
-      expect(registeredTools).toContain('get_upcoming_races');
       // Workout management tools
       expect(registeredTools).toContain('create_workout');
       expect(registeredTools).toContain('update_workout');
@@ -152,7 +150,9 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('set_workout_intervals');
       expect(registeredTools).toContain('update_activity');
       expect(registeredTools).toContain('update_heat_adaptation_score');
-      expect(registeredTools.length).toBe(23);
+      // Removed tools (folded into get_upcoming_activities via type filter)
+      expect(registeredTools).not.toContain('get_upcoming_races');
+      expect(registeredTools.length).toBe(22);
     });
 
     it('should call server.registerTool for each tool', () => {
@@ -162,7 +162,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(23);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(22);
     });
 
     it('skips Whoop-dependent tools when Whoop is not configured', () => {
@@ -173,19 +173,18 @@ describe('ToolRegistry', () => {
       expect(names).not.toContain('get_recovery_trends');
       // Tools that use Whoop only for optional enrichment stay registered
       expect(names).toContain('get_todays_summary');
-      expect(names).toContain('get_todays_workouts');
-      expect(names).toContain('get_workout_history');
-      expect(names.length).toBe(21);
+      expect(names).toContain('get_todays_activities');
+      expect(names).toContain('get_activity_history');
+      expect(names.length).toBe(20);
     });
 
     it('skips TrainerRoad-dependent tools when TrainerRoad is not configured', () => {
       const registryNoTr = new ToolRegistry({ ...fullConfig, trainerroad: null });
       const names = collectRegisteredTools(registryNoTr);
 
-      expect(names).not.toContain('get_upcoming_races');
       expect(names).not.toContain('sync_trainerroad_runs');
       // Planning tools that only need Intervals stay registered
-      expect(names).toContain('get_upcoming_workouts');
+      expect(names).toContain('get_upcoming_activities');
       expect(names).toContain('create_workout');
       expect(names.length).toBe(21);
     });
@@ -201,9 +200,8 @@ describe('ToolRegistry', () => {
 
       expect(names).not.toContain('get_strain_history');
       expect(names).not.toContain('get_recovery_trends');
-      expect(names).not.toContain('get_upcoming_races');
       expect(names).not.toContain('sync_trainerroad_runs');
-      // 23 - 4 skipped (Whoop x2, TR x2) = 19
+      // 22 - 3 skipped (Whoop x2, TR x1) = 19
       expect(names.length).toBe(19);
     });
 

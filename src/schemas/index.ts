@@ -168,9 +168,9 @@ const WhoopMatchedDataZ = z.object({
 //
 // WorkoutSummaryZ is the always-present field set returned by bulk list
 // endpoints that intentionally skip per-activity API calls to avoid rate
-// limiting (get_workout_history). WorkoutDetailZ extends it with the heavier
+// limiting (get_activity_history). WorkoutDetailZ extends it with the heavier
 // fields that get fetched when full per-activity detail is wanted
-// (get_workout_details, get_todays_workouts.completed_workouts,
+// (get_workout_details, get_todays_activities.completed_workouts,
 // get_todays_summary.completed_workouts).
 
 const WorkoutSummaryZ = z.object({
@@ -836,7 +836,7 @@ export const strainHistoryOutputSchema = {
   strain: z.array(StrainDataZ).describe('Whoop strain data for the requested date range, including activities logged in the Whoop app'),
 } as const;
 
-export const workoutHistoryOutputSchema = {
+export const activityHistoryOutputSchema = {
   workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Full per-activity detail (intervals, notes, weather, music) is available separately by activity ID.'),
   annotations: annotationsField,
   hints: hintsField,
@@ -881,15 +881,12 @@ export const activityTotalsOutputSchema = {
   by_sport: z.record(z.string(), SportTotalsZ).describe('Breakdown by sport type. Keys are sport names (cycling, running, swimming, etc.)'),
 } as const;
 
-export const upcomingWorkoutsOutputSchema = {
+export const upcomingActivitiesOutputSchema = {
   workouts: z.array(PlannedWorkoutZ).describe('Planned workouts and fitness activities for the requested future range, from both TrainerRoad and Intervals.icu'),
+  races: z.array(RaceZ).describe('Upcoming races detected on the TrainerRoad calendar within the requested range'),
   annotations: annotationsField,
   training_phase: trainingPhaseField,
   hints: hintsField,
-} as const;
-
-export const upcomingRacesOutputSchema = {
-  races: z.array(RaceZ).describe('Upcoming races from the TrainerRoad calendar'),
 } as const;
 
 export const workoutDetailsOutputSchema = {
@@ -988,10 +985,11 @@ export const forecastOutputSchema = {
   forecasts: z.array(LocationForecastZ).describe("Per-location forecasts for the requested date. One entry per resolved location: the user's configured weather locations when `location` is omitted, a single entry when `location` is provided"),
 } as const;
 
-export const todaysWorkoutsOutputSchema = {
+export const todaysActivitiesOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
   completed_workouts: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
   planned_workouts: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
+  races: z.array(RaceZ).describe("Today's race, if any (zero or one entry, detected from the TrainerRoad calendar)"),
   annotations: annotationsField,
   training_phase: trainingPhaseField,
   workouts_completed: z.number().optional().describe('Number of workouts completed today'),
