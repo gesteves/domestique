@@ -18,7 +18,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ## Available Tools
 
 ### Today's Data
-- `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness (every metric Intervals.icu has for today — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, heat adaptation score from CORE, etc., completed workouts (with matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), active calendar annotations from Intervals.icu (sickness, injury, holiday, freeform note) overlapping today, and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured).
+- `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness (every metric Intervals.icu has for today — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, heat adaptation score from CORE, etc., completed workouts (with full per-activity details and matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), active calendar annotations from Intervals.icu (sickness, injury, holiday, freeform note) overlapping today, and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured).
 - `get_todays_workouts` - Today's completed (with full per-activity details) and planned workouts only, plus active calendar annotations (sickness, injury, holiday, note) overlapping today. A leaner alternative to `get_todays_summary` when only workout data is needed.
 
 ### Profile & Settings

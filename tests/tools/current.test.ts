@@ -801,6 +801,26 @@ describe('CurrentTools', () => {
       expect(result.tss_planned).toBe(88);
     });
 
+    it('should fetch completed workouts with full data (skipExpensiveCalls not set)', async () => {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: null, recovery: null });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+
+      await tools.getTodaysSummary();
+
+      // Per-activity expensive calls (intervals, notes, weather, music) should
+      // be included for today's completed workouts.
+      const callArgs = vi.mocked(mockIntervalsClient.getActivities).mock.calls[0];
+      const options = callArgs[3];
+      expect(options?.skipExpensiveCalls).not.toBe(true);
+    });
+
     it('should include current_time with full datetime in user timezone', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
