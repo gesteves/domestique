@@ -2136,6 +2136,24 @@ export class IntervalsClient {
   }
 
   /**
+   * Update wellness fields for a specific date.
+   * PUT /api/v1/athlete/{id}/wellness/{date}
+   *
+   * Only fields present in `updates` are changed; everything else on the
+   * record is left intact.
+   */
+  async updateWellness(
+    date: string,
+    updates: Partial<IntervalsWellness>
+  ): Promise<IntervalsWellness> {
+    return this.putJson<IntervalsWellness>(
+      `/wellness/${date}`,
+      updates,
+      { operation: 'update wellness', resource: `wellness ${date}` }
+    );
+  }
+
+  /**
    * Get wellness trends for a date range.
    * Includes entries that have any wellness data, not just weight.
    */

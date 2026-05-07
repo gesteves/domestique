@@ -663,6 +663,26 @@ export interface UpdateActivityResponse {
 }
 
 /**
+ * Input for setting the CORE heat adaptation score on a wellness record.
+ */
+export interface UpdateHeatAdaptationScoreInput {
+  /** Heat adaptation score (0-100) */
+  score: number;
+  /** Date the score applies to. Accepts ISO YYYY-MM-DD or natural language ("today", "yesterday"). Defaults to today in the athlete's timezone. */
+  date?: string;
+}
+
+/**
+ * Response from updating the heat adaptation score.
+ */
+export interface UpdateHeatAdaptationScoreResponse {
+  /** Date the score was set on */
+  date: string;
+  /** Updated heat adaptation score, formatted */
+  heat_adaptation_score: string;
+}
+
+/**
  * Upcoming race from the TrainerRoad calendar.
  * A race is detected when an all-day event exists alongside workout legs with the same name.
  */

@@ -1525,6 +1525,55 @@ describe('IntervalsClient', () => {
     });
   });
 
+  describe('updateWellness', () => {
+    it('issues a PUT to /wellness/{date} with the provided fields', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: '2026-05-07' }) });
+
+      await client.updateWellness('2026-05-07', { CoreHeatAdaptationScore: 72 });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(url).toContain('/athlete/i12345/wellness/2026-05-07');
+      expect(init.method).toBe('PUT');
+      expect(init.headers['Content-Type']).toBe('application/json');
+      expect(init.headers.Authorization).toMatch(/^Basic /);
+      expect(JSON.parse(init.body)).toEqual({ CoreHeatAdaptationScore: 72 });
+    });
+
+    it('sends only the fields provided (partial update)', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: '2026-05-07' }) });
+
+      await client.updateWellness('2026-05-07', { CoreHeatAdaptationScore: 50 });
+
+      const init = mockFetch.mock.calls[0][1];
+      const body = JSON.parse(init.body);
+      expect(body).toEqual({ CoreHeatAdaptationScore: 50 });
+      expect(Object.keys(body)).toEqual(['CoreHeatAdaptationScore']);
+    });
+
+    it('returns the updated wellness record from the API', async () => {
+      const updated = { id: '2026-05-07', weight: 74.5, CoreHeatAdaptationScore: 72 };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(updated) });
+
+      const result = await client.updateWellness('2026-05-07', { CoreHeatAdaptationScore: 72 });
+
+      expect(result).toEqual(updated);
+    });
+
+    it('surfaces upstream errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        text: () => Promise.resolve('boom'),
+      });
+
+      await expect(
+        client.updateWellness('2026-05-07', { CoreHeatAdaptationScore: 72 })
+      ).rejects.toThrow();
+    });
+  });
+
   describe('getWellnessTrends', () => {
     it('should return wellness trends for date range', async () => {
       const mockWellness = [

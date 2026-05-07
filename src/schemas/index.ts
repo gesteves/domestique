@@ -1071,3 +1071,8 @@ export const updateActivityOutputSchema = {
   updated_fields: z.array(z.string()).optional().describe('List of fields that were updated'),
   intervals_icu_url: z.string().optional().describe('URL to view the activity in Intervals.icu'),
 } as const;
+
+export const updateHeatAdaptationScoreOutputSchema = {
+  date: z.string().describe('Date the score was set on'),
+  heat_adaptation_score: z.string().describe('Updated heat adaptation score'),
+} as const;

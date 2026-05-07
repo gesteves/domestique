@@ -151,7 +151,8 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('sync_trainerroad_runs');
       expect(registeredTools).toContain('set_workout_intervals');
       expect(registeredTools).toContain('update_activity');
-      expect(registeredTools.length).toBe(22);
+      expect(registeredTools).toContain('update_heat_adaptation_score');
+      expect(registeredTools.length).toBe(23);
     });
 
     it('should call server.registerTool for each tool', () => {
@@ -161,7 +162,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(22);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(23);
     });
 
     it('skips Whoop-dependent tools when Whoop is not configured', () => {
@@ -174,7 +175,7 @@ describe('ToolRegistry', () => {
       expect(names).toContain('get_todays_summary');
       expect(names).toContain('get_todays_workouts');
       expect(names).toContain('get_workout_history');
-      expect(names.length).toBe(20);
+      expect(names.length).toBe(21);
     });
 
     it('skips TrainerRoad-dependent tools when TrainerRoad is not configured', () => {
@@ -186,7 +187,7 @@ describe('ToolRegistry', () => {
       // Planning tools that only need Intervals stay registered
       expect(names).toContain('get_upcoming_workouts');
       expect(names).toContain('create_workout');
-      expect(names.length).toBe(20);
+      expect(names.length).toBe(21);
     });
 
     it('registers only Intervals-only tools when all optional clients are missing', () => {
@@ -202,8 +203,8 @@ describe('ToolRegistry', () => {
       expect(names).not.toContain('get_recovery_trends');
       expect(names).not.toContain('get_upcoming_races');
       expect(names).not.toContain('sync_trainerroad_runs');
-      // 22 - 4 skipped (Whoop x2, TR x2) = 18
-      expect(names.length).toBe(18);
+      // 23 - 4 skipped (Whoop x2, TR x2) = 19
+      expect(names.length).toBe(19);
     });
 
     it('should pass config object with title, description, and annotations to each tool', () => {

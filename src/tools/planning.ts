@@ -2,6 +2,7 @@ import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone } from '../utils/tz.js';
+import { formatPercent } from '../utils/format-units.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
 import type {
@@ -18,6 +19,8 @@ import type {
   SetWorkoutIntervalsResponse,
   UpdateActivityInput,
   UpdateActivityResponse,
+  UpdateHeatAdaptationScoreInput,
+  UpdateHeatAdaptationScoreResponse,
 } from '../types/index.js';
 import type { GetUpcomingWorkoutsInput } from './types.js';
 
@@ -554,6 +557,27 @@ export class PlanningTools {
       activity_id,
       intervals_set: intervals.length,
       intervals_icu_url: `https://intervals.icu/activities/${activity_id}`,
+    };
+  }
+
+  /**
+   * Set the CORE heat adaptation score on a wellness record for a specific
+   * date (defaulting to today in the athlete's timezone). Only that field is
+   * touched; all other wellness fields on the date are left intact.
+   */
+  async updateHeatAdaptationScore(
+    input: UpdateHeatAdaptationScoreInput,
+  ): Promise<UpdateHeatAdaptationScoreResponse> {
+    const { score, date } = input;
+
+    const timezone = await this.intervals.getAthleteTimezone();
+    const resolvedDate = parseDateStringInTimezone(date ?? 'today', timezone, 'date');
+
+    await this.intervals.updateWellness(resolvedDate, { CoreHeatAdaptationScore: score });
+
+    return {
+      date: resolvedDate,
+      heat_adaptation_score: formatPercent(score),
     };
   }
 }

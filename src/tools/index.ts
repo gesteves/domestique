@@ -55,7 +55,7 @@ import { buildToolResponse, type ToolResponse } from '../utils/response-builder.
 import { formatResponseDates } from '../utils/date-formatting.js';
 import { type HintGenerator, generateHints } from '../utils/hints.js';
 import { runWithUnitPreferences, METRIC_DEFAULTS } from '../utils/unit-context.js';
-import type { UnitPreferences, UpdateActivityInput } from '../types/index.js';
+import type { UnitPreferences, UpdateActivityInput, UpdateHeatAdaptationScoreInput } from '../types/index.js';
 import {
   trainerroadSyncHint,
   dailySummarySyncHint,
@@ -662,6 +662,20 @@ export class ToolRegistry {
       outputSchema: schemas.updateActivityOutputSchema,
       annotations: MODIFIES_EXTERNAL,
       handler: async (args: UpdateActivityInput) => this.planningTools.updateActivity(args),
+    });
+
+    register({
+      name: 'update_heat_adaptation_score',
+      title: 'Update Heat Adaptation Score',
+      description: `Sets the CORE heat adaptation score (0-100) on the Intervals.icu wellness record for a specific date. Defaults to today in the athlete's timezone. Only the heat adaptation score is changed; other wellness fields on that date are left intact. The \`date\` parameter accepts ISO YYYY-MM-DD or natural language (e.g., "yesterday", "3 days ago").`,
+      inputSchema: {
+        score: z.number().min(0).max(100).describe('Heat adaptation score (0-100)'),
+        date: z.string().optional().describe('Date the score applies to (defaults to today)'),
+      },
+      outputSchema: schemas.updateHeatAdaptationScoreOutputSchema,
+      annotations: MODIFIES_EXTERNAL,
+      handler: async (args: UpdateHeatAdaptationScoreInput) =>
+        this.planningTools.updateHeatAdaptationScore(args),
     });
 
     // ============================================
