@@ -683,8 +683,24 @@ export interface UpdateHeatAdaptationScoreResponse {
 }
 
 /**
- * Upcoming race from the TrainerRoad calendar.
- * A race is detected when an all-day event exists alongside workout legs with the same name.
+ * Sport for a race. Single-discipline races use the standard ActivityType;
+ * 'Triathlon' is the multi-discipline option used for TrainerRoad umbrella+leg
+ * patterns (Intervals.icu has no native triathlon representation).
+ */
+export type RaceSport = ActivityType | 'Triathlon';
+
+/**
+ * Race priority. A = primary goal / peak event, B = secondary, C = training race.
+ * Sourced natively from Intervals.icu's `category` field (RACE_A/RACE_B/RACE_C),
+ * or extracted via Claude from the TrainerRoad umbrella description for triathlons.
+ * Undefined when the priority isn't stated.
+ */
+export type RacePriority = 'A' | 'B' | 'C';
+
+/**
+ * Upcoming race. Sourced from Intervals.icu for single-discipline races
+ * (where ICU is canonical) or from TrainerRoad for triathlons (where the
+ * umbrella+leg pattern is the only available representation).
  */
 export interface Race {
   /** Scheduled date/time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's timezone */
@@ -693,8 +709,10 @@ export interface Race {
   name: string;
   /** Description of the race, if available */
   description?: string;
-  /** Sport type - currently only Triathlon is supported */
-  sport: 'Triathlon';
+  /** Sport — single discipline (Cycling/Running/Swimming/...) or 'Triathlon' for multi-leg races */
+  sport: RaceSport;
+  /** Priority (A/B/C) when explicitly stated. Omitted if not specified. */
+  priority?: RacePriority;
 }
 
 // Fitness metrics from Intervals.icu

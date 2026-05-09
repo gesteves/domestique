@@ -12,6 +12,7 @@ import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
+import { mergeRaces } from '../utils/race-utils.js';
 import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
 import type {
   StrainData,
@@ -687,16 +688,23 @@ export class CurrentTools {
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
-      this.trainerroad
-        ? this.trainerroad.getUpcomingRaces(timezone).then((races) => {
-            // Filter for today's race only
-            const todaysRace = races.find((race) => race.scheduled_for.startsWith(today));
-            return todaysRace ?? null;
-          }).catch((e) => {
-            console.error('Error fetching races for daily summary:', e);
-            return null as Race | null;
-          })
-        : Promise.resolve(null as Race | null),
+      // Today's race: merge ICU (single-discipline, native A/B/C priority)
+      // with TR (triathlons via umbrella+legs). Both fetched in parallel.
+      Promise.all([
+        this.intervals.getRaces(today, today).catch((e) => {
+          console.error('Error fetching Intervals.icu races for daily summary:', e);
+          return [] as Race[];
+        }),
+        this.trainerroad
+          ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
+              console.error('Error fetching TrainerRoad races for daily summary:', e);
+              return [] as Race[];
+            })
+          : Promise.resolve([] as Race[]),
+      ]).then(([icuRaces, trRaces]) => {
+        const merged = mergeRaces(icuRaces, trRaces);
+        return merged.find((race) => race.scheduled_for.startsWith(today)) ?? null;
+      }),
       this.buildForecasts(timezone, new Date()).catch((e) => {
         console.error('Error building forecast for daily summary:', e);
         return [] as LocationForecast[];

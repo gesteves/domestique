@@ -7,6 +7,7 @@ import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
 import { httpRequestText } from './http.js';
 import { categorizeAnnotation } from '../utils/annotation-categorizer.js';
+import { classifyRacePriority } from '../utils/race-priority-classifier.js';
 import {
   CachedPhaseMarker,
   loadMarkers,
@@ -260,7 +261,21 @@ export class TrainerRoadClient {
     });
 
     // Find race events and their legs
-    return this.findRaces(futureEvents, timezone);
+    const races = this.findRaces(futureEvents, timezone);
+
+    // Enrich each triathlon umbrella with an A/B/C priority extracted from its
+    // description by Claude. The race list is small (a handful per year), so a
+    // simple Promise.all is fine — no rate-limit risk. Priority is omitted
+    // when not stated in the description (classifyRacePriority returns null).
+    if (races.length === 0) return races;
+    const priorities = await Promise.all(
+      races.map((race) =>
+        classifyRacePriority({ name: race.name, description: race.description })
+      )
+    );
+    return races.map((race, i) =>
+      priorities[i] ? { ...race, priority: priorities[i] ?? undefined } : race
+    );
   }
 
   /**

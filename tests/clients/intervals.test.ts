@@ -1134,6 +1134,166 @@ describe('IntervalsClient', () => {
     });
   });
 
+  describe('getRaces', () => {
+    const rangeStart = '2025-05-10';
+    const rangeEnd = '2025-06-10';
+    const mockProfile = { athlete: { id: 'i12345', timezone: 'America/Denver' } };
+
+    function mockApi(events: unknown[]) {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(events),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockProfile),
+        });
+    }
+
+    it('queries /events with the RACE_A,RACE_B,RACE_C category list and the supplied range', async () => {
+      mockApi([]);
+
+      await client.getRaces(rangeStart, rangeEnd);
+
+      const callUrl = mockFetch.mock.calls[0][0] as string;
+      expect(callUrl).toContain('/athlete/i12345/events');
+      expect(callUrl).toContain(`oldest=${rangeStart}`);
+      expect(callUrl).toContain(`newest=${rangeEnd}`);
+      const decoded = decodeURIComponent(callUrl);
+      expect(decoded).toContain('category=RACE_A,RACE_B,RACE_C');
+    });
+
+    it('maps RACE_A/B/C to priority A/B/C and ICU type to RaceSport', async () => {
+      mockApi([
+        {
+          id: 1,
+          uid: 'race-a',
+          start_date_local: '2025-05-15T08:00:00',
+          name: 'Boston Marathon',
+          description: 'A goal',
+          type: 'Run',
+          category: 'RACE_A',
+        },
+        {
+          id: 2,
+          uid: 'race-b',
+          start_date_local: '2025-05-22T07:30:00',
+          name: 'Local Crit',
+          type: 'Ride',
+          category: 'RACE_B',
+        },
+        {
+          id: 3,
+          uid: 'race-c',
+          start_date_local: '2025-06-01T10:00:00',
+          name: 'Practice 5k Swim',
+          type: 'Swim',
+          category: 'RACE_C',
+        },
+      ]);
+
+      const result = await client.getRaces(rangeStart, rangeEnd);
+
+      expect(result).toHaveLength(3);
+      expect(result[0]).toMatchObject({
+        name: 'Boston Marathon',
+        sport: 'Running',
+        priority: 'A',
+      });
+      expect(result[1]).toMatchObject({
+        name: 'Local Crit',
+        sport: 'Cycling',
+        priority: 'B',
+      });
+      expect(result[2]).toMatchObject({
+        name: 'Practice 5k Swim',
+        sport: 'Swimming',
+        priority: 'C',
+      });
+    });
+
+    it('emits scheduled_for as ISO 8601 with the athlete timezone offset', async () => {
+      mockApi([
+        {
+          id: 1,
+          uid: 'race-a',
+          start_date_local: '2025-05-15T08:00:00',
+          name: 'Boston Marathon',
+          type: 'Run',
+          category: 'RACE_A',
+        },
+      ]);
+
+      const result = await client.getRaces(rangeStart, rangeEnd);
+      // America/Denver is UTC-06:00 in May (MDT). Mountain DST applies.
+      expect(result[0].scheduled_for).toMatch(/^2025-05-15T08:00:00[-+]\d{2}:\d{2}$/);
+    });
+
+    it('skips events whose category is not a race category', async () => {
+      mockApi([
+        {
+          id: 99,
+          uid: 'workout-1',
+          start_date_local: '2025-05-15T08:00:00',
+          name: 'Bonus ride',
+          type: 'Ride',
+          category: 'WORKOUT',
+        },
+      ]);
+
+      const result = await client.getRaces(rangeStart, rangeEnd);
+      expect(result).toHaveLength(0);
+    });
+
+    it('returns sport "Other" when ICU type is unrecognized', async () => {
+      mockApi([
+        {
+          id: 7,
+          uid: 'race-misc',
+          start_date_local: '2025-05-15T08:00:00',
+          name: 'Mystery race',
+          type: 'SomeNewSport',
+          category: 'RACE_B',
+        },
+      ]);
+
+      const result = await client.getRaces(rangeStart, rangeEnd);
+      expect(result[0].sport).toBe('Other');
+    });
+
+    it('returns an empty array when no events match', async () => {
+      mockApi([]);
+
+      const result = await client.getRaces(rangeStart, rangeEnd);
+      expect(result).toEqual([]);
+    });
+
+    it('sorts results by scheduled_for ascending', async () => {
+      mockApi([
+        {
+          id: 2,
+          uid: 'b',
+          start_date_local: '2025-06-01T10:00:00',
+          name: 'Later',
+          type: 'Run',
+          category: 'RACE_B',
+        },
+        {
+          id: 1,
+          uid: 'a',
+          start_date_local: '2025-05-15T08:00:00',
+          name: 'Earlier',
+          type: 'Run',
+          category: 'RACE_A',
+        },
+      ]);
+
+      const result = await client.getRaces(rangeStart, rangeEnd);
+      expect(result.map((r) => r.name)).toEqual(['Earlier', 'Later']);
+    });
+  });
+
   describe('getTodayFitness', () => {
     it('should return today\'s fitness metrics', async () => {
       const mockProfile = { athlete: { id: 'test', timezone: 'America/Denver' } };

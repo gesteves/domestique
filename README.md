@@ -104,7 +104,7 @@ For Last.fm integration (optional):
 When both are set, `get_workout_details` and `get_todays_activities` include scrobbled tracks matched to the workout.
 
 For Anthropic API integration (optional):
-- `ANTHROPIC_API_KEY` - Enables TrainerRoad annotation categorization and debug token counting.
+- `ANTHROPIC_API_KEY` - Enables Claude Haiku 4.5 for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note) and triathlon race priority extraction (A/B/C from the umbrella description), plus debug token counting.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.

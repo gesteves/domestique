@@ -24,6 +24,7 @@ describe('PlanningTools', () => {
     vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
     // Default annotations to empty so getUpcomingActivities doesn't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
+    vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getCurrentTrainingPhase).mockResolvedValue(null);
@@ -310,6 +311,58 @@ describe('PlanningTools', () => {
       const result = await tools.getUpcomingActivities({ oldest: '2024-12-15', newest: '2024-12-31' });
 
       expect(result.races).toEqual([inRangeRace]);
+    });
+
+    it('merges races from both Intervals.icu and TrainerRoad', async () => {
+      const icuRace: Race = {
+        scheduled_for: '2024-12-22T08:00:00Z',
+        name: 'Boston Marathon',
+        sport: 'Running',
+        priority: 'A',
+      };
+      const trRace: Race = {
+        scheduled_for: '2024-12-20T08:00:00Z',
+        name: 'Local Tri',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([icuRace]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([trRace]);
+
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15', newest: '2024-12-31' });
+
+      // Sorted by scheduled_for ascending, both sources represented.
+      expect(result.races).toEqual([trRace, icuRace]);
+      expect(result.races[1].priority).toBe('A');
+    });
+
+    it('dedupes a same-name+sport+date collision in favor of the ICU entry for non-tri', async () => {
+      const trCopy: Race = {
+        scheduled_for: '2024-12-22T08:00:00Z',
+        name: 'Boston Marathon',
+        sport: 'Running',
+        description: 'TR fallback',
+      };
+      const icuCanonical: Race = {
+        scheduled_for: '2024-12-22T08:00:00Z',
+        name: 'Boston Marathon',
+        sport: 'Running',
+        description: 'ICU canonical',
+        priority: 'A',
+      };
+
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([icuCanonical]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([trCopy]);
+
+      const result = await tools.getUpcomingActivities({ oldest: '2024-12-15', newest: '2024-12-31' });
+
+      expect(result.races).toHaveLength(1);
+      expect(result.races[0].description).toBe('ICU canonical');
+      expect(result.races[0].priority).toBe('A');
     });
 
     it('should return empty races when TrainerRoad client is not configured', async () => {

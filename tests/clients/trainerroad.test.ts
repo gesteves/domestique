@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
 import { categorizeAnnotation } from '../../src/utils/annotation-categorizer.js';
+import { classifyRacePriority } from '../../src/utils/race-priority-classifier.js';
 
 vi.mock('../../src/utils/annotation-categorizer.js', () => ({
   categorizeAnnotation: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../../src/utils/race-priority-classifier.js', () => ({
+  classifyRacePriority: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../src/utils/training-phase-cache.js', () => ({
@@ -1319,6 +1324,69 @@ END:VCALENDAR`;
       expect(result[0].scheduled_for).toBe('2024-12-20T08:00:00-08:00');
 
       vi.useRealTimers();
+    });
+
+    it('attaches a priority returned by classifyRacePriority', async () => {
+      vi.mocked(classifyRacePriority).mockResolvedValueOnce('A');
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:tri-umbrella
+DTSTART;VALUE=DATE:20260620
+DTEND;VALUE=DATE:20260621
+SUMMARY:Boulder 70.3
+DESCRIPTION:A race
+END:VEVENT
+BEGIN:VEVENT
+UID:tri-leg-1
+DTSTART;VALUE=DATE:20260620
+DTEND;VALUE=DATE:20260621
+SUMMARY:0:35 - Boulder 70.3
+END:VEVENT
+END:VCALENDAR`;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].priority).toBe('A');
+      expect(classifyRacePriority).toHaveBeenCalledWith({
+        name: 'Boulder 70.3',
+        description: 'A race',
+      });
+    });
+
+    it('omits priority entirely when classifyRacePriority returns null (no hallucinated default)', async () => {
+      vi.mocked(classifyRacePriority).mockResolvedValueOnce(null);
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:tri-umbrella-2
+DTSTART;VALUE=DATE:20260620
+DTEND;VALUE=DATE:20260621
+SUMMARY:Mystery Tri
+DESCRIPTION:fun event
+END:VEVENT
+BEGIN:VEVENT
+UID:tri-leg-2
+DTSTART;VALUE=DATE:20260620
+DTEND;VALUE=DATE:20260621
+SUMMARY:0:35 - Mystery Tri
+END:VEVENT
+END:VCALENDAR`;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(ics),
+      });
+
+      const result = await client.getUpcomingRaces();
+
+      expect(result).toHaveLength(1);
+      expect('priority' in result[0]).toBe(false);
+      expect(JSON.stringify(result[0])).not.toContain('"priority"');
     });
   });
 

@@ -42,6 +42,7 @@ describe('CurrentTools', () => {
 
     // Default annotations to empty so list-style tools that fetch them don't choke on auto-mocks.
     vi.mocked(mockIntervalsClient.getAnnotations).mockResolvedValue([]);
+    vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getAnnotations).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getTrainingPhaseStarts).mockResolvedValue([]);
     vi.mocked(mockTrainerRoadClient.getCurrentTrainingPhase).mockResolvedValue(null);
@@ -1107,6 +1108,40 @@ describe('CurrentTools', () => {
       const result = await tools.getTodaysSummary();
 
       expect(result.scheduled_race).toBeNull();
+    });
+
+    it('surfaces an Intervals.icu race scheduled for today as scheduled_race', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const todaysIcuRace: Race = {
+        scheduled_for: '2024-12-15T08:00:00Z',
+        name: 'Boston Marathon',
+        sport: 'Running',
+        priority: 'A',
+      };
+
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
+        sleep: null,
+        recovery: null,
+      });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(null);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([todaysIcuRace]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
+
+      const result = await tools.getTodaysSummary();
+
+      expect(result.scheduled_race).toEqual(todaysIcuRace);
+      expect(result.scheduled_race?.priority).toBe('A');
+
+      vi.useRealTimers();
     });
 
     it('should return null scheduled_race when races exist but none for today', async () => {

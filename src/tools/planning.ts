@@ -5,6 +5,7 @@ import { parseDateStringInTimezone } from '../utils/tz.js';
 import { formatPercent } from '../utils/format-units.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
+import { mergeRaces } from '../utils/race-utils.js';
 import type {
   PlannedWorkout,
   Annotation,
@@ -66,7 +67,15 @@ export class PlanningTools {
     }
 
     // Fetch, merge, and deduplicate from both sources; fetch overlapping annotations and races in parallel
-    const [mergedWorkouts, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, allRaces] = await Promise.all([
+    const [
+      mergedWorkouts,
+      intervalsAnnotations,
+      trainerroadAnnotations,
+      trainerroadPhaseStarts,
+      trainingPhase,
+      intervalsRaces,
+      trainerroadRaces,
+    ] = await Promise.all([
       fetchAndMergePlannedWorkouts(
         this.intervals,
         this.trainerroad,
@@ -96,6 +105,10 @@ export class PlanningTools {
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
+      this.intervals.getRaces(startDateStr, endDateStr).catch((e) => {
+        console.error('Error fetching Intervals.icu races for upcoming activities:', e);
+        return [] as Race[];
+      }),
       this.trainerroad
         ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
             console.error('Error fetching upcoming races for upcoming activities:', e);
@@ -121,8 +134,9 @@ export class PlanningTools {
       (a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
     );
 
-    // TR's getUpcomingRaces is unbounded — range-filter at this layer.
-    const racesInRange = allRaces.filter((race) => {
+    // ICU races are returned within range (API filtered); TR's getUpcomingRaces
+    // is unbounded — range-filter the merged set at this layer.
+    const racesInRange = mergeRaces(intervalsRaces, trainerroadRaces).filter((race) => {
       const ymd = race.scheduled_for.slice(0, 10);
       return ymd >= startDateStr && ymd <= endDateStr;
     });

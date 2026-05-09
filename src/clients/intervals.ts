@@ -44,6 +44,8 @@ import type {
   ActivityIntervalInput,
   PlayedSong,
   WeatherLocation,
+  Race,
+  RacePriority,
 } from '../types/index.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import {
@@ -111,6 +113,16 @@ const TRAINING_AVAILABILITY_MAP: Record<string, TrainingAvailability> = {
   UNAVAILABLE: 'Unavailable',
 };
 const ANNOTATION_LOOKBACK_DAYS = 30;
+
+// Race categories on Intervals.icu — first-class A/B/C priority is encoded in
+// the `category` enum on the event itself.
+const RACE_API_CATEGORIES = ['RACE_A', 'RACE_B', 'RACE_C'] as const;
+type RaceApiCategory = (typeof RACE_API_CATEGORIES)[number];
+const RACE_PRIORITY_MAP: Record<RaceApiCategory, RacePriority> = {
+  RACE_A: 'A',
+  RACE_B: 'B',
+  RACE_C: 'C',
+};
 
 const WIND_UNIT_MAP: Record<'KMH' | 'MPS' | 'KNOTS' | 'MPH' | 'BFT', WindUnit> = {
   KMH: 'kmh',
@@ -1888,6 +1900,47 @@ export class IntervalsClient {
       })
       .map((e) => this.normalizeAnnotation(e))
       .filter((a): a is Annotation => a !== null);
+  }
+
+  /**
+   * Get races (priority A, B, or C) scheduled within the given range. ICU's
+   * `category` field carries first-class race priority as `RACE_A`/`RACE_B`/
+   * `RACE_C`, so we filter at the API level and map directly.
+   *
+   * Triathlons are not returned here — ICU has no native multi-leg
+   * representation; those come from the TrainerRoad client.
+   */
+  async getRaces(rangeStart: string, rangeEnd: string): Promise<Race[]> {
+    const events = await this.fetch<IntervalsEvent[]>('/events', {
+      oldest: rangeStart,
+      newest: rangeEnd,
+      category: RACE_API_CATEGORIES.join(','),
+    });
+
+    const timezone = await this.getAthleteTimezone();
+
+    const races = events
+      .map((e) => this.normalizeRace(e, timezone))
+      .filter((r): r is Race => r !== null);
+    races.sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for));
+    return races;
+  }
+
+  private normalizeRace(event: IntervalsEvent, timezone: string): Race | null {
+    const apiCategory = event.category as RaceApiCategory | undefined;
+    if (!apiCategory || !RACE_PRIORITY_MAP[apiCategory]) {
+      return null;
+    }
+    if (!event.start_date_local) {
+      return null;
+    }
+    return {
+      scheduled_for: localStringToISO8601WithTimezone(event.start_date_local, timezone),
+      name: event.name,
+      description: event.description,
+      sport: this.activityTypeToSport(event.type) ?? 'Other',
+      priority: RACE_PRIORITY_MAP[apiCategory],
+    };
   }
 
   private normalizeAnnotation(event: IntervalsEvent): Annotation | null {
