@@ -4,57 +4,56 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ## Features
 
-- Query completed workouts from Intervals.icu with matched Whoop strain data
-- Access sleep and recovery metrics (HRV, sleep, recovery score) from Whoop
-- View planned workouts from TrainerRoad and Intervals.icu
-- Sync TrainerRoad running workouts to Intervals.icu as structured workouts for Zwift/Garmin
-- Analyze fitness trends (CTL/ATL/TSB)
-- Comprehensive workout analysis with intervals, notes, and weather data
-- Incorporates heat strain data and heat adaptation score recorded from a [CORE Body Temperature](https://corebodytemp.com/) sensor for analysis
-- Weather forecasts up to 10 days out for each enabled location in the athlete's Intervals.icu weather config or, optionally, for any geocoded place (e.g., a race location), including AQI and pollen forecasts
+- Completed workouts from Intervals.icu with matched Whoop strain
+- Recovery, HRV, sleep, and strain from Whoop
+- Planned workouts from TrainerRoad and Intervals.icu
+- Sync TrainerRoad running workouts to Intervals.icu (for Zwift/Garmin)
+- Fitness trends (CTL/ATL/TSB) and detailed workout analysis with intervals, notes, and weather
+- Heat strain and heat adaptation score from a [CORE Body Temperature](https://corebodytemp.com/) sensor
+- Weather, AQI, and pollen forecasts up to 10 days out for Intervals.icu weather locations or any geocoded place
 
-**Note:** Due to Strava API restrictions, workouts imported from Strava to Intervals.icu cannot be analyzed. To work around this, ensure that workouts are synced to Intervals.icu from other sources (Zwift, Garmin Connect, Dropbox, etc.)
+**Note:** Strava-imported workouts can't be analyzed due to API restrictions. Sync from Zwift, Garmin Connect, Dropbox, etc. instead.
 
 ## Available Tools
 
 ### Today's Data
-- `get_todays_summary` - Complete snapshot of today including recovery, sleep, HRV, strain, fitness metrics (CTL/ATL/TSB), wellness (every metric Intervals.icu has for today — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, heat adaptation score from CORE, etc., completed workouts (with full per-activity details and matched Whoop data), planned workouts (from TrainerRoad and Intervals.icu), today's race (if any), active calendar annotations from Intervals.icu (sickness, injury, holiday, freeform note) overlapping today, and the weather forecast for each enabled Intervals.icu weather location (when Google Weather is configured).
-- `get_todays_activities` - Today's completed (with full per-activity details) and planned workouts, today's race (if any), plus active calendar annotations (sickness, injury, holiday, note) overlapping today. A leaner alternative to `get_todays_summary` when only activity-and-event data is needed. Optional `type` filter narrows to a single event type (`workouts` or `races`).
+- `get_todays_summary` - Full snapshot of today: recovery, sleep, HRV, strain, fitness (CTL/ATL/TSB), wellness, completed and planned workouts, race, calendar annotations, and weather.
+- `get_todays_activities` - Today's completed and planned workouts, race, and calendar annotations. Leaner alternative to `get_todays_summary`. Optional `type` filter (`workouts` or `races`).
 
 ### Profile & Settings
-- `get_athlete_profile` - Athlete's profile including unit preferences (metric/imperial), age, and location
-- `get_sports_settings` - Sport-specific settings (FTP, zones, thresholds) for one or more sports (cycling, running, swimming). Pass a `sports` array to filter, or omit to fetch all three.
+- `get_athlete_profile` - Athlete profile, unit preferences, age, and location.
+- `get_sports_settings` - FTP, zones, and thresholds per sport. Optional `sports` filter (cycling, running, swimming).
 
 ### Historical/Trends
-- `get_strain_history` - Whoop strain scores and activities for a date range
-- `get_activity_history` - Past completed workouts with matched Whoop strain data, plus calendar annotations (sickness, injury, holiday, note) overlapping the range. History is workouts-only — past races are not surfaced. The `type` filter is accepted for API symmetry with the today's/upcoming activity tools.
-- `get_recovery_trends` - HRV, sleep, and recovery patterns over time
-- `get_wellness_trends` - Daily Intervals.icu wellness over a date range. Returns every recorded field (HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, steps, heat adaptation score from CORE, etc.)
-- `get_activity_totals` - Aggregated activity totals over a date range, including duration, distance, training load, and zone distributions by sport
+- `get_strain_history` - Whoop strain and activities over a date range.
+- `get_activity_history` - Past completed workouts with matched Whoop strain and calendar annotations. Workouts only — past races are not surfaced.
+- `get_recovery_trends` - HRV, sleep, and recovery patterns over time.
+- `get_wellness_trends` - Daily Intervals.icu wellness over a date range (every recorded field).
+- `get_activity_totals` - Aggregated totals over a date range: duration, distance, training load, and zone distributions by sport.
 
 ### Planning
-- `get_upcoming_activities` - Planned workouts (merged from TrainerRoad and Intervals.icu calendars) and races (detected on the TrainerRoad calendar) for a future date range, plus calendar annotations (sickness, injury, holiday, note) overlapping the range. Optional `type` filter narrows to a single event type (`workouts` or `races`).
+- `get_upcoming_activities` - Planned workouts (TrainerRoad + Intervals.icu) and races for a future date range, plus calendar annotations. Optional `type` filter.
 
 ### Workout Management
-- `create_workout` - Creates a structured workout (cycling, running, or swimming) in Intervals.icu from a workout definition in Intervals.icu syntax. Cycling and running workouts sync to Zwift and Garmin; swimming is WIP pending FORM Goggles sync.
-- `update_workout` - Updates a Domestique-created workout in Intervals.icu
-- `delete_workout` - Deletes a Domestique-created workout from Intervals.icu
-- `sync_trainerroad_runs` - Syncs running workouts from TrainerRoad to Intervals.icu, creating new workouts, detecting changes, and cleaning up orphans
-- `set_workout_intervals` - Sets intervals on a completed activity
-- `update_activity` - Updates the name and/or description of a completed activity
+- `create_workout` - Create a structured cycling/running/swimming workout in Intervals.icu syntax. Cycling and running sync to Zwift/Garmin; swimming pending FORM Goggles sync.
+- `update_workout` - Update a Domestique-created workout.
+- `delete_workout` - Delete a Domestique-created workout.
+- `sync_trainerroad_runs` - Sync running workouts from TrainerRoad to Intervals.icu, detecting changes and orphans.
+- `set_workout_intervals` - Set intervals on a completed activity.
+- `update_activity` - Update name and/or description of a completed activity.
 
 ### Analysis
-- `get_training_load_trends` - Training load trends including CTL (fitness), ATL (fatigue), TSB (form), ramp rate, and ACWR
-- `get_workout_details` - Get all the details for a single workout in one call: intervals (with power, HR, cadence, timing), interval groups, athlete and coach notes, weather conditions, power/pace/HR/heat zones, scrobbled music (when Last.fm is configured), and matched Whoop strain data
+- `get_training_load_trends` - CTL, ATL, TSB, ramp rate, and ACWR over time.
+- `get_workout_details` - All details for one workout: intervals, notes, weather, zones, scrobbled music (Last.fm), and matched Whoop strain.
 
 ### Performance Curves
-- `get_power_curve` - Cycling power curve analysis showing best watts at various durations with W/kg, estimated FTP, and period comparison
-- `get_pace_curve` - Running/swimming pace curve analysis showing best times at key distances
-- `get_hr_curve` - Heart rate curve analysis showing max sustained HR at various durations
+- `get_power_curve` - Best watts at various durations with W/kg, estimated FTP, and period comparison.
+- `get_pace_curve` - Best running/swimming times at key distances.
+- `get_hr_curve` - Max sustained HR at various durations.
 
 ### Weather
 
-- `get_weather_forecast` - Weather forecast for a date and optional location, including AQI and pollen forecasts
+- `get_weather_forecast` - Forecast for a date and optional location, with AQI and pollen.
 
 ## Setup
 
@@ -96,289 +95,97 @@ For TrainerRoad integration:
 - `TRAINERROAD_CALENDAR_URL` - Private iCal feed URL
 
 For weather forecasts (optional):
-- `GOOGLE_API_KEY` - A Google Cloud API key. Enable the [Weather API](https://developers.google.com/maps/documentation/weather), the [Air Quality API](https://developers.google.com/maps/documentation/air-quality), the [Pollen API](https://developers.google.com/maps/documentation/pollen), the [Elevation API](https://developers.google.com/maps/documentation/elevation), the [Geocoding API](https://developers.google.com/maps/documentation/geocoding), and the [Time Zone API](https://developers.google.com/maps/documentation/timezone) on the project. The same key is used for any other Google services Domestique adds in the future.
+- `GOOGLE_API_KEY` - Google Cloud API key with the Weather, Air Quality, Pollen, Elevation, Geocoding, and Time Zone APIs enabled.
 
 For Last.fm integration (optional):
-- `LASTFM_USERNAME` - Your Last.fm username (the account that scrobbles your listening history)
-- `LASTFM_API_KEY` - A Last.fm API key. Create one at https://www.last.fm/api/account/create. Only the API key is needed — Domestique only reads public scrobbles via `user.getRecentTracks`, so no shared secret or OAuth flow is required.
+- `LASTFM_USERNAME` - Last.fm username.
+- `LASTFM_API_KEY` - Last.fm API key (https://www.last.fm/api/account/create). Public scrobbles only, no OAuth.
 
-When both are set, per-workout details from `get_workout_details` and `get_todays_activities` include the matched tracks scrobbled during the workout.
+When both are set, `get_workout_details` and `get_todays_activities` include scrobbled tracks matched to the workout.
 
 For Anthropic API integration (optional):
-- `ANTHROPIC_API_KEY` - Anthropic API key. Enables two features when set:
-  - **TrainerRoad annotation categorization** — TrainerRoad's iCal feed doesn't expose annotation type, so by default every TR annotation is surfaced as a `Note`. With this key set, Claude Haiku 4.5 classifies each TR annotation into `Sick`, `Injured`, `Holiday`, or `Note` based on its title and description, which lets `mergeAnnotations` deduplicate against Intervals.icu by category instead of by brittle title matching. Results are cached in Redis (when configured) by content hash with a 30-day TTL, so each unique annotation is classified once.
-  - **Debug token counting** in development mode (see [Debug Token Counting](#debug-token-counting) below).
+- `ANTHROPIC_API_KEY` - Enables TrainerRoad annotation categorization and debug token counting.
 
 For error reporting (optional):
-- `BUGSNAG_API_KEY` - Bugsnag API key for error reporting. When set, upstream API failures (Intervals.icu, Whoop, TrainerRoad) are reported to Bugsnag with full context including HTTP method, URL, status code, and response body.
+- `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.
 
 ### Whoop OAuth Setup
 
-Whoop uses OAuth 2.0, which requires a one-time authorization flow to obtain refresh tokens. The refresh tokens are single-use, so each time the server refreshes the access token, it receives a new refresh token that gets stored in Redis.
+Whoop uses OAuth 2.0 with single-use refresh tokens stored in Redis. One-time setup:
 
-**First-time setup:**
+1. Create a Whoop developer app at https://developer.whoop.com to get your `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`.
+2. Ensure Redis is running and `REDIS_URL` is set in `.env`.
+3. Start Docker: `docker compose up -d`
+4. Run the OAuth script: `docker compose exec domestique npm run whoop:auth`
+5. Open the displayed URL, authorize, and paste the resulting code back into the script.
 
-1. Create a Whoop developer app at https://developer.whoop.com to get your `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`
+The server refreshes tokens automatically thereafter.
 
-2. Make sure Redis is running and `REDIS_URL` is set in your `.env`
+## Local Development
 
-3. Start the Docker environment:
-   ```bash
-   docker compose up -d
-   ```
+Recommended: `docker compose up` (hot reload, server at `http://localhost:3000`). Use `docker compose exec domestique <command>` to run commands inside the container (e.g., `npm run typecheck`, `npm run whoop:auth`).
 
-4. Run the OAuth setup script:
-   ```bash
-   docker compose exec domestique npm run whoop:auth
-   ```
-
-5. The script will display an authorization URL. Open it in your browser and log in to Whoop
-
-6. After authorizing, you'll be redirected to a callback page that displays your authorization code
-
-7. Copy the authorization code and paste it into the script
-
-8. The script exchanges the code for tokens and stores them in Redis. You're done!
-
-The server will automatically refresh tokens as needed and store new refresh tokens in Redis.
-
-## Common Commands
-
-### Docker Commands
-
-All commands should be run in the Docker container:
+Without Docker:
 
 ```bash
-# Start development server with hot reload
-docker compose up
-
-# Start in background
-docker compose up -d
-
-# View logs
-docker compose logs domestique -f
-
-# Restart container
-docker compose restart domestique
-
-# Stop containers
-docker compose down
-
-# Rebuild containers after dependency changes
-docker compose build
-
-# Run commands in container
-docker compose exec domestique <command>
-
-# Examples:
-docker compose exec domestique npm run typecheck
-docker compose exec domestique npm run whoop:auth
+npm install
+npm run dev          # hot reload
+npm run build && npm start
 ```
 
 ### Testing with MCP Inspector
 
-The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a useful tool for testing and debugging your MCP server:
-
 ```bash
-# Install MCP Inspector globally (if not already installed)
-npm install -g @modelcontextprotocol/inspector
-
-# Run inspector pointing to your local server
 npx @modelcontextprotocol/inspector --server-url "http://localhost:3000/mcp?token=YOUR_SECRET_TOKEN"
-
-# Or with Authorization header
-npx @modelcontextprotocol/inspector --server-url "http://localhost:3000/mcp" \
-  --header "{ \"Authorization\": \"Bearer YOUR_SECRET_TOKEN\" }"
 ```
-
-The inspector will open a web interface where you can:
-- Browse available tools
-- Test tool calls with different parameters
-- View request/response payloads
-- Debug connection issues
 
 ### Debug Token Counting
 
-In development mode, tool responses include a `token_count` field in `_meta` to help you understand how many tokens each tool response would consume when passed to Claude.
-
-To enable this feature:
-
-1. Add your Anthropic API key to `.env`:
-   ```bash
-   ANTHROPIC_API_KEY=your-anthropic-api-key
-   ```
-
-2. Restart the development server:
-   ```bash
-   docker compose restart domestique
-   ```
-
-Tool responses will now include:
-```json
-{
-  "content": [{ "type": "text", "text": "..." }],
-  "structuredContent": { ... },
-  "_meta": {
-    "token_count": 1234
-  }
-}
-```
-
-`_meta` is reserved by the MCP spec for out-of-band metadata that clients aren't required to forward to the model, so the token count doesn't pollute what Claude sees.
-
-This feature is automatically disabled in production (when `NODE_ENV` is not `development`) or when `ANTHROPIC_API_KEY` is not set.
+In development mode, set `ANTHROPIC_API_KEY` to include a `token_count` field in `_meta` on tool responses. `_meta` is out-of-band per the MCP spec, so it isn't shown to the model.
 
 ### MCP Request Logging
 
-To inspect incoming JSON-RPC requests on the `/mcp` endpoint — including the method, tool name (for `tools/call`), and any client-supplied `_meta` field — set:
-
-```bash
-LOG_MCP_REQUESTS=true
-```
-
-This is useful for seeing what different MCP clients send in `_meta`. ChatGPT [documents its `_meta` payload](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) (location, locale, etc.); Claude's is undocumented.
-
-Each request is logged as a single line prefixed with `[MCP Request]`, e.g.:
-
-```
-[MCP Request] {
-  "method": "tools/call",
-  "id": 7,
-  "tool": "get_todays_summary",
-  "arguments": {},
-  "meta": { ... }
-}
-```
-
-Disabled by default. Restart the server after changing the value.
-
-## Local Development
-
-### Using Docker Compose (recommended)
-
-```bash
-# Start development server with hot reload
-docker compose up
-
-# Server runs at http://localhost:3000
-```
-
-### Using Node.js directly
-
-```bash
-# Install dependencies
-npm install
-
-# Run in development mode with hot reload
-npm run dev
-
-# Or build and run production
-npm run build
-npm start
-```
+Set `LOG_MCP_REQUESTS=true` to log incoming JSON-RPC requests on `/mcp`.
 
 ## Deployment to Fly.io
 
-### 1. Install Fly CLI and Login
-
-```bash
-curl -L https://fly.io/install.sh | sh
-fly auth login
-```
-
-### 2. Deploy Redis
-
-Redis is required for Whoop token storage. Deploy it first:
-
-```bash
-cd fly-redis
-
-# Create the Redis app (first time only)
-fly apps create domestique-redis
-
-# Create a volume for persistence
-fly volumes create redis_data --region iad --size 1
-
-# Deploy Redis
-fly deploy
-
-cd ..
-```
-
-### 3. Deploy Domestique
-
-```bash
-# Create the app (first time only)
-fly apps create domestique
-
-# Set secrets
-fly secrets set MCP_AUTH_TOKEN=your-secret-token
-fly secrets set INTERVALS_API_KEY=your-api-key
-fly secrets set INTERVALS_ATHLETE_ID=your-athlete-id
-fly secrets set WHOOP_CLIENT_ID=your-client-id
-fly secrets set WHOOP_CLIENT_SECRET=your-client-secret
-fly secrets set REDIS_URL=redis://domestique-redis.internal:6379
-
-# Deploy
-fly deploy
-
-# View logs
-fly logs
-```
-
-### 4. Set Up Whoop Tokens (if using Whoop)
-
-After deploying, run the OAuth setup to get initial Whoop tokens:
-
-```bash
-fly ssh console -C "npm run whoop:auth"
-```
-
-The redirect URI is automatically set to `https://{your-app}.fly.dev/callback` when running on Fly.io. Make sure this URL is registered in your Whoop developer app settings.
-
-Follow the prompts to authorize with Whoop and store the tokens in Redis.
+1. **Install Fly CLI and log in**: `curl -L https://fly.io/install.sh | sh && fly auth login`
+2. **Deploy Redis** (required for Whoop tokens):
+   ```bash
+   cd fly-redis
+   fly apps create domestique-redis
+   fly volumes create redis_data --region iad --size 1
+   fly deploy
+   cd ..
+   ```
+3. **Deploy Domestique**:
+   ```bash
+   fly apps create domestique
+   fly secrets set MCP_AUTH_TOKEN=... INTERVALS_API_KEY=... INTERVALS_ATHLETE_ID=... \
+     WHOOP_CLIENT_ID=... WHOOP_CLIENT_SECRET=... REDIS_URL=redis://domestique-redis.internal:6379
+   fly deploy
+   ```
+4. **Whoop tokens** (if using Whoop): `fly ssh console -C "npm run whoop:auth"`. The redirect URI is auto-set to `https://{your-app}.fly.dev/callback` — register it in your Whoop app.
 
 ## Connecting to Claude
 
-Add this MCP server as a connector to your Claude configuration using this URL:
-
-```
-https://{FLY_APP_NAME}.fly.dev/mcp?token=YOUR_SECRET_TOKEN
-```
-
-**Note:** Replace `YOUR_SECRET_TOKEN` with your actual `MCP_AUTH_TOKEN` value and `FLY_APP_NAME` with the name of the Fly.io app (or the URL wherever you have it hosted). 
+Add as a connector with: `https://{FLY_APP_NAME}.fly.dev/mcp?token=YOUR_SECRET_TOKEN` (substitute your `MCP_AUTH_TOKEN` and host).
 
 ## Example Queries
-
-Once connected, you can ask Claude:
 
 - "How did my workout go today?"
 - "What's my recovery like this morning?"
 - "Show me my fitness trends for the last month"
-- "What workouts do I have planned this week?"
 - "How has my HRV trended compared to my training load?"
-- "How does my Intervals.icu HRV compare to Whoop's this week, and where do they disagree?"
-- "What workout do I have scheduled for next Wednesday?"
-- "Show me my workouts from last Friday"
-- "How many workouts did I complete in the last 2 weeks?"
-- "What was my training load in the last 42 days?"
 - "What's my power curve for the last 90 days?"
-- "How has my 5-minute power improved compared to last quarter?"
 - "Show me my running pace curve—what's my best 5km time?"
-- "Compare my cycling power from the last 3 months vs the previous 3 months"
-- "What's my FTP?"
-- "What are my running zones?"
 - "How has my weight changed over the last 30 days?"
-- "What are my swimming, cycling and running totals for the past month?"
-- "How much time did I spend in each power zone this month?"
-- "Sync my TrainerRoad runs to Intervals.icu so they sync to Zwift"
+- "Sync my TrainerRoad runs to Intervals.icu"
 - "What's the weather like for my race in Boulder next Saturday?"
-- "Forecast for Kona, HI in 5 days — what should I expect?"
 
 ## MCP Client Compatibility Notes
 
-This server has been tested with Claude and ChatGPT. However, there are some compatibility differences to be aware of:
+Tested with Claude and ChatGPT. Notes:
 
-- **Tool responses**: Every tool declares an `outputSchema` per the [2025-11-25 MCP spec](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). Responses return the typed payload as `structuredContent` (validated against the schema) and the same payload serialized as JSON in `content` for backwards compatibility with clients that only read `content` (e.g., older Claude). Field-level descriptions live in the schema delivered via `tools/list`, not inside every response payload.
-
-- **`_meta` fields**: ChatGPT [provides](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) `_meta` fields in tool inputs, which could be used to identify that the request is coming from ChatGPT, and provides things like the location and locale of the user. Claude doesn't provide any hints.
+- **Tool responses**: Every tool declares an `outputSchema` per the [2025-11-25 MCP spec](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). The payload is returned as `structuredContent` and also serialized into `content` for older clients. Field descriptions are delivered via `tools/list`, not embedded per response.
+- **`_meta` fields**: ChatGPT [provides](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) `_meta` (location, locale, etc.) on tool inputs; Claude doesn't.
