@@ -422,6 +422,25 @@ export class TrainerRoadClient {
   }
 
   /**
+   * Hardcoded descriptions for the four TrainerRoad training-phase markers.
+   * TR's iCal feed only emits "Description: block text" for these, which isn't
+   * useful — replace it with a meaningful description per phase.
+   *
+   * Note: TR's `Recovery Week` marker is the post-A-race recovery phase, not
+   * the regular fourth-week deload that occurs within Base/Build/Specialty
+   * blocks. Those in-block recovery weeks are not surfaced as markers.
+   */
+  private static readonly TRAINING_PHASE_DESCRIPTIONS: Record<TrainingPhaseName, string> = {
+    Base: 'Base phase: building aerobic foundation with high-volume, low-intensity work.',
+    Build:
+      'Build phase: introducing race-specific intensity (threshold and VO2max work) on top of the base.',
+    Specialty:
+      'Specialty phase: race-specific peaking and sharpening for goal events.',
+    'Recovery Week':
+      'Post-A-race recovery: reduced volume after a goal event, before the next training block begins. (Not the regular fourth-week recovery within a Base/Build/Specialty block — those are not surfaced as phase markers.)',
+  };
+
+  /**
    * Get TrainerRoad training-phase-start markers whose date falls within the
    * given range. Each marker becomes a single-day annotation
    * (`category: 'TrainingPhaseStart'`). Spans are not synthesized — the
@@ -445,7 +464,7 @@ export class TrainerRoadClient {
           id: event.uid,
           category: 'TrainingPhaseStart',
           name,
-          description: this.cleanDescription(event.description),
+          description: TrainerRoadClient.TRAINING_PHASE_DESCRIPTIONS[name],
           start_date: date,
         };
       })
