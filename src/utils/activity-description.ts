@@ -300,7 +300,7 @@ const HeadlineWeatherSchema = z.object({
     .describe(
       'One-sentence rewrite of the weather data. Sentence case, no trailing period, serial comma, en dashes for positive ' +
         'ranges (3–5°C) but "to" when one or both ends are negative (−2 to 2°C). Space before non-temperature units ' +
-        '(20 km/h), no space before temperature units (55°F). Null when weather input was not provided.'
+        '(20 km/h), no space before temperature units (55°F). Round all numbers. Null when weather input was not provided.'
     ),
 });
 
