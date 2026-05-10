@@ -24,13 +24,16 @@ function workout(overrides: Partial<NormalizedWorkout> = {}): NormalizedWorkout 
   };
 }
 
-function song(artist: string, opts: { loved?: boolean } = {}): PlayedSong {
+function song(
+  artist: string,
+  opts: { loved?: boolean; name?: string; playedAt?: string } = {}
+): PlayedSong {
   return {
-    name: `${artist} - some song`,
+    name: opts.name ?? `${artist} - some song`,
     artist,
     album: 'Album',
     url: 'https://example.com',
-    played_at: '2024-12-15T10:10:00Z',
+    played_at: opts.playedAt ?? '2024-12-15T10:10:00Z',
     ...(opts.loved ? { loved: true } : {}),
   };
 }
@@ -142,12 +145,46 @@ describe('pickTopArtists', () => {
     expect(remaining).toBe(0);
   });
 
-  it('weights loved songs (2× per loved)', () => {
-    // X: 1 play, 1 loved → score 3
-    // Y: 2 plays, 0 loved → score 2
-    const songs = [song('X', { loved: true }), song('Y'), song('Y')];
+  it('weights notable (loved) tracks (+2 each)', () => {
+    // X: 1 loved track, 1 play → notable=1, score = 2*1 + 1 = 3
+    // Y: 2 distinct unloved tracks, 1 play each → notable=0, score = 0 + 2 = 2
+    const songs = [
+      song('X', { loved: true }),
+      song('Y', { name: 'Y - track A' }),
+      song('Y', { name: 'Y - track B' }),
+    ];
     const { top } = pickTopArtists(songs);
     expect(top).toEqual(['X', 'Y']);
+  });
+
+  it('treats a repeated track as notable (love-equivalent)', () => {
+    // A: 1 unique track played twice → notable=1 (repeated), score = 2 + 2 = 4
+    // B: 2 distinct tracks played once each → notable=0, score = 0 + 2 = 2
+    const songs = [
+      song('A', { name: 'A - track 1' }),
+      song('A', { name: 'A - track 1' }),
+      song('B', { name: 'B - track 1' }),
+      song('B', { name: 'B - track 2' }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['A', 'B']);
+  });
+
+  it('compounds the notable bonus across multiple notable tracks', () => {
+    // A: 3 distinct tracks, all repeated → notable=3, plays=6, score = 6 + 6 = 12
+    // B: 1 loved track played 5 times → notable=1, plays=5, score = 2 + 5 = 7
+    const songs = [
+      song('A', { name: 'A - 1' }), song('A', { name: 'A - 1' }),
+      song('A', { name: 'A - 2' }), song('A', { name: 'A - 2' }),
+      song('A', { name: 'A - 3' }), song('A', { name: 'A - 3' }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['A', 'B']);
   });
 
   it('caps at 5 and reports remaining unique artists', () => {
@@ -166,10 +203,27 @@ describe('pickTopArtists', () => {
     expect(remaining).toBe(3);
   });
 
-  it('breaks ties alphabetically', () => {
-    const songs = [song('Bee'), song('Alpha')];
+  it('breaks score/plays ties chronologically by first play (earliest first)', () => {
+    // Both score=1, plays=1. Bee was scrobbled first → wins the tiebreak.
+    const songs = [
+      song('Bee', { playedAt: '2024-12-15T10:00:00Z' }),
+      song('Alpha', { playedAt: '2024-12-15T11:00:00Z' }),
+    ];
     const { top } = pickTopArtists(songs);
-    expect(top).toEqual(['Alpha', 'Bee']);
+    expect(top).toEqual(['Bee', 'Alpha']);
+  });
+
+  it('uses the earliest scrobble across an artist for the chronological tiebreak', () => {
+    // Both end up at score=2, plays=2. Z's first play (10:00) precedes Y's
+    // first play (10:30), so Z wins despite appearing later in the input.
+    const songs = [
+      song('Y', { name: 'Y - 1', playedAt: '2024-12-15T10:30:00Z' }),
+      song('Z', { name: 'Z - 1', playedAt: '2024-12-15T10:00:00Z' }),
+      song('Y', { name: 'Y - 2', playedAt: '2024-12-15T11:00:00Z' }),
+      song('Z', { name: 'Z - 2', playedAt: '2024-12-15T11:30:00Z' }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['Z', 'Y']);
   });
 });
 

@@ -90,33 +90,77 @@ export function buildMusicBlock(songs: PlayedSong[] | undefined): string | null 
  * Pick the top-5 artists from a played-songs list and report how many other
  * unique artists were dropped. Scoring is deterministic:
  *
- *   score = 2 × (loved-song count) + (total play count)
+ *   score = 2 × (notable-track count) + (total play count)
  *
- * Ties break first by total play count (more plays > fewer plays), then
- * alphabetically. The 2× weight on loved songs lets a single loved track edge
- * out a never-loved track with the same play count.
+ * A track counts as **notable** if the athlete loved it OR played it more
+ * than once during this activity — repeating a track during a workout is
+ * treated as a "love"-equivalent signal of taste. The +2 boost is per unique
+ * notable track, so an artist with several notable tracks compounds.
+ *
+ * Ties break: score desc → total plays desc → earliest first-play-time asc
+ * (chronological — the artist that kicked off the playlist wins). When even
+ * that ties, the insertion order of the underlying Map (first-seen) holds
+ * via stable sort.
  */
 export function pickTopArtists(
   songs: PlayedSong[]
 ): { top: string[]; remaining: number } {
   if (songs.length === 0) return { top: [], remaining: 0 };
 
-  const stats = new Map<string, { plays: number; loved: number }>();
+  interface TrackStat {
+    plays: number;
+    loved: boolean;
+  }
+
+  interface ArtistAggregate {
+    plays: number;
+    firstPlayedAt: string;
+    tracks: Map<string, TrackStat>;
+  }
+
+  const byArtist = new Map<string, ArtistAggregate>();
   for (const song of songs) {
     const artist = song.artist?.trim();
     if (!artist) continue;
-    const entry = stats.get(artist) ?? { plays: 0, loved: 0 };
-    entry.plays += 1;
-    if (song.loved) entry.loved += 1;
-    stats.set(artist, entry);
+    const trackName = song.name?.trim() ?? '';
+
+    let agg = byArtist.get(artist);
+    if (!agg) {
+      agg = { plays: 0, firstPlayedAt: song.played_at, tracks: new Map() };
+      byArtist.set(artist, agg);
+    }
+
+    agg.plays += 1;
+    if (song.played_at && song.played_at < agg.firstPlayedAt) {
+      agg.firstPlayedAt = song.played_at;
+    }
+
+    const track = agg.tracks.get(trackName) ?? { plays: 0, loved: false };
+    track.plays += 1;
+    if (song.loved) track.loved = true;
+    agg.tracks.set(trackName, track);
   }
 
-  const ranked = Array.from(stats.entries())
-    .map(([artist, { plays, loved }]) => ({ artist, plays, loved, score: 2 * loved + plays }))
+  const ranked = Array.from(byArtist.entries())
+    .map(([artist, agg]) => {
+      let notableTracks = 0;
+      for (const track of agg.tracks.values()) {
+        if (track.loved || track.plays > 1) notableTracks += 1;
+      }
+      return {
+        artist,
+        plays: agg.plays,
+        notableTracks,
+        firstPlayedAt: agg.firstPlayedAt,
+        score: 2 * notableTracks + agg.plays,
+      };
+    })
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       if (b.plays !== a.plays) return b.plays - a.plays;
-      return a.artist.localeCompare(b.artist);
+      // Chronological by first appearance in the playlist (earliest wins).
+      // ISO 8601 strings are lexicographically ordered, so string compare works.
+      return a.firstPlayedAt.localeCompare(b.firstPlayedAt);
     });
 
   const top = ranked.slice(0, 5).map((r) => r.artist);
