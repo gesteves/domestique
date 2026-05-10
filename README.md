@@ -12,30 +12,30 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Heat strain and heat adaptation score from a [CORE Body Temperature](https://corebodytemp.com/) sensor
 - Weather, AQI, and pollen forecasts up to 10 days out for Intervals.icu weather locations or any geocoded place
 
-**Note:** Strava-imported workouts can't be analyzed due to API restrictions. Sync from Zwift, Garmin Connect, Dropbox, etc. instead.
+**Note:** Workouts imported from Strava can't be analyzed due to API restrictions. Sync them from Zwift, Garmin Connect, Dropbox, etc. instead.
 
 ## Available Tools
 
 ### Today's Data
-- `get_todays_summary` - Full snapshot of today: recovery, sleep, HRV, strain, fitness (CTL/ATL/TSB), wellness, completed and planned workouts, race, calendar annotations (sick / injured / holiday / note / season start), and weather.
-- `get_todays_activities` - Today's completed and planned workouts, race, and calendar annotations (sick / injured / holiday / note / season start). Leaner alternative to `get_todays_summary`. Optional `type` filter (`workouts` or `races`).
+- `get_todays_summary` - Full snapshot of today: recovery, sleep, HRV, strain, fitness (CTL/ATL/TSB), wellness, completed and planned workouts, race, calendar annotations (sick/injured/holiday/notes), and weather.
+- `get_todays_activities` - Today's completed and planned workouts, race, and calendar annotations (sick/injured/holiday/notes). Leaner alternative to `get_todays_summary`.
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete profile, unit preferences, age, and location.
-- `get_sports_settings` - FTP, zones, and thresholds per sport. Optional `sports` filter (cycling, running, swimming).
+- `get_sports_settings` - FTP, zones, and thresholds per sport.
 
 ### Historical/Trends
 - `get_strain_history` - Whoop strain and activities over a date range.
-- `get_activity_history` - Past completed workouts with matched Whoop strain and calendar annotations. Workouts only — past races are not surfaced.
+- `get_activity_history` - Past completed workouts with matched Whoop strain and calendar annotations.
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time.
-- `get_wellness_trends` - Daily Intervals.icu wellness over a date range (every recorded field).
+- `get_wellness_trends` - Daily Intervals.icu wellness metrics over a date range.
 - `get_activity_totals` - Aggregated totals over a date range: duration, distance, training load, and zone distributions by sport.
 
 ### Planning
-- `get_upcoming_activities` - Planned workouts (TrainerRoad + Intervals.icu) and races for a future date range, plus calendar annotations. Optional `type` filter.
+- `get_upcoming_activities` - Planned workouts (TrainerRoad + Intervals.icu) and races for a future date range, plus calendar annotations.
 
 ### Workout Management
-- `create_workout` - Create a structured cycling/running/swimming workout in Intervals.icu syntax. Cycling and running sync to Zwift/Garmin; swimming pending FORM Goggles sync.
+- `create_workout` - Create a structured cycling/running/swimming workout in Intervals.icu syntax.
 - `update_workout` - Update a Domestique-created workout.
 - `delete_workout` - Delete a Domestique-created workout.
 - `sync_trainerroad_runs` - Sync running workouts from TrainerRoad to Intervals.icu, detecting changes and orphans.
@@ -43,13 +43,13 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `update_activity` - Update name and/or description of a completed activity.
 
 ### Calendar Annotations
-- `create_annotation` - Add a sick / injured / holiday / note / season-start entry to the Intervals.icu calendar.
+- `create_annotation` - Add a sick/injured/holiday/note annotation to the Intervals.icu calendar.
 - `update_annotation` - Update a Domestique-created annotation.
 - `delete_annotation` - Delete a Domestique-created annotation.
 
 ### Analysis
 - `get_training_load_trends` - CTL, ATL, TSB, ramp rate, and ACWR over time.
-- `get_workout_details` - All details for one workout: intervals, notes, weather, zones, scrobbled music (Last.fm), and matched Whoop strain.
+- `get_workout_details` - All details for one workout: intervals, notes, weather, zones, music, and matched Whoop strain.
 
 ### Performance Curves
 - `get_power_curve` - Best watts at various durations with W/kg, estimated FTP, and period comparison.
@@ -104,9 +104,9 @@ For weather forecasts (optional):
 
 For Last.fm integration (optional):
 - `LASTFM_USERNAME` - Last.fm username.
-- `LASTFM_API_KEY` - Last.fm API key (https://www.last.fm/api/account/create). Public scrobbles only, no OAuth.
+- `LASTFM_API_KEY` - Last.fm API key (https://www.last.fm/api/account/create).
 
-When both are set, `get_workout_details` and `get_todays_activities` include scrobbled tracks matched to the workout.
+When both are set, `get_workout_details` and `get_todays_activities` include tracks played during the workout.
 
 For Anthropic API integration (optional):
 - `ANTHROPIC_API_KEY` - Enables Claude Haiku 4.5 for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note) and triathlon race priority extraction (A/B/C from the umbrella description), plus debug token counting.
