@@ -1,10 +1,17 @@
 import type { Request, Response } from 'express';
 import { createHmac } from 'crypto';
 import { secureCompare } from '../auth/middleware.js';
-import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
+import { findMatchingWhoopActivity, areActivityTypesCompatible } from '../utils/activity-matcher.js';
 import { addDaysToYMD, formatYMDInTimezone } from '../utils/tz.js';
+import {
+  generateActivityDescription,
+  type PlannedCandidate,
+} from '../utils/activity-description.js';
+import { getDescriptionModel } from '../utils/classifier-model.js';
+import { runWithUnitPreferences } from '../utils/unit-context.js';
 import type { IntervalsClient } from '../clients/intervals.js';
 import type { WhoopClient } from '../clients/whoop.js';
+import type { NormalizedWorkout, StrainActivity, WhoopMatchedData } from '../types/index.js';
 
 /** Maximum clock skew tolerated between Whoop's signing timestamp and our clock. */
 const MAX_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
@@ -186,7 +193,134 @@ export async function dispatchWhoopWebhook(
       `[WhoopWebhook] workout.updated ${payload.id} → Intervals.icu activity ${match.id} ` +
       `WhoopWorkoutStrain=${whoopActivity.strain_score}`
     );
+
+    // Best-effort: regenerate the Strava-bound description. Isolated try/catch
+    // so a flaky Anthropic call or Intervals.icu hiccup never reverses the
+    // WhoopWorkoutStrain write above.
+    try {
+      await maybeGenerateActivityDescription(match.id, whoopActivity, deps);
+    } catch (error) {
+      console.error(
+        `[WhoopWebhook] description-generation failed for activity ${match.id} ` +
+        `(trace=${payload.trace_id}):`,
+        error
+      );
+    }
   }
+}
+
+/**
+ * Compose a Strava-ready description for the matched Intervals.icu activity
+ * and PUT it back. Skips pool swims and activities that have already been
+ * touched (idempotency flag). Runs under the athlete's unit preferences so
+ * pre-formatted strings (power, temperature, etc.) on the activity respect
+ * their settings.
+ */
+async function maybeGenerateActivityDescription(
+  activityId: string,
+  whoopActivity: StrainActivity,
+  deps: WhoopWebhookDeps
+): Promise<void> {
+  const { intervals } = deps;
+
+  const prefs = await intervals.getUnitPreferences();
+
+  await runWithUnitPreferences(prefs, async () => {
+    const full = await intervals.getActivity(activityId);
+
+    if (full.pool_length) {
+      console.log(
+        `[WhoopWebhook] activity ${activityId} is a pool swim — skipping description generation`
+      );
+      return;
+    }
+
+    if (full.domestique_description_generated && full.domestique_description_generated > 0) {
+      console.log(
+        `[WhoopWebhook] activity ${activityId} already has a Domestique-generated description ` +
+        `(at ${full.domestique_description_generated}) — skipping`
+      );
+      return;
+    }
+
+    const plannedCandidates = await resolvePlannedCandidates(full, intervals);
+
+    const whoopMatched: WhoopMatchedData = {
+      id: whoopActivity.id,
+      strain_score: whoopActivity.strain_score,
+      average_heart_rate: whoopActivity.average_heart_rate,
+      max_heart_rate: whoopActivity.max_heart_rate,
+      calories: whoopActivity.calories,
+      distance: whoopActivity.distance,
+      elevation_gain: whoopActivity.elevation_gain,
+      zone_durations: whoopActivity.zone_durations,
+    };
+
+    const description = await generateActivityDescription({
+      activity: full,
+      whoop: whoopMatched,
+      plannedCandidates,
+      model: getDescriptionModel(),
+    });
+
+    if (!description) {
+      console.log(`[WhoopWebhook] activity ${activityId}: composed description was empty — skipping write`);
+      return;
+    }
+
+    await intervals.updateActivity(activityId, {
+      description,
+      DomestiqueDescriptionGenerated: Math.floor(Date.now() / 1000),
+    });
+    console.log(`[WhoopWebhook] activity ${activityId}: description updated (${description.length} chars)`);
+  });
+}
+
+/**
+ * Resolve planned-workout candidates for the headline.
+ *   - paired_event_id present → fetch that single event from Intervals.icu.
+ *   - paired_event_id null → fetch same-day planned events and filter to
+ *     sport-compatible candidates; Claude picks one (or none) inside the
+ *     description generator.
+ */
+async function resolvePlannedCandidates(
+  activity: NormalizedWorkout,
+  intervals: IntervalsClient
+): Promise<PlannedCandidate[]> {
+  if (activity.paired_event_id != null) {
+    try {
+      const event = await intervals.getEvent(activity.paired_event_id);
+      return [
+        {
+          id: String(activity.paired_event_id),
+          name: event.name ?? '',
+          description: event.description ?? '',
+        },
+      ];
+    } catch (error) {
+      console.warn(
+        `[WhoopWebhook] failed to fetch paired event ${activity.paired_event_id} for activity ${activity.id}:`,
+        error
+      );
+      return [];
+    }
+  }
+
+  if (!activity.activity_type) return [];
+
+  const date = activity.start_time.slice(0, 10);
+  const planned = await intervals.getPlannedEvents(date, date).catch((error) => {
+    console.warn(`[WhoopWebhook] failed to fetch planned events for ${date}:`, error);
+    return [];
+  });
+
+  return planned
+    .filter((p) => p.sport && areActivityTypesCompatible(activity.activity_type!, p.sport))
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description ?? '',
+    }));
 }
 
 async function refreshDailyWhoopStrain(

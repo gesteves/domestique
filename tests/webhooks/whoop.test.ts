@@ -25,6 +25,10 @@ interface FakeWhoop {
 interface FakeIntervals {
   getAthleteTimezone: ReturnType<typeof vi.fn>;
   getActivities: ReturnType<typeof vi.fn>;
+  getActivity: ReturnType<typeof vi.fn>;
+  getEvent: ReturnType<typeof vi.fn>;
+  getPlannedEvents: ReturnType<typeof vi.fn>;
+  getUnitPreferences: ReturnType<typeof vi.fn>;
   updateActivity: ReturnType<typeof vi.fn>;
   updateWellness: ReturnType<typeof vi.fn>;
 }
@@ -39,6 +43,17 @@ function makeFakes(): { whoop: FakeWhoop; intervals: FakeIntervals } {
     intervals: {
       getAthleteTimezone: vi.fn().mockResolvedValue('UTC'),
       getActivities: vi.fn().mockResolvedValue([]),
+      getActivity: vi.fn(),
+      getEvent: vi.fn(),
+      getPlannedEvents: vi.fn().mockResolvedValue([]),
+      getUnitPreferences: vi.fn().mockResolvedValue({
+        system: 'metric',
+        weight: 'kg',
+        temperature: 'celsius',
+        wind: 'kmh',
+        precipitation: 'mm',
+        height: 'cm',
+      }),
       updateActivity: vi.fn().mockResolvedValue(undefined),
       updateWellness: vi.fn().mockResolvedValue(undefined),
     },
@@ -226,6 +241,16 @@ describe('Whoop webhook handler', () => {
         source: 'intervals.icu',
       },
     ]);
+    // Pretend the activity already has a Domestique-generated description so
+    // the description-generation branch short-circuits and we only see the
+    // WhoopWorkoutStrain write.
+    fakes.intervals.getActivity.mockResolvedValueOnce({
+      id: 'icu-act-1',
+      start_time: '2024-12-15T10:02:00+00:00',
+      activity_type: 'Running',
+      source: 'intervals.icu',
+      domestique_description_generated: 1700000000,
+    });
 
     const res = await postWebhook(app, {
       user_id: ATHLETE_USER_ID,
@@ -240,6 +265,107 @@ describe('Whoop webhook handler', () => {
     expect(fakes.intervals.updateActivity).toHaveBeenCalledWith('icu-act-1', {
       WhoopWorkoutStrain: 13.5,
     });
+    // No second updateActivity (no description write):
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('on workout.updated for a pool swim, writes WhoopWorkoutStrain but skips description generation', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+      id: 'pool-uuid',
+      activity_type: 'Swimming' as const,
+      start_time: '2024-12-15T07:00:00+00:00',
+      end_time: '2024-12-15T08:00:00+00:00',
+      duration: '1:00:00',
+      strain_score: 9.5,
+    });
+    fakes.intervals.getActivities.mockResolvedValueOnce([
+      {
+        id: 'icu-pool-1',
+        start_time: '2024-12-15T07:01:00+00:00',
+        activity_type: 'Swimming',
+        source: 'intervals.icu',
+      },
+    ]);
+    fakes.intervals.getActivity.mockResolvedValueOnce({
+      id: 'icu-pool-1',
+      start_time: '2024-12-15T07:01:00+00:00',
+      activity_type: 'Swimming',
+      source: 'intervals.icu',
+      pool_length: '25 m',
+    });
+
+    const res = await postWebhook(app, {
+      user_id: ATHLETE_USER_ID,
+      id: 'pool-uuid',
+      type: 'workout.updated',
+      trace_id: 'trace-pool',
+    });
+    expect(res.status).toBe(200);
+    await flushAsync();
+
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledTimes(1);
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledWith('icu-pool-1', {
+      WhoopWorkoutStrain: 9.5,
+    });
+    logSpy.mockRestore();
+  });
+
+  it('on workout.updated for an unpaired outdoor ride with no plausible plan, writes a description without a headline', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+      id: 'ride-uuid',
+      activity_type: 'Cycling' as const,
+      start_time: '2024-12-15T08:00:00+00:00',
+      end_time: '2024-12-15T10:00:00+00:00',
+      duration: '2:00:00',
+      strain_score: 14.2,
+    });
+    fakes.intervals.getActivities.mockResolvedValueOnce([
+      {
+        id: 'icu-ride-1',
+        start_time: '2024-12-15T08:00:00+00:00',
+        activity_type: 'Cycling',
+        source: 'intervals.icu',
+      },
+    ]);
+    fakes.intervals.getActivity.mockResolvedValueOnce({
+      id: 'icu-ride-1',
+      start_time: '2024-12-15T08:00:00+00:00',
+      activity_type: 'Cycling',
+      source: 'intervals.icu',
+      is_indoor: false,
+      average_power: '200 W',
+      normalized_power: '210 W',
+      intensity_factor: 0.7,
+      tss: 98,
+      // paired_event_id absent, no Anthropic key set → no LLM call,
+      // no planned candidates → no headline.
+    });
+    // No same-day planned events:
+    fakes.intervals.getPlannedEvents.mockResolvedValueOnce([]);
+
+    const res = await postWebhook(app, {
+      user_id: ATHLETE_USER_ID,
+      id: 'ride-uuid',
+      type: 'workout.updated',
+      trace_id: 'trace-ride',
+    });
+    expect(res.status).toBe(200);
+    await flushAsync();
+
+    // Two updateActivity calls: WhoopWorkoutStrain first, then the description.
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledTimes(2);
+    const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+    expect(descriptionCall[0]).toBe('icu-ride-1');
+    expect(typeof descriptionCall[1].description).toBe('string');
+    expect(descriptionCall[1].description).toContain('⚡️ Avg 200 W · NP 210 W · IF 0.70 · TSS 98');
+    expect(descriptionCall[1].description).toContain('🔥 Whoop strain 14.2');
+    // No headline (no planned candidate, no existing description):
+    expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
+    expect(descriptionCall[1].DomestiqueDescriptionGenerated).toBeGreaterThan(0);
+    logSpy.mockRestore();
   });
 
   it('on workout.updated with no matching Intervals.icu activity, logs and skips without throwing', async () => {

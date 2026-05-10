@@ -9,3 +9,15 @@ export const DEFAULT_CLASSIFIER_MODEL = 'claude-haiku-4-5';
 export function getClassifierModel(): string {
   return process.env.ANTHROPIC_CLASSIFIER_MODEL?.trim() || DEFAULT_CLASSIFIER_MODEL;
 }
+
+/**
+ * Resolves the Claude model used by the activity-description generator
+ * (Whoop webhook → Strava-ready descriptions). Defaults to Sonnet for prose
+ * quality; override via `ANTHROPIC_DESCRIPTION_MODEL`.
+ */
+
+export const DEFAULT_DESCRIPTION_MODEL = 'claude-sonnet-4-6';
+
+export function getDescriptionModel(): string {
+  return process.env.ANTHROPIC_DESCRIPTION_MODEL?.trim() || DEFAULT_DESCRIPTION_MODEL;
+}
