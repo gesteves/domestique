@@ -252,5 +252,30 @@ describe('heat-zones', () => {
       expect(metrics.max_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
       expect(metrics.median_heat_strain_index.toString()).toMatch(/^\d+\.\d$/);
     });
+
+    it('excludes zero-padded samples from the median', () => {
+      // CORE sensor warm-up / disconnect periods come back as 0 in the stream.
+      // The naive median over [0,0,0,0,0,0,0,0,0,0,0.5,0.8,1.2,1.5] would be 0;
+      // the filtered median should reflect the typical strain when the sensor
+      // was registering.
+      const timeData = Array.from({ length: 14 }, (_, i) => i);
+      const heatStrainData = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 0.8, 1.2, 1.5];
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      expect(metrics.max_heat_strain_index).toBe(1.5);
+      // Non-zero samples sorted: [0.5, 0.8, 1.2, 1.5] → median = (0.8 + 1.2) / 2 = 1.0
+      expect(metrics.median_heat_strain_index).toBe(1.0);
+    });
+
+    it('falls back to 0 when every sample is zero', () => {
+      const timeData = [0, 1, 2, 3];
+      const heatStrainData = [0, 0, 0, 0];
+
+      const metrics = calculateHeatMetrics(timeData, heatStrainData);
+
+      expect(metrics.max_heat_strain_index).toBe(0);
+      expect(metrics.median_heat_strain_index).toBe(0);
+    });
   });
 });

@@ -97,9 +97,20 @@ export function calculateHeatZones(
 /**
  * Calculate comprehensive heat metrics from activity stream data.
  *
+ * Max and the time-in-zone distribution are computed from the full stream
+ * (every sample counts toward the zone the athlete spent time in).
+ *
+ * The **median** is computed over non-zero samples only. CORE sensor streams
+ * routinely include 0-padding from the period before the sensor was engaged
+ * or after it disconnected, plus the warm-up window where the body is still
+ * thermoneutral. Counting those toward the median pulls it artificially to 0
+ * even when the activity reached non-trivial peak strain, which reads as a
+ * broken value in tool outputs. When every sample is zero the median falls
+ * back to 0 (no signal to recover).
+ *
  * @param timeData - Array of time values in seconds
  * @param heatStrainData - Array of heat strain index values (aligned with timeData)
- * @returns Heat metrics including zones, max, avg, and heat training load
+ * @returns Heat metrics including zones, max, and median HSI
  */
 export function calculateHeatMetrics(
   timeData: number[],
@@ -107,13 +118,15 @@ export function calculateHeatMetrics(
 ): HeatMetrics {
   const zones = calculateHeatZones(timeData, heatStrainData);
 
-  // Calculate max HSI
+  // Calculate max HSI over the full stream — robust to 0-padding.
   const maxHSI = heatStrainData.length > 0 ? Math.max(...heatStrainData) : 0;
 
-  // Calculate median HSI
+  // Calculate median HSI over non-zero samples (see jsdoc above). Fall back
+  // to 0 when no sample is positive.
+  const positive = heatStrainData.filter((v) => v > 0);
   let medianHSI = 0;
-  if (heatStrainData.length > 0) {
-    const sorted = [...heatStrainData].sort((a, b) => a - b);
+  if (positive.length > 0) {
+    const sorted = positive.slice().sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     medianHSI = sorted.length % 2 === 0
       ? (sorted[mid - 1] + sorted[mid]) / 2

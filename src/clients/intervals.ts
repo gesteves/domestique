@@ -1696,12 +1696,18 @@ export class IntervalsClient {
         const minHSI = Math.min(...intervalHSI);
         const maxHSI = Math.max(...intervalHSI);
 
-        // Calculate median HSI
-        const sorted = [...intervalHSI].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        const medianHSI = sorted.length % 2 === 0
-          ? (sorted[mid - 1] + sorted[mid]) / 2
-          : sorted[mid];
+        // Calculate median HSI over non-zero samples only — see
+        // calculateHeatMetrics in heat-zones.ts for the rationale. Falls back
+        // to 0 when every sample in this interval was zero.
+        const positiveHSI = intervalHSI.filter((v) => v > 0);
+        let medianHSI = 0;
+        if (positiveHSI.length > 0) {
+          const sorted = positiveHSI.slice().sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          medianHSI = sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+        }
 
         heatMetrics = {
           min_heat_strain_index: Math.round(minHSI * 10) / 10,
