@@ -11,6 +11,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Fitness trends (CTL/ATL/TSB) and detailed workout analysis with intervals, notes, and weather
 - Heat strain and heat adaptation score from a [CORE Body Temperature](https://corebodytemp.com/) sensor
 - Weather, AQI, and pollen forecasts up to 10 days out for Intervals.icu weather locations or any geocoded place
+- Whoop webhook receiver: refreshes daily Whoop strain on Intervals.icu wellness, sets per-activity Whoop strain on the matched Intervals.icu activity, and auto-generates a Strava-ready description on completion
 
 **Note:** Workouts imported from Strava can't be analyzed due to API restrictions. Sync them from Zwift, Garmin Connect, Dropbox, etc. instead.
 
@@ -109,8 +110,9 @@ For Last.fm integration (optional):
 When both are set, `get_workout_details` and `get_todays_activities` include tracks played during the workout.
 
 For Anthropic API integration (optional):
-- `ANTHROPIC_API_KEY` - Enables Claude Haiku 4.5 for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note) and triathlon race priority extraction (A/B/C from the umbrella description), plus debug token counting.
-- `ANTHROPIC_CLASSIFIER_MODEL` - Optional override for the Claude model used by the annotation and race-priority classifiers. Defaults to `claude-haiku-4-5`.
+- `ANTHROPIC_API_KEY` - Enables Claude for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note), triathlon race priority extraction (A/B/C from the umbrella description), auto-generated activity descriptions on `workout.updated` Whoop webhooks, and debug token counting.
+- `ANTHROPIC_CLASSIFIER_MODEL` - Optional override for the model used by the annotation and race-priority classifiers. Defaults to `claude-haiku-4-5`.
+- `ANTHROPIC_DESCRIPTION_MODEL` - Optional override for the model used by the activity-description generator. Defaults to `claude-sonnet-4-6`.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.
@@ -126,6 +128,21 @@ Whoop uses OAuth 2.0 with single-use refresh tokens stored in Redis. One-time se
 5. Open the displayed URL, authorize, and paste the resulting code back into the script.
 
 The server refreshes tokens automatically thereafter.
+
+### Whoop Webhooks (optional)
+
+When Whoop is configured, Domestique exposes `POST /webhooks/whoop` and uses it to:
+
+- Sync the day's Whoop strain to Intervals.icu wellness.
+- Set per-workout Whoop strain on the matching Intervals.icu activity.
+- Auto-generate a Strava-ready description for the completed activity (requires `ANTHROPIC_API_KEY`).
+
+**One-time setup in Intervals.icu** — create these custom fields (all type Number):
+- Wellness: `WhoopStrain`
+- Activity: `WhoopWorkoutStrain`
+- Activity: `DomestiqueDescriptionGenerated` — clear this on an activity if you want Domestique to regenerate the description.
+
+**One-time setup in Whoop** — in your Whoop developer dashboard, add the webhook URL `https://{your-host}/webhooks/whoop` and select **Model Version: v2**.
 
 ## Local Development
 
