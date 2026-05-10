@@ -26,6 +26,8 @@ vi.mock('../src/tools/index.js', () => ({
       handleToolCall: vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: '{}' }],
       }),
+      getIntervalsClient: vi.fn(),
+      getWhoopClient: vi.fn().mockReturnValue(null),
     };
   }),
 }));

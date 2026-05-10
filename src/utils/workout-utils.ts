@@ -77,6 +77,7 @@ export function matchWhoopActivity(
   if (!match) return null;
 
   return {
+    id: match.id,
     strain_score: match.strain_score,
     average_heart_rate: match.average_heart_rate,
     max_heart_rate: match.max_heart_rate,

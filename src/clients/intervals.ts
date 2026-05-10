@@ -409,6 +409,10 @@ interface IntervalsActivity {
   // carbs_ingested / (elapsed_time / 3600). Null when intake or elapsed time
   // isn't recorded.
   CarbIntakeRate?: number;
+
+  // Whoop strain (0-21) for the matched Whoop workout. Written by the
+  // Whoop webhook receiver on workout.updated events.
+  WhoopWorkoutStrain?: number;
 }
 
 interface IntervalsWellness {
@@ -472,6 +476,7 @@ interface IntervalsWellness {
 
   // Custom metrics
   CoreHeatAdaptationScore?: number;
+  WhoopStrain?: number; // Daily Whoop cycle strain (0-21), written by the Whoop webhook receiver
 }
 
 /**

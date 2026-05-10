@@ -153,6 +153,7 @@ const WhoopZoneDurationsZ = z.object({
 }).passthrough();
 
 const WhoopMatchedDataZ = z.object({
+  id: z.string().describe('Whoop workout ID for the matched activity. Stable across syncs; useful for correlating Intervals.icu activities with Whoop workouts'),
   strain_score: z.number().optional().describe('Whoop cardiovascular strain score for the matched workout (0-21, logarithmic). Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21'),
   average_heart_rate: z.string().optional().describe('Average heart rate Whoop recorded during this matched workout'),
   max_heart_rate: z.string().optional().describe('Peak heart rate Whoop recorded during this matched workout'),

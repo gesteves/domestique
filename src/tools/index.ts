@@ -241,6 +241,7 @@ export class ToolRegistry {
   private historicalTools: HistoricalTools;
   private planningTools: PlanningTools;
   private intervalsClient: IntervalsClient;
+  private whoopClient: WhoopClient | null;
   // Track optional client presence so registerTools can skip tools whose data
   // source isn't connected — better to hide a tool than register one that
   // returns empty results without explanation.
@@ -253,6 +254,7 @@ export class ToolRegistry {
     const intervalsClient = new IntervalsClient(config.intervals);
     this.intervalsClient = intervalsClient;
     const whoopClient = config.whoop ? new WhoopClient(config.whoop) : null;
+    this.whoopClient = whoopClient;
     const trainerroadClient = config.trainerroad
       ? new TrainerRoadClient(config.trainerroad)
       : null;
@@ -306,6 +308,16 @@ export class ToolRegistry {
     );
     this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient, trainerroadClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
+  }
+
+  /** Access the shared Intervals.icu client (for non-MCP entry points like webhooks). */
+  getIntervalsClient(): IntervalsClient {
+    return this.intervalsClient;
+  }
+
+  /** Access the shared Whoop client, or null if Whoop isn't configured. */
+  getWhoopClient(): WhoopClient | null {
+    return this.whoopClient;
   }
 
   /**

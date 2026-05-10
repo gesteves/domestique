@@ -133,6 +133,7 @@ describe('workout-utils', () => {
       const result = matchWhoopActivity(workout, activities);
 
       expect(result).not.toBeNull();
+      expect(result?.id).toBe('a1');
       expect(result?.strain_score).toBe(10.5);
       expect(result?.average_heart_rate).toBe(145);
       expect(result?.max_heart_rate).toBe(175);

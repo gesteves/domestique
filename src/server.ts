@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { validateToken, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
 import { logMcpRequest, isMcpRequestLoggingEnabled } from './utils/request-logger.js';
+import { createWhoopWebhookHandler } from './webhooks/whoop.js';
 
 export interface ServerOptions {
   port: number;
@@ -148,6 +149,27 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
     res.type('html').send(html);
   });
+
+  // Whoop webhook receiver. Authenticates incoming requests via Whoop's HMAC
+  // signature (signed with WHOOP_CLIENT_SECRET), so no separate auth token is
+  // needed. Body must be read raw (not JSON-parsed) so the HMAC is computed
+  // byte-for-byte against the bytes Whoop sent.
+  const whoopClientForWebhook = toolRegistry.getWhoopClient();
+  if (whoopClientForWebhook && config.whoop) {
+    const whoopWebhookHandler = createWhoopWebhookHandler({
+      intervals: toolRegistry.getIntervalsClient(),
+      whoop: whoopClientForWebhook,
+      clientSecret: config.whoop.clientSecret,
+    });
+    app.post(
+      '/webhooks/whoop',
+      express.raw({ type: 'application/json', limit: '64kb' }),
+      whoopWebhookHandler
+    );
+    console.log('Whoop webhook receiver registered at POST /webhooks/whoop');
+  } else {
+    console.log('Whoop webhook receiver not registered (Whoop is not configured)');
+  }
 
   // Notify all connected clients that tools have changed
   // Useful after deployments that add/modify/remove tools

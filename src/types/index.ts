@@ -211,6 +211,7 @@ export interface ZoneTime {
  * comparable to other training load metrics like TSS.
  */
 export interface WhoopMatchedData {
+  id: string;
   strain_score: number;
   average_heart_rate?: string; // e.g., "165 bpm"
   max_heart_rate?: string;

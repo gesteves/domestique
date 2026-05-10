@@ -893,6 +893,85 @@ describe('WhoopClient', () => {
     });
   });
 
+  describe('getWorkoutById', () => {
+    const sampleWorkout = {
+      id: 'b8c4a1d2-1234-4abc-9def-0123456789ab',
+      user_id: 1,
+      created_at: '2024-12-15T10:00:00Z',
+      updated_at: '2024-12-15T11:00:00Z',
+      start: '2024-12-15T10:00:00Z',
+      end: '2024-12-15T11:00:00Z',
+      timezone_offset: '-05:00',
+      sport_name: 'running',
+      score_state: 'SCORED',
+      score: {
+        strain: 12.4,
+        average_heart_rate: 150,
+        max_heart_rate: 175,
+        kilojoule: 2000,
+        percent_recorded: 100,
+        distance_meter: 9000,
+        altitude_gain_meter: 50,
+      },
+    };
+
+    it('returns a normalized StrainActivity for a SCORED workout', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(sampleWorkout),
+      });
+
+      const result = await client.getWorkoutById(sampleWorkout.id);
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe(sampleWorkout.id);
+      expect(result?.activity_type).toBe('Running');
+      expect(result?.strain_score).toBe(12.4);
+    });
+
+    it('returns null when Whoop responds 404', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(''),
+        headers: createMockHeaders(),
+      });
+
+      const result = await client.getWorkoutById('missing-id');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when the workout is not yet SCORED', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          ...sampleWorkout,
+          score_state: 'PENDING_SCORE',
+          score: null,
+        }),
+      });
+
+      const result = await client.getWorkoutById(sampleWorkout.id);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getUserId', () => {
+    it('fetches the authenticated Whoop user_id and caches subsequent calls', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user_id: 10129, first_name: 'A', last_name: 'B' }),
+      });
+
+      const first = await client.getUserId();
+      const second = await client.getUserId();
+
+      expect(first).toBe(10129);
+      expect(second).toBe(10129);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('token refresh', () => {
     it('should use cached token from Redis', async () => {
       vi.mocked(getWhoopAccessToken).mockResolvedValueOnce({

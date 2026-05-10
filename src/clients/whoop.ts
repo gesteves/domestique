@@ -1095,6 +1095,46 @@ export class WhoopClient {
   }
 
   /**
+   * Fetch a single Whoop workout by ID (v2 uses UUID strings).
+   * Returns null for 404 or workouts that aren't SCORED yet (no strain available).
+   * Rethrows other errors.
+   */
+  async getWorkoutById(workoutId: string): Promise<StrainActivity | null> {
+    let workout: WhoopWorkout;
+    try {
+      workout = await this.fetch<WhoopWorkout>(`/activity/workout/${workoutId}`, undefined, {
+        operation: 'fetch workout by id',
+        resource: workoutId,
+      });
+    } catch (error) {
+      if (error instanceof WhoopApiError && error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+    // Only SCORED workouts carry a strain score; PENDING_SCORE / UNSCORABLE have none.
+    if (workout.score_state !== 'SCORED' || workout.score === null) return null;
+    return this.normalizeWorkout(workout);
+  }
+
+  /**
+   * Get the authenticated Whoop user_id. Cached for the session — used by the
+   * webhook receiver to verify the payload's user_id matches our athlete.
+   */
+  async getUserId(): Promise<number> {
+    return this.fetchUserIdCached();
+  }
+
+  private fetchUserIdCached = memoize(async (): Promise<number> => {
+    const profile = await this.fetch<{ user_id: number }>(
+      '/user/profile/basic',
+      undefined,
+      { operation: 'fetch user profile' }
+    );
+    return profile.user_id;
+  });
+
+  /**
    * Get body measurements from Whoop.
    * Cached for the session duration since these rarely change. Returns null on error
    * (fetch retries on the next call rather than caching null).
