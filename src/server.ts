@@ -13,7 +13,6 @@ export interface ServerOptions {
 
 export async function createServer(options: ServerOptions): Promise<express.Express> {
   const app = express();
-  app.use(express.json());
 
   const config = getConfig();
 
@@ -32,6 +31,30 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
   });
 
   console.log('Tool registry created');
+
+  // Whoop webhook receiver. Authenticates incoming requests via Whoop's HMAC
+  // signature (signed with WHOOP_CLIENT_SECRET), so no separate auth token is
+  // needed. Registered BEFORE the global express.json() so the route-local
+  // express.raw() can see the unparsed body — the HMAC must be computed over
+  // exactly the bytes Whoop sent.
+  const whoopClientForWebhook = toolRegistry.getWhoopClient();
+  if (whoopClientForWebhook && config.whoop) {
+    const whoopWebhookHandler = createWhoopWebhookHandler({
+      intervals: toolRegistry.getIntervalsClient(),
+      whoop: whoopClientForWebhook,
+      clientSecret: config.whoop.clientSecret,
+    });
+    app.post(
+      '/webhooks/whoop',
+      express.raw({ type: '*/*', limit: '64kb' }),
+      whoopWebhookHandler
+    );
+    console.log('Whoop webhook receiver registered at POST /webhooks/whoop');
+  } else {
+    console.log('Whoop webhook receiver not registered (Whoop is not configured)');
+  }
+
+  app.use(express.json());
 
   if (isMcpRequestLoggingEnabled()) {
     console.log('[MCP Request] Logging enabled (LOG_MCP_REQUESTS=true)');
@@ -149,27 +172,6 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
     res.type('html').send(html);
   });
-
-  // Whoop webhook receiver. Authenticates incoming requests via Whoop's HMAC
-  // signature (signed with WHOOP_CLIENT_SECRET), so no separate auth token is
-  // needed. Body must be read raw (not JSON-parsed) so the HMAC is computed
-  // byte-for-byte against the bytes Whoop sent.
-  const whoopClientForWebhook = toolRegistry.getWhoopClient();
-  if (whoopClientForWebhook && config.whoop) {
-    const whoopWebhookHandler = createWhoopWebhookHandler({
-      intervals: toolRegistry.getIntervalsClient(),
-      whoop: whoopClientForWebhook,
-      clientSecret: config.whoop.clientSecret,
-    });
-    app.post(
-      '/webhooks/whoop',
-      express.raw({ type: 'application/json', limit: '64kb' }),
-      whoopWebhookHandler
-    );
-    console.log('Whoop webhook receiver registered at POST /webhooks/whoop');
-  } else {
-    console.log('Whoop webhook receiver not registered (Whoop is not configured)');
-  }
 
   // Notify all connected clients that tools have changed
   // Useful after deployments that add/modify/remove tools
