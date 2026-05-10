@@ -105,6 +105,7 @@ When both are set, `get_workout_details` and `get_todays_activities` include scr
 
 For Anthropic API integration (optional):
 - `ANTHROPIC_API_KEY` - Enables Claude Haiku 4.5 for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note) and triathlon race priority extraction (A/B/C from the umbrella description), plus debug token counting.
+- `ANTHROPIC_CLASSIFIER_MODEL` - Optional override for the Claude model used by the annotation and race-priority classifiers. Defaults to `claude-haiku-4-5`.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.

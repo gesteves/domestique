@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { DEFAULT_CLASSIFIER_MODEL } from '../../src/utils/classifier-model.js';
 
 const mockParse = vi.fn();
 const mockConstructor = vi.fn();
@@ -40,6 +41,7 @@ describe('classifyRacePriority', () => {
 
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_CLASSIFIER_MODEL;
   });
 
   it('returns null when ANTHROPIC_API_KEY is unset', async () => {
@@ -86,7 +88,7 @@ describe('classifyRacePriority', () => {
     expect(ttl).toBe(60 * 60 * 24 * 30);
   });
 
-  it("uses Haiku 4.5 with structured output and a no-hallucination system prompt", async () => {
+  it("uses the configured classifier model with structured output and a no-hallucination system prompt", async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
     mockParse.mockResolvedValueOnce({ parsed_output: { priority: 'B' } });
     const { classifyRacePriority } = await loadModule();
@@ -97,7 +99,7 @@ describe('classifyRacePriority', () => {
     });
 
     const callArgs = mockParse.mock.calls[0][0];
-    expect(callArgs.model).toBe('claude-haiku-4-5');
+    expect(callArgs.model).toBe(DEFAULT_CLASSIFIER_MODEL);
     expect(callArgs.output_config?.format).toBeDefined();
     expect(callArgs.system).toMatch(/explicitly states the priority/i);
     expect(callArgs.system).toMatch(/do not guess/i);
@@ -228,5 +230,20 @@ describe('classifyRacePriority', () => {
 
     expect(mockConstructor).toHaveBeenCalledTimes(1);
     expect(mockConstructor).toHaveBeenCalledWith({ apiKey: 'sk-test' });
+  });
+
+  it('uses ANTHROPIC_CLASSIFIER_MODEL when set, falling back to the default otherwise', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-test';
+    process.env.ANTHROPIC_CLASSIFIER_MODEL = 'claude-sonnet-4-6';
+    mockParse.mockResolvedValueOnce({ parsed_output: { priority: 'A' } });
+    const { classifyRacePriority } = await loadModule();
+
+    await classifyRacePriority({ name: 'Race', description: 'A race' });
+    expect(mockParse.mock.calls[0][0].model).toBe('claude-sonnet-4-6');
+
+    delete process.env.ANTHROPIC_CLASSIFIER_MODEL;
+    mockParse.mockResolvedValueOnce({ parsed_output: { priority: 'B' } });
+    await classifyRacePriority({ name: 'Other', description: 'B race' });
+    expect(mockParse.mock.calls[1][0].model).toBe(DEFAULT_CLASSIFIER_MODEL);
   });
 });

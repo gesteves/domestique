@@ -15,9 +15,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { AnnotationCategory } from '../types/index.js';
+import { getClassifierModel } from './classifier-model.js';
 import { redisGetJson, redisSetJson } from './redis.js';
 
-const MODEL = 'claude-haiku-4-5';
 const CACHE_KEY_PREFIX = 'domestique:annotation-category:v1:';
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
@@ -75,7 +75,7 @@ export async function categorizeAnnotation(
   let category: AnnotationCategory | null = null;
   try {
     const message = await anthropic.messages.parse({
-      model: MODEL,
+      model: getClassifierModel(),
       max_tokens: 256,
       system: SYSTEM_PROMPT,
       messages: [

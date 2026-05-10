@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { DEFAULT_CLASSIFIER_MODEL } from '../../src/utils/classifier-model.js';
 
 const mockParse = vi.fn();
 const mockConstructor = vi.fn();
@@ -40,6 +41,7 @@ describe('categorizeAnnotation', () => {
 
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_CLASSIFIER_MODEL;
   });
 
   it('returns null when ANTHROPIC_API_KEY is unset', async () => {
@@ -73,7 +75,7 @@ describe('categorizeAnnotation', () => {
     expect(result).toBe('Sick');
     expect(mockParse).toHaveBeenCalledTimes(1);
     const callArgs = mockParse.mock.calls[0][0];
-    expect(callArgs.model).toBe('claude-haiku-4-5');
+    expect(callArgs.model).toBe(DEFAULT_CLASSIFIER_MODEL);
     expect(callArgs.messages[0].content).toContain('Cold');
     expect(callArgs.messages[0].content).toContain('feeling unwell');
     expect(callArgs.output_config?.format).toBeDefined();
@@ -145,5 +147,20 @@ describe('categorizeAnnotation', () => {
     const firstKey = mockRedisGetJson.mock.calls[0][0];
     const secondKey = mockRedisGetJson.mock.calls[1][0];
     expect(firstKey).toBe(secondKey);
+  });
+
+  it('uses ANTHROPIC_CLASSIFIER_MODEL when set, falling back to the default otherwise', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-test';
+    process.env.ANTHROPIC_CLASSIFIER_MODEL = 'claude-sonnet-4-6';
+    mockParse.mockResolvedValueOnce({ parsed_output: { category: 'Note' } });
+    const { categorizeAnnotation } = await loadModule();
+
+    await categorizeAnnotation({ name: 'Conference', description: 'work trip' });
+    expect(mockParse.mock.calls[0][0].model).toBe('claude-sonnet-4-6');
+
+    delete process.env.ANTHROPIC_CLASSIFIER_MODEL;
+    mockParse.mockResolvedValueOnce({ parsed_output: { category: 'Note' } });
+    await categorizeAnnotation({ name: 'Other', description: 'something else' });
+    expect(mockParse.mock.calls[1][0].model).toBe(DEFAULT_CLASSIFIER_MODEL);
   });
 });
