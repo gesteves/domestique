@@ -1,219 +1,69 @@
 # Agent Instructions
 
-This document contains everything an AI agent needs to know to work on this repository.
+Domestique is a TypeScript MCP server integrating Intervals.icu, Whoop, and TrainerRoad. See @README.md for the project overview, feature list, and full environment variable reference.
 
-## Project Overview
+## Development
 
-Domestique is a TypeScript MCP (Model Context Protocol) server that integrates with fitness platforms:
-- **Intervals.icu** - Training data, workouts, fitness metrics (CTL/ATL/TSB)
-- **Whoop** - Recovery, HRV, sleep, strain data
-- **TrainerRoad** - Planned workouts via iCal feed
-
-## Development Environment
-
-### Commands Run in Docker
-
-This project uses Docker Compose for development. When possible, run commands in Docker, and not directly on the host machine, like so:
+Run commands inside the dev container:
 
 ```bash
-docker compose exec domestique <command>
-```
-
-Examples:
-```bash
-# Type checking
+docker compose up                                       # start dev (port 3000, hot reload of src/)
 docker compose exec domestique npm run typecheck
-
-# Run dev server (already running via docker compose up)
-docker compose up
-
-# View logs
 docker compose logs domestique -f
-
-# Restart after code changes (hot reload is enabled, but sometimes needed)
-docker compose restart domestique
 ```
 
-If any commands need to be run directly on the host machine, run `nvm use` first to ensure you're using the correct version of Node, defined in @.nvmrc.
+For commands on the host, run `nvm use` first (version in @.nvmrc).
 
-### Starting Development
-
-```bash
-# Start all services (domestique + redis)
-docker compose up
-
-# Or in background
-docker compose up -d
-```
-
-The development server runs on `http://localhost:3000` with hot reload enabled.
-
-### Docker Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| `domestique` | 3000 | Main MCP server (dev mode with hot reload) |
-| `domestique-prod` | 3001 | Production-like build (use `--profile prod`) |
-| `redis` | 6379 | Token storage for Whoop OAuth |
-
-### Claude Code on the Web
-
-When using Claude Code on the Web, Docker is not available in the cloud environment. Commands should be run directly using Node.js:
-
-```bash
-# Install dependencies (done automatically via SessionStart hook)
-npm install
-
-# Run tests
-npm test
-
-# Type checking
-npm run typecheck
-
-# Build
-npm run build
-```
-
-## MCP Transport
-
-The server uses Streamable HTTP Transport:
-
-- Single endpoint: `/mcp`
-- Authentication: `Authorization: Bearer <token>` header or `?token=<token>` query param
-- Session management via `mcp-session-id` header
-- Session termination via `DELETE /mcp` endpoint
-
-## Environment Variables
-
-Required in `.env`:
-```bash
-MCP_AUTH_TOKEN=          # Secret token for MCP authentication
-INTERVALS_API_KEY=       # Intervals.icu API key
-INTERVALS_ATHLETE_ID=    # Intervals.icu athlete ID
-```
-
-Optional:
-```bash
-# Whoop (requires all three + Redis)
-WHOOP_CLIENT_ID=
-WHOOP_CLIENT_SECRET=
-WHOOP_REDIRECT_URI=        # OAuth redirect URI (defaults to http://localhost:3000/callback)
-REDIS_URL=redis://redis:6379
-
-# TrainerRoad
-TRAINERROAD_CALENDAR_URL=  # Private iCal feed URL
-
-# Google APIs (Weather API + Air Quality API + Pollen API + Elevation API + Geocoding API + Time Zone API; same key, all six must be enabled on the GCP project)
-GOOGLE_API_KEY=             # Google Cloud API key (used for Weather API, Air Quality API, Pollen API, Elevation API, Geocoding API, Time Zone API, and other Google services)
-
-# Anthropic API (optional). Enables:
-#   - Claude Haiku categorization of TrainerRoad annotations into
-#     Sick/Injured/Holiday/Note (results cached in Redis when configured).
-#   - Token counting in tool responses (development mode only).
-ANTHROPIC_API_KEY=
-
-# Optional override for the Claude model used by the annotation and
-# race-priority classifiers. Defaults to claude-haiku-4-5.
-ANTHROPIC_CLASSIFIER_MODEL=
-
-# Error Reporting
-BUGSNAG_API_KEY=            # Bugsnag API key for error reporting (optional)
-```
+**On Claude Code Web**, Docker isn't available — run `npm install`, `npm test`, `npm run typecheck`, `npm run build` directly.
 
 ## Testing
 
-Tests are in the `tests/` directory mirroring `src/` structure.
-
 ```bash
-# Tests must run with the test Docker target or locally (not in dev container)
-# The dev container doesn't mount the tests/ directory
-
-# Run tests locally
 nvm use && npm test
-
-# Or build and run test container
-docker build --target test -t domestique-test .
-docker run domestique-test
 ```
 
-**Note:** The dev container only mounts `src/` and `tsconfig.json` for hot reload. Tests directory is not mounted.
+Tests run on the host (or the test Docker target), **not** in the dev container — the dev container only mounts `src/` and `tsconfig.json`, not `tests/`. Always add tests for new functionality.
 
 ## Common Tasks
 
-### Adding a New Tool
+### Adding a tool
 
-1. Add tool implementation in appropriate file (`tools/current.ts`, `tools/historical.ts`, or `tools/planning.ts`)
-2. Register in `tools/index.ts` in the `registerTools()` method
-3. Add any new API methods to the relevant client (`clients/*.ts`)
-4. Ensure the new tool, any new API methods to the existing clients, and/or new clients have extensive test coverage.
-5. Ensure the tool description and field descriptions are accurate.
-6. Ensure the new tool is represented in the @README.md file.
+1. Implement in `src/tools/{current,historical,planning}.ts`
+2. Define the response shape as a Zod schema in `src/schemas/index.ts` and pass it as `outputSchema` when registering
+3. Register in `src/tools/index.ts` (`registerTools`)
+4. Add any new API methods to the relevant `src/clients/*.ts`
+5. Cover the tool, new client methods, and any new clients with tests
+6. Update tool descriptions, field descriptions, and add a one-sentence entry to @README.md (no implementation details, no exhaustive field lists)
 
-### Adding a New API Client
+### Adding an API client
 
-1. Create client in `src/clients/`
-2. Add configuration in `src/auth/middleware.ts` `getConfig()`
+1. Create the client in `src/clients/`
+2. Wire up config in `src/auth/middleware.ts` `getConfig()`
 3. Add to `ToolRegistry` constructor in `src/tools/index.ts`
-4. Update environment validation if required
-
-### Debugging
-
-```bash
-# View container logs
-docker compose logs domestique -f
-
-# Check health
-curl http://localhost:3000/health
-
-# Test auth
-curl -X POST http://localhost:3000/mcp \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
 
 ## Code Style
 
-- Use TypeScript strict mode
-- Async/await over promises
-- Descriptive error messages with context
-- JSDoc comments for public APIs
-- No default exports (use named exports)
+- TypeScript strict mode, async/await, named exports only (no default exports)
+- JSDoc on public APIs
 
 ### Unit conventions
 
-Tool responses standardize on **unit-in-value** strings for every unit-bearing field. Two rules:
+Tool responses use **unit-in-value** strings.
 
-1. **Values carry the unit.** Emit `weight: "75.9 kg"`, `max_hr: "165 bpm"`, `average_power: "220 W"`, `recovery_score: "82%"` — not `weight_kilogram: 75.9` or `max_hr: 165`. Field names should describe the metric (`max_hr`, `weight`, `average_power`), not the unit. Use the helpers in `src/utils/format-units.ts` (`formatPower`, `formatHR`, `formatWeight`, `formatHeight`, `formatStride`, `formatPercent`, `formatTemperature`, `formatLength`, `formatEnergy`, `formatEnergyKJ`, `formatCadence`, `formatMass`, `formatHRV`, `formatVO2max`, `formatBP`, plus `withUnit` for one-offs).
-2. **Field descriptions in `.describe()` must NOT name units.** Describe what the field is (`'Average heart rate'`, `'Functional Threshold Power'`), not the unit it's in. The unit lives in the value. This keeps schemas valid as the server formats values per user preference — descriptions don't need a second sweep.
+- Emit `weight: "75.9 kg"`, `max_hr: "165 bpm"`, `recovery_score: "82%"` — **not** `weight_kg: 75.9` or `max_hr: 165`. Field names describe the metric, not the unit.
+- Use the helpers in `src/utils/format-units.ts`: `formatPower`, `formatHR`, `formatWeight`, `formatHeight`, `formatStride`, `formatPercent`, `formatTemperature`, `formatLength`, `formatEnergy`, `formatEnergyKJ`, `formatCadence`, `formatMass`, `formatHRV`, `formatVO2max`, `formatBP`, plus `withUnit` for one-offs. `formatStride` for stride length, `formatHeight` only for athlete stature, `formatLength` for elevation/altitude.
+- Field descriptions in `.describe()` must **not** name units. Describe the metric (`'Average heart rate'`), not the unit. Formatters consult athlete prefs via `runWithUnitPreferences` in `src/utils/unit-context.ts`, so values change per user — unit-named descriptions go stale.
+- Bare numerics only for unitless scores (TSS, CTL/ATL/TSB, IF, RPE, 1–4 wellness scales) and counts (`activities`, `lengths`, `steps`).
 
-Bare numerics are reserved for unitless scores (TSS, CTL/ATL/TSB, intensity factor, RPE 1-10, scale-based wellness fields like `mood`/`fatigue` 1-4) and counts (`activities`, `lengths`, `steps`).
+## MCP Compatibility
 
-Unit-bearing formatters consult the athlete's Intervals.icu unit preferences via the request-scoped AsyncLocalStorage in `src/utils/unit-context.ts`. Each tool call wraps its handler in `runWithUnitPreferences(prefs, ...)` so formatters emit values in the user's chosen units (kg/lb, °C/°F, km/mi, m/ft, mm/in, km·h/mph/m·s/kn/Bft, cm/feet+inches). Outside a request, formatters fall back to metric. Use `formatStride` for stride length and `formatHeight` only for athlete physical stature; use `formatLength` for elevation/altitude.
+- **`outputSchema` required for every tool.** Define the shape in `src/schemas/index.ts`. Handlers return a JSON object — wrap arrays at the registration site, e.g. `{ strain: await this.currentTools.getStrainHistory(args) }`. The return becomes `structuredContent`; it's also serialized into `content` for older clients. Field descriptions live in `.describe()` and ship via `tools/list`, not in every response.
+- **No underscore-prefixed property names in `outputSchema`.** MCP Inspector treats `_*` as protocol-private and strips them, then flags the value as an unexpected additional property. Use plain names. `_meta` is reserved for genuine out-of-band metadata.
+- **No MCP resources or elicitations.** ChatGPT doesn't support resources; neither client supports elicitations. Don't suggest either. Before adding any non-tool MCP feature, check https://modelcontextprotocol.io/clients.md.
 
-## Important Notes
+## Project-specific gotchas
 
-1. **Whoop uses OAuth** - Tokens stored in Redis, refreshed automatically. Initial setup requires running `npm run whoop:auth` interactively.
-2. **Hot reload** - The dev container uses `tsx watch` for hot reload of `src/` files.
-3. **express.json() middleware** - Used for Streamable HTTP transport to parse JSON request bodies.
-4. **Tool registry is shared** - Created once at server start, but each MCP session gets its own `McpServer` instance.
-5. When making changes, ensure that @README.md is up to date. Keep README entries brief — one short sentence per tool, no implementation details, no exhaustive field lists. The README is for users; implementation lives in this file and the code.
-6. When adding new tools or modifying existing ones, ensure that the tool descriptions and the field descriptions are up to date.
-7. Always ensure tests pass with `nvm use && npm test` and always add tests for new functionality.
-8. **TrainerRoad annotation categorization** - TR's iCal feed only carries title + description, so by default annotations land as `Note`. When `ANTHROPIC_API_KEY` is set, `src/utils/annotation-categorizer.ts` uses Claude Haiku 4.5 (or whatever `ANTHROPIC_CLASSIFIER_MODEL` overrides it to) with structured outputs to classify each TR annotation into `Sick`/`Injured`/`Holiday`/`Note`, cached by content hash in Redis. `mergeAnnotations` (`src/utils/annotation-utils.ts`) then dedupes TR vs. Intervals.icu by category + date overlap for Sick/Injured/Holiday, and falls back to name + date overlap for Note.
-
-9. **Race sources (split by sport)** - Single-discipline races (Running, Cycling, Swimming, etc.) come from Intervals.icu via `IntervalsClient.getRaces`, which queries the `/events` endpoint with `category=RACE_A,RACE_B,RACE_C`. ICU encodes A/B/C priority natively in the `category` field; we map it directly to `Race.priority` — no NLP needed. Triathlons continue to come from TrainerRoad via the umbrella+leg pattern (ICU has no native triathlon representation). For TR triathlons, `src/utils/race-priority-classifier.ts` calls Claude Haiku 4.5 (overridable via `ANTHROPIC_CLASSIFIER_MODEL`) to extract A/B/C priority from the umbrella description; the prompt explicitly forbids guessing — when the priority isn't clearly stated, the helper returns `null` and `Race.priority` is omitted. Cache key includes the description so editing it in TR (e.g. adding "B race" later) invalidates the cached verdict and triggers a fresh classification on the next fetch. `mergeRaces` (`src/utils/race-utils.ts`) merges the two sources by `name + sport + date`; ICU wins for non-tri collisions, TR wins when its entry is `sport: 'Triathlon'`. Both `getUpcomingActivities` and `get_todays_summary.scheduled_race` flow through this merged path.
-
-## MCP Client Compatibility Notes
-
-When implementing MCP features, be aware of these compatibility differences between Claude and ChatGPT:
-
-1. **Tool responses**: Every tool declares an `outputSchema` (Zod raw shape in `src/schemas/index.ts`). The handler's return value becomes `structuredContent` directly — no `{ response, field_descriptions }` envelope. The same payload is also serialized into a `content` text block for backwards compatibility with clients that only read `content`. Field descriptions live in `.describe()` calls inside the Zod schemas and are delivered to the client via `tools/list` in the JSON Schema, not embedded in every response. When adding a new tool, define its response shape in `src/schemas/index.ts` and pass it as `outputSchema` in `src/tools/index.ts`. Handlers must return a JSON object — for tools whose underlying logic returns an array (e.g., a list of strain entries), wrap it at the registration site, e.g. `{ strain: await this.currentTools.getStrainHistory(args) }`.
-
-2. **Avoid underscore-prefixed property names in `outputSchema`**: MCP Inspector (and likely other clients) treats `_*` properties as protocol-private — generalizing the spec's `_meta` convention — and strips them from the schema it uses for response validation. The result: the field is in the schema your server sends, but the inspector doesn't see it, then flags it as an "additional property" when it appears in the response. Use plain names (`hints`, not `_hints`). Reserve `_meta` for genuine out-of-band metadata that is not meant to reach the model.
-
-3. **MCP resources**: ChatGPT does not support resources; Claude does but it can't seem to reliably access resources while calling tools. If any future resources are implemented, you must also implement tools that return the resource content directly as a fallback mechanism for compatibility.
-
-4. **Elicitations**: Neither ChatGPT nor Claude support MCP elicitations, so they can't be used to get user input or show confirmation dialogs. Don't implement or suggest implementing elicitations in the future.
-
-5. Before implementing any MCP features besides tools, such as elicitations, sampling, and prompts, check the latest documentation for both Claude and ChatGPT to ensure compatibility: https://modelcontextprotocol.io/clients.md
+- **Whoop OAuth.** Tokens are stored in Redis and refreshed automatically. Initial setup is interactive: `docker compose exec domestique npm run whoop:auth`.
+- **Tool registry is shared** across MCP sessions (created once at server start), but each session gets its own `McpServer`.
+- **TrainerRoad annotation categorization.** With `ANTHROPIC_API_KEY` set, `src/utils/annotation-categorizer.ts` classifies TR annotations into Sick/Injured/Holiday/Note via Claude Haiku 4.5 (override with `ANTHROPIC_CLASSIFIER_MODEL`), cached in Redis by content hash. `mergeAnnotations` (`src/utils/annotation-utils.ts`) dedupes TR vs. Intervals.icu.
+- **Race sources are split by sport.** Single-discipline races come from Intervals.icu (`IntervalsClient.getRaces`, `category=RACE_A,RACE_B,RACE_C` — priority is native). Triathlons come from TrainerRoad; `src/utils/race-priority-classifier.ts` extracts A/B/C from the umbrella description via Haiku and returns `null` rather than guessing. `mergeRaces` (`src/utils/race-utils.ts`) merges by `name + sport + date`; ICU wins non-tri collisions, TR wins for `sport: 'Triathlon'`.
