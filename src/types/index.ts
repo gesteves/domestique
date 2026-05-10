@@ -423,6 +423,7 @@ export type AnnotationCategory =
   | 'Injured'
   | 'Holiday'
   | 'Note'
+  | 'SeasonStart'
   | 'TrainingPhaseStart';
 
 export type TrainingAvailability = 'Normal' | 'Limited' | 'Unavailable';
@@ -539,6 +540,78 @@ export interface UpdateWorkoutResponse {
   /** URL to view the workout in Intervals.icu */
   intervals_icu_url: string;
   /** Fields that were updated */
+  updated_fields: string[];
+}
+
+/**
+ * The Intervals.icu Event categories Domestique exposes as user-creatable
+ * "annotations" — calendar entries that aren't workouts or races.
+ */
+export type CreatableAnnotationCategory =
+  | 'sick'
+  | 'injured'
+  | 'holiday'
+  | 'note'
+  | 'season_start';
+
+/**
+ * Input for creating a calendar annotation in Intervals.icu.
+ */
+export interface CreateAnnotationInput {
+  /** Annotation category */
+  category: CreatableAnnotationCategory;
+  /** Start date in YYYY-MM-DD format */
+  start_date: string;
+  /** End date in YYYY-MM-DD format (for multi-day annotations like Sick / Injured / Holiday) */
+  end_date?: string;
+  /** Annotation title */
+  name?: string;
+  /** Annotation body / details */
+  description?: string;
+}
+
+/**
+ * Response from creating an annotation.
+ */
+export interface CreateAnnotationResponse {
+  id: number;
+  uid: string;
+  category: AnnotationCategory;
+  name?: string;
+  start_date: string;
+  end_date?: string;
+  intervals_icu_url: string;
+}
+
+/**
+ * Input for updating a Domestique-created annotation.
+ */
+export interface UpdateAnnotationInput {
+  /** Intervals.icu event ID */
+  event_id: string;
+  /** New category */
+  category?: CreatableAnnotationCategory;
+  /** New start date (YYYY-MM-DD) */
+  start_date?: string;
+  /** New end date (YYYY-MM-DD); pass empty string to clear */
+  end_date?: string;
+  /** New annotation title */
+  name?: string;
+  /** New description / details */
+  description?: string;
+}
+
+/**
+ * Response from updating an annotation.
+ */
+export interface UpdateAnnotationResponse {
+  id: number;
+  uid: string;
+  category: AnnotationCategory;
+  name?: string;
+  start_date: string;
+  end_date?: string;
+  intervals_icu_url: string;
   updated_fields: string[];
 }
 

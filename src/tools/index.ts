@@ -582,6 +582,54 @@ export class ToolRegistry {
         this.planningTools.updateWorkout(args),
     });
 
+    register({
+      name: 'create_annotation',
+      title: 'Create Calendar Annotation',
+      description: `Adds a non-workout entry to the user's Intervals.icu calendar — \`sick\`, \`injured\`, \`holiday\`, \`note\`, or \`season_start\`. Use \`sick\`/\`injured\` to record training-affecting illness or injury, \`holiday\` for vacation/travel days, \`note\` for freeform calendar notes, and \`season_start\` to anchor a new training season. \`sick\`/\`injured\`/\`holiday\` typically span multiple days — pass an \`end_date\`. \`note\`/\`season_start\` are usually single-day; omit \`end_date\`. Created annotations are tagged \`domestique\` (internally — the tag is not visible in the Intervals.icu UI), which is the gating condition for the matching update / delete tools.`,
+      inputSchema: {
+        category: z.enum(['sick', 'injured', 'holiday', 'note', 'season_start']).describe('Annotation category'),
+        start_date: z.string().describe('Start date (YYYY-MM-DD or relative like "today", "tomorrow")'),
+        end_date: z.string().optional().describe('End date (YYYY-MM-DD or relative). Omit for single-day annotations'),
+        name: z.string().optional().describe('Annotation title; defaults to a generic label for the category'),
+        description: z.string().optional().describe('Optional details/notes'),
+      },
+      outputSchema: schemas.createAnnotationOutputSchema,
+      annotations: CREATES_EXTERNAL,
+      handler: async (args: { category: 'sick' | 'injured' | 'holiday' | 'note' | 'season_start'; start_date: string; end_date?: string; name?: string; description?: string }) =>
+        this.planningTools.createAnnotation(args),
+    });
+
+    register({
+      name: 'update_annotation',
+      title: 'Update Calendar Annotation',
+      description: `Updates a Domestique-created calendar annotation (\`category\`, \`start_date\`, \`end_date\`, \`name\`, \`description\`). Only works on annotations tagged \`domestique\`; the tag is preserved on update. Pass only the fields you want to change — omitted fields are left intact. To clear an existing \`end_date\` (turning a multi-day annotation into a single-day one), pass an empty string for \`end_date\`. Annotation IDs are surfaced wherever annotations are listed (today's snapshot, upcoming-activities queries, history queries).`,
+      inputSchema: {
+        event_id: z.string().describe('Intervals.icu event ID to update'),
+        category: z.enum(['sick', 'injured', 'holiday', 'note', 'season_start']).optional().describe('New category'),
+        start_date: z.string().optional().describe('New start date (YYYY-MM-DD or relative)'),
+        end_date: z.string().optional().describe('New end date (YYYY-MM-DD or relative). Pass an empty string to clear'),
+        name: z.string().optional().describe('New annotation title'),
+        description: z.string().optional().describe('New description/notes'),
+      },
+      outputSchema: schemas.updateAnnotationOutputSchema,
+      annotations: MODIFIES_EXTERNAL,
+      handler: async (args: { event_id: string; category?: 'sick' | 'injured' | 'holiday' | 'note' | 'season_start'; start_date?: string; end_date?: string; name?: string; description?: string }) =>
+        this.planningTools.updateAnnotation(args),
+    });
+
+    register({
+      name: 'delete_annotation',
+      title: 'Delete Calendar Annotation',
+      description: `Permanently removes a Domestique-created calendar annotation from the user's Intervals.icu calendar. Only works on annotations tagged \`domestique\`; attempts to delete other events fail. Annotation IDs are surfaced wherever annotations are listed (today's snapshot, upcoming-activities queries, history queries).`,
+      inputSchema: {
+        event_id: z.string().describe('Intervals.icu event ID to delete'),
+      },
+      outputSchema: schemas.deleteAnnotationOutputSchema,
+      annotations: DESTRUCTIVE,
+      handler: async (args: { event_id: string }) =>
+        this.planningTools.deleteAnnotation(args.event_id),
+    });
+
     if (this.hasTrainerRoad) {
       register({
         name: 'sync_trainerroad_runs',

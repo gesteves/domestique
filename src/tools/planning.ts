@@ -15,6 +15,12 @@ import type {
   CreateWorkoutResponse,
   UpdateWorkoutInput,
   UpdateWorkoutResponse,
+  CreateAnnotationInput,
+  CreateAnnotationResponse,
+  UpdateAnnotationInput,
+  UpdateAnnotationResponse,
+  CreatableAnnotationCategory,
+  AnnotationCategory,
   SyncTRRunsResult,
   SetWorkoutIntervalsInput,
   SetWorkoutIntervalsResponse,
@@ -33,6 +39,32 @@ export interface UpcomingActivitiesResponse {
   races: Race[];
   annotations: Annotation[];
   training_phase: TrainingPhase | null;
+}
+
+const ANNOTATION_INPUT_TO_API = {
+  sick: 'SICK',
+  injured: 'INJURED',
+  holiday: 'HOLIDAY',
+  note: 'NOTE',
+  season_start: 'SEASON_START',
+} as const satisfies Record<CreatableAnnotationCategory, 'SICK' | 'INJURED' | 'HOLIDAY' | 'NOTE' | 'SEASON_START'>;
+
+const ANNOTATION_API_TO_DISPLAY = {
+  SICK: 'Sick',
+  INJURED: 'Injured',
+  HOLIDAY: 'Holiday',
+  NOTE: 'Note',
+  SEASON_START: 'SeasonStart',
+} as const satisfies Record<'SICK' | 'INJURED' | 'HOLIDAY' | 'NOTE' | 'SEASON_START', AnnotationCategory>;
+
+function defaultAnnotationName(category: CreatableAnnotationCategory): string {
+  switch (category) {
+    case 'sick': return 'Sick';
+    case 'injured': return 'Injured';
+    case 'holiday': return 'Holiday';
+    case 'note': return 'Note';
+    case 'season_start': return 'Season start';
+  }
 }
 
 export class PlanningTools {
@@ -327,6 +359,158 @@ export class PlanningTools {
       scheduled_for: response.start_date_local,
       intervals_icu_url: `https://intervals.icu/calendar/${scheduledDate.split('T')[0]}`,
       updated_fields: updatedFields,
+    };
+  }
+
+  /**
+   * Create a calendar annotation in Intervals.icu (Sick / Injured / Holiday /
+   * Note / SeasonStart). Tagged with 'domestique' so update/delete tools can
+   * later identify it as Domestique-created.
+   */
+  async createAnnotation(input: CreateAnnotationInput): Promise<CreateAnnotationResponse> {
+    const timezone = await this.intervals.getAthleteTimezone();
+    const startDate = parseDateStringInTimezone(input.start_date, timezone, 'start_date');
+    const endDate = input.end_date
+      ? parseDateStringInTimezone(input.end_date, timezone, 'end_date')
+      : undefined;
+
+    if (endDate && endDate < startDate) {
+      throw new Error('end_date must be on or after start_date');
+    }
+
+    const apiCategory = ANNOTATION_INPUT_TO_API[input.category];
+    const sendEnd = endDate && endDate !== startDate ? endDate : undefined;
+
+    const response = await this.intervals.createEvent({
+      name: input.name ?? defaultAnnotationName(input.category),
+      description: input.description,
+      category: apiCategory,
+      start_date_local: `${startDate}T00:00:00`,
+      end_date_local: sendEnd ? `${sendEnd}T00:00:00` : undefined,
+      tags: [DOMESTIQUE_TAG],
+    });
+
+    return {
+      id: response.id,
+      uid: response.uid,
+      category: ANNOTATION_API_TO_DISPLAY[apiCategory],
+      name: response.name,
+      start_date: startDate,
+      end_date: sendEnd,
+      intervals_icu_url: `https://intervals.icu/calendar/${startDate}`,
+    };
+  }
+
+  /**
+   * Update a Domestique-created annotation. Only operates on events tagged
+   * 'domestique'.
+   */
+  async updateAnnotation(input: UpdateAnnotationInput): Promise<UpdateAnnotationResponse> {
+    const { event_id, category, start_date, end_date, name, description } = input;
+
+    const existingEvent = await this.intervals.getEvent(event_id);
+
+    if (!existingEvent.tags?.includes(DOMESTIQUE_TAG)) {
+      throw new Error(
+        `Cannot update this annotation: it was not created by Domestique. ` +
+        `Only annotations tagged with "${DOMESTIQUE_TAG}" can be updated via this tool.`
+      );
+    }
+
+    const updatePayload: Record<string, unknown> = {};
+    const updatedFields: string[] = [];
+
+    let resolvedStart: string | undefined;
+    let resolvedEnd: string | undefined;
+
+    if (category !== undefined) {
+      updatePayload.category = ANNOTATION_INPUT_TO_API[category];
+      updatedFields.push('category');
+    }
+
+    if (start_date !== undefined) {
+      const timezone = await this.intervals.getAthleteTimezone();
+      resolvedStart = parseDateStringInTimezone(start_date, timezone, 'start_date');
+      updatePayload.start_date_local = `${resolvedStart}T00:00:00`;
+      updatedFields.push('start_date');
+    }
+
+    if (end_date !== undefined) {
+      if (end_date === '') {
+        updatePayload.end_date_local = null;
+      } else {
+        const timezone = await this.intervals.getAthleteTimezone();
+        resolvedEnd = parseDateStringInTimezone(end_date, timezone, 'end_date');
+        updatePayload.end_date_local = `${resolvedEnd}T00:00:00`;
+      }
+      updatedFields.push('end_date');
+    }
+
+    if (resolvedStart && resolvedEnd && resolvedEnd < resolvedStart) {
+      throw new Error('end_date must be on or after start_date');
+    }
+
+    if (name !== undefined) {
+      updatePayload.name = name;
+      updatedFields.push('name');
+    }
+
+    if (description !== undefined) {
+      updatePayload.description = description;
+      updatedFields.push('description');
+    }
+
+    if (updatedFields.length === 0) {
+      throw new Error(
+        'No fields provided to update. Specify at least one of: category, start_date, end_date, name, description'
+      );
+    }
+
+    updatePayload.tags = existingEvent.tags;
+
+    const response = await this.intervals.updateEvent(event_id, updatePayload);
+
+    const finalApiCategory = (updatePayload.category as keyof typeof ANNOTATION_API_TO_DISPLAY | undefined)
+      ?? (existingEvent.category as keyof typeof ANNOTATION_API_TO_DISPLAY);
+    const finalStart = updatePayload.start_date_local
+      ? (updatePayload.start_date_local as string).slice(0, 10)
+      : existingEvent.start_date_local.slice(0, 10);
+    const rawEnd = updatePayload.end_date_local !== undefined
+      ? (updatePayload.end_date_local as string | null)
+      : existingEvent.end_date_local;
+    const finalEnd = rawEnd ? rawEnd.slice(0, 10) : undefined;
+
+    return {
+      id: response.id,
+      uid: response.uid,
+      category: ANNOTATION_API_TO_DISPLAY[finalApiCategory] ?? 'Note',
+      name: response.name,
+      start_date: finalStart,
+      end_date: finalEnd && finalEnd !== finalStart ? finalEnd : undefined,
+      intervals_icu_url: `https://intervals.icu/calendar/${finalStart}`,
+      updated_fields: updatedFields,
+    };
+  }
+
+  /**
+   * Delete a Domestique-created annotation. Only operates on events tagged
+   * 'domestique'.
+   */
+  async deleteAnnotation(eventId: string): Promise<{ deleted: boolean; message: string }> {
+    const event = await this.intervals.getEvent(eventId);
+
+    if (!event.tags?.includes(DOMESTIQUE_TAG)) {
+      throw new Error(
+        `Cannot delete this annotation: it was not created by Domestique. ` +
+        `Only annotations tagged with "${DOMESTIQUE_TAG}" can be deleted via this tool.`
+      );
+    }
+
+    await this.intervals.deleteEvent(eventId);
+
+    return {
+      deleted: true,
+      message: `Successfully deleted annotation "${event.name ?? eventId}"`,
     };
   }
 

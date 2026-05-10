@@ -17,8 +17,8 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ## Available Tools
 
 ### Today's Data
-- `get_todays_summary` - Full snapshot of today: recovery, sleep, HRV, strain, fitness (CTL/ATL/TSB), wellness, completed and planned workouts, race, calendar annotations, and weather.
-- `get_todays_activities` - Today's completed and planned workouts, race, and calendar annotations. Leaner alternative to `get_todays_summary`. Optional `type` filter (`workouts` or `races`).
+- `get_todays_summary` - Full snapshot of today: recovery, sleep, HRV, strain, fitness (CTL/ATL/TSB), wellness, completed and planned workouts, race, calendar annotations (sick / injured / holiday / note / season start), and weather.
+- `get_todays_activities` - Today's completed and planned workouts, race, and calendar annotations (sick / injured / holiday / note / season start). Leaner alternative to `get_todays_summary`. Optional `type` filter (`workouts` or `races`).
 
 ### Profile & Settings
 - `get_athlete_profile` - Athlete profile, unit preferences, age, and location.
@@ -41,6 +41,11 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `sync_trainerroad_runs` - Sync running workouts from TrainerRoad to Intervals.icu, detecting changes and orphans.
 - `set_workout_intervals` - Set intervals on a completed activity.
 - `update_activity` - Update name and/or description of a completed activity.
+
+### Calendar Annotations
+- `create_annotation` - Add a sick / injured / holiday / note / season-start entry to the Intervals.icu calendar.
+- `update_annotation` - Update a Domestique-created annotation.
+- `delete_annotation` - Delete a Domestique-created annotation.
 
 ### Analysis
 - `get_training_load_trends` - CTL, ATL, TSB, ramp rate, and ACWR over time.

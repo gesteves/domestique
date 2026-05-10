@@ -254,4 +254,22 @@ describe('mergeAnnotations', () => {
       expect(merged).toHaveLength(2);
     });
   });
+
+  describe('SeasonStart', () => {
+    it('passes Intervals.icu SeasonStart annotations through unchanged', () => {
+      const icu: Annotation[] = [
+        {
+          id: 'icu-season',
+          category: 'SeasonStart',
+          name: '2025 season',
+          start_date: '2025-01-01',
+        },
+      ];
+
+      const merged = mergeAnnotations(icu, []);
+
+      expect(merged).toHaveLength(1);
+      expect(merged[0].category).toBe('SeasonStart');
+    });
+  });
 });

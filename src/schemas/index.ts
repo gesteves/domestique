@@ -500,7 +500,7 @@ const PlannedWorkoutZ = z.object({
 
 const AnnotationZ = z.object({
   id: z.string().optional().describe('Unique annotation identifier'),
-  category: z.enum(['Sick', 'Injured', 'Holiday', 'Note', 'TrainingPhaseStart']).describe('Annotation category. Sick and Injured explain training gaps; Holiday marks vacation; Note is a freeform calendar note; TrainingPhaseStart marks the day a TrainerRoad training phase (Base, Build, Specialty, Recovery Week) begins'),
+  category: z.enum(['Sick', 'Injured', 'Holiday', 'Note', 'SeasonStart', 'TrainingPhaseStart']).describe('Annotation category. Sick and Injured explain training gaps; Holiday marks vacation; Note is a freeform calendar note; SeasonStart anchors the start of a training season; TrainingPhaseStart marks the day a TrainerRoad training phase (Base, Build, Specialty, Recovery Week) begins'),
   name: z.string().optional().describe('Annotation title'),
   description: z.string().optional().describe('Annotation body / details'),
   start_date: z.string().describe('Local start date (YYYY-MM-DD)'),
@@ -508,7 +508,7 @@ const AnnotationZ = z.object({
   training_availability: z.enum(['Normal', 'Limited', 'Unavailable']).optional().describe('Training availability set on the annotation. Limited means the athlete can train in a reduced capacity; Unavailable means no training is possible'),
 }).passthrough();
 
-const annotationsField = z.array(AnnotationZ).optional().describe('Non-workout calendar annotations (sickness, injury, holiday, freeform note, training-phase boundary) whose date span overlaps the queried range. Use these to interpret training-volume changes, to know when the athlete is unavailable to train, and to spot when a new TrainerRoad training phase begins');
+const annotationsField = z.array(AnnotationZ).optional().describe('Non-workout calendar annotations (sickness, injury, holiday, freeform note, season start, training-phase boundary) whose date span overlaps the queried range. Use these to interpret training-volume changes, to know when the athlete is unavailable to train, to anchor the current training season, and to spot when a new TrainerRoad training phase begins');
 
 const TrainingPhaseZ = z.object({
   name: z.enum(['Base', 'Build', 'Specialty', 'Recovery Week']).describe('Active TrainerRoad training phase. Base builds aerobic capacity; Build adds intensity; Specialty sharpens for an A-race; Recovery Week is post-A-race recovery'),
@@ -1023,6 +1023,32 @@ export const updateWorkoutOutputSchema = {
   scheduled_for: z.string().optional().describe('Scheduled date/time'),
   intervals_icu_url: z.string().optional().describe('URL to view the workout in Intervals.icu'),
   updated_fields: z.array(z.string()).optional().describe('Fields that were updated'),
+} as const;
+
+export const createAnnotationOutputSchema = {
+  id: z.number().optional().describe('Intervals.icu event ID'),
+  uid: z.string().optional().describe('Intervals.icu event UID'),
+  category: z.enum(['Sick', 'Injured', 'Holiday', 'Note', 'SeasonStart']).optional().describe('Annotation category'),
+  name: z.string().optional().describe('Annotation title'),
+  start_date: z.string().optional().describe('Local start date (YYYY-MM-DD)'),
+  end_date: z.string().optional().describe('Local end date (YYYY-MM-DD); absent for single-day annotations'),
+  intervals_icu_url: z.string().optional().describe('URL to view the annotation in Intervals.icu'),
+} as const;
+
+export const updateAnnotationOutputSchema = {
+  id: z.number().optional().describe('Intervals.icu event ID'),
+  uid: z.string().optional().describe('Intervals.icu event UID'),
+  category: z.enum(['Sick', 'Injured', 'Holiday', 'Note', 'SeasonStart']).optional().describe('Annotation category'),
+  name: z.string().optional().describe('Annotation title'),
+  start_date: z.string().optional().describe('Local start date (YYYY-MM-DD)'),
+  end_date: z.string().optional().describe('Local end date (YYYY-MM-DD); absent for single-day annotations'),
+  intervals_icu_url: z.string().optional().describe('URL to view the annotation in Intervals.icu'),
+  updated_fields: z.array(z.string()).optional().describe('Fields that were updated'),
+} as const;
+
+export const deleteAnnotationOutputSchema = {
+  deleted: z.boolean().optional().describe('Whether the annotation was deleted'),
+  message: z.string().optional().describe('Human-readable result message'),
 } as const;
 
 export const syncTrainerRoadRunsOutputSchema = {

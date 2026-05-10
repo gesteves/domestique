@@ -152,7 +152,10 @@ describe('ToolRegistry', () => {
       expect(registeredTools).toContain('update_heat_adaptation_score');
       // Removed tools (folded into get_upcoming_activities via type filter)
       expect(registeredTools).not.toContain('get_upcoming_races');
-      expect(registeredTools.length).toBe(22);
+      expect(registeredTools).toContain('create_annotation');
+      expect(registeredTools).toContain('update_annotation');
+      expect(registeredTools).toContain('delete_annotation');
+      expect(registeredTools.length).toBe(25);
     });
 
     it('should call server.registerTool for each tool', () => {
@@ -162,7 +165,7 @@ describe('ToolRegistry', () => {
 
       registry.registerTools(mockServer as any);
 
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(22);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(25);
     });
 
     it('skips Whoop-dependent tools when Whoop is not configured', () => {
@@ -175,7 +178,7 @@ describe('ToolRegistry', () => {
       expect(names).toContain('get_todays_summary');
       expect(names).toContain('get_todays_activities');
       expect(names).toContain('get_activity_history');
-      expect(names.length).toBe(20);
+      expect(names.length).toBe(23);
     });
 
     it('skips TrainerRoad-dependent tools when TrainerRoad is not configured', () => {
@@ -186,7 +189,7 @@ describe('ToolRegistry', () => {
       // Planning tools that only need Intervals stay registered
       expect(names).toContain('get_upcoming_activities');
       expect(names).toContain('create_workout');
-      expect(names.length).toBe(21);
+      expect(names.length).toBe(24);
     });
 
     it('registers only Intervals-only tools when all optional clients are missing', () => {
@@ -201,8 +204,8 @@ describe('ToolRegistry', () => {
       expect(names).not.toContain('get_strain_history');
       expect(names).not.toContain('get_recovery_trends');
       expect(names).not.toContain('sync_trainerroad_runs');
-      // 22 - 3 skipped (Whoop x2, TR x1) = 19
-      expect(names.length).toBe(19);
+      // 25 - 3 skipped (Whoop x2, TR x1) = 22
+      expect(names.length).toBe(22);
     });
 
     it('should pass config object with title, description, and annotations to each tool', () => {

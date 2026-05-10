@@ -99,13 +99,14 @@ const INTERVALS_API_BASE = 'https://intervals.icu/api/v1';
 
 // Intervals.icu API uses uppercase category and training_availability values.
 // Domestique normalizes both to sentence case in tool responses.
-const ANNOTATION_API_CATEGORIES = ['SICK', 'INJURED', 'HOLIDAY', 'NOTE'] as const;
+const ANNOTATION_API_CATEGORIES = ['SICK', 'INJURED', 'HOLIDAY', 'NOTE', 'SEASON_START'] as const;
 type AnnotationApiCategory = (typeof ANNOTATION_API_CATEGORIES)[number];
 const ANNOTATION_CATEGORY_MAP: Record<AnnotationApiCategory, AnnotationCategory> = {
   SICK: 'Sick',
   INJURED: 'Injured',
   HOLIDAY: 'Holiday',
   NOTE: 'Note',
+  SEASON_START: 'SeasonStart',
 };
 const TRAINING_AVAILABILITY_MAP: Record<string, TrainingAvailability> = {
   NORMAL: 'Normal',
@@ -535,16 +536,18 @@ interface IntervalsEvent {
  * Input for creating an event in Intervals.icu.
  */
 export interface CreateEventInput {
-  /** Workout name */
+  /** Event name */
   name: string;
   /** Description/notes - can include structured workout syntax */
   description?: string;
-  /** Event type (e.g., "Run", "Ride") */
-  type: string;
-  /** Category - should be "WORKOUT" for workouts */
-  category: 'WORKOUT' | 'NOTE' | 'RACE' | 'OTHER';
+  /** Event type (e.g., "Run", "Ride"). Required for WORKOUT events; omit for annotations. */
+  type?: string;
+  /** Category */
+  category: 'WORKOUT' | 'NOTE' | 'RACE' | 'OTHER' | 'SICK' | 'INJURED' | 'HOLIDAY' | 'SEASON_START';
   /** Start date in YYYY-MM-DD or datetime format */
   start_date_local: string;
+  /** End date in YYYY-MM-DD or datetime format (for multi-day annotations) */
+  end_date_local?: string;
   /** Duration in seconds */
   moving_time?: number;
   /** Training load (TSS) */
@@ -574,16 +577,18 @@ export interface CreateEventResponse {
  * All fields are optional - only provided fields will be updated.
  */
 export interface UpdateEventInput {
-  /** Workout name */
+  /** Event name */
   name?: string;
   /** Description/notes - can include structured workout syntax */
   description?: string;
   /** Event type (e.g., "Run", "Ride") */
   type?: string;
-  /** Category - should be "WORKOUT" for workouts */
-  category?: 'WORKOUT' | 'NOTE' | 'RACE' | 'OTHER';
+  /** Category */
+  category?: 'WORKOUT' | 'NOTE' | 'RACE' | 'OTHER' | 'SICK' | 'INJURED' | 'HOLIDAY' | 'SEASON_START';
   /** Start date in YYYY-MM-DD or datetime format */
   start_date_local?: string;
+  /** End date in YYYY-MM-DD or datetime format (for multi-day annotations) */
+  end_date_local?: string;
   /** Duration in seconds */
   moving_time?: number;
   /** Training load (TSS) */

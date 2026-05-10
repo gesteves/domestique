@@ -989,7 +989,7 @@ describe('IntervalsClient', () => {
       expect(callUrl).toContain('newest=2025-05-10');
       // Categories sent uppercase to the API
       const decoded = decodeURIComponent(callUrl);
-      expect(decoded).toContain('category=SICK,INJURED,HOLIDAY,NOTE');
+      expect(decoded).toContain('category=SICK,INJURED,HOLIDAY,NOTE,SEASON_START');
     });
 
     it('includes a single-day annotation that starts inside the range', async () => {
@@ -1131,6 +1131,30 @@ describe('IntervalsClient', () => {
 
       const result = await client.getAnnotations(rangeStart, rangeEnd);
       expect(result).toHaveLength(0);
+    });
+
+    it('normalizes SEASON_START events to category SeasonStart', async () => {
+      mockApi([
+        {
+          id: 8,
+          uid: 'season-2025',
+          start_date_local: '2025-05-10',
+          name: '2025 season',
+          description: 'Block 1: base',
+          type: 'Note',
+          category: 'SEASON_START',
+        },
+      ]);
+
+      const result = await client.getAnnotations(rangeStart, rangeEnd);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: 'season-2025',
+        category: 'SeasonStart',
+        name: '2025 season',
+        description: 'Block 1: base',
+        start_date: '2025-05-10',
+      });
     });
   });
 
