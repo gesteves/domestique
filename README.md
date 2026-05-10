@@ -104,7 +104,7 @@ For weather forecasts (optional):
 
 For Last.fm integration (optional):
 - `LASTFM_USERNAME` - Last.fm username.
-- `LASTFM_API_KEY` - Last.fm API key (https://www.last.fm/api/account/create).
+- `LASTFM_API_KEY` - Last.fm API key.
 
 When both are set, `get_workout_details` and `get_todays_activities` include tracks played during the workout.
 
