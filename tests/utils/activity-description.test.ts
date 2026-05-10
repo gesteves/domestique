@@ -229,22 +229,32 @@ describe('splitExistingDescription', () => {
 });
 
 describe('composeBlocks', () => {
-  it('joins present blocks with a single blank line', () => {
+  it('separates headline from emoji blocks with a blank line, joins emoji blocks with single newlines', () => {
     const out = composeBlocks({
       headline: 'A nice ride.',
       weather: '🌤️ Sunny',
       power: '⚡️ NP 200 W',
     });
-    expect(out).toBe('A nice ride.\n\n🌤️ Sunny\n\n⚡️ NP 200 W');
+    expect(out).toBe('A nice ride.\n\n🌤️ Sunny\n⚡️ NP 200 W');
   });
 
-  it('places the Zwift map line right after the headline', () => {
+  it('places the Zwift map line at the top of the emoji-block group', () => {
     const out = composeBlocks({
       headline: 'Endurance ride.',
       zwiftMapLine: '🗺️ Volcano Circuit in Watopia',
       power: '⚡️ NP 200 W',
     });
-    expect(out).toBe('Endurance ride.\n\n🗺️ Volcano Circuit in Watopia\n\n⚡️ NP 200 W');
+    expect(out).toBe('Endurance ride.\n\n🗺️ Volcano Circuit in Watopia\n⚡️ NP 200 W');
+  });
+
+  it('emits only the emoji section when no headline is present', () => {
+    const out = composeBlocks({
+      headline: null,
+      weather: '🌤️ Sunny',
+      power: '⚡️ NP 200 W',
+      whoop: '🔥 Whoop strain 14.2',
+    });
+    expect(out).toBe('🌤️ Sunny\n⚡️ NP 200 W\n🔥 Whoop strain 14.2');
   });
 
   it('drops null/undefined/empty blocks', () => {
@@ -254,6 +264,10 @@ describe('composeBlocks', () => {
       power: '⚡️ NP 200 W',
     });
     expect(out).toBe('⚡️ NP 200 W');
+  });
+
+  it('emits just the headline when there are no emoji blocks', () => {
+    expect(composeBlocks({ headline: 'Just a chill day.' })).toBe('Just a chill day.');
   });
 });
 

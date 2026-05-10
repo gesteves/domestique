@@ -171,21 +171,30 @@ export interface ComposeBlocksInput {
 }
 
 /**
- * Join blocks with single blank lines. The Zwift map line, when present,
- * sits at the top of the emoji-block group (immediately after the headline,
- * before weather).
+ * Compose the final description.
+ *   - Headline, when present, is separated from the emoji-block group by a
+ *     single blank line (`\n\n`).
+ *   - Emoji blocks (Zwift map line, weather, water temp, power, heat, whoop,
+ *     music) are joined by a single newline (`\n`) — they read as a stacked
+ *     stat block, not paragraphs.
+ *   - The Zwift map line, when present, sits at the top of the emoji-block
+ *     group (immediately before weather).
  */
 export function composeBlocks(input: ComposeBlocksInput): string {
-  const blocks: string[] = [];
-  if (input.headline) blocks.push(input.headline);
-  if (input.zwiftMapLine) blocks.push(input.zwiftMapLine);
-  if (input.weather) blocks.push(input.weather);
-  if (input.waterTemp) blocks.push(input.waterTemp);
-  if (input.power) blocks.push(input.power);
-  if (input.heat) blocks.push(input.heat);
-  if (input.whoop) blocks.push(input.whoop);
-  if (input.music) blocks.push(input.music);
-  return blocks.join('\n\n');
+  const emojiBlocks: string[] = [];
+  if (input.zwiftMapLine) emojiBlocks.push(input.zwiftMapLine);
+  if (input.weather) emojiBlocks.push(input.weather);
+  if (input.waterTemp) emojiBlocks.push(input.waterTemp);
+  if (input.power) emojiBlocks.push(input.power);
+  if (input.heat) emojiBlocks.push(input.heat);
+  if (input.whoop) emojiBlocks.push(input.whoop);
+  if (input.music) emojiBlocks.push(input.music);
+
+  const emojiSection = emojiBlocks.join('\n');
+
+  if (input.headline && emojiSection) return `${input.headline}\n\n${emojiSection}`;
+  if (input.headline) return input.headline;
+  return emojiSection;
 }
 
 // ============================================================================
