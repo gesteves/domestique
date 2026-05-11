@@ -245,6 +245,53 @@ describe('Whoop webhook handler', () => {
     expect(fakes.intervals.updateWellness).toHaveBeenCalledWith(yesterday, { WhoopStrain: 14.2 });
   });
 
+  it('on workout.updated, refreshes WhoopStrain wellness for the workout\'s date, not today', async () => {
+    // Whoop sometimes scores workouts late, and webhook edits can fire for
+    // past workouts. The daily WhoopStrain refresh should target the
+    // workout's date — not whenever the webhook happened to land.
+    const workoutYMD = '2024-11-20'; // arbitrary past date, ≠ today
+    fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+      id: 'late-uuid',
+      activity_type: 'Running' as const,
+      start_time: `${workoutYMD}T10:00:00+00:00`,
+      end_time: `${workoutYMD}T11:00:00+00:00`,
+      duration: '1:00:00',
+      strain_score: 11.3,
+    });
+    fakes.whoop.getStrainData.mockImplementation(async (start: string) => {
+      if (start === workoutYMD) {
+        return [
+          {
+            date: workoutYMD,
+            strain_score: 18.4,
+            strain_level: 'High',
+            strain_level_description: '',
+            activities: [],
+          },
+        ];
+      }
+      return [];
+    });
+    fakes.intervals.getActivities.mockResolvedValueOnce([]); // no ICU match — exercise just the strain-refresh path
+
+    const res = await postWebhook(app, {
+      user_id: ATHLETE_USER_ID,
+      id: 'late-uuid',
+      type: 'workout.updated',
+      trace_id: 'trace-late',
+    });
+    expect(res.status).toBe(200);
+
+    await flushAsync();
+
+    // Wellness PUT targets the workout's date, with the strain value Whoop
+    // reports for that date.
+    expect(fakes.whoop.getStrainData).toHaveBeenCalledWith(workoutYMD, workoutYMD);
+    expect(fakes.intervals.updateWellness).toHaveBeenCalledWith(workoutYMD, { WhoopStrain: 18.4 });
+    // Crucially, today's wellness is NOT touched.
+    expect(fakes.intervals.updateWellness).not.toHaveBeenCalledWith(todayUTC(), expect.anything());
+  });
+
   it('on workout.updated, writes WhoopWorkoutStrain and the regenerated description', async () => {
     const whoopWorkout = {
       id: 'workout-uuid',

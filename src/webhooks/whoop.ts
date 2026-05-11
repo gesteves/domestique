@@ -173,12 +173,17 @@ export function createWhoopWebhookHandler(deps: WhoopWebhookDeps) {
 }
 
 /**
- * Apply Whoop webhook side effects to Intervals.icu:
- *   - Every event refreshes today's wellness `WhoopStrain`.
- *   - `sleep.updated` additionally refreshes yesterday's `WhoopStrain`
- *     (sleep finalization is what marks the prior day complete on Whoop).
- *   - `workout.updated` updates `WhoopWorkoutStrain` on the matching
- *     Intervals.icu activity (or logs and skips if no match).
+ * Apply Whoop webhook side effects to Intervals.icu. The wellness-refresh
+ * date depends on the event type:
+ *
+ *   - `workout.updated`: refresh the **workout's date** (Whoop sometimes
+ *     scores workouts late or fires updates for retroactive edits, so the
+ *     event's date isn't necessarily today). Also updates
+ *     `WhoopWorkoutStrain` on the matching Intervals.icu activity and
+ *     regenerates the activity description.
+ *   - `sleep.updated`: refresh today and yesterday (sleep finalization is
+ *     what marks the prior day's strain complete on Whoop).
+ *   - All other event types: refresh today's wellness.
  */
 export async function dispatchWhoopWebhook(
   payload: WhoopWebhookPayload,
@@ -188,18 +193,11 @@ export async function dispatchWhoopWebhook(
   const timezone = await intervals.getAthleteTimezone();
   const todayYMD = formatYMDInTimezone(new Date(), timezone);
 
-  await refreshDailyWhoopStrain(todayYMD, deps);
-
-  if (payload.type === 'sleep.updated') {
-    const yesterdayYMD = addDaysToYMD(todayYMD, -1);
-    await refreshDailyWhoopStrain(yesterdayYMD, deps);
-  }
-
-  // TODO: `workout.deleted` currently only refreshes today's wellness via the
-  // unconditional `refreshDailyWhoopStrain` call above. It does not clear
-  // `WhoopWorkoutStrain` on the matched Intervals.icu activity, so a deleted
-  // Whoop workout leaves an orphan strain value on the ICU side. Decide on
-  // intended semantics before wiring up the cleanup path.
+  // TODO: `workout.deleted` currently falls through to "refresh today's
+  // wellness." It does not clear `WhoopWorkoutStrain` on the matched
+  // Intervals.icu activity, so a deleted Whoop workout leaves an orphan
+  // strain value on the ICU side. Decide on intended semantics before
+  // wiring up the cleanup path.
   if (payload.type === 'workout.updated') {
     const whoopActivity = await whoop.getWorkoutById(payload.id);
     if (!whoopActivity) {
@@ -209,9 +207,14 @@ export async function dispatchWhoopWebhook(
       return;
     }
 
+    // Refresh wellness for the workout's day (not today): a workout scored
+    // late, or a retroactive edit to a past workout, changes that day's
+    // strain — not the current day's.
+    const workoutYMD = whoopActivity.start_time.slice(0, 10);
+    await refreshDailyWhoopStrain(workoutYMD, deps);
+
     // Look for a matching Intervals.icu activity around the workout's date.
     // 1-day buffer absorbs timezone boundaries and overnight workouts.
-    const workoutYMD = whoopActivity.start_time.slice(0, 10);
     const oldest = addDaysToYMD(workoutYMD, -1);
     const newest = addDaysToYMD(workoutYMD, 1);
 
@@ -251,15 +254,24 @@ export async function dispatchWhoopWebhook(
         error
       );
     }
+    return;
+  }
+
+  // All other event types refresh today's wellness; sleep.updated also
+  // refreshes yesterday (sleep finalization is what marks the prior day's
+  // strain complete on Whoop).
+  await refreshDailyWhoopStrain(todayYMD, deps);
+  if (payload.type === 'sleep.updated') {
+    await refreshDailyWhoopStrain(addDaysToYMD(todayYMD, -1), deps);
   }
 }
 
 /**
- * Compose a Strava-ready description for the matched Intervals.icu activity
- * and PUT it back. Skips pool swims and activities that have already been
- * touched (idempotency flag). Runs under the athlete's unit preferences so
- * pre-formatted strings (power, temperature, etc.) on the activity respect
- * their settings.
+ * Compose a description for the matched Intervals.icu activity and PUT it
+ * back. Skips pool swims. Deduped against concurrent webhooks for the same
+ * activity via `inFlightDescriptions`. Runs under the athlete's unit
+ * preferences so pre-formatted strings (power, temperature, etc.) on the
+ * activity respect their settings.
  */
 async function maybeGenerateActivityDescription(
   activityId: string,
