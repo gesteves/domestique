@@ -5,8 +5,9 @@
  * · Heat strain · Whoop strain · Music. Pool swims are out of scope for the
  * Whoop-webhook caller; the orchestrator only handles non-pool activities.
  *
- * The headline + weather sentences come from a single Anthropic
- * `messages.parse()` call; every other block is built programmatically.
+ * The headline, weather sentence, and music artist picks come from a single
+ * Anthropic `messages.parse()` call; every other block is built
+ * programmatically.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -73,98 +74,50 @@ export function buildWaterTempBlock(activity: NormalizedWorkout): string | null 
 }
 
 /**
- * Build the music line.
+ * Build the music line from the LLM's pre-picked artist list.
  *
  * Format: 🎧 Tracy Chapman, Radiohead, Crowded House, Johnny Cash, Tears for Fears, and 18 more
- * The "and N more" suffix is added only when more than 5 unique artists exist.
+ * The "and N more" suffix is added only when `remaining` is a positive integer.
+ *
+ * Defensive against an over-eager model: caps `topArtists` at 5 and floors
+ * `remaining` at 0.
  */
-export function buildMusicBlock(songs: PlayedSong[] | undefined): string | null {
-  if (!songs || songs.length === 0) return null;
-  const { top, remaining } = pickTopArtists(songs);
-  if (top.length === 0) return null;
-  const suffix = remaining > 0 ? `, and ${remaining} more` : '';
+export function buildMusicBlock(
+  topArtists: string[] | null | undefined,
+  remaining: number | null | undefined
+): string | null {
+  if (!topArtists || topArtists.length === 0) return null;
+  const top = topArtists.slice(0, 5);
+  const safeRemaining =
+    typeof remaining === 'number' && Number.isFinite(remaining) ? Math.max(0, Math.floor(remaining)) : 0;
+  const suffix = safeRemaining > 0 ? `, and ${safeRemaining} more` : '';
   return `🎧 ${top.join(', ')}${suffix}`;
 }
 
 /**
- * Pick the top-5 artists from a played-songs list and report how many other
- * unique artists were dropped. Scoring is deterministic:
- *
- *   score = 2 × (notable-track count) + (total play count)
- *
- * A track counts as **notable** if the athlete loved it OR played it more
- * than once during this activity — repeating a track during a workout is
- * treated as a "love"-equivalent signal of taste. The +2 boost is per unique
- * notable track, so an artist with several notable tracks compounds.
- *
- * Ties break: score desc → total plays desc → earliest first-play-time asc
- * (chronological — the artist that kicked off the playlist wins). When even
- * that ties, the insertion order of the underlying Map (first-seen) holds
- * via stable sort.
+ * Pick up to 5 unique artists at random from a played-songs list. Used as a
+ * fallback only when `ANTHROPIC_API_KEY` is unset — the LLM normally handles
+ * artist selection (with name normalization). This fallback is intentionally
+ * dumb: case-sensitive uniqueness, no variant collapsing.
  */
-export function pickTopArtists(
-  songs: PlayedSong[]
+export function pickRandomArtists(
+  songs: PlayedSong[] | undefined
 ): { top: string[]; remaining: number } {
-  if (songs.length === 0) return { top: [], remaining: 0 };
-
-  interface TrackStat {
-    plays: number;
-    loved: boolean;
-  }
-
-  interface ArtistAggregate {
-    plays: number;
-    firstPlayedAt: string;
-    tracks: Map<string, TrackStat>;
-  }
-
-  const byArtist = new Map<string, ArtistAggregate>();
+  if (!songs || songs.length === 0) return { top: [], remaining: 0 };
+  const seen = new Set<string>();
+  const unique: string[] = [];
   for (const song of songs) {
     const artist = song.artist?.trim();
-    if (!artist) continue;
-    const trackName = song.name?.trim() ?? '';
-
-    let agg = byArtist.get(artist);
-    if (!agg) {
-      agg = { plays: 0, firstPlayedAt: song.played_at, tracks: new Map() };
-      byArtist.set(artist, agg);
-    }
-
-    agg.plays += 1;
-    if (song.played_at && song.played_at < agg.firstPlayedAt) {
-      agg.firstPlayedAt = song.played_at;
-    }
-
-    const track = agg.tracks.get(trackName) ?? { plays: 0, loved: false };
-    track.plays += 1;
-    if (song.loved) track.loved = true;
-    agg.tracks.set(trackName, track);
+    if (!artist || seen.has(artist)) continue;
+    seen.add(artist);
+    unique.push(artist);
   }
-
-  const ranked = Array.from(byArtist.entries())
-    .map(([artist, agg]) => {
-      let notableTracks = 0;
-      for (const track of agg.tracks.values()) {
-        if (track.loved || track.plays > 1) notableTracks += 1;
-      }
-      return {
-        artist,
-        plays: agg.plays,
-        notableTracks,
-        firstPlayedAt: agg.firstPlayedAt,
-        score: 2 * notableTracks + agg.plays,
-      };
-    })
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.plays !== a.plays) return b.plays - a.plays;
-      // Chronological by first appearance in the playlist (earliest wins).
-      // ISO 8601 strings are lexicographically ordered, so string compare works.
-      return a.firstPlayedAt.localeCompare(b.firstPlayedAt);
-    });
-
-  const top = ranked.slice(0, 5).map((r) => r.artist);
-  const remaining = Math.max(0, ranked.length - top.length);
+  for (let i = unique.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unique[i], unique[j]] = [unique[j], unique[i]];
+  }
+  const top = unique.slice(0, 5);
+  const remaining = Math.max(0, unique.length - top.length);
   return { top, remaining };
 }
 
@@ -250,25 +203,31 @@ export interface PlannedSummaryInput {
   description: string;
 }
 
-export interface HeadlineWeatherInput {
+export interface LlmFieldsInput {
   /** Planned-workout description to summarize. Null/undefined = no headline. */
   plannedSummary?: PlannedSummaryInput | null;
   /** Raw Intervals.icu weather description. When null/empty the model omits weather. */
   weatherDescription?: string | null;
   /** Whether the activity is indoor; weather is only generated for outdoor. */
   isIndoor?: boolean;
+  /** Scrobbled tracks played during the workout. Empty/undefined = no music block. */
+  playedSongs?: PlayedSong[];
 }
 
-export interface HeadlineWeatherResult {
+export interface LlmFieldsResult {
   /** One-sentence headline summarizing the planned workout, or null. */
   headline: string | null;
   /** Emoji that leads the weather block, or null when weather isn't generated. */
   weather_emoji: string | null;
   /** One-sentence weather description, or null when weather isn't generated. */
   weather_sentence: string | null;
+  /** Up to 5 representative artist names (normalized), or null when no songs. */
+  top_artists: string[] | null;
+  /** Count of unique normalized artists not in `top_artists`, or null when no songs. */
+  remaining_artists: number | null;
 }
 
-const HeadlineWeatherSchema = z.object({
+const LlmFieldsSchema = z.object({
   headline: z
     .string()
     .nullable()
@@ -287,9 +246,22 @@ const HeadlineWeatherSchema = z.object({
     .describe(
       'One-sentence prose rewrite of the weather data. Follow the WEATHER RULES in the system prompt. Null when weather input was not provided.'
     ),
+  top_artists: z
+    .array(z.string())
+    .nullable()
+    .describe(
+      'Up to 5 artist names that best represent the played-songs list. Collapse trivial variants (e.g. "The Foo Fighters" → "Foo Fighters", "Beyonce" → "Beyoncé") to one canonical form, choosing the form most commonly seen in the input. Null when no played songs were provided.'
+    ),
+  remaining_artists: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      'Count of unique artists in the input — after the same normalization — NOT named in top_artists. 0 when 5 or fewer unique artists exist after normalization. Null when no played songs were provided.'
+    ),
 });
 
-const HEADLINE_WEATHER_SYSTEM_PROMPT = `You produce two short fields for an athlete's training-log activity description: a one-sentence HEADLINE summarizing the planned workout, and a one-sentence WEATHER rewrite (with a leading emoji). Both fields are optional — output null when the corresponding input wasn't provided, and never invent data.
+const LLM_FIELDS_SYSTEM_PROMPT = `You produce a few short fields for an athlete's training-log activity description: a one-sentence HEADLINE summarizing the planned workout, a one-sentence WEATHER rewrite (with a leading emoji), and a representative MUSIC artist list. Each section is optional — output null when the corresponding input wasn't provided, and never invent data.
 
 # HEADLINE RULES
 
@@ -337,9 +309,19 @@ Examples:
 - ☁️ Overcast with a light NNW breeze of 3–7 km/h gusting to 21, temps around 20°C (feels like 17°C), and mostly tailwind
 - ☀️ Sunny skies with SW winds of 1–5 mph and gusts up to 11 mph, temperatures ranging from 51–61°F with an average feel of 49°F
 
+# MUSIC RULES
+
+- You will be given a list of played songs, one per line, in the form \`- Artist - Song Title\`. Each line is one scrobble; repeats mean the track was played more than once.
+- Pick up to 5 artists that best represent the playlist as a whole. You may use any criteria, including (but not limited to): artists with the most repeated tracks, artists with the most distinct songs played, artists whose tracks dominate stretches of the listening. A repeated track is a strong signal of taste.
+- **Normalize artist names**: collapse trivial variants to one canonical form. Examples: "Foo Fighters" and "The Foo Fighters" → "Foo Fighters"; "Beyoncé" and "Beyonce" → "Beyoncé". Choose the spelling most commonly used for the artist.
+- Do not invent artists. Every name you emit in \`top_artists\` must appear in the input (in the chosen canonical form).
+- If fewer than 5 unique artists are present (after normalization), return only those — do not pad.
+- \`remaining_artists\` is the count of unique artists (after normalization) NOT in \`top_artists\`. Think step by step: count distinct normalized artists in the input, subtract \`top_artists.length\`, floor at 0. Be precise — readers will compare this number against the playlist they remember.
+- Return \`top_artists: null\` and \`remaining_artists: null\` if no played-songs list was provided.
+
 # OUTPUT FORMATTING
 
-- Return both \`headline\` and \`weather_sentence\` as raw text. Do not wrap the output in quotation marks.`;
+- Return \`headline\` and \`weather_sentence\` as raw text. Do not wrap the output in quotation marks.`;
 
 let anthropicClient: Anthropic | null = null;
 
@@ -359,31 +341,38 @@ export function _resetDescriptionClientForTesting(): void {
 }
 
 /**
- * Single LLM call that produces (zero, one, or both of) the headline and the
- * weather sentence. Returns nulls in either field when the corresponding
- * input wasn't provided, or when the model declined to pick.
+ * Single LLM call that produces (zero, one, or all of) the headline, the
+ * weather sentence, and the representative-artists list. Returns nulls in
+ * any field when the corresponding input wasn't provided, or when the model
+ * declined to pick.
  *
  * Throws on transport / parse failure; callers catch and log so a flaky
  * Anthropic call never blocks the rest of the Whoop webhook work.
  */
-export async function generateHeadlineAndWeather(
-  input: HeadlineWeatherInput,
+export async function generateLlmFields(
+  input: LlmFieldsInput,
   model: string
-): Promise<HeadlineWeatherResult> {
+): Promise<LlmFieldsResult> {
+  const empty: LlmFieldsResult = {
+    headline: null,
+    weather_emoji: null,
+    weather_sentence: null,
+    top_artists: null,
+    remaining_artists: null,
+  };
+
   const anthropic = getAnthropicClient();
-  if (!anthropic) {
-    return { headline: null, weather_emoji: null, weather_sentence: null };
-  }
+  if (!anthropic) return empty;
 
   const wantsHeadline = !!input.plannedSummary?.description?.trim();
   const wantsWeather =
     input.isIndoor !== true && !!input.weatherDescription && input.weatherDescription.trim().length > 0;
+  const wantsMusic = !!input.playedSongs && input.playedSongs.length > 0;
 
-  if (!wantsHeadline && !wantsWeather) {
-    return { headline: null, weather_emoji: null, weather_sentence: null };
-  }
+  if (!wantsHeadline && !wantsWeather && !wantsMusic) return empty;
 
   const userParts: string[] = [];
+
   if (wantsHeadline) {
     userParts.push(
       'Planned workout description (summarize in one sentence):',
@@ -393,18 +382,32 @@ export async function generateHeadlineAndWeather(
     userParts.push('Planned workout description: not provided. Return null for headline.');
   }
 
+  userParts.push('');
   if (wantsWeather) {
-    userParts.push('', `Weather data: ${input.weatherDescription}`);
+    userParts.push(`Weather data: ${input.weatherDescription}`);
   } else {
-    userParts.push('', 'Weather data: not provided. Return null for weather_emoji and weather_sentence.');
+    userParts.push('Weather data: not provided. Return null for weather_emoji and weather_sentence.');
+  }
+
+  userParts.push('');
+  if (wantsMusic) {
+    userParts.push('Played songs:');
+    for (const song of input.playedSongs!) {
+      const artist = song.artist?.trim();
+      const title = song.name?.trim();
+      if (!artist || !title) continue;
+      userParts.push(`- ${artist} - ${title}`);
+    }
+  } else {
+    userParts.push('Played songs: not provided. Return null for top_artists and remaining_artists.');
   }
 
   const message = await anthropic.messages.parse({
     model,
     max_tokens: 512,
-    system: HEADLINE_WEATHER_SYSTEM_PROMPT,
+    system: LLM_FIELDS_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userParts.join('\n') }],
-    output_config: { format: zodOutputFormat(HeadlineWeatherSchema) },
+    output_config: { format: zodOutputFormat(LlmFieldsSchema) },
   });
 
   const parsed = message.parsed_output;
@@ -412,6 +415,8 @@ export async function generateHeadlineAndWeather(
     headline: parsed?.headline ?? null,
     weather_emoji: parsed?.weather_emoji ?? null,
     weather_sentence: parsed?.weather_sentence ?? null,
+    top_artists: parsed?.top_artists ?? null,
+    remaining_artists: parsed?.remaining_artists ?? null,
   };
 }
 
@@ -442,12 +447,13 @@ export async function generateActivityDescription(
   const { headline: existingHeadline, zwiftMapLine } = splitExistingDescription(activity.description);
 
   // If the athlete already wrote a headline, preserve it verbatim and skip
-  // headline generation entirely. We still rewrite the weather (sentence).
-  const llmResult = await generateHeadlineAndWeather(
+  // the headline path — but still ask the LLM for weather and music.
+  const llmResult = await generateLlmFields(
     {
       plannedSummary: existingHeadline ? null : plannedSummary,
       weatherDescription: activity.weather_description ?? null,
       isIndoor: activity.is_indoor,
+      playedSongs: activity.played_songs,
     },
     model
   );
@@ -459,6 +465,18 @@ export async function generateActivityDescription(
       ? `${llmResult.weather_emoji} ${llmResult.weather_sentence}`
       : null;
 
+  // Random fallback when Anthropic is unavailable: the LLM short-circuits to
+  // null and we'd otherwise lose the music block entirely. The other
+  // LLM-driven fields (headline, weather rewrite) have no programmatic
+  // fallback because they're prose; artists are just a list.
+  let topArtists = llmResult.top_artists;
+  let remainingArtists = llmResult.remaining_artists;
+  if (!process.env.ANTHROPIC_API_KEY && activity.played_songs && activity.played_songs.length > 0) {
+    const fallback = pickRandomArtists(activity.played_songs);
+    topArtists = fallback.top;
+    remainingArtists = fallback.remaining;
+  }
+
   return composeBlocks({
     headline,
     zwiftMapLine,
@@ -467,6 +485,6 @@ export async function generateActivityDescription(
     power: buildPowerBlock(activity),
     heat: buildHeatBlock(activity),
     whoop: buildWhoopBlock(activity, whoop),
-    music: buildMusicBlock(activity.played_songs),
+    music: buildMusicBlock(topArtists, remainingArtists),
   });
 }
