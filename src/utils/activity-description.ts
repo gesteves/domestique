@@ -308,8 +308,10 @@ const HEADLINE_WEATHER_SYSTEM_PROMPT = `You produce two short fields for an athl
 - Write one sentence summarizing the matched planned workout, derived from its name and description.
 - End the sentence with a period.
 - Use "VO₂max" (subscript 2, no dot) when referencing VO₂max efforts.
+- Tone: neutral and technical. No exclamation marks. No marketing language ("crushed", "epic", "smashed", "huge", "killer"). No emojis in the headline.
+- Scope: describe only the *planned* workout. Do not reference weather, perceived effort, fatigue, Whoop strain, or any post-activity outcome — those belong in the emoji blocks Domestique appends after the headline.
 - When multiple planned candidates are provided, pick the one whose sport and structure genuinely match the completed activity. If no candidate fits, return null for both \`headline\` and \`matched_workout_id\` rather than forcing a match.
-- Echo the chosen candidate's id in \`matched_workout_id\`.
+- \`matched_workout_id\` must be the chosen candidate's \`id\` copied byte-for-byte. Do not transform, lowercase, paraphrase, or trim it.
 
 Examples:
 - "2 hours of endurance at 70-75% FTP."
@@ -323,6 +325,7 @@ Examples:
 - Open the sentence with a summary of the conditions, chosen from (but not limited to): clear, sunny, mostly sunny, partly cloudy, overcast, windy, light rain, heavy rain, snow. Infer this from wind speeds, precipitation amount, and cloud coverage in the input.
 - Assume any missing data point is zero (no cloud percentage in the input → 0% cloud; no rain field → no rain; etc.).
 - Use the same units as the source data. Round all numbers.
+- If — and only if — the source data mentions wind direction relative to the route (tailwind, headwind, crosswind), preserve that phrasing. Never invent route-relative wind information; use compass direction (W, WSW, NNE, etc.) when the source provides only that.
 - \`weather_emoji\` is a single emoji that best represents the conditions overall.
 
 Style:
@@ -337,7 +340,11 @@ Examples:
 - 🌤️ Mostly sunny with light W winds of 7–21 km/h gusting to 26, temps 10–14°C (feels like 5–9°C), and a slight tailwind
 - ☁️ Overcast with light-to-moderate WSW winds of 14–23 km/h gusting to 31, temps 8–13°C (feels like 2–8°C)
 - ☁️ Overcast with a light NNW breeze of 3–7 km/h gusting to 21, temps around 20°C (feels like 17°C), and mostly tailwind
-- ☀️ Sunny skies with SW winds of 1–5 mph and gusts up to 11 mph, temperatures ranging from 51–61°F with an average feel of 49°F`;
+- ☀️ Sunny skies with SW winds of 1–5 mph and gusts up to 11 mph, temperatures ranging from 51–61°F with an average feel of 49°F
+
+# OUTPUT FORMATTING
+
+- Return both \`headline\` and \`weather_sentence\` as raw text. Do not wrap the output in quotation marks — the examples above are quoted only to delimit them in this prompt.`;
 
 let anthropicClient: Anthropic | null = null;
 
