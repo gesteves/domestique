@@ -140,7 +140,6 @@ When Whoop is configured, Domestique exposes `POST /webhooks/whoop` and uses it 
 **One-time setup in Intervals.icu** — create these custom fields:
 - Wellness: `WhoopStrain` (Number)
 - Activity: `WhoopWorkoutStrain` (Number)
-- Activity: `DomestiqueDescriptionGenerated` (Text) — Domestique writes `yes` after generating a description. Clear it on an activity to force regeneration on the next workout.updated.
 
 **One-time setup in Whoop** — in your Whoop developer dashboard, add the webhook URL `https://{your-host}/webhooks/whoop` and select **Model Version: v2**.
 

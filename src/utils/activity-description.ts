@@ -539,7 +539,6 @@ function settled<T>(
 /**
  * Compose the full activity description. The caller is responsible for:
  *   - Skipping pool swims before reaching this function.
- *   - Checking the `domestique_description_generated` idempotency flag.
  *   - Wrapping the call in try/catch (a catastrophic failure before any LLM
  *     call is made must not bubble out of the Whoop webhook handler).
  *

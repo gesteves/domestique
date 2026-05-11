@@ -413,12 +413,6 @@ interface IntervalsActivity {
   // Whoop strain (0-21) for the matched Whoop workout. Written by the
   // Whoop webhook receiver on workout.updated events.
   WhoopWorkoutStrain?: number;
-
-  // Idempotency marker for the Whoop-webhook description generator. Domestique
-  // writes the literal string "yes" after writing a description; any other
-  // value (or empty) means we should generate one on the next workout.updated.
-  // The user can clear this in Intervals.icu's UI to force regeneration.
-  DomestiqueDescriptionGenerated?: string;
 }
 
 interface IntervalsWellness {
@@ -2624,11 +2618,6 @@ export class IntervalsClient {
 
       // Workout compliance
       compliance: activity.compliance != null ? formatPercent(activity.compliance) : undefined,
-
-      // Internal: Domestique description idempotency marker. Surfaced for the
-      // Whoop webhook receiver; intentionally not exposed in Zod output
-      // schemas, so it never reaches MCP tool consumers.
-      domestique_description_generated: activity.DomestiqueDescriptionGenerated,
 
       // Weather (only fetched for outdoor activities in single-activity requests)
       weather_description: weatherDescription,

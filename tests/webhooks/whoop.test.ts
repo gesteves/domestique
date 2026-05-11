@@ -243,7 +243,7 @@ describe('Whoop webhook handler', () => {
     expect(fakes.intervals.updateWellness).toHaveBeenCalledWith(yesterday, { WhoopStrain: 14.2 });
   });
 
-  it('on workout.updated, updates WhoopWorkoutStrain on the matching Intervals.icu activity', async () => {
+  it('on workout.updated, writes WhoopWorkoutStrain and the regenerated description', async () => {
     const whoopWorkout = {
       id: 'workout-uuid',
       activity_type: 'Running' as const,
@@ -261,15 +261,11 @@ describe('Whoop webhook handler', () => {
         source: 'intervals.icu',
       },
     ]);
-    // Pretend the activity already has a Domestique-generated description so
-    // the description-generation branch short-circuits and we only see the
-    // WhoopWorkoutStrain write.
     fakes.intervals.getActivity.mockResolvedValueOnce({
       id: 'icu-act-1',
       start_time: '2024-12-15T10:02:00+00:00',
       activity_type: 'Running',
       source: 'intervals.icu',
-      domestique_description_generated: 'yes',
     });
 
     const res = await postWebhook(app, {
@@ -282,11 +278,16 @@ describe('Whoop webhook handler', () => {
 
     await flushAsync();
     expect(fakes.whoop.getWorkoutById).toHaveBeenCalledWith('workout-uuid');
-    expect(fakes.intervals.updateActivity).toHaveBeenCalledWith('icu-act-1', {
+
+    // Two updateActivity calls: strain first, then description.
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledTimes(2);
+    expect(fakes.intervals.updateActivity).toHaveBeenNthCalledWith(1, 'icu-act-1', {
       WhoopWorkoutStrain: 13.5,
     });
-    // No second updateActivity (no description write):
-    expect(fakes.intervals.updateActivity).toHaveBeenCalledTimes(1);
+    const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+    expect(descriptionCall[0]).toBe('icu-act-1');
+    expect(typeof descriptionCall[1].description).toBe('string');
+    expect(descriptionCall[1].description).toContain('🔥 Whoop strain 13.5');
   });
 
   it('on workout.updated for a pool swim, writes WhoopWorkoutStrain but skips description generation', async () => {
@@ -381,7 +382,6 @@ describe('Whoop webhook handler', () => {
     expect(descriptionCall[1].description).toContain('🔥 Whoop strain 14.2');
     // No headline (no planned candidate, no existing description):
     expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
-    expect(descriptionCall[1].DomestiqueDescriptionGenerated).toBe('yes');
     logSpy.mockRestore();
   });
 
@@ -570,11 +570,10 @@ describe('Whoop webhook handler', () => {
       // 2 PUTs: WhoopWorkoutStrain, then description. The description-generation
       // path resolved a planned summary; we can't easily assert the LLM call
       // from here without mocking it, but we can confirm the second PUT carried
-      // a `description` and `DomestiqueDescriptionGenerated`.
+      // a `description`.
       const calls = fakes.intervals.updateActivity.mock.calls;
       expect(calls).toHaveLength(2);
       expect(calls[1][1]).toHaveProperty('description');
-      expect(calls[1][1].DomestiqueDescriptionGenerated).toBe('yes');
       logSpy.mockRestore();
     });
 

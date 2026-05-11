@@ -49,9 +49,9 @@ const HEADLINE_SPORTS: ReadonlySet<ActivityType> = new Set<ActivityType>(['Cycli
 /**
  * Activity IDs currently being processed for description generation, used
  * to dedupe rapid duplicate `workout.updated` webhooks for the same
- * activity. Two events ~100ms apart would otherwise both read the activity
- * before either writes the `DomestiqueDescriptionGenerated=yes` flag,
- * spending 2× LLM tokens and clobbering the first description.
+ * activity. Two events ~100ms apart would otherwise both spawn full
+ * description-generation passes — 2× LLM tokens, redundant PUTs, and the
+ * second clobbering the first.
  *
  * Scope: single-process only. Multi-process or rolling-restart races
  * aren't addressed — those are bounded enough not to warrant Redis.
@@ -299,14 +299,6 @@ async function runDescriptionGeneration(
       return;
     }
 
-    if (full.domestique_description_generated === 'yes') {
-      console.log(
-        `[WhoopWebhook] activity ${activityId} already has a Domestique-generated description — skipping ` +
-        `(clear DomestiqueDescriptionGenerated on the activity to force regeneration)`
-      );
-      return;
-    }
-
     const plannedSummary = await resolvePlannedSummary(full, deps);
 
     const whoopMatched: WhoopMatchedData = {
@@ -332,10 +324,7 @@ async function runDescriptionGeneration(
       return;
     }
 
-    await intervals.updateActivity(activityId, {
-      description,
-      DomestiqueDescriptionGenerated: 'yes',
-    });
+    await intervals.updateActivity(activityId, { description });
     console.log(`[WhoopWebhook] activity ${activityId}: description updated (${description.length} chars)`);
   });
 }
