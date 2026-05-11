@@ -414,10 +414,11 @@ interface IntervalsActivity {
   // Whoop webhook receiver on workout.updated events.
   WhoopWorkoutStrain?: number;
 
-  // Unix timestamp (seconds) when Domestique last wrote an auto-generated
-  // description to this activity. Used as an idempotency flag on the
-  // workout.updated webhook so we don't regenerate on every retry.
-  DomestiqueDescriptionGenerated?: number;
+  // Idempotency marker for the Whoop-webhook description generator. Domestique
+  // writes the literal string "yes" after writing a description; any other
+  // value (or empty) means we should generate one on the next workout.updated.
+  // The user can clear this in Intervals.icu's UI to force regeneration.
+  DomestiqueDescriptionGenerated?: string;
 }
 
 interface IntervalsWellness {

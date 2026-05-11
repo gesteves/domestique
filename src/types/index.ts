@@ -185,8 +185,10 @@ export interface NormalizedWorkout {
   played_songs?: PlayedSong[];
 
   // Internal field for the Whoop webhook description-generation flow.
-  // Not exposed via any MCP output schema.
-  domestique_description_generated?: number; // Unix seconds; set after we auto-write a description
+  // Not exposed via any MCP output schema. The value is the literal "yes" when
+  // Domestique has already written a description; anything else (empty, other
+  // text) is treated as "regenerate on the next workout.updated".
+  domestique_description_generated?: string;
 }
 
 /**

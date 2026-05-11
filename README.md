@@ -137,10 +137,10 @@ When Whoop is configured, Domestique exposes `POST /webhooks/whoop` and uses it 
 - Set per-workout Whoop strain on the matching Intervals.icu activity.
 - Auto-generate a Strava-ready description for the completed activity (requires `ANTHROPIC_API_KEY`).
 
-**One-time setup in Intervals.icu** — create these custom fields (all type Number):
-- Wellness: `WhoopStrain`
-- Activity: `WhoopWorkoutStrain`
-- Activity: `DomestiqueDescriptionGenerated` — clear this on an activity if you want Domestique to regenerate the description.
+**One-time setup in Intervals.icu** — create these custom fields:
+- Wellness: `WhoopStrain` (Number)
+- Activity: `WhoopWorkoutStrain` (Number)
+- Activity: `DomestiqueDescriptionGenerated` (Text) — Domestique writes `yes` after generating a description. Clear it on an activity to force regeneration on the next workout.updated.
 
 **One-time setup in Whoop** — in your Whoop developer dashboard, add the webhook URL `https://{your-host}/webhooks/whoop` and select **Model Version: v2**.
 

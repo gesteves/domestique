@@ -241,10 +241,10 @@ async function maybeGenerateActivityDescription(
       return;
     }
 
-    if (full.domestique_description_generated && full.domestique_description_generated > 0) {
+    if (full.domestique_description_generated === 'yes') {
       console.log(
-        `[WhoopWebhook] activity ${activityId} already has a Domestique-generated description ` +
-        `(at ${full.domestique_description_generated}) — skipping`
+        `[WhoopWebhook] activity ${activityId} already has a Domestique-generated description — skipping ` +
+        `(clear DomestiqueDescriptionGenerated on the activity to force regeneration)`
       );
       return;
     }
@@ -276,7 +276,7 @@ async function maybeGenerateActivityDescription(
 
     await intervals.updateActivity(activityId, {
       description,
-      DomestiqueDescriptionGenerated: Math.floor(Date.now() / 1000),
+      DomestiqueDescriptionGenerated: 'yes',
     });
     console.log(`[WhoopWebhook] activity ${activityId}: description updated (${description.length} chars)`);
   });

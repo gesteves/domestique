@@ -253,7 +253,7 @@ describe('Whoop webhook handler', () => {
       start_time: '2024-12-15T10:02:00+00:00',
       activity_type: 'Running',
       source: 'intervals.icu',
-      domestique_description_generated: 1700000000,
+      domestique_description_generated: 'yes',
     });
 
     const res = await postWebhook(app, {
@@ -365,7 +365,7 @@ describe('Whoop webhook handler', () => {
     expect(descriptionCall[1].description).toContain('🔥 Whoop strain 14.2');
     // No headline (no planned candidate, no existing description):
     expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
-    expect(descriptionCall[1].DomestiqueDescriptionGenerated).toBeGreaterThan(0);
+    expect(descriptionCall[1].DomestiqueDescriptionGenerated).toBe('yes');
     logSpy.mockRestore();
   });
 
@@ -476,7 +476,7 @@ describe('Whoop webhook handler', () => {
       const calls = fakes.intervals.updateActivity.mock.calls;
       expect(calls).toHaveLength(2);
       expect(calls[1][1]).toHaveProperty('description');
-      expect(calls[1][1].DomestiqueDescriptionGenerated).toBeGreaterThan(0);
+      expect(calls[1][1].DomestiqueDescriptionGenerated).toBe('yes');
       logSpy.mockRestore();
     });
 
