@@ -2239,6 +2239,36 @@ export class IntervalsClient {
   }
 
   /**
+   * Bulk-update wellness records for multiple dates in a single request.
+   * PUT /api/v1/athlete/{id}/wellness-bulk
+   *
+   * Each record's `id` is the day in YYYY-MM-DD format. Only fields present
+   * on each record are changed; everything else is left intact.
+   */
+  async updateWellnessBulk(
+    records: Array<Partial<IntervalsWellness> & { id: string }>
+  ): Promise<void> {
+    const url = new URL(
+      `${INTERVALS_API_BASE}/athlete/${this.config.athleteId}/wellness-bulk`
+    );
+    return httpRequestVoid({
+      url: url.toString(),
+      method: 'PUT',
+      headers: {
+        Authorization: this.authHeader,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(records),
+      context: {
+        operation: 'bulk update wellness',
+        resource: `${records.length} wellness records`,
+      },
+      ...intervalsHttpErrorBuilders,
+    });
+  }
+
+  /**
    * Get wellness trends for a date range.
    * Includes entries that have any wellness data, not just weight.
    */

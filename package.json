@@ -14,6 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "whoop:auth": "node dist/scripts/whoop-oauth.js",
     "whoop:auth:dev": "tsx src/scripts/whoop-oauth.ts",
+    "whoop:backfill": "node dist/scripts/backfill-whoop-strain.js",
+    "whoop:backfill:dev": "tsx src/scripts/backfill-whoop-strain.ts",
     "test:clients": "node dist/scripts/test-clients.js"
   },
   "keywords": [

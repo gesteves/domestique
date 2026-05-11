@@ -1074,6 +1074,36 @@ export class WhoopClient {
   }
 
   /**
+   * Fetch raw `/cycle` records for a date range, paginating via `next_token`.
+   *
+   * Returns cycles unmodified — caller is responsible for filtering by
+   * `score_state` and assigning each cycle to a calendar day. Used by the
+   * historical-strain backfill script, which applies each cycle's own
+   * `timezone_offset` rather than the athlete's current timezone.
+   */
+  async getRawCycles(startDate: string, endDate: string): Promise<WhoopCycle[]> {
+    const all: WhoopCycle[] = [];
+    let nextToken: string | undefined;
+    do {
+      const params: Record<string, string> = {
+        start: `${startDate}T00:00:00.000Z`,
+        end: `${endDate}T23:59:59.999Z`,
+        limit: '25',
+      };
+      if (nextToken) {
+        params.nextToken = nextToken;
+      }
+      const resp = await this.fetch<{ records: WhoopCycle[]; next_token?: string }>(
+        '/cycle',
+        params
+      );
+      all.push(...resp.records);
+      nextToken = resp.next_token;
+    } while (nextToken);
+    return all;
+  }
+
+  /**
    * Get workouts/activities for a date range.
    * Filters results to match the user's local timezone.
    */
