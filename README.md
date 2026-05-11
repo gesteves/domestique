@@ -107,7 +107,7 @@ For Last.fm integration (optional):
 - `LASTFM_USERNAME` - Last.fm username.
 - `LASTFM_API_KEY` - Last.fm API key.
 
-When both are set, `get_workout_details` and `get_todays_activities` include tracks played during the workout.
+When both are set, `get_workout_details` and `get_todays_activities` include tracks played during the workout. ("Why not use Spotify?" you may be wondering. Ingesting Spotify data into AI is against their [developer policy](https://developer.spotify.com/policy).)
 
 For Anthropic API integration (optional):
 - `ANTHROPIC_API_KEY` - Enables Claude for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note), triathlon race priority extraction (A/B/C from the umbrella description), auto-generated activity descriptions on `workout.updated` Whoop webhooks, and debug token counting.
