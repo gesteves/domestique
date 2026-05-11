@@ -300,6 +300,8 @@ async function runDescriptionGeneration(
     }
 
     const plannedSummary = await resolvePlannedSummary(full, deps);
+    const activityDate = full.start_time.slice(0, 10);
+    const heatAdaptationScore = await intervals.getCoreHeatAdaptationScore(activityDate);
 
     const whoopMatched: WhoopMatchedData = {
       id: whoopActivity.id,
@@ -316,6 +318,7 @@ async function runDescriptionGeneration(
       activity: full,
       whoop: whoopMatched,
       plannedSummary,
+      heatAdaptationScore,
       model: getDescriptionModel(),
     });
 

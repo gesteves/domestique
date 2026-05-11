@@ -2205,6 +2205,22 @@ export class IntervalsClient {
   }
 
   /**
+   * Fetch the raw CoreHeatAdaptationScore (0–100) for a given date, or null
+   * when there's no wellness record / no score on file. Used by the Whoop
+   * webhook description path to append a "X% heat adapted" suffix to the
+   * heat-strain line. Failures (404, network) resolve to null — heat
+   * adaptation is best-effort, not a critical signal.
+   */
+  async getCoreHeatAdaptationScore(date: string): Promise<number | null> {
+    try {
+      const data = await this.fetch<IntervalsWellness>(`/wellness/${date}`);
+      return typeof data.CoreHeatAdaptationScore === 'number' ? data.CoreHeatAdaptationScore : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Update wellness fields for a specific date.
    * PUT /api/v1/athlete/{id}/wellness/{date}
    *

@@ -29,6 +29,7 @@ interface FakeIntervals {
   getUnitPreferences: ReturnType<typeof vi.fn>;
   updateActivity: ReturnType<typeof vi.fn>;
   updateWellness: ReturnType<typeof vi.fn>;
+  getCoreHeatAdaptationScore: ReturnType<typeof vi.fn>;
 }
 
 interface FakeTrainerRoad {
@@ -56,6 +57,7 @@ function makeFakes(): { whoop: FakeWhoop; intervals: FakeIntervals; trainerroad:
       }),
       updateActivity: vi.fn().mockResolvedValue(undefined),
       updateWellness: vi.fn().mockResolvedValue(undefined),
+      getCoreHeatAdaptationScore: vi.fn().mockResolvedValue(null),
     },
     trainerroad: {
       getPlannedWorkouts: vi.fn().mockResolvedValue([]),
@@ -382,6 +384,99 @@ describe('Whoop webhook handler', () => {
     expect(descriptionCall[1].description).toContain('🔥 Whoop strain 14.2');
     // No headline (no planned candidate, no existing description):
     expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
+    logSpy.mockRestore();
+  });
+
+  it('on workout.updated, appends the daily heat-adaptation score to the heat line when > 0', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+      id: 'hot-ride-uuid',
+      activity_type: 'Cycling' as const,
+      start_time: '2024-12-15T08:00:00+00:00',
+      end_time: '2024-12-15T10:00:00+00:00',
+      duration: '2:00:00',
+      strain_score: 14.2,
+    });
+    fakes.intervals.getActivities.mockResolvedValueOnce([
+      {
+        id: 'icu-hot-1',
+        start_time: '2024-12-15T08:00:00+00:00',
+        activity_type: 'Cycling',
+        source: 'intervals.icu',
+      },
+    ]);
+    fakes.intervals.getActivity.mockResolvedValueOnce({
+      id: 'icu-hot-1',
+      start_time: '2024-12-15T08:00:00+00:00',
+      activity_type: 'Cycling',
+      source: 'intervals.icu',
+      is_indoor: false,
+      max_heat_strain_index: 2.47,
+      median_heat_strain_index: 1.71,
+    });
+    fakes.intervals.getCoreHeatAdaptationScore.mockResolvedValueOnce(72);
+
+    const res = await postWebhook(app, {
+      user_id: ATHLETE_USER_ID,
+      id: 'hot-ride-uuid',
+      type: 'workout.updated',
+      trace_id: 'trace-hot',
+    });
+    expect(res.status).toBe(200);
+    await flushAsync();
+
+    // Wellness fetched for the activity's local date:
+    expect(fakes.intervals.getCoreHeatAdaptationScore).toHaveBeenCalledWith('2024-12-15');
+
+    const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+    expect(descriptionCall[1].description).toContain(
+      '🌡️ Max HSI 2.5 · Median HSI 1.7 · 72% heat adapted'
+    );
+    logSpy.mockRestore();
+  });
+
+  it('on workout.updated with no HSI but a positive adaptation score, renders adaptation alone', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+      id: 'adapt-uuid',
+      activity_type: 'Cycling' as const,
+      start_time: '2024-12-15T08:00:00+00:00',
+      end_time: '2024-12-15T09:00:00+00:00',
+      duration: '1:00:00',
+      strain_score: 10.0,
+    });
+    fakes.intervals.getActivities.mockResolvedValueOnce([
+      {
+        id: 'icu-adapt-1',
+        start_time: '2024-12-15T08:00:00+00:00',
+        activity_type: 'Cycling',
+        source: 'intervals.icu',
+      },
+    ]);
+    fakes.intervals.getActivity.mockResolvedValueOnce({
+      id: 'icu-adapt-1',
+      start_time: '2024-12-15T08:00:00+00:00',
+      activity_type: 'Cycling',
+      source: 'intervals.icu',
+      is_indoor: true,
+      // No HSI values.
+    });
+    fakes.intervals.getCoreHeatAdaptationScore.mockResolvedValueOnce(58);
+
+    const res = await postWebhook(app, {
+      user_id: ATHLETE_USER_ID,
+      id: 'adapt-uuid',
+      type: 'workout.updated',
+      trace_id: 'trace-adapt',
+    });
+    expect(res.status).toBe(200);
+    await flushAsync();
+
+    const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+    expect(descriptionCall[1].description).toContain('🌡️ 58% heat adapted');
+    expect(descriptionCall[1].description).not.toContain('HSI');
     logSpy.mockRestore();
   });
 

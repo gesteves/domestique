@@ -17,7 +17,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { NormalizedWorkout, PlayedSong, WhoopMatchedData } from '../types/index.js';
-import { isSwimmingActivity } from './format-units.js';
+import { formatPercent, isSwimmingActivity } from './format-units.js';
 
 const ZWIFT_PREFIX = '🗺️';
 
@@ -67,13 +67,49 @@ export function buildPowerBlock(activity: NormalizedWorkout): string | null {
 }
 
 /**
- * Build the CORE heat strain line. Requires both max and median HSI.
- * Skipped for all swimming activities (sensor inaccurate in water).
+ * Build the CORE heat line.
+ *
+ * Combines two independent signals:
+ *   - Per-activity HSI (Max + Median). Requires both fields.
+ *   - Daily CoreHeatAdaptationScore. Skipped when null or ≤ 0.
+ *
+ * Both signals are suppressed for swimming activities — the CORE sensor
+ * is inaccurate in water, and heat adaptation isn't a relevant lens for
+ * swim sessions.
+ *
+ * Format examples:
+ *   🌡️ Max HSI 2.5 · Median HSI 1.7
+ *   🌡️ Max HSI 2.5 · Median HSI 1.7 · 72% heat adapted
+ *   🌡️ 72% heat adapted
+ *
+ * Returns null when neither signal is present.
  */
-export function buildHeatBlock(activity: NormalizedWorkout): string | null {
+export function buildHeatBlock(
+  activity: NormalizedWorkout,
+  heatAdaptationScore: number | null | undefined
+): string | null {
   if (!activity.activity_type || isSwimmingActivity(activity.activity_type)) return null;
-  if (activity.max_heat_strain_index == null || activity.median_heat_strain_index == null) return null;
-  return `🌡️ Max HSI ${activity.max_heat_strain_index.toFixed(1)} · Median HSI ${activity.median_heat_strain_index.toFixed(1)}`;
+
+  const hasHsi =
+    activity.max_heat_strain_index != null && activity.median_heat_strain_index != null;
+
+  const hasAdaptation =
+    typeof heatAdaptationScore === 'number' &&
+    Number.isFinite(heatAdaptationScore) &&
+    heatAdaptationScore > 0;
+
+  if (!hasHsi && !hasAdaptation) return null;
+
+  const parts: string[] = [];
+  if (hasHsi) {
+    parts.push(`Max HSI ${activity.max_heat_strain_index!.toFixed(1)}`);
+    parts.push(`Median HSI ${activity.median_heat_strain_index!.toFixed(1)}`);
+  }
+  if (hasAdaptation) {
+    parts.push(`${formatPercent(heatAdaptationScore!)} heat adapted`);
+  }
+
+  return `🌡️ ${parts.join(' · ')}`;
 }
 
 /**
@@ -516,8 +552,10 @@ export async function generateMusicSelection(
 export interface GenerateDescriptionInput {
   activity: NormalizedWorkout;
   whoop: WhoopMatchedData | null;
-  /** Planned-workout description to summarize as the headline. Null = no headline. */
+  /** Planned-workout description to summarize as a 🗓️ stat line. Null = no plan line. */
   plannedSummary: PlannedSummaryInput | null;
+  /** Daily CoreHeatAdaptationScore (0–100) for the activity's date. Null = unavailable; ≤0 = suppress. */
+  heatAdaptationScore: number | null;
   model: string;
 }
 
@@ -550,7 +588,7 @@ function settled<T>(
 export async function generateActivityDescription(
   input: GenerateDescriptionInput
 ): Promise<string> {
-  const { activity, whoop, plannedSummary, model } = input;
+  const { activity, whoop, plannedSummary, heatAdaptationScore, model } = input;
 
   // We never emit a headline ourselves anymore — anything in this slot is
   // user-written prose, preserved verbatim across regenerations. The
@@ -603,7 +641,7 @@ export async function generateActivityDescription(
     weather: weatherBlock,
     waterTemp: buildWaterTempBlock(activity),
     power: buildPowerBlock(activity),
-    heat: buildHeatBlock(activity),
+    heat: buildHeatBlock(activity, heatAdaptationScore),
     whoop: buildWhoopBlock(activity, whoop),
     music: buildMusicBlock(topArtists, remainingArtists),
   });

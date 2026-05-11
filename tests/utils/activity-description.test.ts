@@ -68,24 +68,55 @@ describe('buildPowerBlock', () => {
 });
 
 describe('buildHeatBlock', () => {
-  it('returns null when either HSI field is missing', () => {
-    expect(buildHeatBlock(workout({ max_heat_strain_index: 2 }))).toBeNull();
-    expect(buildHeatBlock(workout({ median_heat_strain_index: 1 }))).toBeNull();
+  it('returns null when neither HSI nor adaptation score is available', () => {
+    expect(buildHeatBlock(workout(), null)).toBeNull();
+    expect(buildHeatBlock(workout({ max_heat_strain_index: 2 }), null)).toBeNull();
+    expect(buildHeatBlock(workout({ median_heat_strain_index: 1 }), null)).toBeNull();
   });
 
-  it('renders both values rounded to one decimal', () => {
+  it('renders HSI alone when only HSI is present', () => {
     const block = buildHeatBlock(
-      workout({ max_heat_strain_index: 2.47, median_heat_strain_index: 1.71 })
+      workout({ max_heat_strain_index: 2.47, median_heat_strain_index: 1.71 }),
+      null
     );
     expect(block).toBe('🌡️ Max HSI 2.5 · Median HSI 1.7');
   });
 
-  it('is skipped for swimming activities', () => {
+  it('renders adaptation alone when only the score is present', () => {
+    expect(buildHeatBlock(workout(), 72)).toBe('🌡️ 72% heat adapted');
+  });
+
+  it('renders both when HSI and adaptation are present', () => {
+    const block = buildHeatBlock(
+      workout({ max_heat_strain_index: 2.47, median_heat_strain_index: 1.71 }),
+      72
+    );
+    expect(block).toBe('🌡️ Max HSI 2.5 · Median HSI 1.7 · 72% heat adapted');
+  });
+
+  it('suppresses the adaptation suffix when the score is ≤ 0', () => {
+    expect(
+      buildHeatBlock(workout({ max_heat_strain_index: 2, median_heat_strain_index: 1 }), 0)
+    ).toBe('🌡️ Max HSI 2.0 · Median HSI 1.0');
+    expect(
+      buildHeatBlock(workout({ max_heat_strain_index: 2, median_heat_strain_index: 1 }), -5)
+    ).toBe('🌡️ Max HSI 2.0 · Median HSI 1.0');
+  });
+
+  it('suppresses both signals for swimming activities', () => {
+    // HSI is unreliable in water; heat adaptation isn't a relevant lens
+    // for swim sessions either. The whole line goes away.
     expect(
       buildHeatBlock(
-        workout({ activity_type: 'Swimming', max_heat_strain_index: 2, median_heat_strain_index: 1 })
+        workout({ activity_type: 'Swimming', max_heat_strain_index: 2, median_heat_strain_index: 1 }),
+        72
       )
     ).toBeNull();
+    expect(buildHeatBlock(workout({ activity_type: 'Swimming' }), 72)).toBeNull();
+  });
+
+  it('rounds non-integer scores via formatPercent (0 decimals)', () => {
+    expect(buildHeatBlock(workout(), 72.6)).toBe('🌡️ 73% heat adapted');
   });
 });
 
@@ -659,6 +690,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: { id: 'w1', strain_score: 14.2 },
       plannedSummary: { description: 'TR description for the planned-summary LLM call' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -694,6 +726,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: null,
       plannedSummary: { description: 'Some TR description for the planned call' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -721,6 +754,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: { id: 'w1', strain_score: 11.0 },
       plannedSummary: { description: '65-75% FTP endurance, 1 hr' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -767,6 +801,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: null,
       plannedSummary: { description: '65-75% FTP endurance, 1 hr' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -814,6 +849,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: null,
       plannedSummary: { description: '1 hr endurance' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -833,6 +869,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       activity: workout({ activity_type: 'Running' }),
       whoop: null,
       plannedSummary: null,
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
     expect(description).toBe('');
@@ -860,6 +897,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: null,
       plannedSummary: { description: 'Some plan we cannot summarize without a key' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -913,6 +951,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: { id: 'w1', strain_score: 14.2 },
       plannedSummary: { description: '65-75% FTP endurance, 1 hr' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -952,6 +991,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: null,
       plannedSummary: { description: 'Z2 endurance, 30 min' },
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -988,6 +1028,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: null,
       plannedSummary: null,
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
@@ -1016,6 +1057,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       }),
       whoop: null,
       plannedSummary: null,
+      heatAdaptationScore: null,
       model: 'claude-sonnet-4-6',
     });
 
