@@ -11,7 +11,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Fitness trends (CTL/ATL/TSB) and detailed workout analysis with intervals, notes, and weather
 - Heat strain and heat adaptation score from a [CORE Body Temperature](https://corebodytemp.com/) sensor
 - Weather, AQI, and pollen forecasts up to 10 days out for Intervals.icu weather locations or any geocoded place
-- Whoop webhook receiver: refreshes daily Whoop strain on Intervals.icu wellness, sets per-activity Whoop strain on the matched Intervals.icu activity, and auto-generates a Strava-ready description on completion
+- Whoop webhook receiver: refreshes daily Whoop strain on Intervals.icu wellness, sets per-activity Whoop strain on the matched Intervals.icu activity, and auto-generates an activity description on completion
 
 **Note:** Workouts imported from Strava can't be analyzed due to API restrictions. Sync them from Zwift, Garmin Connect, Dropbox, etc. instead.
 
@@ -135,7 +135,7 @@ When Whoop is configured, Domestique exposes `POST /webhooks/whoop` and uses it 
 
 - Sync the day's Whoop strain to Intervals.icu wellness.
 - Set per-workout Whoop strain on the matching Intervals.icu activity.
-- Auto-generate a Strava-ready description for the completed activity (requires `ANTHROPIC_API_KEY`).
+- Auto-generate a description for the completed activity (requires `ANTHROPIC_API_KEY`).
 
 **One-time setup in Intervals.icu** — create these custom fields:
 - Wellness: `WhoopStrain` (Number)
