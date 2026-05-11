@@ -279,8 +279,7 @@ const HeadlineWeatherSchema = z.object({
     .string()
     .nullable()
     .describe(
-      'One-sentence summary of the planned workout, ending with a period. Use "VO₂max" (subscript 2, no dot) when relevant. ' +
-        'Return null if no planned candidate genuinely represents the athlete\'s intent (e.g. swapped workouts, sport mismatch).'
+      "One-sentence summary of the matched planned workout, ending with a period. Follow the HEADLINE RULES in the system prompt. Return null if no planned candidate genuinely represents the athlete's intent."
     ),
   matched_workout_id: z
     .string()
@@ -292,24 +291,53 @@ const HeadlineWeatherSchema = z.object({
     .string()
     .nullable()
     .describe(
-      'A single emoji that best represents the weather conditions overall. Null when weather input was not provided.'
+      'Single emoji that best represents the overall weather conditions. Null when weather input was not provided.'
     ),
   weather_sentence: z
     .string()
     .nullable()
     .describe(
-      'One-sentence rewrite of the weather data. Sentence case, no trailing period, serial comma, en dashes for positive ' +
-        'ranges (3–5°C) but "to" when one or both ends are negative (−2 to 2°C). Space before non-temperature units ' +
-        '(20 km/h), no space before temperature units (55°F). Round all numbers. Null when weather input was not provided.'
+      'One-sentence prose rewrite of the weather data. Follow the WEATHER RULES in the system prompt. Null when weather input was not provided.'
     ),
 });
 
-const HEADLINE_WEATHER_SYSTEM_PROMPT =
-  'You assist an athlete by composing two short fields for their training-log description: a one-sentence headline ' +
-  'summarizing their planned workout, and a one-sentence rewrite of the day\'s weather. You MUST output null in any ' +
-  'field whose input data was not provided. Never invent data. When multiple planned candidates are provided, pick the ' +
-  'one that genuinely represents the athlete\'s intent for the completed activity\'s sport and duration; if none fit, ' +
-  'return null for both `headline` and `matched_workout_id` rather than forcing a match.';
+const HEADLINE_WEATHER_SYSTEM_PROMPT = `You produce two short fields for an athlete's training-log activity description: a one-sentence HEADLINE summarizing the planned workout, and a one-sentence WEATHER rewrite (with a leading emoji). Both fields are optional — output null when the corresponding input wasn't provided, and never invent data.
+
+# HEADLINE RULES
+
+- Write one sentence summarizing the matched planned workout, derived from its name and description.
+- End the sentence with a period.
+- Use "VO₂max" (subscript 2, no dot) when referencing VO₂max efforts.
+- When multiple planned candidates are provided, pick the one whose sport and structure genuinely match the completed activity. If no candidate fits, return null for both \`headline\` and \`matched_workout_id\` rather than forcing a match.
+- Echo the chosen candidate's id in \`matched_workout_id\`.
+
+Examples:
+- "2 hours of endurance at 70-75% FTP."
+- "7×3-minute intervals at 5K pace with 3-minute recoveries."
+- "6×5-min at 10K pace with 3-min recoveries."
+- "1 hour of VO₂max with two sets of 3×2.5 min at 118% FTP."
+
+# WEATHER RULES
+
+- Rewrite the provided weather data as one sentence of natural flowing prose — not a list of data points. Prioritize readability over completeness; omit minor data points if they disrupt the flow.
+- Open the sentence with a summary of the conditions, chosen from (but not limited to): clear, sunny, mostly sunny, partly cloudy, overcast, windy, light rain, heavy rain, snow. Infer this from wind speeds, precipitation amount, and cloud coverage in the input.
+- Assume any missing data point is zero (no cloud percentage in the input → 0% cloud; no rain field → no rain; etc.).
+- Use the same units as the source data. Round all numbers.
+- \`weather_emoji\` is a single emoji that best represents the conditions overall.
+
+Style:
+- Sentence case, no trailing period.
+- Use the serial comma.
+- Use en dashes for ranges where both ends are positive (e.g. 3–5°C, 7–21 km/h).
+- Use "to" instead of an en dash when one or both ends of the range are negative (e.g. "−2 to 2°C", "−3 to −1°C").
+- Add a space before non-temperature units (20 km/h, not 20km/h).
+- Do not add a space before temperature units (55°F, not 55 °F).
+
+Examples:
+- 🌤️ Mostly sunny with light W winds of 7–21 km/h gusting to 26, temps 10–14°C (feels like 5–9°C), and a slight tailwind
+- ☁️ Overcast with light-to-moderate WSW winds of 14–23 km/h gusting to 31, temps 8–13°C (feels like 2–8°C)
+- ☁️ Overcast with a light NNW breeze of 3–7 km/h gusting to 21, temps around 20°C (feels like 17°C), and mostly tailwind
+- ☀️ Sunny skies with SW winds of 1–5 mph and gusts up to 11 mph, temperatures ranging from 51–61°F with an average feel of 49°F`;
 
 let anthropicClient: Anthropic | null = null;
 
