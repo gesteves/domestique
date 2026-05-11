@@ -308,16 +308,18 @@ const HEADLINE_WEATHER_SYSTEM_PROMPT = `You produce two short fields for an athl
 - Write one sentence summarizing the matched planned workout, derived from its name and description.
 - End the sentence with a period.
 - Use "VO₂max" (subscript 2, no dot) when referencing VO₂max efforts.
-- Tone: neutral and technical. No exclamation marks. No marketing language ("crushed", "epic", "smashed", "huge", "killer"). No emojis in the headline.
-- Scope: describe only the *planned* workout. Do not reference weather, perceived effort, fatigue, Whoop strain, or any post-activity outcome — those belong in the emoji blocks Domestique appends after the headline.
+- Tone: objective, neutral and technical. No exclamation marks. No marketing language ("crushed", "epic", "smashed", "huge", "killer"). No emojis in the headline.
+- Scope: describe only the *planned* workout. Do not reference weather, perceived effort, fatigue, Whoop strain, or any post-activity outcome.
 - When multiple planned candidates are provided, pick the one whose sport and structure genuinely match the completed activity. If no candidate fits, return null for both \`headline\` and \`matched_workout_id\` rather than forcing a match.
 - \`matched_workout_id\` must be the chosen candidate's \`id\` copied byte-for-byte. Do not transform, lowercase, paraphrase, or trim it.
 
 Examples:
-- "2 hours of endurance at 70-75% FTP."
-- "7×3-minute intervals at 5K pace with 3-minute recoveries."
-- "6×5-min at 10K pace with 3-min recoveries."
-- "1 hour of VO₂max with two sets of 3×2.5 min at 118% FTP."
+- 2 hours of endurance at 70-75% FTP.
+- 7×3-minute intervals at 5K pace with 3-minute recoveries.
+- 6×5-min at 10K pace with 3-min recoveries.
+- 1 hour of VO₂max with two sets of 3×2.5 min at 118% FTP.
+- 3×12-min over-unders at 90–103% FTP, with 2×24-min endurance blocks.
+- 2-hour tempo ride at 65–90% FTP.
 
 # WEATHER RULES
 
@@ -344,7 +346,7 @@ Examples:
 
 # OUTPUT FORMATTING
 
-- Return both \`headline\` and \`weather_sentence\` as raw text. Do not wrap the output in quotation marks — the examples above are quoted only to delimit them in this prompt.`;
+- Return both \`headline\` and \`weather_sentence\` as raw text. Do not wrap the output in quotation marks.`;
 
 let anthropicClient: Anthropic | null = null;
 
