@@ -2455,7 +2455,10 @@ export class IntervalsClient {
       average_power: averagePowerVal != null ? formatPower(averagePowerVal) : undefined,
       average_heart_rate: activity.average_heartrate != null ? formatHR(activity.average_heartrate) : undefined,
       max_heart_rate: activity.max_heartrate != null ? formatHR(activity.max_heartrate) : undefined,
-      intensity_factor: activity.icu_intensity,
+      // icu_intensity comes back as a percentage (e.g. 73.45 means 73.45% =
+      // IF 0.73), so divide by 100 to normalize to the decimal form everyone
+      // else uses. Matches the per-interval normalization at line ~1793.
+      intensity_factor: activity.icu_intensity != null ? activity.icu_intensity / 100 : undefined,
       elevation_gain: activity.total_elevation_gain != null
         ? formatLength(activity.total_elevation_gain)
         : undefined,
