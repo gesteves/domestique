@@ -5,9 +5,10 @@
  * · Heat strain · Whoop strain · Music. Pool swims are out of scope for the
  * Whoop-webhook caller; the orchestrator only handles non-pool activities.
  *
- * The headline, weather sentence, and music artist picks come from a single
- * Anthropic `messages.parse()` call; every other block is built
- * programmatically.
+ * Headline, weather sentence, and music artist picks each come from their own
+ * focused Anthropic `messages.parse()` call. The orchestrator fires the
+ * three concurrently with `Promise.allSettled`, so a single failed call
+ * loses only its own block instead of the entire description.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -195,7 +196,7 @@ export function composeBlocks(input: ComposeBlocksInput): string {
 }
 
 // ============================================================================
-// Anthropic-backed helper
+// Anthropic-backed helpers
 // ============================================================================
 
 export interface PlannedSummaryInput {
@@ -203,67 +204,47 @@ export interface PlannedSummaryInput {
   description: string;
 }
 
-export interface LlmFieldsInput {
-  /** Planned-workout description to summarize. Null/undefined = no headline. */
-  plannedSummary?: PlannedSummaryInput | null;
-  /** Raw Intervals.icu weather description. When null/empty the model omits weather. */
-  weatherDescription?: string | null;
-  /** Whether the activity is indoor; weather is only generated for outdoor. */
-  isIndoor?: boolean;
-  /** Scrobbled tracks played during the workout. Empty/undefined = no music block. */
-  playedSongs?: PlayedSong[];
+export interface WeatherSentence {
+  emoji: string;
+  sentence: string;
 }
 
-export interface LlmFieldsResult {
-  /** One-sentence headline summarizing the planned workout, or null. */
-  headline: string | null;
-  /** Emoji that leads the weather block, or null when weather isn't generated. */
-  weather_emoji: string | null;
-  /** One-sentence weather description, or null when weather isn't generated. */
-  weather_sentence: string | null;
-  /** Up to 5 representative artist names (normalized), or null when no songs. */
-  top_artists: string[] | null;
-  /** Count of unique normalized artists not in `top_artists`, or null when no songs. */
-  remaining_artists: number | null;
+export interface MusicSelection {
+  top_artists: string[];
+  remaining_artists: number;
 }
 
-const LlmFieldsSchema = z.object({
+let anthropicClient: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic | null {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  if (!anthropicClient) anthropicClient = new Anthropic({ apiKey });
+  return anthropicClient;
+}
+
+/**
+ * Reset the cached client. Test-only.
+ * @internal
+ */
+export function _resetDescriptionClientForTesting(): void {
+  anthropicClient = null;
+}
+
+// ---------------------------------------------------------------------------
+// Headline
+// ---------------------------------------------------------------------------
+
+const HeadlineSchema = z.object({
   headline: z
     .string()
     .nullable()
     .describe(
-      'One-sentence summary of the planned workout description, ending with a period. Follow the HEADLINE RULES in the system prompt. Null when no planned workout description was provided.'
-    ),
-  weather_emoji: z
-    .string()
-    .nullable()
-    .describe(
-      'Single emoji that best represents the overall weather conditions. Null when weather input was not provided.'
-    ),
-  weather_sentence: z
-    .string()
-    .nullable()
-    .describe(
-      'One-sentence prose rewrite of the weather data. Follow the WEATHER RULES in the system prompt. Null when weather input was not provided.'
-    ),
-  top_artists: z
-    .array(z.string())
-    .nullable()
-    .describe(
-      'Up to 5 artist names that best represent the played-songs list. Collapse trivial variants (e.g. "The Foo Fighters" → "Foo Fighters", "Beyonce" → "Beyoncé") to one canonical form, choosing the form most commonly seen in the input. Null when no played songs were provided.'
-    ),
-  remaining_artists: z
-    .number()
-    .int()
-    .nullable()
-    .describe(
-      'Count of unique artists in the input — after the same normalization — NOT named in top_artists. 0 when 5 or fewer unique artists exist after normalization. Null when no played songs were provided.'
+      'One-sentence summary of the planned workout description, ending with a period. Follow the rules in the system prompt. Null when the planned-workout description is too sparse to summarize faithfully.'
     ),
 });
 
-const LLM_FIELDS_SYSTEM_PROMPT = `You produce a few short fields for an athlete's training-log activity description: a one-sentence HEADLINE summarizing the planned workout, a one-sentence WEATHER rewrite (with a leading emoji), and a representative MUSIC artist list. Each section is optional — output null when the corresponding input wasn't provided, and never invent data.
-
-# HEADLINE RULES
+const HEADLINE_SYSTEM_PROMPT = `You write a one-sentence HEADLINE summarizing an athlete's planned workout for their training-log activity description.
 
 - You will be given exactly one planned-workout description. Summarize it in one sentence, ending with a period.
 - **Match the brevity and shape of the examples below.** Target 6–14 words. The examples are the ceiling, not the floor.
@@ -286,7 +267,60 @@ Counter-example — DO NOT produce headlines like this:
 - ❌ "2-hour aerobic endurance ride at 68–75% FTP, targeting fat metabolism and aerobic power development with cadence above 85 rpm."
 - ✅ "2 hours of endurance at 68–75% FTP."
 
-# WEATHER RULES
+Return \`headline\` as raw text. Do not wrap the output in quotation marks.`;
+
+/**
+ * Summarize a planned-workout description into a one-sentence headline.
+ *
+ * Returns null when the input is empty/whitespace, when the Anthropic API key
+ * isn't configured, or when the model declined to summarize a sparse
+ * description. Throws on transport/parse failure; the orchestrator catches
+ * per-call rejections so a single failure can't lose the other blocks.
+ */
+export async function generateHeadline(
+  plannedDescription: string,
+  model: string
+): Promise<string | null> {
+  if (!plannedDescription?.trim()) return null;
+  const anthropic = getAnthropicClient();
+  if (!anthropic) return null;
+
+  const message = await anthropic.messages.parse({
+    model,
+    max_tokens: 256,
+    system: HEADLINE_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: `Planned workout description (summarize in one sentence):\n${plannedDescription}`,
+      },
+    ],
+    output_config: { format: zodOutputFormat(HeadlineSchema) },
+  });
+
+  return message.parsed_output?.headline ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Weather
+// ---------------------------------------------------------------------------
+
+const WeatherSchema = z.object({
+  weather_emoji: z
+    .string()
+    .nullable()
+    .describe(
+      'Single emoji that best represents the overall weather conditions. Null when the weather input is too sparse to characterize.'
+    ),
+  weather_sentence: z
+    .string()
+    .nullable()
+    .describe(
+      'One-sentence prose rewrite of the weather data, following the rules in the system prompt. Null when the weather input is too sparse to characterize.'
+    ),
+});
+
+const WEATHER_SYSTEM_PROMPT = `You rewrite raw weather data into one sentence of natural prose for an athlete's training-log activity description, and pick a single representative emoji.
 
 - Rewrite the provided weather data as one sentence of natural flowing prose — not a list of data points. Prioritize readability over completeness; omit minor data points if they disrupt the flow.
 - Open the sentence with a summary of the conditions, chosen from (but not limited to): clear, sunny, mostly sunny, partly cloudy, overcast, windy, light rain, heavy rain, snow. Infer this from wind speeds, precipitation amount, and cloud coverage in the input.
@@ -309,114 +343,111 @@ Examples:
 - ☁️ Overcast with a light NNW breeze of 3–7 km/h gusting to 21, temps around 20°C (feels like 17°C), and mostly tailwind
 - ☀️ Sunny skies with SW winds of 1–5 mph and gusts up to 11 mph, temperatures ranging from 51–61°F with an average feel of 49°F
 
-# MUSIC RULES
+Return \`weather_sentence\` as raw text. Do not wrap the output in quotation marks.`;
+
+/**
+ * Rewrite a raw weather description as one sentence + a leading emoji.
+ *
+ * Returns null when the activity is indoor, when the description is empty,
+ * when no API key is configured, or when the model declined to characterize
+ * the conditions. Throws on transport/parse failure.
+ */
+export async function generateWeatherSentence(
+  weatherDescription: string,
+  isIndoor: boolean,
+  model: string
+): Promise<WeatherSentence | null> {
+  if (isIndoor) return null;
+  if (!weatherDescription?.trim()) return null;
+  const anthropic = getAnthropicClient();
+  if (!anthropic) return null;
+
+  const message = await anthropic.messages.parse({
+    model,
+    max_tokens: 256,
+    system: WEATHER_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: `Weather data: ${weatherDescription}`,
+      },
+    ],
+    output_config: { format: zodOutputFormat(WeatherSchema) },
+  });
+
+  const parsed = message.parsed_output;
+  if (!parsed?.weather_emoji || !parsed?.weather_sentence) return null;
+  return { emoji: parsed.weather_emoji, sentence: parsed.weather_sentence };
+}
+
+// ---------------------------------------------------------------------------
+// Music
+// ---------------------------------------------------------------------------
+
+const MusicSchema = z.object({
+  top_artists: z
+    .array(z.string())
+    .nullable()
+    .describe(
+      'Up to 5 artist names that best represent the played-songs list. Collapse trivial variants (e.g. "The Foo Fighters" → "Foo Fighters", "Beyonce" → "Beyoncé") to one canonical form, choosing the form most commonly used for the artist.'
+    ),
+  remaining_artists: z
+    .number()
+    .int()
+    .nullable()
+    .describe(
+      'Count of unique artists in the input — after the same normalization — NOT named in top_artists. 0 when 5 or fewer unique artists exist after normalization.'
+    ),
+});
+
+const MUSIC_SYSTEM_PROMPT = `You pick up to 5 representative artists from a list of songs an athlete listened to during a workout, for their training-log activity description.
 
 - You will be given a list of played songs, one per line, in the form \`- Artist - Song Title\`. Each line is one scrobble; repeats mean the track was played more than once.
 - Pick up to 5 artists that best represent the playlist as a whole. You may use any criteria, including (but not limited to): artists with the most repeated tracks, artists with the most distinct songs played, artists whose tracks dominate stretches of the listening. A repeated track is a strong signal of taste.
 - **Normalize artist names**: collapse trivial variants to one canonical form. Examples: "Foo Fighters" and "The Foo Fighters" → "Foo Fighters"; "Beyoncé" and "Beyonce" → "Beyoncé". Choose the spelling most commonly used for the artist.
 - Do not invent artists. Every name you emit in \`top_artists\` must appear in the input (in the chosen canonical form).
 - If fewer than 5 unique artists are present (after normalization), return only those — do not pad.
-- \`remaining_artists\` is the count of unique artists (after normalization) NOT in \`top_artists\`. Think step by step: count distinct normalized artists in the input, subtract \`top_artists.length\`, floor at 0. Be precise — readers will compare this number against the playlist they remember.
-- Return \`top_artists: null\` and \`remaining_artists: null\` if no played-songs list was provided.
-
-# OUTPUT FORMATTING
-
-- Return \`headline\` and \`weather_sentence\` as raw text. Do not wrap the output in quotation marks.`;
-
-let anthropicClient: Anthropic | null = null;
-
-function getAnthropicClient(): Anthropic | null {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  if (!anthropicClient) anthropicClient = new Anthropic({ apiKey });
-  return anthropicClient;
-}
+- \`remaining_artists\` is the count of unique artists (after normalization) NOT in \`top_artists\`. Think step by step: count distinct normalized artists in the input, subtract \`top_artists.length\`, floor at 0. Be precise — readers will compare this number against the playlist they remember.`;
 
 /**
- * Reset the cached client. Test-only.
- * @internal
- */
-export function _resetDescriptionClientForTesting(): void {
-  anthropicClient = null;
-}
-
-/**
- * Single LLM call that produces (zero, one, or all of) the headline, the
- * weather sentence, and the representative-artists list. Returns nulls in
- * any field when the corresponding input wasn't provided, or when the model
- * declined to pick.
+ * Pick up to 5 representative artists from a played-songs list, with the
+ * model handling variant-name normalization (e.g. "Foo Fighters" vs
+ * "The Foo Fighters").
  *
- * Throws on transport / parse failure; callers catch and log so a flaky
- * Anthropic call never blocks the rest of the Whoop webhook work.
+ * Returns null when no songs are provided, when no API key is configured, or
+ * when the model declined to pick. Throws on transport/parse failure.
  */
-export async function generateLlmFields(
-  input: LlmFieldsInput,
+export async function generateMusicSelection(
+  playedSongs: PlayedSong[],
   model: string
-): Promise<LlmFieldsResult> {
-  const empty: LlmFieldsResult = {
-    headline: null,
-    weather_emoji: null,
-    weather_sentence: null,
-    top_artists: null,
-    remaining_artists: null,
-  };
-
+): Promise<MusicSelection | null> {
+  if (!playedSongs || playedSongs.length === 0) return null;
   const anthropic = getAnthropicClient();
-  if (!anthropic) return empty;
+  if (!anthropic) return null;
 
-  const wantsHeadline = !!input.plannedSummary?.description?.trim();
-  const wantsWeather =
-    input.isIndoor !== true && !!input.weatherDescription && input.weatherDescription.trim().length > 0;
-  const wantsMusic = !!input.playedSongs && input.playedSongs.length > 0;
-
-  if (!wantsHeadline && !wantsWeather && !wantsMusic) return empty;
-
-  const userParts: string[] = [];
-
-  if (wantsHeadline) {
-    userParts.push(
-      'Planned workout description (summarize in one sentence):',
-      input.plannedSummary!.description
-    );
-  } else {
-    userParts.push('Planned workout description: not provided. Return null for headline.');
+  const lines: string[] = ['Played songs:'];
+  for (const song of playedSongs) {
+    const artist = song.artist?.trim();
+    const title = song.name?.trim();
+    if (!artist || !title) continue;
+    lines.push(`- ${artist} - ${title}`);
   }
-
-  userParts.push('');
-  if (wantsWeather) {
-    userParts.push(`Weather data: ${input.weatherDescription}`);
-  } else {
-    userParts.push('Weather data: not provided. Return null for weather_emoji and weather_sentence.');
-  }
-
-  userParts.push('');
-  if (wantsMusic) {
-    userParts.push('Played songs:');
-    for (const song of input.playedSongs!) {
-      const artist = song.artist?.trim();
-      const title = song.name?.trim();
-      if (!artist || !title) continue;
-      userParts.push(`- ${artist} - ${title}`);
-    }
-  } else {
-    userParts.push('Played songs: not provided. Return null for top_artists and remaining_artists.');
-  }
+  if (lines.length === 1) return null; // every song was unusable
 
   const message = await anthropic.messages.parse({
     model,
-    max_tokens: 512,
-    system: LLM_FIELDS_SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userParts.join('\n') }],
-    output_config: { format: zodOutputFormat(LlmFieldsSchema) },
+    max_tokens: 256,
+    system: MUSIC_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: lines.join('\n') }],
+    output_config: { format: zodOutputFormat(MusicSchema) },
   });
 
   const parsed = message.parsed_output;
+  if (!parsed?.top_artists || parsed.top_artists.length === 0) return null;
   return {
-    headline: parsed?.headline ?? null,
-    weather_emoji: parsed?.weather_emoji ?? null,
-    weather_sentence: parsed?.weather_sentence ?? null,
-    top_artists: parsed?.top_artists ?? null,
-    remaining_artists: parsed?.remaining_artists ?? null,
+    top_artists: parsed.top_artists,
+    remaining_artists:
+      typeof parsed.remaining_artists === 'number' ? parsed.remaining_artists : 0,
   };
 }
 
@@ -433,11 +464,31 @@ export interface GenerateDescriptionInput {
 }
 
 /**
+ * Unwrap a `Promise.allSettled` result, logging the rejection (with the
+ * given label) and returning null when the promise rejected. Letting the
+ * three LLM calls fail independently is the whole point of the split — a
+ * flaky music call shouldn't lose the headline.
+ */
+function settled<T>(
+  result: PromiseSettledResult<T>,
+  label: string
+): T | null {
+  if (result.status === 'fulfilled') return result.value;
+  console.warn(`[ActivityDescription] ${label} call failed:`, result.reason);
+  return null;
+}
+
+/**
  * Compose the full activity description. The caller is responsible for:
  *   - Skipping pool swims before reaching this function.
  *   - Checking the `domestique_description_generated` idempotency flag.
- *   - Wrapping the call in try/catch (a transient Anthropic failure must not
- *     bubble out of the Whoop webhook handler).
+ *   - Wrapping the call in try/catch (a catastrophic failure before any LLM
+ *     call is made must not bubble out of the Whoop webhook handler).
+ *
+ * Per-LLM-call failures are absorbed via `Promise.allSettled`: if e.g. the
+ * music call rejects, the description is still composed from the surviving
+ * headline + weather blocks (and the music line is dropped), with a
+ * `[ActivityDescription]` warning logged.
  */
 export async function generateActivityDescription(
   input: GenerateDescriptionInput
@@ -446,32 +497,45 @@ export async function generateActivityDescription(
 
   const { headline: existingHeadline, zwiftMapLine } = splitExistingDescription(activity.description);
 
-  // If the athlete already wrote a headline, preserve it verbatim and skip
-  // the headline path — but still ask the LLM for weather and music.
-  const llmResult = await generateLlmFields(
-    {
-      plannedSummary: existingHeadline ? null : plannedSummary,
-      weatherDescription: activity.weather_description ?? null,
-      isIndoor: activity.is_indoor,
-      playedSongs: activity.played_songs,
-    },
+  // Athlete already wrote a headline → preserve verbatim and skip the
+  // headline LLM call entirely. Weather + music still go to the LLM.
+  const headlinePromise: Promise<string | null> =
+    existingHeadline || !plannedSummary?.description
+      ? Promise.resolve(null)
+      : generateHeadline(plannedSummary.description, model);
+
+  const weatherPromise = generateWeatherSentence(
+    activity.weather_description ?? '',
+    activity.is_indoor === true,
     model
   );
 
-  const headline = existingHeadline ?? llmResult.headline ?? null;
+  const musicPromise = generateMusicSelection(activity.played_songs ?? [], model);
 
-  const weatherBlock =
-    llmResult.weather_emoji && llmResult.weather_sentence
-      ? `${llmResult.weather_emoji} ${llmResult.weather_sentence}`
-      : null;
+  const [headlineResult, weatherResult, musicResult] = await Promise.allSettled([
+    headlinePromise,
+    weatherPromise,
+    musicPromise,
+  ]);
 
-  // Random fallback when Anthropic is unavailable: the LLM short-circuits to
-  // null and we'd otherwise lose the music block entirely. The other
-  // LLM-driven fields (headline, weather rewrite) have no programmatic
+  const headline =
+    existingHeadline ?? settled(headlineResult, 'headline') ?? null;
+  const weather = settled(weatherResult, 'weather');
+  const music = settled(musicResult, 'music');
+
+  const weatherBlock = weather ? `${weather.emoji} ${weather.sentence}` : null;
+
+  // Random fallback when Anthropic is unavailable: the music call returns
+  // null without an API key and we'd otherwise lose the music block. The
+  // other LLM-driven fields (headline, weather) have no programmatic
   // fallback because they're prose; artists are just a list.
-  let topArtists = llmResult.top_artists;
-  let remainingArtists = llmResult.remaining_artists;
-  if (!process.env.ANTHROPIC_API_KEY && activity.played_songs && activity.played_songs.length > 0) {
+  let topArtists = music?.top_artists ?? null;
+  let remainingArtists = music?.remaining_artists ?? null;
+  if (
+    !process.env.ANTHROPIC_API_KEY &&
+    activity.played_songs &&
+    activity.played_songs.length > 0
+  ) {
     const fallback = pickRandomArtists(activity.played_songs);
     topArtists = fallback.top;
     remainingArtists = fallback.remaining;

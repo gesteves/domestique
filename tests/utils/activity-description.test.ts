@@ -9,7 +9,9 @@ import {
   pickRandomArtists,
   splitExistingDescription,
   composeBlocks,
-  generateLlmFields,
+  generateHeadline,
+  generateWeatherSentence,
+  generateMusicSelection,
   generateActivityDescription,
   _resetDescriptionClientForTesting,
 } from '../../src/utils/activity-description.js';
@@ -287,26 +289,11 @@ vi.mock('@anthropic-ai/sdk/helpers/zod', () => ({
   zodOutputFormat: (schema: unknown) => ({ schema }),
 }));
 
-function parsedOutput(overrides: {
-  headline?: string | null;
-  weather_emoji?: string | null;
-  weather_sentence?: string | null;
-  top_artists?: string[] | null;
-  remaining_artists?: number | null;
-} = {}) {
-  return {
-    parsed_output: {
-      headline: null,
-      weather_emoji: null,
-      weather_sentence: null,
-      top_artists: null,
-      remaining_artists: null,
-      ...overrides,
-    },
-  };
-}
+// --------------------------------------------------------------------------
+// generateHeadline
+// --------------------------------------------------------------------------
 
-describe('generateLlmFields', () => {
+describe('generateHeadline', () => {
   beforeEach(() => {
     mockParse.mockReset();
     _resetDescriptionClientForTesting();
@@ -317,127 +304,156 @@ describe('generateLlmFields', () => {
     delete process.env.ANTHROPIC_API_KEY;
   });
 
-  it('returns all-null when ANTHROPIC_API_KEY is not set', async () => {
+  it('returns null without calling the API when description is empty/whitespace', async () => {
+    expect(await generateHeadline('', 'claude-sonnet-4-6')).toBeNull();
+    expect(await generateHeadline('   ', 'claude-sonnet-4-6')).toBeNull();
+    expect(mockParse).not.toHaveBeenCalled();
+  });
+
+  it('returns null without calling the API when no key is set', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     _resetDescriptionClientForTesting();
-    const result = await generateLlmFields(
-      { plannedSummary: { description: 'Some plan' } },
-      'claude-sonnet-4-6'
-    );
-    expect(result).toEqual({
-      headline: null,
-      weather_emoji: null,
-      weather_sentence: null,
-      top_artists: null,
-      remaining_artists: null,
+    expect(await generateHeadline('7×3 min at 5k pace', 'claude-sonnet-4-6')).toBeNull();
+    expect(mockParse).not.toHaveBeenCalled();
+  });
+
+  it('passes the description verbatim and returns the model summary', async () => {
+    mockParse.mockResolvedValueOnce({
+      parsed_output: { headline: '7×3-minute intervals at 5K pace with 3-minute recoveries.' },
     });
-    expect(mockParse).not.toHaveBeenCalled();
-  });
 
-  it('skips the API entirely when there is nothing to produce', async () => {
-    const result = await generateLlmFields(
-      { plannedSummary: null },
-      'claude-sonnet-4-6'
-    );
-    expect(result.headline).toBeNull();
-    expect(result.weather_sentence).toBeNull();
-    expect(result.top_artists).toBeNull();
-    expect(mockParse).not.toHaveBeenCalled();
-  });
-
-  it('passes the planned-workout description verbatim and returns the model summary', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({ headline: '7×3-minute intervals at 5k pace with 3-minute recoveries.' })
-    );
-
-    const result = await generateLlmFields(
-      { plannedSummary: { description: '7 reps × 3 min at 5k pace with 3-min jogs' } },
+    const result = await generateHeadline(
+      '7 reps × 3 min at 5k pace with 3-min jogs',
       'claude-sonnet-4-6'
     );
 
-    expect(result.headline).toBe('7×3-minute intervals at 5k pace with 3-minute recoveries.');
+    expect(result).toBe('7×3-minute intervals at 5K pace with 3-minute recoveries.');
     expect(mockParse).toHaveBeenCalledTimes(1);
     const call = mockParse.mock.calls[0][0];
     expect(call.model).toBe('claude-sonnet-4-6');
     expect(call.messages[0].content).toContain('7 reps × 3 min at 5k pace');
-    // No multi-candidate phrasing in the new prompt:
-    expect(call.messages[0].content).not.toContain('candidates');
+    // The headline prompt is self-contained — no weather/music leakage.
+    expect(call.system).not.toContain('weather_emoji');
+    expect(call.system).not.toContain('top_artists');
   });
 
-  it('returns null when the model declines to summarize a sparse description', async () => {
-    mockParse.mockResolvedValueOnce(parsedOutput());
+  it('returns null when the model declines to summarize', async () => {
+    mockParse.mockResolvedValueOnce({ parsed_output: { headline: null } });
+    expect(await generateHeadline('something', 'claude-sonnet-4-6')).toBeNull();
+  });
+});
 
-    const result = await generateLlmFields(
-      { plannedSummary: { description: '' } },
-      'claude-sonnet-4-6'
-    );
+// --------------------------------------------------------------------------
+// generateWeatherSentence
+// --------------------------------------------------------------------------
 
-    // Empty description short-circuits before the API call:
-    expect(result.headline).toBeNull();
+describe('generateWeatherSentence', () => {
+  beforeEach(() => {
+    mockParse.mockReset();
+    _resetDescriptionClientForTesting();
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it('returns null without calling the API when the activity is indoor', async () => {
+    expect(await generateWeatherSentence('Sunny 20C', true, 'claude-sonnet-4-6')).toBeNull();
     expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('omits weather output when the activity is indoor and no headline is requested', async () => {
-    await generateLlmFields(
-      {
-        plannedSummary: null,
-        weatherDescription: 'Sunny 20C',
-        isIndoor: true,
-      },
-      'claude-sonnet-4-6'
-    );
-
+  it('returns null without calling the API when the description is empty', async () => {
+    expect(await generateWeatherSentence('', false, 'claude-sonnet-4-6')).toBeNull();
+    expect(await generateWeatherSentence('   ', false, 'claude-sonnet-4-6')).toBeNull();
     expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('asks for a weather rewrite when weather is present and the activity is outdoor', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({
+  it('returns null when no API key is set', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    _resetDescriptionClientForTesting();
+    expect(await generateWeatherSentence('Sunny 20C', false, 'claude-sonnet-4-6')).toBeNull();
+    expect(mockParse).not.toHaveBeenCalled();
+  });
+
+  it('returns the model rewrite on success', async () => {
+    mockParse.mockResolvedValueOnce({
+      parsed_output: {
         weather_emoji: '🌤️',
         weather_sentence: 'Mostly sunny with light W winds of 7–12 km/h, temps 10–14°C',
-      })
-    );
-
-    const result = await generateLlmFields(
-      {
-        plannedSummary: null,
-        weatherDescription: 'Mostly sunny, light W winds 7-12 km/h, 10-14C',
-        isIndoor: false,
       },
+    });
+
+    const result = await generateWeatherSentence(
+      'Mostly sunny, light W winds 7-12 km/h, 10-14C',
+      false,
       'claude-sonnet-4-6'
     );
 
-    expect(result.weather_emoji).toBe('🌤️');
-    expect(result.weather_sentence).toContain('Mostly sunny');
+    expect(result).toEqual({
+      emoji: '🌤️',
+      sentence: 'Mostly sunny with light W winds of 7–12 km/h, temps 10–14°C',
+    });
     const call = mockParse.mock.calls[0][0];
     expect(call.messages[0].content).toContain('Mostly sunny, light W winds');
+    // Self-contained prompt — no cross-leakage.
+    expect(call.system).not.toContain('VO₂max');
+    expect(call.system).not.toContain('top_artists');
   });
 
-  it('skips the API when only an empty played-songs list is provided', async () => {
-    await generateLlmFields(
-      { plannedSummary: null, playedSongs: [] },
-      'claude-sonnet-4-6'
-    );
+  it('returns null when the model returns only one of the two weather fields', async () => {
+    mockParse.mockResolvedValueOnce({
+      parsed_output: { weather_emoji: '🌤️', weather_sentence: null },
+    });
+    expect(await generateWeatherSentence('Sunny', false, 'claude-sonnet-4-6')).toBeNull();
+  });
+});
 
+// --------------------------------------------------------------------------
+// generateMusicSelection
+// --------------------------------------------------------------------------
+
+describe('generateMusicSelection', () => {
+  beforeEach(() => {
+    mockParse.mockReset();
+    _resetDescriptionClientForTesting();
+    process.env.ANTHROPIC_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it('returns null without calling the API when no songs are provided', async () => {
+    expect(await generateMusicSelection([], 'claude-sonnet-4-6')).toBeNull();
     expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('tells the model that played songs are absent when none are provided', async () => {
-    mockParse.mockResolvedValueOnce(parsedOutput({ headline: 'Some headline.' }));
-
-    await generateLlmFields(
-      { plannedSummary: { description: 'Easy hour' } },
-      'claude-sonnet-4-6'
-    );
-
-    const call = mockParse.mock.calls[0][0];
-    expect(call.messages[0].content).toContain('Played songs: not provided');
+  it('returns null when every song is missing an artist or title', async () => {
+    const songs: PlayedSong[] = [
+      { name: '', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: 'X' },
+      { name: 'Y', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: '' },
+    ];
+    expect(await generateMusicSelection(songs, 'claude-sonnet-4-6')).toBeNull();
+    expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('passes scrobbles as plain `- Artist - Title` lines, never marking loved songs', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({ top_artists: ['Radiohead', 'Foo Fighters'], remaining_artists: 3 })
-    );
+  it('returns null when no API key is set', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    _resetDescriptionClientForTesting();
+    expect(
+      await generateMusicSelection([song('A')], 'claude-sonnet-4-6')
+    ).toBeNull();
+    expect(mockParse).not.toHaveBeenCalled();
+  });
+
+  it('passes scrobbles as plain `- Artist - Title` lines and never marks loved songs', async () => {
+    mockParse.mockResolvedValueOnce({
+      parsed_output: {
+        top_artists: ['Radiohead', 'Foo Fighters'],
+        remaining_artists: 3,
+      },
+    });
 
     const songs: PlayedSong[] = [
       song('Radiohead', { name: 'Karma Police' }),
@@ -447,12 +463,9 @@ describe('generateLlmFields', () => {
       song('Johnny Cash', { name: 'Hurt' }),
     ];
 
-    const result = await generateLlmFields(
-      { plannedSummary: null, playedSongs: songs },
-      'claude-sonnet-4-6'
-    );
+    const result = await generateMusicSelection(songs, 'claude-sonnet-4-6');
 
-    const content = mockParse.mock.calls[0][0].messages[0].content;
+    const content = mockParse.mock.calls[0][0].messages[0].content as string;
     expect(content).toContain('Played songs:');
     expect(content).toContain('- Radiohead - Karma Police');
     expect(content).toContain('- Foo Fighters - The Pretender');
@@ -462,15 +475,17 @@ describe('generateLlmFields', () => {
     // Loved flag is not forwarded:
     expect(content).not.toContain('❤');
     expect(content).not.toContain('loved');
+    // Self-contained prompt — no cross-leakage.
+    expect(mockParse.mock.calls[0][0].system).not.toContain('VO₂max');
+    expect(mockParse.mock.calls[0][0].system).not.toContain('weather_emoji');
 
-    expect(result.top_artists).toEqual(['Radiohead', 'Foo Fighters']);
-    expect(result.remaining_artists).toBe(3);
+    expect(result).toEqual({ top_artists: ['Radiohead', 'Foo Fighters'], remaining_artists: 3 });
   });
 
   it('drops scrobbles missing an artist or title', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({ top_artists: ['Radiohead'], remaining_artists: 0 })
-    );
+    mockParse.mockResolvedValueOnce({
+      parsed_output: { top_artists: ['Radiohead'], remaining_artists: 0 },
+    });
 
     const songs: PlayedSong[] = [
       song('Radiohead', { name: 'Karma Police' }),
@@ -478,17 +493,70 @@ describe('generateLlmFields', () => {
       { name: 'Y', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: '' },
     ];
 
-    await generateLlmFields(
-      { plannedSummary: null, playedSongs: songs },
-      'claude-sonnet-4-6'
-    );
+    await generateMusicSelection(songs, 'claude-sonnet-4-6');
 
     const content = mockParse.mock.calls[0][0].messages[0].content as string;
     expect(content).toContain('- Radiohead - Karma Police');
     expect(content).not.toMatch(/- X -/);
     expect(content).not.toMatch(/- - Y/);
   });
+
+  it('returns null when the model returns an empty or null top_artists', async () => {
+    mockParse.mockResolvedValueOnce({
+      parsed_output: { top_artists: null, remaining_artists: null },
+    });
+    expect(await generateMusicSelection([song('A')], 'claude-sonnet-4-6')).toBeNull();
+
+    mockParse.mockResolvedValueOnce({
+      parsed_output: { top_artists: [], remaining_artists: 0 },
+    });
+    expect(await generateMusicSelection([song('A')], 'claude-sonnet-4-6')).toBeNull();
+  });
+
+  it('defaults remaining_artists to 0 when the model omits it', async () => {
+    mockParse.mockResolvedValueOnce({
+      parsed_output: { top_artists: ['A', 'B'], remaining_artists: null },
+    });
+    expect(await generateMusicSelection([song('A'), song('B')], 'claude-sonnet-4-6')).toEqual({
+      top_artists: ['A', 'B'],
+      remaining_artists: 0,
+    });
+  });
 });
+
+// --------------------------------------------------------------------------
+// Orchestrator
+// --------------------------------------------------------------------------
+
+/**
+ * Match each call to the right `parsed_output` by inspecting its user
+ * message. Order-of-arrival isn't guaranteed across the three concurrent
+ * `Promise.allSettled` calls, so we discriminate on the user-content prefix
+ * — production strings, no test-only markers.
+ */
+function callKind(args: {
+  messages?: Array<{ role: string; content: string }>;
+}): 'headline' | 'weather' | 'music' | 'unknown' {
+  const content = args.messages?.[0]?.content ?? '';
+  if (content.startsWith('Planned workout description')) return 'headline';
+  if (content.startsWith('Weather data:')) return 'weather';
+  if (content.startsWith('Played songs:')) return 'music';
+  return 'unknown';
+}
+
+function dispatchMockParse(byCall: {
+  headline?: unknown;
+  weather?: unknown;
+  music?: unknown;
+}): void {
+  mockParse.mockImplementation((args) => {
+    const kind = callKind(args);
+    if (kind !== 'unknown' && byCall[kind] !== undefined) {
+      return Promise.resolve(byCall[kind]);
+    }
+    return Promise.reject(new Error(`Unexpected LLM call: kind="${kind}"`));
+  });
+}
 
 describe('generateActivityDescription (orchestrator)', () => {
   beforeEach(() => {
@@ -499,15 +567,19 @@ describe('generateActivityDescription (orchestrator)', () => {
 
   afterEach(() => {
     delete process.env.ANTHROPIC_API_KEY;
+    vi.restoreAllMocks();
   });
 
-  it('preserves an existing headline verbatim and skips the LLM headline path', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({
-        weather_emoji: '☁️',
-        weather_sentence: 'Overcast with light NW winds, around 10°C',
-      })
-    );
+  it('preserves an existing headline verbatim and skips the LLM headline call', async () => {
+    dispatchMockParse({
+      // No headline mock — the headline call must NOT be made.
+      weather: {
+        parsed_output: {
+          weather_emoji: '☁️',
+          weather_sentence: 'Overcast with light NW winds, around 10°C',
+        },
+      },
+    });
 
     const description = await generateActivityDescription({
       activity: workout({
@@ -525,10 +597,14 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
-    // The LLM call still happens (for weather), but we asked for no headline:
-    const call = mockParse.mock.calls[0][0];
-    expect(call.messages[0].content).toContain('Planned workout description: not provided');
-    expect(call.messages[0].content).not.toContain('Some TR description we should ignore');
+    // No headline call fired; weather call did:
+    const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
+    expect(kinds).not.toContain('headline');
+    expect(kinds).toContain('weather');
+    // None of the calls received the TR description:
+    for (const call of mockParse.mock.calls) {
+      expect(call[0].messages[0].content).not.toContain('Some TR description we should ignore');
+    }
 
     expect(description.startsWith('Felt great today!')).toBe(true);
     expect(description).toContain('☁️ Overcast with light NW winds');
@@ -536,13 +612,15 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(description).toContain('🔥 Whoop strain 14.2');
   });
 
-  it('preserves an existing headline but still regenerates the music line via the LLM', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({
-        top_artists: ['Radiohead', 'Foo Fighters', 'Tracy Chapman'],
-        remaining_artists: 4,
-      })
-    );
+  it('preserves an existing headline but still regenerates the music line', async () => {
+    dispatchMockParse({
+      music: {
+        parsed_output: {
+          top_artists: ['Radiohead', 'Foo Fighters', 'Tracy Chapman'],
+          remaining_artists: 4,
+        },
+      },
+    });
 
     const description = await generateActivityDescription({
       activity: workout({
@@ -558,12 +636,18 @@ describe('generateActivityDescription (orchestrator)', () => {
 
     expect(description.startsWith('Felt great today!')).toBe(true);
     expect(description).toContain('🎧 Radiohead, Foo Fighters, Tracy Chapman, and 4 more');
+    // Headline call did NOT fire (existing headline); weather did NOT fire
+    // (indoor); only music fired.
+    const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
+    expect(kinds).not.toContain('headline');
+    expect(kinds).not.toContain('weather');
+    expect(kinds).toContain('music');
   });
 
-  it('moves a Zwift map line out of the headline slot', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({ headline: '1-hour endurance ride at 65-75% FTP.' })
-    );
+  it('moves a Zwift map line out of the headline slot and asks the LLM for a new headline', async () => {
+    dispatchMockParse({
+      headline: { parsed_output: { headline: '1-hour endurance ride at 65-75% FTP.' } },
+    });
 
     const description = await generateActivityDescription({
       activity: workout({
@@ -581,23 +665,32 @@ describe('generateActivityDescription (orchestrator)', () => {
     const lines = description.split('\n');
     expect(lines[0]).toBe('1-hour endurance ride at 65-75% FTP.');
     expect(description).toContain('🗺️ Volcano Circuit in Watopia');
-    // Zwift line precedes the power line:
     expect(description.indexOf('🗺️')).toBeLessThan(description.indexOf('⚡️'));
   });
 
-  it('renders the music block from the LLM-picked artist list', async () => {
-    mockParse.mockResolvedValueOnce(
-      parsedOutput({
-        headline: '1-hour endurance ride at 65-75% FTP.',
-        top_artists: ['Radiohead', 'Tracy Chapman', 'Foo Fighters'],
-        remaining_artists: 2,
-      })
-    );
+  it('composes a full description from all three LLM calls', async () => {
+    dispatchMockParse({
+      headline: { parsed_output: { headline: '1-hour endurance ride at 65-75% FTP.' } },
+      weather: {
+        parsed_output: {
+          weather_emoji: '🌤️',
+          weather_sentence: 'Mostly sunny with light W winds of 7–12 km/h, temps 10–14°C',
+        },
+      },
+      music: {
+        parsed_output: {
+          top_artists: ['Radiohead', 'Tracy Chapman', 'Foo Fighters'],
+          remaining_artists: 2,
+        },
+      },
+    });
 
     const description = await generateActivityDescription({
       activity: workout({
         activity_type: 'Cycling',
-        is_indoor: true,
+        is_indoor: false,
+        weather_description: 'Mostly sunny',
+        average_power: '200 W',
         played_songs: [
           song('Radiohead'),
           song('Tracy Chapman'),
@@ -612,7 +705,59 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
+    expect(description).toContain('1-hour endurance ride at 65-75% FTP.');
+    expect(description).toContain('🌤️ Mostly sunny with light W winds');
     expect(description).toContain('🎧 Radiohead, Tracy Chapman, Foo Fighters, and 2 more');
+
+    const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
+    expect(kinds.filter((k) => k === 'headline')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'weather')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'music')).toHaveLength(1);
+  });
+
+  it('degrades gracefully when one of the three calls rejects', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    mockParse.mockImplementation((args) => {
+      const kind = callKind(args);
+      if (kind === 'headline') return Promise.reject(new Error('headline boom'));
+      if (kind === 'weather') {
+        return Promise.resolve({
+          parsed_output: {
+            weather_emoji: '🌤️',
+            weather_sentence: 'Mostly sunny',
+          },
+        });
+      }
+      if (kind === 'music') {
+        return Promise.resolve({
+          parsed_output: { top_artists: ['Radiohead'], remaining_artists: 0 },
+        });
+      }
+      return Promise.reject(new Error('unexpected'));
+    });
+
+    const description = await generateActivityDescription({
+      activity: workout({
+        activity_type: 'Cycling',
+        weather_description: 'Sunny',
+        is_indoor: false,
+        played_songs: [song('Radiohead')],
+      }),
+      whoop: null,
+      plannedSummary: { description: '1 hr endurance' },
+      model: 'claude-sonnet-4-6',
+    });
+
+    // Headline failed → no headline; weather + music survived:
+    expect(description).not.toContain('endurance');
+    expect(description.startsWith('🌤️')).toBe(true);
+    expect(description).toContain('🎧 Radiohead');
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[ActivityDescription] headline call failed:'),
+      expect.any(Error)
+    );
   });
 
   it('returns an empty string when nothing to say', async () => {
