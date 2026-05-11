@@ -357,12 +357,11 @@ describe('generateHeadlineAndWeather', () => {
     delete process.env.ANTHROPIC_API_KEY;
     _resetDescriptionClientForTesting();
     const result = await generateHeadlineAndWeather(
-      { plannedCandidates: [{ id: 'p1', name: 'X', description: 'Y' }] },
+      { plannedSummary: { description: 'Some plan' } },
       'claude-sonnet-4-6'
     );
     expect(result).toEqual({
       headline: null,
-      matched_workout_id: null,
       weather_emoji: null,
       weather_sentence: null,
     });
@@ -371,7 +370,7 @@ describe('generateHeadlineAndWeather', () => {
 
   it('skips the API entirely when there is nothing to produce', async () => {
     const result = await generateHeadlineAndWeather(
-      { plannedCandidates: [] },
+      { plannedSummary: null },
       'claude-sonnet-4-6'
     );
     expect(result.headline).toBeNull();
@@ -379,67 +378,52 @@ describe('generateHeadlineAndWeather', () => {
     expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('passes planned candidates to the model and returns its choice', async () => {
+  it('passes the planned-workout description verbatim and returns the model summary', async () => {
     mockParse.mockResolvedValueOnce({
       parsed_output: {
         headline: '7×3-minute intervals at 5k pace with 3-minute recoveries.',
-        matched_workout_id: 'p1',
         weather_emoji: null,
         weather_sentence: null,
       },
     });
 
     const result = await generateHeadlineAndWeather(
-      {
-        plannedCandidates: [{ id: 'p1', name: '7×3', description: '7 reps at 5k pace' }],
-        activityType: 'Running',
-      },
+      { plannedSummary: { description: '7 reps × 3 min at 5k pace with 3-min jogs' } },
       'claude-sonnet-4-6'
     );
 
     expect(result.headline).toBe('7×3-minute intervals at 5k pace with 3-minute recoveries.');
-    expect(result.matched_workout_id).toBe('p1');
     expect(mockParse).toHaveBeenCalledTimes(1);
     const call = mockParse.mock.calls[0][0];
     expect(call.model).toBe('claude-sonnet-4-6');
-    expect(call.messages[0].content).toContain('id=p1');
+    expect(call.messages[0].content).toContain('7 reps × 3 min at 5k pace');
+    // No multi-candidate phrasing in the new prompt:
+    expect(call.messages[0].content).not.toContain('candidates');
   });
 
-  it('respects null sentinel when no candidate represents the athlete\'s intent', async () => {
+  it('returns null when the model declines to summarize a sparse description', async () => {
     mockParse.mockResolvedValueOnce({
       parsed_output: {
         headline: null,
-        matched_workout_id: null,
         weather_emoji: null,
         weather_sentence: null,
       },
     });
 
     const result = await generateHeadlineAndWeather(
-      {
-        plannedCandidates: [{ id: 'p1', name: 'Swim drills', description: 'pool' }],
-        activityType: 'Running',
-      },
+      { plannedSummary: { description: '' } },
       'claude-sonnet-4-6'
     );
 
+    // Empty description short-circuits before the API call:
     expect(result.headline).toBeNull();
-    expect(result.matched_workout_id).toBeNull();
+    expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('omits weather output when the activity is indoor', async () => {
-    mockParse.mockResolvedValueOnce({
-      parsed_output: {
-        headline: null,
-        matched_workout_id: null,
-        weather_emoji: null,
-        weather_sentence: null,
-      },
-    });
-
+  it('omits weather output when the activity is indoor and no headline is requested', async () => {
     await generateHeadlineAndWeather(
       {
-        plannedCandidates: [],
+        plannedSummary: null,
         weatherDescription: 'Sunny 20C',
         isIndoor: true,
       },
@@ -453,7 +437,6 @@ describe('generateHeadlineAndWeather', () => {
     mockParse.mockResolvedValueOnce({
       parsed_output: {
         headline: null,
-        matched_workout_id: null,
         weather_emoji: '🌤️',
         weather_sentence: 'Mostly sunny with light W winds of 7–12 km/h, temps 10–14°C',
       },
@@ -461,7 +444,7 @@ describe('generateHeadlineAndWeather', () => {
 
     const result = await generateHeadlineAndWeather(
       {
-        plannedCandidates: [],
+        plannedSummary: null,
         weatherDescription: 'Mostly sunny, light W winds 7-12 km/h, 10-14C',
         isIndoor: false,
       },
@@ -490,7 +473,6 @@ describe('generateActivityDescription (orchestrator)', () => {
     mockParse.mockResolvedValueOnce({
       parsed_output: {
         headline: null, // we shouldn't have asked for one
-        matched_workout_id: null,
         weather_emoji: '☁️',
         weather_sentence: 'Overcast with light NW winds, around 10°C',
       },
@@ -508,13 +490,14 @@ describe('generateActivityDescription (orchestrator)', () => {
         tss: 98,
       }),
       whoop: { id: 'w1', strain_score: 14.2 },
-      plannedCandidates: [{ id: 'p1', name: 'X', description: 'Y' }],
+      plannedSummary: { description: 'Some TR description we should ignore' },
       model: 'claude-sonnet-4-6',
     });
 
     // The LLM call still happens (for weather), but we asked for no headline:
     const call = mockParse.mock.calls[0][0];
-    expect(call.messages[0].content).toContain('Planned workout candidates: none provided');
+    expect(call.messages[0].content).toContain('Planned workout description: not provided');
+    expect(call.messages[0].content).not.toContain('Some TR description we should ignore');
 
     expect(description.startsWith('Felt great today!')).toBe(true);
     expect(description).toContain('☁️ Overcast with light NW winds');
@@ -526,7 +509,6 @@ describe('generateActivityDescription (orchestrator)', () => {
     mockParse.mockResolvedValueOnce({
       parsed_output: {
         headline: '1-hour endurance ride at 65-75% FTP.',
-        matched_workout_id: 'p1',
         weather_emoji: null,
         weather_sentence: null,
       },
@@ -541,7 +523,7 @@ describe('generateActivityDescription (orchestrator)', () => {
         tss: 50,
       }),
       whoop: { id: 'w1', strain_score: 11.0 },
-      plannedCandidates: [{ id: 'p1', name: 'Endurance', description: '65-75% FTP' }],
+      plannedSummary: { description: '65-75% FTP endurance, 1 hr' },
       model: 'claude-sonnet-4-6',
     });
 
@@ -556,7 +538,7 @@ describe('generateActivityDescription (orchestrator)', () => {
     const description = await generateActivityDescription({
       activity: workout({ activity_type: 'Running' }),
       whoop: null,
-      plannedCandidates: [],
+      plannedSummary: null,
       model: 'claude-sonnet-4-6',
     });
     expect(description).toBe('');

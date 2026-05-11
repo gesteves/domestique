@@ -5,13 +5,14 @@ import { findMatchingWhoopActivity, areActivityTypesCompatible } from '../utils/
 import { addDaysToYMD, formatYMDInTimezone } from '../utils/tz.js';
 import {
   generateActivityDescription,
-  type PlannedCandidate,
+  type PlannedSummaryInput,
 } from '../utils/activity-description.js';
 import { getDescriptionModel } from '../utils/classifier-model.js';
 import { runWithUnitPreferences } from '../utils/unit-context.js';
 import type { IntervalsClient } from '../clients/intervals.js';
 import type { WhoopClient } from '../clients/whoop.js';
-import type { NormalizedWorkout, StrainActivity, WhoopMatchedData } from '../types/index.js';
+import type { TrainerRoadClient } from '../clients/trainerroad.js';
+import type { ActivityType, NormalizedWorkout, StrainActivity, WhoopMatchedData } from '../types/index.js';
 
 /** Maximum clock skew tolerated between Whoop's signing timestamp and our clock. */
 const MAX_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
@@ -36,9 +37,14 @@ export interface WhoopWebhookPayload {
 export interface WhoopWebhookDeps {
   intervals: IntervalsClient;
   whoop: WhoopClient;
+  /** Optional — required only for headline generation on workout.updated. */
+  trainerroad: TrainerRoadClient | null;
   /** Whoop OAuth client_secret — used as the HMAC signing key. */
   clientSecret: string;
 }
+
+/** Activity types eligible for an LLM-generated headline. */
+const HEADLINE_SPORTS: ReadonlySet<ActivityType> = new Set<ActivityType>(['Cycling', 'Running']);
 
 /**
  * Verify the X-WHOOP-Signature header per Whoop's spec:
@@ -243,7 +249,7 @@ async function maybeGenerateActivityDescription(
       return;
     }
 
-    const plannedCandidates = await resolvePlannedCandidates(full, intervals);
+    const plannedSummary = await resolvePlannedSummary(full, deps);
 
     const whoopMatched: WhoopMatchedData = {
       id: whoopActivity.id,
@@ -259,7 +265,7 @@ async function maybeGenerateActivityDescription(
     const description = await generateActivityDescription({
       activity: full,
       whoop: whoopMatched,
-      plannedCandidates,
+      plannedSummary,
       model: getDescriptionModel(),
     });
 
@@ -277,50 +283,65 @@ async function maybeGenerateActivityDescription(
 }
 
 /**
- * Resolve planned-workout candidates for the headline.
- *   - paired_event_id present → fetch that single event from Intervals.icu.
- *   - paired_event_id null → fetch same-day planned events and filter to
- *     sport-compatible candidates; Claude picks one (or none) inside the
- *     description generator.
+ * Resolve the single TrainerRoad planned workout whose name appears verbatim
+ * in the completed activity's name, scoped to cycling and running only.
+ *
+ * Rules:
+ *   - Cycling and Running only — other sports never get a headline.
+ *   - Requires `activity.name` and a configured TrainerRoad client.
+ *   - Same-day, sport-compatible planned workouts only.
+ *   - **Case-sensitive** `activity.name.includes(planned.name)` match.
+ *   - Exactly one match → return it. Zero or ≥2 (ambiguous) → null.
  */
-async function resolvePlannedCandidates(
+async function resolvePlannedSummary(
   activity: NormalizedWorkout,
-  intervals: IntervalsClient
-): Promise<PlannedCandidate[]> {
-  if (activity.paired_event_id != null) {
-    try {
-      const event = await intervals.getEvent(activity.paired_event_id);
-      return [
-        {
-          id: String(activity.paired_event_id),
-          name: event.name ?? '',
-          description: event.description ?? '',
-        },
-      ];
-    } catch (error) {
-      console.warn(
-        `[WhoopWebhook] failed to fetch paired event ${activity.paired_event_id} for activity ${activity.id}:`,
-        error
-      );
-      return [];
-    }
-  }
-
-  if (!activity.activity_type) return [];
+  deps: WhoopWebhookDeps
+): Promise<PlannedSummaryInput | null> {
+  if (!activity.activity_type || !HEADLINE_SPORTS.has(activity.activity_type)) return null;
+  if (!deps.trainerroad) return null;
+  if (!activity.name) return null;
 
   const date = activity.start_time.slice(0, 10);
-  const planned = await intervals.getPlannedEvents(date, date).catch((error) => {
-    console.warn(`[WhoopWebhook] failed to fetch planned events for ${date}:`, error);
+  const timezone = await deps.intervals.getAthleteTimezone();
+
+  const planned = await deps.trainerroad.getPlannedWorkouts(date, date, timezone).catch((error) => {
+    console.warn(`[WhoopWebhook] failed to fetch TrainerRoad planned workouts for ${date}:`, error);
     return [];
   });
 
-  return planned
-    .filter((p) => p.sport && areActivityTypesCompatible(activity.activity_type!, p.sport))
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description ?? '',
-    }));
+  const activityName = activity.name;
+  const matches = planned.filter(
+    (p) =>
+      p.sport &&
+      areActivityTypesCompatible(activity.activity_type!, p.sport) &&
+      p.name &&
+      activityName.includes(p.name)
+  );
+
+  if (matches.length === 0) {
+    console.log(
+      `[WhoopWebhook] no TR planned workout name appears in activity name "${activityName}" on ${date} — no headline`
+    );
+    return null;
+  }
+
+  if (matches.length > 1) {
+    console.warn(
+      `[WhoopWebhook] ambiguous TR name match for activity "${activityName}" on ${date}: ` +
+      `${matches.map((m) => m.name).join(', ')} — refusing to pick, skipping headline`
+    );
+    return null;
+  }
+
+  const match = matches[0];
+  if (!match.description || !match.description.trim()) {
+    console.log(
+      `[WhoopWebhook] TR planned workout "${match.name}" has no description on ${date} — no headline`
+    );
+    return null;
+  }
+
+  return { description: match.description };
 }
 
 async function refreshDailyWhoopStrain(

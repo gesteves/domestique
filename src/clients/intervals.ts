@@ -391,7 +391,6 @@ interface IntervalsActivity {
 
   // Compliance (from single activity endpoint)
   compliance?: number; // Workout compliance percentage (0-100)
-  paired_event_id?: number; // ID of the planned event Intervals.icu auto-paired with this activity; null when unpaired
 
   // Swim-specific (from single activity endpoint)
   pool_length?: number; // Pool length in meters (e.g., 22.86 for a 25yd pool)
@@ -2622,10 +2621,9 @@ export class IntervalsClient {
       // Workout compliance
       compliance: activity.compliance != null ? formatPercent(activity.compliance) : undefined,
 
-      // Internal: planned-event linkage and Domestique idempotency marker.
-      // Surfaced for the Whoop webhook receiver; intentionally not exposed in
-      // Zod output schemas, so these never reach MCP tool consumers.
-      paired_event_id: activity.paired_event_id,
+      // Internal: Domestique description idempotency marker. Surfaced for the
+      // Whoop webhook receiver; intentionally not exposed in Zod output
+      // schemas, so it never reaches MCP tool consumers.
       domestique_description_generated: activity.DomestiqueDescriptionGenerated,
 
       // Weather (only fetched for outdoor activities in single-activity requests)

@@ -42,6 +42,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     const whoopWebhookHandler = createWhoopWebhookHandler({
       intervals: toolRegistry.getIntervalsClient(),
       whoop: whoopClientForWebhook,
+      trainerroad: toolRegistry.getTrainerRoadClient(),
       clientSecret: config.whoop.clientSecret,
     });
     app.post(

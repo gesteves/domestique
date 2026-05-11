@@ -242,6 +242,7 @@ export class ToolRegistry {
   private planningTools: PlanningTools;
   private intervalsClient: IntervalsClient;
   private whoopClient: WhoopClient | null;
+  private trainerroadClient: TrainerRoadClient | null;
   // Track optional client presence so registerTools can skip tools whose data
   // source isn't connected — better to hide a tool than register one that
   // returns empty results without explanation.
@@ -258,6 +259,7 @@ export class ToolRegistry {
     const trainerroadClient = config.trainerroad
       ? new TrainerRoadClient(config.trainerroad)
       : null;
+    this.trainerroadClient = trainerroadClient;
     const lastfmClient = config.lastfm ? new LastFmClient(config.lastfm) : null;
     const googleWeatherClient = config.googleWeather
       ? new GoogleWeatherClient(config.googleWeather)
@@ -318,6 +320,11 @@ export class ToolRegistry {
   /** Access the shared Whoop client, or null if Whoop isn't configured. */
   getWhoopClient(): WhoopClient | null {
     return this.whoopClient;
+  }
+
+  /** Access the shared TrainerRoad client, or null if TR isn't configured. */
+  getTrainerRoadClient(): TrainerRoadClient | null {
+    return this.trainerroadClient;
   }
 
   /**
@@ -548,7 +555,7 @@ export class ToolRegistry {
     register({
       name: 'create_workout',
       title: 'Create Workout',
-      description: `Creates a structured workout on the user's Intervals.icu calendar; cycling and running workouts then sync to Zwift and Garmin. The caller is responsible for generating valid Intervals.icu workout-doc syntax — there is no schema validation, so a malformed doc will create a broken workout. When mirroring a TrainerRoad run, set \`sport\` to "running" and pass the TR workout UID as \`trainerroad_uid\` so orphan tracking can detect later changes; the field is ignored for other sports. Created workouts are tagged \`domestique\`, which is the gating condition for the matching update / delete tools — fix mistakes by deleting and recreating.`,
+      description: `Creates a structured workout on the user's Intervals.icu calendar; cycling and running workouts then sync to Zwift and Garmin. The caller is responsible for generating valid Intervals.icu workout-doc syntax — there is no schema validation, so a malformed doc will create a broken workout. When mirroring a TrainerRoad run, set \`sport\` to "running", pass the TR workout UID as \`trainerroad_uid\` so orphan tracking can detect later changes (the field is ignored for other sports), and pass the TR workout's name **verbatim** as \`name\` — case-sensitive, no decoration — so the Whoop-webhook headline matcher can later identify the completed activity by substring match against names like \`Zwift - Intervals.icu: <name>\`. Created workouts are tagged \`domestique\`, which is the gating condition for the matching update / delete tools — fix mistakes by deleting and recreating.`,
       inputSchema: {
         sport: z.enum(['cycling', 'running', 'swimming']).describe('Sport for the workout'),
         scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
@@ -646,7 +653,7 @@ export class ToolRegistry {
       register({
         name: 'sync_trainerroad_runs',
         title: 'Sync TrainerRoad Runs',
-        description: `Reconciles TrainerRoad running workouts against the Intervals.icu calendar over a date range (defaults today through 30 days out). Runs only — TrainerRoad cycling and swimming are not synced. The response splits into \`runs_to_sync\` (new TR runs not yet on Intervals.icu — caller is expected to follow up by creating each as a structured running workout), \`runs_to_update\` (TR runs whose source has changed), and \`deleted\` (orphans whose TR source was removed, cleaned up automatically). Call this when the user asks to sync TrainerRoad, before showing this week's plan, or when adjusting after a TR plan change.`,
+        description: `Reconciles TrainerRoad running workouts against the Intervals.icu calendar over a date range (defaults today through 30 days out). Runs only — TrainerRoad cycling and swimming are not synced. The response splits into \`runs_to_sync\` (new TR runs not yet on Intervals.icu — caller is expected to follow up by creating each as a structured running workout), \`runs_to_update\` (TR runs whose source has changed), and \`deleted\` (orphans whose TR source was removed, cleaned up automatically). When following up with \`create_workout\` for each entry, pass \`tr_name\` verbatim as the workout's \`name\` (case-sensitive, no decoration) so the Whoop-webhook headline matcher can later substring-match the completed activity. Call this when the user asks to sync TrainerRoad, before showing this week's plan, or when adjusting after a TR plan change.`,
         inputSchema: {
           oldest: z.string().optional().describe('Start date (defaults to today)'),
           newest: z.string().optional().describe('End date (defaults to 30 days from start)'),

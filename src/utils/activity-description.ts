@@ -245,18 +245,14 @@ export function composeBlocks(input: ComposeBlocksInput): string {
 // Anthropic-backed helper
 // ============================================================================
 
-export interface PlannedCandidate {
-  /** Stable ID we can echo back to identify which candidate Claude picked. */
-  id: string;
-  name: string;
+export interface PlannedSummaryInput {
+  /** The planned workout's description (e.g. TR's structured workout text). */
   description: string;
 }
 
 export interface HeadlineWeatherInput {
-  /** When null/empty the model is told to omit the headline. */
-  plannedCandidates: PlannedCandidate[];
-  /** Activity sport, e.g. "Cycling", "Running", "Swimming". For context. */
-  activityType?: string;
+  /** Planned-workout description to summarize. Null/undefined = no headline. */
+  plannedSummary?: PlannedSummaryInput | null;
   /** Raw Intervals.icu weather description. When null/empty the model omits weather. */
   weatherDescription?: string | null;
   /** Whether the activity is indoor; weather is only generated for outdoor. */
@@ -264,10 +260,8 @@ export interface HeadlineWeatherInput {
 }
 
 export interface HeadlineWeatherResult {
-  /** One-sentence headline, or null when no plausible plan candidate exists. */
+  /** One-sentence headline summarizing the planned workout, or null. */
   headline: string | null;
-  /** The candidate ID Claude chose, or null. Used for diagnostics. */
-  matched_workout_id: string | null;
   /** Emoji that leads the weather block, or null when weather isn't generated. */
   weather_emoji: string | null;
   /** One-sentence weather description, or null when weather isn't generated. */
@@ -279,13 +273,7 @@ const HeadlineWeatherSchema = z.object({
     .string()
     .nullable()
     .describe(
-      "One-sentence summary of the matched planned workout, ending with a period. Follow the HEADLINE RULES in the system prompt. Return null if no planned candidate genuinely represents the athlete's intent."
-    ),
-  matched_workout_id: z
-    .string()
-    .nullable()
-    .describe(
-      'The id of the planned candidate whose name+description the headline summarizes. Null if you returned a null headline.'
+      'One-sentence summary of the planned workout description, ending with a period. Follow the HEADLINE RULES in the system prompt. Null when no planned workout description was provided.'
     ),
   weather_emoji: z
     .string()
@@ -305,13 +293,12 @@ const HEADLINE_WEATHER_SYSTEM_PROMPT = `You produce two short fields for an athl
 
 # HEADLINE RULES
 
-- Write one sentence summarizing the matched planned workout, derived from its name and description.
+- You will be given exactly one planned-workout description. Summarize it in one sentence.
 - End the sentence with a period.
 - Use "VO₂max" (subscript 2, no dot) when referencing VO₂max efforts.
 - Tone: objective, neutral and technical. No exclamation marks. No marketing language ("crushed", "epic", "smashed", "huge", "killer"). No emojis in the headline.
 - Scope: describe only the *planned* workout. Do not reference weather, perceived effort, fatigue, Whoop strain, or any post-activity outcome.
-- When multiple planned candidates are provided, pick the one whose sport and structure genuinely match the completed activity. If no candidate fits, return null for both \`headline\` and \`matched_workout_id\` rather than forcing a match.
-- \`matched_workout_id\` must be the chosen candidate's \`id\` copied byte-for-byte. Do not transform, lowercase, paraphrase, or trim it.
+- If the planned-workout description is too sparse to summarize faithfully, return null rather than inventing structure.
 
 Examples:
 - 2 hours of endurance at 70-75% FTP.
@@ -379,28 +366,25 @@ export async function generateHeadlineAndWeather(
 ): Promise<HeadlineWeatherResult> {
   const anthropic = getAnthropicClient();
   if (!anthropic) {
-    return { headline: null, matched_workout_id: null, weather_emoji: null, weather_sentence: null };
+    return { headline: null, weather_emoji: null, weather_sentence: null };
   }
 
-  const wantsHeadline = input.plannedCandidates.length > 0;
+  const wantsHeadline = !!input.plannedSummary?.description?.trim();
   const wantsWeather =
     input.isIndoor !== true && !!input.weatherDescription && input.weatherDescription.trim().length > 0;
 
   if (!wantsHeadline && !wantsWeather) {
-    return { headline: null, matched_workout_id: null, weather_emoji: null, weather_sentence: null };
+    return { headline: null, weather_emoji: null, weather_sentence: null };
   }
 
   const userParts: string[] = [];
   if (wantsHeadline) {
     userParts.push(
-      `Activity sport: ${input.activityType ?? 'unknown'}`,
-      'Planned workout candidates (pick one or none):',
-      ...input.plannedCandidates.map(
-        (c) => `- id=${c.id}\n  name: ${c.name}\n  description: ${c.description || '(no description)'}`
-      )
+      'Planned workout description (summarize in one sentence):',
+      input.plannedSummary!.description
     );
   } else {
-    userParts.push('Planned workout candidates: none provided. Return null for headline and matched_workout_id.');
+    userParts.push('Planned workout description: not provided. Return null for headline.');
   }
 
   if (wantsWeather) {
@@ -420,7 +404,6 @@ export async function generateHeadlineAndWeather(
   const parsed = message.parsed_output;
   return {
     headline: parsed?.headline ?? null,
-    matched_workout_id: parsed?.matched_workout_id ?? null,
     weather_emoji: parsed?.weather_emoji ?? null,
     weather_sentence: parsed?.weather_sentence ?? null,
   };
@@ -433,8 +416,8 @@ export async function generateHeadlineAndWeather(
 export interface GenerateDescriptionInput {
   activity: NormalizedWorkout;
   whoop: WhoopMatchedData | null;
-  /** Candidates for the planned-workout headline. Empty array = skip headline. */
-  plannedCandidates: PlannedCandidate[];
+  /** Planned-workout description to summarize as the headline. Null = no headline. */
+  plannedSummary: PlannedSummaryInput | null;
   model: string;
 }
 
@@ -448,17 +431,15 @@ export interface GenerateDescriptionInput {
 export async function generateActivityDescription(
   input: GenerateDescriptionInput
 ): Promise<string> {
-  const { activity, whoop, plannedCandidates, model } = input;
+  const { activity, whoop, plannedSummary, model } = input;
 
   const { headline: existingHeadline, zwiftMapLine } = splitExistingDescription(activity.description);
 
   // If the athlete already wrote a headline, preserve it verbatim and skip
   // headline generation entirely. We still rewrite the weather (sentence).
-  const needsHeadline = !existingHeadline && plannedCandidates.length > 0;
   const llmResult = await generateHeadlineAndWeather(
     {
-      plannedCandidates: needsHeadline ? plannedCandidates : [],
-      activityType: activity.activity_type,
+      plannedSummary: existingHeadline ? null : plannedSummary,
       weatherDescription: activity.weather_description ?? null,
       isIndoor: activity.is_indoor,
     },

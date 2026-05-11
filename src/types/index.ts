@@ -184,9 +184,8 @@ export interface NormalizedWorkout {
   // Music (only included with skipExpensiveCalls: false and when Last.fm is configured)
   played_songs?: PlayedSong[];
 
-  // Internal fields for the Whoop webhook description-generation flow.
+  // Internal field for the Whoop webhook description-generation flow.
   // Not exposed via any MCP output schema.
-  paired_event_id?: number; // Linked planned event on Intervals.icu, when auto-paired
   domestique_description_generated?: number; // Unix seconds; set after we auto-write a description
 }
 

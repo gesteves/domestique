@@ -26,14 +26,16 @@ interface FakeIntervals {
   getAthleteTimezone: ReturnType<typeof vi.fn>;
   getActivities: ReturnType<typeof vi.fn>;
   getActivity: ReturnType<typeof vi.fn>;
-  getEvent: ReturnType<typeof vi.fn>;
-  getPlannedEvents: ReturnType<typeof vi.fn>;
   getUnitPreferences: ReturnType<typeof vi.fn>;
   updateActivity: ReturnType<typeof vi.fn>;
   updateWellness: ReturnType<typeof vi.fn>;
 }
 
-function makeFakes(): { whoop: FakeWhoop; intervals: FakeIntervals } {
+interface FakeTrainerRoad {
+  getPlannedWorkouts: ReturnType<typeof vi.fn>;
+}
+
+function makeFakes(): { whoop: FakeWhoop; intervals: FakeIntervals; trainerroad: FakeTrainerRoad } {
   return {
     whoop: {
       getUserId: vi.fn().mockResolvedValue(ATHLETE_USER_ID),
@@ -44,8 +46,6 @@ function makeFakes(): { whoop: FakeWhoop; intervals: FakeIntervals } {
       getAthleteTimezone: vi.fn().mockResolvedValue('UTC'),
       getActivities: vi.fn().mockResolvedValue([]),
       getActivity: vi.fn(),
-      getEvent: vi.fn(),
-      getPlannedEvents: vi.fn().mockResolvedValue([]),
       getUnitPreferences: vi.fn().mockResolvedValue({
         system: 'metric',
         weight: 'kg',
@@ -56,6 +56,9 @@ function makeFakes(): { whoop: FakeWhoop; intervals: FakeIntervals } {
       }),
       updateActivity: vi.fn().mockResolvedValue(undefined),
       updateWellness: vi.fn().mockResolvedValue(undefined),
+    },
+    trainerroad: {
+      getPlannedWorkouts: vi.fn().mockResolvedValue([]),
     },
   };
 }
@@ -144,6 +147,7 @@ describe('Whoop webhook handler', () => {
     app = makeApp({
       intervals: fakes.intervals as unknown as WhoopWebhookDeps['intervals'],
       whoop: fakes.whoop as unknown as WhoopWebhookDeps['whoop'],
+      trainerroad: fakes.trainerroad as unknown as WhoopWebhookDeps['trainerroad'],
       clientSecret: CLIENT_SECRET,
     });
   });
@@ -340,11 +344,8 @@ describe('Whoop webhook handler', () => {
       normalized_power: '210 W',
       intensity_factor: 0.7,
       tss: 98,
-      // paired_event_id absent, no Anthropic key set → no LLM call,
-      // no planned candidates → no headline.
+      // No TR plan, no LLM → no headline; description starts with emoji blocks.
     });
-    // No same-day planned events:
-    fakes.intervals.getPlannedEvents.mockResolvedValueOnce([]);
 
     const res = await postWebhook(app, {
       user_id: ATHLETE_USER_ID,
@@ -410,6 +411,218 @@ describe('Whoop webhook handler', () => {
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
   });
+
+  describe('TR-name substring headline matcher', () => {
+    function setupCyclingWorkout(activityName: string) {
+      fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+        id: 'workout-uuid',
+        activity_type: 'Cycling' as const,
+        start_time: '2024-12-15T08:00:00+00:00',
+        end_time: '2024-12-15T09:00:00+00:00',
+        duration: '1:00:00',
+        strain_score: 12.0,
+      });
+      fakes.intervals.getActivities.mockResolvedValueOnce([
+        {
+          id: 'icu-act-1',
+          start_time: '2024-12-15T08:00:00+00:00',
+          activity_type: 'Cycling',
+          source: 'intervals.icu',
+        },
+      ]);
+      fakes.intervals.getActivity.mockResolvedValueOnce({
+        id: 'icu-act-1',
+        start_time: '2024-12-15T08:00:00+00:00',
+        activity_type: 'Cycling',
+        name: activityName,
+        source: 'intervals.icu',
+        is_indoor: true,
+        average_power: '200 W',
+        tss: 50,
+      });
+    }
+
+    function postRide(): Promise<{ status: number; body: unknown }> {
+      return postWebhook(app, {
+        user_id: ATHLETE_USER_ID,
+        id: 'workout-uuid',
+        type: 'workout.updated',
+        trace_id: 'trace-tr',
+      });
+    }
+
+    it('passes the TR description to the LLM when the activity name contains the TR workout name', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      setupCyclingWorkout('Zwift - TrainerRoad: Heseman');
+      fakes.trainerroad.getPlannedWorkouts.mockResolvedValueOnce([
+        {
+          id: 'tr-heseman',
+          name: 'Heseman',
+          description: '6×3 min at 105% FTP with 3-min recoveries',
+          scheduled_for: '2024-12-15T08:00:00Z',
+          sport: 'Cycling',
+          source: 'trainerroad',
+        },
+      ]);
+
+      const res = await postRide();
+      expect(res.status).toBe(200);
+      await flushAsync();
+
+      // 2 PUTs: WhoopWorkoutStrain, then description. The description-generation
+      // path resolved a planned summary; we can't easily assert the LLM call
+      // from here without mocking it, but we can confirm the second PUT carried
+      // a `description` and `DomestiqueDescriptionGenerated`.
+      const calls = fakes.intervals.updateActivity.mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[1][1]).toHaveProperty('description');
+      expect(calls[1][1].DomestiqueDescriptionGenerated).toBeGreaterThan(0);
+      logSpy.mockRestore();
+    });
+
+    it('skips headline when no TR planned workout name appears in the activity name', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      setupCyclingWorkout('Morning Ride');
+      fakes.trainerroad.getPlannedWorkouts.mockResolvedValueOnce([
+        {
+          id: 'tr-heseman',
+          name: 'Heseman',
+          description: 'some description',
+          scheduled_for: '2024-12-15T08:00:00Z',
+          sport: 'Cycling',
+          source: 'trainerroad',
+        },
+      ]);
+
+      const res = await postRide();
+      expect(res.status).toBe(200);
+      await flushAsync();
+
+      const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+      expect(typeof descriptionCall[1].description).toBe('string');
+      // No headline → description starts with an emoji block (power line).
+      expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
+      logSpy.mockRestore();
+    });
+
+    it('refuses to pick when two TR workout names both substring-match (ambiguous)', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      setupCyclingWorkout('Zwift - TrainerRoad: Heseman -2');
+      fakes.trainerroad.getPlannedWorkouts.mockResolvedValueOnce([
+        {
+          id: 'tr-heseman',
+          name: 'Heseman',
+          description: 'short',
+          scheduled_for: '2024-12-15T08:00:00Z',
+          sport: 'Cycling',
+          source: 'trainerroad',
+        },
+        {
+          id: 'tr-heseman-2',
+          name: 'Heseman -2',
+          description: 'long',
+          scheduled_for: '2024-12-15T08:00:00Z',
+          sport: 'Cycling',
+          source: 'trainerroad',
+        },
+      ]);
+
+      const res = await postRide();
+      expect(res.status).toBe(200);
+      await flushAsync();
+
+      const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+      expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+
+    it('rejects sport-incompatible TR matches (cycling TR workout, running activity)', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+        id: 'workout-uuid',
+        activity_type: 'Running' as const,
+        start_time: '2024-12-15T08:00:00+00:00',
+        end_time: '2024-12-15T09:00:00+00:00',
+        duration: '1:00:00',
+        strain_score: 12.0,
+      });
+      fakes.intervals.getActivities.mockResolvedValueOnce([
+        {
+          id: 'icu-run-1',
+          start_time: '2024-12-15T08:00:00+00:00',
+          activity_type: 'Running',
+          source: 'intervals.icu',
+        },
+      ]);
+      fakes.intervals.getActivity.mockResolvedValueOnce({
+        id: 'icu-run-1',
+        start_time: '2024-12-15T08:00:00+00:00',
+        activity_type: 'Running',
+        name: 'Heseman',
+        source: 'intervals.icu',
+        is_indoor: false,
+      });
+      fakes.trainerroad.getPlannedWorkouts.mockResolvedValueOnce([
+        {
+          id: 'tr-heseman',
+          name: 'Heseman',
+          description: 'a ride',
+          scheduled_for: '2024-12-15T08:00:00Z',
+          sport: 'Cycling',
+          source: 'trainerroad',
+        },
+      ]);
+
+      const res = await postRide();
+      expect(res.status).toBe(200);
+      await flushAsync();
+
+      // Sport mismatch → no TR match → no headline.
+      const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+      expect(typeof descriptionCall[1].description).toBe('string');
+      logSpy.mockRestore();
+    });
+
+    it('skips the headline entirely for swimming activities even with a perfect TR name match', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+        id: 'workout-uuid',
+        activity_type: 'Swimming' as const,
+        start_time: '2024-12-15T08:00:00+00:00',
+        end_time: '2024-12-15T09:00:00+00:00',
+        duration: '1:00:00',
+        strain_score: 8.0,
+      });
+      fakes.intervals.getActivities.mockResolvedValueOnce([
+        {
+          id: 'icu-swim-1',
+          start_time: '2024-12-15T08:00:00+00:00',
+          activity_type: 'Swimming',
+          source: 'intervals.icu',
+        },
+      ]);
+      fakes.intervals.getActivity.mockResolvedValueOnce({
+        id: 'icu-swim-1',
+        start_time: '2024-12-15T08:00:00+00:00',
+        activity_type: 'Swimming',
+        name: 'TrainerRoad: PoolSet',
+        source: 'intervals.icu',
+        median_ambient_temperature: '21°C',
+        // No pool_length → open-water swim; description still generates but
+        // the headline path is gated off for swimming.
+      });
+
+      const res = await postRide();
+      expect(res.status).toBe(200);
+      await flushAsync();
+
+      // TR is never consulted for swimming:
+      expect(fakes.trainerroad.getPlannedWorkouts).not.toHaveBeenCalled();
+      logSpy.mockRestore();
+    });
+  });
 });
 
 describe('dispatchWhoopWebhook (direct)', () => {
@@ -427,6 +640,7 @@ describe('dispatchWhoopWebhook (direct)', () => {
       {
         intervals: fakes.intervals as unknown as WhoopWebhookDeps['intervals'],
         whoop: fakes.whoop as unknown as WhoopWebhookDeps['whoop'],
+        trainerroad: fakes.trainerroad as unknown as WhoopWebhookDeps['trainerroad'],
         clientSecret: CLIENT_SECRET,
       }
     );
