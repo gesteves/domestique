@@ -232,72 +232,52 @@ describe('pickRandomArtists', () => {
 
 describe('splitExistingDescription', () => {
   it('handles empty input', () => {
-    expect(splitExistingDescription(null)).toEqual({ headline: null, zwiftMapLine: null });
-    expect(splitExistingDescription('')).toEqual({ headline: null, zwiftMapLine: null });
-    expect(splitExistingDescription('   \n   ')).toEqual({ headline: null, zwiftMapLine: null });
+    expect(splitExistingDescription(null)).toBeNull();
+    expect(splitExistingDescription('')).toBeNull();
+    expect(splitExistingDescription('   \n   ')).toBeNull();
   });
 
-  it('treats a non-Zwift first paragraph as the headline', () => {
-    expect(splitExistingDescription('Felt great today!')).toEqual({
-      headline: 'Felt great today!',
-      zwiftMapLine: null,
-    });
+  it('returns a non-emoji first line as the headline', () => {
+    expect(splitExistingDescription('Felt great today!')).toBe('Felt great today!');
   });
 
-  it('treats a sole 🗺️ paragraph as a Zwift map line, not a headline', () => {
-    expect(splitExistingDescription('🗺️ Volcano Circuit in Watopia')).toEqual({
-      headline: null,
-      zwiftMapLine: '🗺️ Volcano Circuit in Watopia',
-    });
+  it('strips a sole 🗺️ Zwift map line so nothing remains', () => {
+    expect(splitExistingDescription('🗺️ Volcano Circuit in Watopia')).toBeNull();
   });
 
-  it('separates headline from Zwift map line when both are present', () => {
+  it('strips the Zwift map line below a headline', () => {
     const input = 'Felt great today!\n\n🗺️ Volcano Circuit in Watopia';
-    expect(splitExistingDescription(input)).toEqual({
-      headline: 'Felt great today!',
-      zwiftMapLine: '🗺️ Volcano Circuit in Watopia',
-    });
+    expect(splitExistingDescription(input)).toBe('Felt great today!');
   });
 
-  it('strips stale emoji-prefixed stat lines when regenerating, capturing only the Zwift line from a multi-line emoji paragraph', () => {
-    // This is the bug scenario: composeBlocks joins emoji stat lines with
-    // single newlines, so on regenerate the previously-generated content
-    // looks like ONE multi-line paragraph starting with 🗺️. The old
-    // paragraph-startsWith implementation captured the whole thing as the
-    // Zwift line, then duplicated everything on the next compose.
+  it('strips stale emoji-prefixed stat lines when regenerating, including the Zwift line', () => {
+    // composeBlocks joins emoji stat lines with single newlines, so on
+    // regenerate the previously-generated content looks like ONE multi-line
+    // paragraph beginning with an emoji. Every emoji-prefixed line — Zwift
+    // map included — gets stripped so blocks aren't duplicated.
     const input =
       'Felt great today!\n\n🗺️ Volcano Circuit\n☁️ Old weather\n⚡️ Old power\n🔥 Old strain\n🎧 Old artists';
-    expect(splitExistingDescription(input)).toEqual({
-      headline: 'Felt great today!',
-      zwiftMapLine: '🗺️ Volcano Circuit',
-    });
+    expect(splitExistingDescription(input)).toBe('Felt great today!');
   });
 
   it('strips LLM-picked weather emojis even when not in our enumerated set', () => {
     // Weather emojis come from an open set picked by the LLM. The
     // structural codepoint-based detector should still strip them.
     const input = 'Headline.\n\n🌧️ Heavy rain incoming\n⚡️ Power line';
-    expect(splitExistingDescription(input)).toEqual({
-      headline: 'Headline.',
-      zwiftMapLine: null,
-    });
+    expect(splitExistingDescription(input)).toBe('Headline.');
   });
 
   it('preserves multi-paragraph user prose across the emoji block', () => {
     const input =
       'Felt strong today.\n\nKnee was a bit sore on the climbs.\n\n🗺️ Map\n⚡️ Power';
-    expect(splitExistingDescription(input)).toEqual({
-      headline: 'Felt strong today.\n\nKnee was a bit sore on the climbs.',
-      zwiftMapLine: '🗺️ Map',
-    });
+    expect(splitExistingDescription(input)).toBe(
+      'Felt strong today.\n\nKnee was a bit sore on the climbs.'
+    );
   });
 
   it('collapses runs of more than two blank lines down to a single \\n\\n', () => {
     const input = 'Para 1.\n\n\n\nPara 2.';
-    expect(splitExistingDescription(input)).toEqual({
-      headline: 'Para 1.\n\nPara 2.',
-      zwiftMapLine: null,
-    });
+    expect(splitExistingDescription(input)).toBe('Para 1.\n\nPara 2.');
   });
 });
 
@@ -309,15 +289,6 @@ describe('composeBlocks', () => {
       power: '⚡️ NP 200 W',
     });
     expect(out).toBe('A nice ride.\n\n🌤️ Sunny\n⚡️ NP 200 W');
-  });
-
-  it('places the Zwift map line at the top of the emoji-block group', () => {
-    const out = composeBlocks({
-      headline: 'Endurance ride.',
-      zwiftMapLine: '🗺️ Volcano Circuit in Watopia',
-      power: '⚡️ NP 200 W',
-    });
-    expect(out).toBe('Endurance ride.\n\n🗺️ Volcano Circuit in Watopia\n⚡️ NP 200 W');
   });
 
   it('emits only the emoji section when no headline is present', () => {
@@ -346,11 +317,11 @@ describe('composeBlocks', () => {
   it('places the planned summary first in the emoji group with a 🗓️ prefix', () => {
     const out = composeBlocks({
       plannedSummary: '7×3-minute intervals at 5K pace with 3-minute recoveries',
-      zwiftMapLine: '🗺️ Volcano Circuit',
+      weather: '🌤️ Sunny',
       power: '⚡️ NP 200 W',
     });
     expect(out).toBe(
-      '🗓️ 7×3-minute intervals at 5K pace with 3-minute recoveries\n🗺️ Volcano Circuit\n⚡️ NP 200 W'
+      '🗓️ 7×3-minute intervals at 5K pace with 3-minute recoveries\n🌤️ Sunny\n⚡️ NP 200 W'
     );
   });
 
@@ -739,7 +710,7 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(kinds).toContain('music');
   });
 
-  it('puts the planned summary first in the emoji block, before the Zwift map line', async () => {
+  it('strips a stale Zwift map line from the input and leads with the planned-summary line', async () => {
     dispatchMockParse({
       planned: { parsed_output: { planned_summary: '1-hour endurance ride at 65-75% FTP' } },
     });
@@ -759,12 +730,13 @@ describe('generateActivityDescription (orchestrator)', () => {
     });
 
     const lines = description.split('\n');
-    // No top-level headline; planned-summary line leads the emoji block.
+    // No top-level headline; planned-summary leads.
     expect(lines[0]).toBe('🗓️ 1-hour endurance ride at 65-75% FTP');
-    expect(description).toContain('🗺️ Volcano Circuit in Watopia');
-    // Order: planned summary → Zwift map → power.
-    expect(description.indexOf('🗓️')).toBeLessThan(description.indexOf('🗺️'));
-    expect(description.indexOf('🗺️')).toBeLessThan(description.indexOf('⚡️'));
+    // Zwift map line is stripped — not preserved across compose.
+    expect(description).not.toContain('🗺️');
+    expect(description).not.toContain('Volcano Circuit');
+    // Order: planned summary → power.
+    expect(description.indexOf('🗓️')).toBeLessThan(description.indexOf('⚡️'));
   });
 
   it('composes a full description from all three LLM calls', async () => {
@@ -956,8 +928,10 @@ describe('generateActivityDescription (orchestrator)', () => {
     });
 
     expect(description.startsWith('User wrote this.')).toBe(true);
-    expect(description).toContain('🗺️ Volcano Circuit');
-    // Each emoji prefix appears exactly once — no duplicates:
+    // Zwift line stripped entirely — we no longer preserve it.
+    expect(description).not.toContain('🗺️');
+    expect(description).not.toContain('Volcano Circuit');
+    // Each remaining emoji prefix appears exactly once — no duplicates:
     expect(description.match(/🗓️/g)?.length ?? 0).toBe(1);
     expect(description.match(/⚡️/g)?.length ?? 0).toBe(1);
     expect(description.match(/🔥/g)?.length ?? 0).toBe(1);
@@ -997,7 +971,7 @@ describe('generateActivityDescription (orchestrator)', () => {
 
     expect(description.startsWith('Felt strong today.\n\nKnee was a bit sore on the climbs.')).toBe(true);
     expect(description).toContain('🗓️ 30 minutes of Z2 endurance');
-    expect(description).toContain('🗺️ Map');
+    expect(description).not.toContain('🗺️');
     expect(description).toContain('🎧 Radiohead');
     // Planned summary call fires; weather doesn't (indoor):
     const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
