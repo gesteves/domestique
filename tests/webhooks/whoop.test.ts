@@ -188,6 +188,22 @@ describe('Whoop webhook handler', () => {
     expect(fakes.intervals.updateWellness).not.toHaveBeenCalled();
   });
 
+  it('returns 400 when the payload has a missing or wrongly-typed required field', async () => {
+    // Signed correctly, but user_id is a string instead of a number — the
+    // runtime shape check rejects before downstream user_id comparison.
+    const rawBody = JSON.stringify({
+      user_id: 'abc',
+      id: 'x',
+      type: 'recovery.updated',
+      trace_id: 't',
+    });
+    const res = await postWebhook(app, recoveryPayload, { rawBody });
+    expect(res.status).toBe(400);
+    await flushAsync();
+    expect(fakes.whoop.getUserId).not.toHaveBeenCalled();
+    expect(fakes.intervals.updateWellness).not.toHaveBeenCalled();
+  });
+
   it('returns 200 and refreshes today\'s WhoopStrain for any event type', async () => {
     fakes.whoop.getStrainData.mockResolvedValueOnce([
       { date: todayUTC(), strain_score: 11.7, strain_level: 'Moderate', strain_level_description: '', activities: [] },
@@ -366,6 +382,88 @@ describe('Whoop webhook handler', () => {
     // No headline (no planned candidate, no existing description):
     expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
     expect(descriptionCall[1].DomestiqueDescriptionGenerated).toBe('yes');
+    logSpy.mockRestore();
+  });
+
+  it('dedupes concurrent workout.updated webhooks for the same activity ID', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const whoopWorkout = {
+      id: 'race-uuid',
+      activity_type: 'Running' as const,
+      start_time: '2024-12-15T10:00:00+00:00',
+      end_time: '2024-12-15T11:00:00+00:00',
+      duration: '1:00:00',
+      strain_score: 13.5,
+    };
+    fakes.whoop.getWorkoutById.mockResolvedValue(whoopWorkout);
+    fakes.intervals.getActivities.mockResolvedValue([
+      {
+        id: 'icu-act-race',
+        start_time: '2024-12-15T10:02:00+00:00',
+        activity_type: 'Running',
+        source: 'intervals.icu',
+      },
+    ]);
+
+    // Hang the first getActivity so webhook A's runDescriptionGeneration
+    // stays in flight while webhook B arrives at maybeGenerateActivityDescription.
+    // Without this, all fakes resolve synchronously in one microtask round
+    // and webhook A's `finally { delete }` fires before webhook B's `has` check.
+    let releaseFirstActivity: () => void = () => {};
+    const firstActivity = new Promise<Record<string, unknown>>((resolve) => {
+      releaseFirstActivity = () =>
+        resolve({
+          id: 'icu-act-race',
+          start_time: '2024-12-15T10:02:00+00:00',
+          activity_type: 'Running',
+          name: 'Lunch Run',
+          source: 'intervals.icu',
+        });
+    });
+    fakes.intervals.getActivity.mockReturnValueOnce(firstActivity);
+
+    const payload: WhoopWebhookPayload = {
+      user_id: ATHLETE_USER_ID,
+      id: 'race-uuid',
+      type: 'workout.updated',
+      trace_id: 'trace-race',
+    };
+
+    const [r1, r2] = await Promise.all([postWebhook(app, payload), postWebhook(app, payload)]);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+
+    // Let both dispatch chains progress until webhook A is hung on getActivity
+    // and webhook B has reached the in-flight check and bailed.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // getActivity was called exactly once — webhook B never reached it.
+    expect(fakes.intervals.getActivity).toHaveBeenCalledTimes(1);
+
+    // Both wrote WhoopWorkoutStrain (idempotent — same value):
+    const strainCalls = fakes.intervals.updateActivity.mock.calls.filter(
+      (call) => Object.keys(call[1]).length === 1 && 'WhoopWorkoutStrain' in call[1]
+    );
+    expect(strainCalls).toHaveLength(2);
+
+    // Webhook B already logged its skip while webhook A is still hung:
+    expect(
+      logSpy.mock.calls.some(
+        (call) => typeof call[0] === 'string' && call[0].includes('skipping duplicate')
+      )
+    ).toBe(true);
+
+    // Release webhook A and let it complete.
+    releaseFirstActivity();
+    await flushAsync();
+
+    // Exactly one description PUT in total:
+    const descCalls = fakes.intervals.updateActivity.mock.calls.filter(
+      (call) => 'description' in call[1]
+    );
+    expect(descCalls).toHaveLength(1);
+
     logSpy.mockRestore();
   });
 

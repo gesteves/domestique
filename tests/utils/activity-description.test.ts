@@ -227,6 +227,47 @@ describe('splitExistingDescription', () => {
       zwiftMapLine: '🗺️ Volcano Circuit in Watopia',
     });
   });
+
+  it('strips stale emoji-prefixed stat lines when regenerating, capturing only the Zwift line from a multi-line emoji paragraph', () => {
+    // This is the bug scenario: composeBlocks joins emoji stat lines with
+    // single newlines, so on regenerate the previously-generated content
+    // looks like ONE multi-line paragraph starting with 🗺️. The old
+    // paragraph-startsWith implementation captured the whole thing as the
+    // Zwift line, then duplicated everything on the next compose.
+    const input =
+      'Felt great today!\n\n🗺️ Volcano Circuit\n☁️ Old weather\n⚡️ Old power\n🔥 Old strain\n🎧 Old artists';
+    expect(splitExistingDescription(input)).toEqual({
+      headline: 'Felt great today!',
+      zwiftMapLine: '🗺️ Volcano Circuit',
+    });
+  });
+
+  it('strips LLM-picked weather emojis even when not in our enumerated set', () => {
+    // Weather emojis come from an open set picked by the LLM. The
+    // structural codepoint-based detector should still strip them.
+    const input = 'Headline.\n\n🌧️ Heavy rain incoming\n⚡️ Power line';
+    expect(splitExistingDescription(input)).toEqual({
+      headline: 'Headline.',
+      zwiftMapLine: null,
+    });
+  });
+
+  it('preserves multi-paragraph user prose across the emoji block', () => {
+    const input =
+      'Felt strong today.\n\nKnee was a bit sore on the climbs.\n\n🗺️ Map\n⚡️ Power';
+    expect(splitExistingDescription(input)).toEqual({
+      headline: 'Felt strong today.\n\nKnee was a bit sore on the climbs.',
+      zwiftMapLine: '🗺️ Map',
+    });
+  });
+
+  it('collapses runs of more than two blank lines down to a single \\n\\n', () => {
+    const input = 'Para 1.\n\n\n\nPara 2.';
+    expect(splitExistingDescription(input)).toEqual({
+      headline: 'Para 1.\n\nPara 2.',
+      zwiftMapLine: null,
+    });
+  });
 });
 
 describe('composeBlocks', () => {
@@ -814,5 +855,140 @@ describe('generateActivityDescription (orchestrator)', () => {
       ]).toContain(name);
     }
     expect(new Set(names).size).toBe(5);
+  });
+
+  it('does not duplicate emoji stat lines when regenerating from a previously-composed description', async () => {
+    dispatchMockParse({
+      headline: { parsed_output: { headline: '1-hour endurance ride at 65-75% FTP.' } },
+      weather: {
+        parsed_output: {
+          weather_emoji: '☁️',
+          weather_sentence: 'Overcast with light NW winds, around 10°C',
+        },
+      },
+    });
+
+    const description = await generateActivityDescription({
+      activity: workout({
+        activity_type: 'Cycling',
+        // Looks like the output of a previous compose: headline + multi-line
+        // emoji-block paragraph. The buggy splitter captured the whole thing
+        // as zwiftMapLine and duplicated power + weather on the next compose.
+        description:
+          'Stale headline.\n\n🗺️ Volcano Circuit\n☁️ Old weather\n⚡️ Old power\n🔥 Old strain',
+        is_indoor: false,
+        weather_description: 'Overcast, 10C',
+        average_power: '200 W',
+        normalized_power: '210 W',
+        intensity_factor: 0.71,
+        tss: 98,
+      }),
+      whoop: { id: 'w1', strain_score: 14.2 },
+      plannedSummary: { description: '65-75% FTP endurance, 1 hr' },
+      model: 'claude-sonnet-4-6',
+    });
+
+    // The pre-existing headline wins (we never asked the LLM for one):
+    expect(description.startsWith('Stale headline.')).toBe(true);
+    // Zwift line preserved:
+    expect(description).toContain('🗺️ Volcano Circuit');
+    // Fresh weather + power + strain replaced the stale lines (no duplicates):
+    expect(description.match(/⚡️/g)?.length ?? 0).toBe(1);
+    expect(description.match(/🔥/g)?.length ?? 0).toBe(1);
+    expect(description.match(/☁️/g)?.length ?? 0).toBe(1);
+    // The new lines are the fresh ones, not the stale ones:
+    expect(description).toContain('⚡️ Avg 200 W · NP 210 W · IF 0.71 · TSS 98');
+    expect(description).toContain('🔥 Whoop strain 14.2');
+    expect(description).toContain('☁️ Overcast with light NW winds');
+    expect(description).not.toContain('Old weather');
+    expect(description).not.toContain('Old power');
+    expect(description).not.toContain('Old strain');
+  });
+
+  it('preserves multi-paragraph user prose as the headline on regenerate', async () => {
+    dispatchMockParse({
+      // No headline mock — pre-existing headline wins and the call shouldn't fire.
+      music: {
+        parsed_output: { top_artists: ['Radiohead'], remaining_artists: 0 },
+      },
+    });
+
+    const description = await generateActivityDescription({
+      activity: workout({
+        activity_type: 'Cycling',
+        description:
+          'Felt strong today.\n\nKnee was a bit sore on the climbs.\n\n🗺️ Map\n⚡️ Old power',
+        is_indoor: true,
+        played_songs: [song('Radiohead')],
+      }),
+      whoop: null,
+      plannedSummary: { description: 'Ignored — we have an existing headline' },
+      model: 'claude-sonnet-4-6',
+    });
+
+    expect(description.startsWith('Felt strong today.\n\nKnee was a bit sore on the climbs.')).toBe(true);
+    expect(description).toContain('🗺️ Map');
+    expect(description).toContain('🎧 Radiohead');
+    // No headline call fired:
+    const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
+    expect(kinds).not.toContain('headline');
+  });
+
+  it('falls back to a random artist pick when the music LLM call rejects with a key set', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    mockParse.mockImplementation((args) => {
+      const kind = callKind(args);
+      if (kind === 'music') return Promise.reject(new Error('music boom'));
+      return Promise.resolve({ parsed_output: { headline: null, weather_emoji: null, weather_sentence: null } });
+    });
+
+    const description = await generateActivityDescription({
+      activity: workout({
+        activity_type: 'Cycling',
+        is_indoor: true,
+        played_songs: [
+          song('Radiohead'),
+          song('Foo Fighters'),
+          song('Tracy Chapman'),
+        ],
+      }),
+      whoop: null,
+      plannedSummary: null,
+      model: 'claude-sonnet-4-6',
+    });
+
+    const musicLine = description.split('\n').find((line) => line.startsWith('🎧 '));
+    expect(musicLine).toBeDefined();
+    const names = musicLine!.replace(/^🎧 /, '').split(', ');
+    expect(new Set(names)).toEqual(new Set(['Radiohead', 'Foo Fighters', 'Tracy Chapman']));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[ActivityDescription] music call failed:'),
+      expect.any(Error)
+    );
+  });
+
+  it('falls back to a random artist pick when the music LLM returns an explicit null', async () => {
+    dispatchMockParse({
+      music: {
+        parsed_output: { top_artists: null, remaining_artists: null },
+      },
+    });
+
+    const description = await generateActivityDescription({
+      activity: workout({
+        activity_type: 'Cycling',
+        is_indoor: true,
+        played_songs: [song('Radiohead'), song('Foo Fighters')],
+      }),
+      whoop: null,
+      plannedSummary: null,
+      model: 'claude-sonnet-4-6',
+    });
+
+    const musicLine = description.split('\n').find((line) => line.startsWith('🎧 '));
+    expect(musicLine).toBeDefined();
+    const names = musicLine!.replace(/^🎧 /, '').split(', ');
+    expect(new Set(names)).toEqual(new Set(['Radiohead', 'Foo Fighters']));
   });
 });

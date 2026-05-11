@@ -47,6 +47,35 @@ export interface WhoopWebhookDeps {
 const HEADLINE_SPORTS: ReadonlySet<ActivityType> = new Set<ActivityType>(['Cycling', 'Running']);
 
 /**
+ * Activity IDs currently being processed for description generation, used
+ * to dedupe rapid duplicate `workout.updated` webhooks for the same
+ * activity. Two events ~100ms apart would otherwise both read the activity
+ * before either writes the `DomestiqueDescriptionGenerated=yes` flag,
+ * spending 2× LLM tokens and clobbering the first description.
+ *
+ * Scope: single-process only. Multi-process or rolling-restart races
+ * aren't addressed — those are bounded enough not to warrant Redis.
+ */
+const inFlightDescriptions = new Set<string>();
+
+/**
+ * Runtime shape check for a Whoop webhook payload. The HMAC has already
+ * verified the body came from Whoop, but we still defend against
+ * malformed JSON (wrong types on the four required fields) before the
+ * downstream `user_id` comparison.
+ */
+function isWhoopWebhookPayload(x: unknown): x is WhoopWebhookPayload {
+  if (!x || typeof x !== 'object') return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.user_id === 'number' &&
+    typeof o.id === 'string' &&
+    typeof o.type === 'string' &&
+    typeof o.trace_id === 'string'
+  );
+}
+
+/**
  * Verify the X-WHOOP-Signature header per Whoop's spec:
  *   base64( HMAC-SHA256( timestampHeader + rawBody, clientSecret ) )
  * https://developer.whoop.com/docs/developing/webhooks/
@@ -100,13 +129,18 @@ export function createWhoopWebhookHandler(deps: WhoopWebhookDeps) {
       return;
     }
 
-    let payload: WhoopWebhookPayload;
+    let parsed: unknown;
     try {
-      payload = JSON.parse(rawBody.toString('utf8')) as WhoopWebhookPayload;
+      parsed = JSON.parse(rawBody.toString('utf8'));
     } catch {
       res.status(400).json({ error: 'Invalid JSON body' });
       return;
     }
+    if (!isWhoopWebhookPayload(parsed)) {
+      res.status(400).json({ error: 'Malformed Whoop webhook payload' });
+      return;
+    }
+    const payload: WhoopWebhookPayload = parsed;
 
     let expectedUserId: number;
     try {
@@ -161,6 +195,11 @@ export async function dispatchWhoopWebhook(
     await refreshDailyWhoopStrain(yesterdayYMD, deps);
   }
 
+  // TODO: `workout.deleted` currently only refreshes today's wellness via the
+  // unconditional `refreshDailyWhoopStrain` call above. It does not clear
+  // `WhoopWorkoutStrain` on the matched Intervals.icu activity, so a deleted
+  // Whoop workout leaves an orphan strain value on the ICU side. Decide on
+  // intended semantics before wiring up the cleanup path.
   if (payload.type === 'workout.updated') {
     const whoopActivity = await whoop.getWorkoutById(payload.id);
     if (!whoopActivity) {
@@ -223,6 +262,25 @@ export async function dispatchWhoopWebhook(
  * their settings.
  */
 async function maybeGenerateActivityDescription(
+  activityId: string,
+  whoopActivity: StrainActivity,
+  deps: WhoopWebhookDeps
+): Promise<void> {
+  if (inFlightDescriptions.has(activityId)) {
+    console.log(
+      `[WhoopWebhook] activity ${activityId}: description already being generated — skipping duplicate`
+    );
+    return;
+  }
+  inFlightDescriptions.add(activityId);
+  try {
+    await runDescriptionGeneration(activityId, whoopActivity, deps);
+  } finally {
+    inFlightDescriptions.delete(activityId);
+  }
+}
+
+async function runDescriptionGeneration(
   activityId: string,
   whoopActivity: StrainActivity,
   deps: WhoopWebhookDeps
