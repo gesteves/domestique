@@ -1,14 +1,16 @@
 /**
  * Compose Strava-ready activity descriptions for completed workouts.
  *
- * Block order (skip if data missing): Headline · Weather · Water temp · Power
- * · Heat strain · Whoop strain · Music. Pool swims are out of scope for the
- * Whoop-webhook caller; the orchestrator only handles non-pool activities.
+ * Layout: an optional user-written headline (preserved verbatim — we never
+ * generate one) sits above a stack of emoji-prefixed stat lines, in order:
+ * Planned summary (🗓️) · Zwift map · Weather · Water temp · Power · Heat
+ * strain · Whoop strain · Music. Pool swims are out of scope for the Whoop-
+ * webhook caller; the orchestrator only handles non-pool activities.
  *
- * Headline, weather sentence, and music artist picks each come from their own
- * focused Anthropic `messages.parse()` call. The orchestrator fires the
- * three concurrently with `Promise.allSettled`, so a single failed call
- * loses only its own block instead of the entire description.
+ * Planned summary, weather sentence, and music artist picks each come from
+ * their own focused Anthropic `messages.parse()` call. The orchestrator
+ * fires the three concurrently with `Promise.allSettled`, so a single
+ * failed call loses only its own line instead of the entire description.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -189,7 +191,10 @@ export function splitExistingDescription(
 }
 
 export interface ComposeBlocksInput {
+  /** User-preserved prose only — we never generate this. Sits above the emoji block. */
   headline?: string | null;
+  /** LLM summary of the planned workout. Renders as the first emoji line with a 🗓️ prefix. */
+  plannedSummary?: string | null;
   weather?: string | null;
   waterTemp?: string | null;
   power?: string | null;
@@ -201,16 +206,17 @@ export interface ComposeBlocksInput {
 
 /**
  * Compose the final description.
- *   - Headline, when present, is separated from the emoji-block group by a
- *     single blank line (`\n\n`).
- *   - Emoji blocks (Zwift map line, weather, water temp, power, heat, whoop,
- *     music) are joined by a single newline (`\n`) — they read as a stacked
- *     stat block, not paragraphs.
- *   - The Zwift map line, when present, sits at the top of the emoji-block
- *     group (immediately before weather).
+ *   - Headline, when present (only user-preserved prose ever lives here),
+ *     is separated from the emoji-block group by a single blank line.
+ *   - Emoji blocks (planned summary, Zwift map line, weather, water temp,
+ *     power, heat, whoop, music) are joined by single newlines — they read
+ *     as a stacked stat block, not paragraphs.
+ *   - Planned summary leads the emoji group (contextual: what was planned),
+ *     followed by Zwift map line (location), then conditions and results.
  */
 export function composeBlocks(input: ComposeBlocksInput): string {
   const emojiBlocks: string[] = [];
+  if (input.plannedSummary) emojiBlocks.push(`🗓️ ${input.plannedSummary}`);
   if (input.zwiftMapLine) emojiBlocks.push(input.zwiftMapLine);
   if (input.weather) emojiBlocks.push(input.weather);
   if (input.waterTemp) emojiBlocks.push(input.waterTemp);
@@ -272,52 +278,55 @@ export function _resetDescriptionClientForTesting(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Headline
+// Planned-workout summary
 // ---------------------------------------------------------------------------
 
-const HeadlineSchema = z.object({
-  headline: z
+const PlannedSummarySchema = z.object({
+  planned_summary: z
     .string()
     .nullable()
     .describe(
-      'One-sentence summary of the planned workout description, ending with a period. Follow the rules in the system prompt. Null when the planned-workout description is too sparse to summarize faithfully.'
+      'One-sentence summary of the planned workout description. No trailing period. Follow the rules in the system prompt. Null when the planned-workout description is too sparse to summarize faithfully.'
     ),
 });
 
-const HEADLINE_SYSTEM_PROMPT = `You write a one-sentence HEADLINE summarizing an athlete's planned workout for their training-log activity description.
+const PLANNED_SUMMARY_SYSTEM_PROMPT = `You write a one-sentence SUMMARY of an athlete's planned workout, for inclusion in their training-log activity description. The output will appear as a single stat line (an emoji prefix is added by the caller — do not include one yourself).
 
-- You will be given exactly one planned-workout description. Summarize it in one sentence, ending with a period.
+- You will be given exactly one planned-workout description. Summarize it in one sentence.
+- **No trailing period.** The output appears as a stat line, alongside lines like "Mostly sunny with light W winds" — they have no terminal punctuation.
 - **Match the brevity and shape of the examples below.** Target 6–14 words. The examples are the ceiling, not the floor.
-- Mention only the workout's **structure**: total duration, interval pattern (count × duration), target intensity (% FTP, pace zone like "5K pace", or zone name like "endurance", "tempo", "sweet spot", "VO₂max", "threshold"), and recovery intervals when present.
+- Mention only the workout's **structure**: total duration, interval pattern (count × duration), target intensity (% FTP, pace zone like "5K pace", or zone name like "endurance", "tempo", "sweet spot", "VO₂max", "threshold"), and recovery intervals when present. Omit the warmup and cooldown.
 - Use "VO₂max" (subscript 2, no dot) when referencing VO₂max efforts.
 - **Do not include**, even if the source description mentions them: physiological purpose ("targeting fat metabolism", "aerobic power development", "lactate shuttling"), training adaptations, perceived-exertion guidance, cadence/RPM specs (unless cadence IS the workout's defining feature, e.g. a cadence drill), gearing notes, coaching rationale, or any "why" behind the workout.
-- Tone: objective, neutral, technical. No exclamation marks. No marketing language ("crushed", "epic", "smashed", "huge", "killer"). No emojis in the headline.
+- Tone: objective, neutral, technical. No exclamation marks. No marketing language ("crushed", "epic", "smashed", "huge", "killer"). Output prose only — no emojis.
 - Scope: describe only the *planned* workout. Do not reference weather, perceived effort, fatigue, Whoop strain, or any post-activity outcome.
 - If the planned-workout description is too sparse to summarize faithfully, return null rather than inventing structure.
 
 Examples (study the length and how they strip rationale to just structure):
-- 2 hours of endurance at 70-75% FTP.
-- 7×3-minute intervals at 5K pace with 3-minute recoveries.
-- 6×5-min at 10K pace with 3-min recoveries.
-- 1 hour of VO₂max with two sets of 3×2.5 min at 118% FTP.
-- 3×12-min over-unders at 90–103% FTP, with 2×24-min endurance blocks.
-- 2-hour tempo ride at 65–90% FTP.
+- 2 hours of endurance at 70-75% FTP
+- 7×3-minute intervals at 5K pace with 3-minute recoveries
+- 6×5-min at 10K pace with 3-min recoveries
+- 1 hour of VO₂max with two sets of 3×2.5 min at 118% FTP
+- 3×12-min over-unders at 90–103% FTP, with 2×24-min endurance blocks
+- 2-hour tempo ride at 65–90% FTP
 
-Counter-example — DO NOT produce headlines like this:
+Counter-example — DO NOT produce summaries like this:
 - ❌ "2-hour aerobic endurance ride at 68–75% FTP, targeting fat metabolism and aerobic power development with cadence above 85 rpm."
-- ✅ "2 hours of endurance at 68–75% FTP."
+- ✅ "2 hours of endurance at 68–75% FTP"
 
-Return \`headline\` as raw text. Do not wrap the output in quotation marks.`;
+Return \`planned_summary\` as raw text. Do not wrap the output in quotation marks.`;
 
 /**
- * Summarize a planned-workout description into a one-sentence headline.
+ * Summarize a planned-workout description into a one-sentence stat-line
+ * phrase (no trailing period — the composer renders it as one of the
+ * emoji-prefixed stat lines).
  *
  * Returns null when the input is empty/whitespace, when the Anthropic API key
  * isn't configured, or when the model declined to summarize a sparse
  * description. Throws on transport/parse failure; the orchestrator catches
  * per-call rejections so a single failure can't lose the other blocks.
  */
-export async function generateHeadline(
+export async function generatePlannedSummary(
   plannedDescription: string,
   model: string
 ): Promise<string | null> {
@@ -329,19 +338,19 @@ export async function generateHeadline(
     {
       model,
       max_tokens: 512,
-      system: HEADLINE_SYSTEM_PROMPT,
+      system: PLANNED_SUMMARY_SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
           content: `Planned workout description (summarize in one sentence):\n${plannedDescription}`,
         },
       ],
-      output_config: { format: zodOutputFormat(HeadlineSchema) },
+      output_config: { format: zodOutputFormat(PlannedSummarySchema) },
     },
     { timeout: ANTHROPIC_TIMEOUT_MS }
   );
 
-  return message.parsed_output?.headline ?? null;
+  return message.parsed_output?.planned_summary ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -544,14 +553,15 @@ export async function generateActivityDescription(
 ): Promise<string> {
   const { activity, whoop, plannedSummary, model } = input;
 
+  // We never emit a headline ourselves anymore — anything in this slot is
+  // user-written prose, preserved verbatim across regenerations. The
+  // planned-workout summary now lives in the emoji block (🗓️ prefix) and
+  // is regenerated on every run.
   const { headline: existingHeadline, zwiftMapLine } = splitExistingDescription(activity.description);
 
-  // Athlete already wrote a headline → preserve verbatim and skip the
-  // headline LLM call entirely. Weather + music still go to the LLM.
-  const headlinePromise: Promise<string | null> =
-    existingHeadline || !plannedSummary?.description
-      ? Promise.resolve(null)
-      : generateHeadline(plannedSummary.description, model);
+  const plannedPromise: Promise<string | null> = plannedSummary?.description
+    ? generatePlannedSummary(plannedSummary.description, model)
+    : Promise.resolve(null);
 
   const weatherPromise = generateWeatherSentence(
     activity.weather_description ?? '',
@@ -561,14 +571,13 @@ export async function generateActivityDescription(
 
   const musicPromise = generateMusicSelection(activity.played_songs ?? [], model);
 
-  const [headlineResult, weatherResult, musicResult] = await Promise.allSettled([
-    headlinePromise,
+  const [plannedResult, weatherResult, musicResult] = await Promise.allSettled([
+    plannedPromise,
     weatherPromise,
     musicPromise,
   ]);
 
-  const headline =
-    existingHeadline ?? settled(headlineResult, 'headline') ?? null;
+  const planned = settled(plannedResult, 'plannedSummary');
   const weather = settled(weatherResult, 'weather');
   const music = settled(musicResult, 'music');
 
@@ -577,9 +586,9 @@ export async function generateActivityDescription(
   // Random fallback whenever the LLM didn't give us artists but the
   // activity has scrobbles. Covers: no API key (the call short-circuits to
   // null), the call rejected (settled returned null), or the model
-  // explicitly declined. The other LLM-driven fields (headline, weather)
-  // have no programmatic fallback because they're prose; artists are just
-  // a list.
+  // explicitly declined. The other LLM-driven fields (planned summary,
+  // weather) have no programmatic fallback because they're prose; artists
+  // are just a list.
   let topArtists = music?.top_artists ?? null;
   let remainingArtists = music?.remaining_artists ?? null;
   if (topArtists === null && activity.played_songs && activity.played_songs.length > 0) {
@@ -589,7 +598,8 @@ export async function generateActivityDescription(
   }
 
   return composeBlocks({
-    headline,
+    headline: existingHeadline,
+    plannedSummary: planned,
     zwiftMapLine,
     weather: weatherBlock,
     waterTemp: buildWaterTempBlock(activity),

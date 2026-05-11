@@ -9,7 +9,7 @@ import {
   pickRandomArtists,
   splitExistingDescription,
   composeBlocks,
-  generateHeadline,
+  generatePlannedSummary,
   generateWeatherSentence,
   generateMusicSelection,
   generateActivityDescription,
@@ -311,6 +311,28 @@ describe('composeBlocks', () => {
   it('emits just the headline when there are no emoji blocks', () => {
     expect(composeBlocks({ headline: 'Just a chill day.' })).toBe('Just a chill day.');
   });
+
+  it('places the planned summary first in the emoji group with a 🗓️ prefix', () => {
+    const out = composeBlocks({
+      plannedSummary: '7×3-minute intervals at 5K pace with 3-minute recoveries',
+      zwiftMapLine: '🗺️ Volcano Circuit',
+      power: '⚡️ NP 200 W',
+    });
+    expect(out).toBe(
+      '🗓️ 7×3-minute intervals at 5K pace with 3-minute recoveries\n🗺️ Volcano Circuit\n⚡️ NP 200 W'
+    );
+  });
+
+  it('preserves the user headline above the emoji group when both are present', () => {
+    const out = composeBlocks({
+      headline: 'Felt great today.',
+      plannedSummary: '2 hours of endurance at 70-75% FTP',
+      power: '⚡️ NP 200 W',
+    });
+    expect(out).toBe(
+      'Felt great today.\n\n🗓️ 2 hours of endurance at 70-75% FTP\n⚡️ NP 200 W'
+    );
+  });
 });
 
 // --------------------------------------------------------------------------
@@ -331,10 +353,10 @@ vi.mock('@anthropic-ai/sdk/helpers/zod', () => ({
 }));
 
 // --------------------------------------------------------------------------
-// generateHeadline
+// generatePlannedSummary
 // --------------------------------------------------------------------------
 
-describe('generateHeadline', () => {
+describe('generatePlannedSummary', () => {
   beforeEach(() => {
     mockParse.mockReset();
     _resetDescriptionClientForTesting();
@@ -346,41 +368,43 @@ describe('generateHeadline', () => {
   });
 
   it('returns null without calling the API when description is empty/whitespace', async () => {
-    expect(await generateHeadline('', 'claude-sonnet-4-6')).toBeNull();
-    expect(await generateHeadline('   ', 'claude-sonnet-4-6')).toBeNull();
+    expect(await generatePlannedSummary('', 'claude-sonnet-4-6')).toBeNull();
+    expect(await generatePlannedSummary('   ', 'claude-sonnet-4-6')).toBeNull();
     expect(mockParse).not.toHaveBeenCalled();
   });
 
   it('returns null without calling the API when no key is set', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     _resetDescriptionClientForTesting();
-    expect(await generateHeadline('7×3 min at 5k pace', 'claude-sonnet-4-6')).toBeNull();
+    expect(await generatePlannedSummary('7×3 min at 5k pace', 'claude-sonnet-4-6')).toBeNull();
     expect(mockParse).not.toHaveBeenCalled();
   });
 
   it('passes the description verbatim and returns the model summary', async () => {
     mockParse.mockResolvedValueOnce({
-      parsed_output: { headline: '7×3-minute intervals at 5K pace with 3-minute recoveries.' },
+      parsed_output: { planned_summary: '7×3-minute intervals at 5K pace with 3-minute recoveries' },
     });
 
-    const result = await generateHeadline(
+    const result = await generatePlannedSummary(
       '7 reps × 3 min at 5k pace with 3-min jogs',
       'claude-sonnet-4-6'
     );
 
-    expect(result).toBe('7×3-minute intervals at 5K pace with 3-minute recoveries.');
+    expect(result).toBe('7×3-minute intervals at 5K pace with 3-minute recoveries');
     expect(mockParse).toHaveBeenCalledTimes(1);
     const call = mockParse.mock.calls[0][0];
     expect(call.model).toBe('claude-sonnet-4-6');
     expect(call.messages[0].content).toContain('7 reps × 3 min at 5k pace');
-    // The headline prompt is self-contained — no weather/music leakage.
+    // The planned-summary prompt is self-contained — no weather/music leakage.
     expect(call.system).not.toContain('weather_emoji');
     expect(call.system).not.toContain('top_artists');
+    // Prompt instructs the model to emit no leading emoji (composer adds 🗓️):
+    expect(call.system).toContain('emoji prefix is added by the caller');
   });
 
   it('returns null when the model declines to summarize', async () => {
-    mockParse.mockResolvedValueOnce({ parsed_output: { headline: null } });
-    expect(await generateHeadline('something', 'claude-sonnet-4-6')).toBeNull();
+    mockParse.mockResolvedValueOnce({ parsed_output: { planned_summary: null } });
+    expect(await generatePlannedSummary('something', 'claude-sonnet-4-6')).toBeNull();
   });
 });
 
@@ -577,16 +601,16 @@ describe('generateMusicSelection', () => {
  */
 function callKind(args: {
   messages?: Array<{ role: string; content: string }>;
-}): 'headline' | 'weather' | 'music' | 'unknown' {
+}): 'planned' | 'weather' | 'music' | 'unknown' {
   const content = args.messages?.[0]?.content ?? '';
-  if (content.startsWith('Planned workout description')) return 'headline';
+  if (content.startsWith('Planned workout description')) return 'planned';
   if (content.startsWith('Weather data:')) return 'weather';
   if (content.startsWith('Played songs:')) return 'music';
   return 'unknown';
 }
 
 function dispatchMockParse(byCall: {
-  headline?: unknown;
+  planned?: unknown;
   weather?: unknown;
   music?: unknown;
 }): void {
@@ -611,9 +635,9 @@ describe('generateActivityDescription (orchestrator)', () => {
     vi.restoreAllMocks();
   });
 
-  it('preserves an existing headline verbatim and skips the LLM headline call', async () => {
+  it('preserves an existing user headline and emits a fresh planned-summary line below it', async () => {
     dispatchMockParse({
-      // No headline mock — the headline call must NOT be made.
+      planned: { parsed_output: { planned_summary: '1-hour endurance ride at 65-75% FTP' } },
       weather: {
         parsed_output: {
           weather_emoji: '☁️',
@@ -634,27 +658,25 @@ describe('generateActivityDescription (orchestrator)', () => {
         tss: 98,
       }),
       whoop: { id: 'w1', strain_score: 14.2 },
-      plannedSummary: { description: 'Some TR description we should ignore' },
+      plannedSummary: { description: 'TR description for the planned-summary LLM call' },
       model: 'claude-sonnet-4-6',
     });
 
-    // No headline call fired; weather call did:
+    // Planned + weather calls both fire (the existing user headline no
+    // longer short-circuits anything):
     const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
-    expect(kinds).not.toContain('headline');
+    expect(kinds).toContain('planned');
     expect(kinds).toContain('weather');
-    // None of the calls received the TR description:
-    for (const call of mockParse.mock.calls) {
-      expect(call[0].messages[0].content).not.toContain('Some TR description we should ignore');
-    }
 
-    expect(description.startsWith('Felt great today!')).toBe(true);
+    expect(description.startsWith('Felt great today!\n\n🗓️ 1-hour endurance ride at 65-75% FTP')).toBe(true);
     expect(description).toContain('☁️ Overcast with light NW winds');
     expect(description).toContain('⚡️ Avg 200 W · NP 210 W · IF 0.71 · TSS 98');
     expect(description).toContain('🔥 Whoop strain 14.2');
   });
 
-  it('preserves an existing headline but still regenerates the music line', async () => {
+  it('emits planned + music alongside an existing user headline, skipping the indoor weather call', async () => {
     dispatchMockParse({
+      planned: { parsed_output: { planned_summary: '90 minutes of endurance at 65-75% FTP' } },
       music: {
         parsed_output: {
           top_artists: ['Radiohead', 'Foo Fighters', 'Tracy Chapman'],
@@ -671,23 +693,22 @@ describe('generateActivityDescription (orchestrator)', () => {
         played_songs: [song('Radiohead'), song('Foo Fighters', { loved: true })],
       }),
       whoop: null,
-      plannedSummary: { description: 'Some TR description we should ignore' },
+      plannedSummary: { description: 'Some TR description for the planned call' },
       model: 'claude-sonnet-4-6',
     });
 
-    expect(description.startsWith('Felt great today!')).toBe(true);
+    expect(description.startsWith('Felt great today!\n\n🗓️ 90 minutes of endurance at 65-75% FTP')).toBe(true);
     expect(description).toContain('🎧 Radiohead, Foo Fighters, Tracy Chapman, and 4 more');
-    // Headline call did NOT fire (existing headline); weather did NOT fire
-    // (indoor); only music fired.
+    // Planned + music fire; weather does NOT (indoor short-circuit):
     const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
-    expect(kinds).not.toContain('headline');
+    expect(kinds).toContain('planned');
     expect(kinds).not.toContain('weather');
     expect(kinds).toContain('music');
   });
 
-  it('moves a Zwift map line out of the headline slot and asks the LLM for a new headline', async () => {
+  it('puts the planned summary first in the emoji block, before the Zwift map line', async () => {
     dispatchMockParse({
-      headline: { parsed_output: { headline: '1-hour endurance ride at 65-75% FTP.' } },
+      planned: { parsed_output: { planned_summary: '1-hour endurance ride at 65-75% FTP' } },
     });
 
     const description = await generateActivityDescription({
@@ -704,14 +725,17 @@ describe('generateActivityDescription (orchestrator)', () => {
     });
 
     const lines = description.split('\n');
-    expect(lines[0]).toBe('1-hour endurance ride at 65-75% FTP.');
+    // No top-level headline; planned-summary line leads the emoji block.
+    expect(lines[0]).toBe('🗓️ 1-hour endurance ride at 65-75% FTP');
     expect(description).toContain('🗺️ Volcano Circuit in Watopia');
+    // Order: planned summary → Zwift map → power.
+    expect(description.indexOf('🗓️')).toBeLessThan(description.indexOf('🗺️'));
     expect(description.indexOf('🗺️')).toBeLessThan(description.indexOf('⚡️'));
   });
 
   it('composes a full description from all three LLM calls', async () => {
     dispatchMockParse({
-      headline: { parsed_output: { headline: '1-hour endurance ride at 65-75% FTP.' } },
+      planned: { parsed_output: { planned_summary: '1-hour endurance ride at 65-75% FTP' } },
       weather: {
         parsed_output: {
           weather_emoji: '🌤️',
@@ -746,12 +770,15 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
-    expect(description).toContain('1-hour endurance ride at 65-75% FTP.');
+    // No top-level headline; planned summary leads the emoji block.
+    expect(description.startsWith('🗓️ 1-hour endurance ride at 65-75% FTP')).toBe(true);
     expect(description).toContain('🌤️ Mostly sunny with light W winds');
     expect(description).toContain('🎧 Radiohead, Tracy Chapman, Foo Fighters, and 2 more');
+    // Planned summary precedes weather:
+    expect(description.indexOf('🗓️')).toBeLessThan(description.indexOf('🌤️'));
 
     const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
-    expect(kinds.filter((k) => k === 'headline')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'planned')).toHaveLength(1);
     expect(kinds.filter((k) => k === 'weather')).toHaveLength(1);
     expect(kinds.filter((k) => k === 'music')).toHaveLength(1);
   });
@@ -761,7 +788,7 @@ describe('generateActivityDescription (orchestrator)', () => {
 
     mockParse.mockImplementation((args) => {
       const kind = callKind(args);
-      if (kind === 'headline') return Promise.reject(new Error('headline boom'));
+      if (kind === 'planned') return Promise.reject(new Error('planned boom'));
       if (kind === 'weather') {
         return Promise.resolve({
           parsed_output: {
@@ -790,13 +817,13 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
-    // Headline failed → no headline; weather + music survived:
-    expect(description).not.toContain('endurance');
+    // Planned summary failed → no 🗓️ line; weather + music survived:
+    expect(description).not.toContain('🗓️');
     expect(description.startsWith('🌤️')).toBe(true);
     expect(description).toContain('🎧 Radiohead');
 
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[ActivityDescription] headline call failed:'),
+      expect.stringContaining('[ActivityDescription] plannedSummary call failed:'),
       expect.any(Error)
     );
   });
@@ -857,9 +884,9 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(new Set(names).size).toBe(5);
   });
 
-  it('does not duplicate emoji stat lines when regenerating from a previously-composed description', async () => {
+  it('does not duplicate emoji stat lines when regenerating, including the planned-summary line', async () => {
     dispatchMockParse({
-      headline: { parsed_output: { headline: '1-hour endurance ride at 65-75% FTP.' } },
+      planned: { parsed_output: { planned_summary: '1-hour endurance ride at 65-75% FTP' } },
       weather: {
         parsed_output: {
           weather_emoji: '☁️',
@@ -871,11 +898,12 @@ describe('generateActivityDescription (orchestrator)', () => {
     const description = await generateActivityDescription({
       activity: workout({
         activity_type: 'Cycling',
-        // Looks like the output of a previous compose: headline + multi-line
-        // emoji-block paragraph. The buggy splitter captured the whole thing
-        // as zwiftMapLine and duplicated power + weather on the next compose.
+        // Looks like a previously-composed description: user headline +
+        // multi-line emoji-block paragraph that includes a stale planned-
+        // summary line. All emoji-prefixed lines should be stripped and
+        // replaced; only the user headline is preserved.
         description:
-          'Stale headline.\n\n🗺️ Volcano Circuit\n☁️ Old weather\n⚡️ Old power\n🔥 Old strain',
+          'User wrote this.\n\n🗓️ Old plan summary\n🗺️ Volcano Circuit\n☁️ Old weather\n⚡️ Old power\n🔥 Old strain',
         is_indoor: false,
         weather_description: 'Overcast, 10C',
         average_power: '200 W',
@@ -888,26 +916,27 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
-    // The pre-existing headline wins (we never asked the LLM for one):
-    expect(description.startsWith('Stale headline.')).toBe(true);
-    // Zwift line preserved:
+    expect(description.startsWith('User wrote this.')).toBe(true);
     expect(description).toContain('🗺️ Volcano Circuit');
-    // Fresh weather + power + strain replaced the stale lines (no duplicates):
+    // Each emoji prefix appears exactly once — no duplicates:
+    expect(description.match(/🗓️/g)?.length ?? 0).toBe(1);
     expect(description.match(/⚡️/g)?.length ?? 0).toBe(1);
     expect(description.match(/🔥/g)?.length ?? 0).toBe(1);
     expect(description.match(/☁️/g)?.length ?? 0).toBe(1);
     // The new lines are the fresh ones, not the stale ones:
+    expect(description).toContain('🗓️ 1-hour endurance ride at 65-75% FTP');
     expect(description).toContain('⚡️ Avg 200 W · NP 210 W · IF 0.71 · TSS 98');
     expect(description).toContain('🔥 Whoop strain 14.2');
     expect(description).toContain('☁️ Overcast with light NW winds');
+    expect(description).not.toContain('Old plan summary');
     expect(description).not.toContain('Old weather');
     expect(description).not.toContain('Old power');
     expect(description).not.toContain('Old strain');
   });
 
-  it('preserves multi-paragraph user prose as the headline on regenerate', async () => {
+  it('preserves multi-paragraph user prose as the headline on regenerate, alongside a fresh planned-summary line', async () => {
     dispatchMockParse({
-      // No headline mock — pre-existing headline wins and the call shouldn't fire.
+      planned: { parsed_output: { planned_summary: '30 minutes of Z2 endurance' } },
       music: {
         parsed_output: { top_artists: ['Radiohead'], remaining_artists: 0 },
       },
@@ -922,16 +951,18 @@ describe('generateActivityDescription (orchestrator)', () => {
         played_songs: [song('Radiohead')],
       }),
       whoop: null,
-      plannedSummary: { description: 'Ignored — we have an existing headline' },
+      plannedSummary: { description: 'Z2 endurance, 30 min' },
       model: 'claude-sonnet-4-6',
     });
 
     expect(description.startsWith('Felt strong today.\n\nKnee was a bit sore on the climbs.')).toBe(true);
+    expect(description).toContain('🗓️ 30 minutes of Z2 endurance');
     expect(description).toContain('🗺️ Map');
     expect(description).toContain('🎧 Radiohead');
-    // No headline call fired:
+    // Planned summary call fires; weather doesn't (indoor):
     const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
-    expect(kinds).not.toContain('headline');
+    expect(kinds).toContain('planned');
+    expect(kinds).not.toContain('weather');
   });
 
   it('falls back to a random artist pick when the music LLM call rejects with a key set', async () => {
@@ -940,7 +971,9 @@ describe('generateActivityDescription (orchestrator)', () => {
     mockParse.mockImplementation((args) => {
       const kind = callKind(args);
       if (kind === 'music') return Promise.reject(new Error('music boom'));
-      return Promise.resolve({ parsed_output: { headline: null, weather_emoji: null, weather_sentence: null } });
+      return Promise.resolve({
+        parsed_output: { planned_summary: null, weather_emoji: null, weather_sentence: null },
+      });
     });
 
     const description = await generateActivityDescription({
