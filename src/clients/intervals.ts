@@ -477,6 +477,8 @@ interface IntervalsWellness {
   // Custom metrics
   CoreHeatAdaptationScore?: number;
   WhoopStrain?: number; // Daily Whoop cycle strain (0-21), written by the Whoop webhook receiver
+  WhoopSleepPerformance?: number; // Whoop sleep performance percentage (0-100), keyed by sleep end date
+  WhoopRecovery?: number; // Whoop recovery score (0-100), keyed by associated sleep's end date
 }
 
 /**

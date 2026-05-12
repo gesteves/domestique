@@ -38,6 +38,37 @@ export function addMonthsToYMD(ymd: string, months: number): string {
 }
 
 /**
+ * Convert a UTC timestamp (or `undefined` to mean "now") into a YYYY-MM-DD
+ * using a fixed offset like Whoop's `timezone_offset` ("Z", "-05:00", "+0200").
+ *
+ * Unlike `formatYMDInTimezone`, this takes a raw numeric offset string rather
+ * than an IANA zone name — handy for sources like Whoop that record the
+ * offset that applied at the moment of the event, regardless of the athlete's
+ * current location.
+ */
+export function formatYMDFromOffset(
+  timestamp: string | undefined,
+  offset: string,
+  now: Date = new Date()
+): string {
+  const offsetMs = parseFixedOffsetMs(offset);
+  const baseMs = timestamp ? new Date(timestamp).getTime() : now.getTime();
+  return new Date(baseMs + offsetMs).toISOString().slice(0, 10);
+}
+
+function parseFixedOffsetMs(offset: string): number {
+  if (offset === 'Z') return 0;
+  const match = /^([+-])(\d{2}):?(\d{2})$/.exec(offset);
+  if (!match) {
+    throw new Error(`Unrecognized fixed timezone offset: ${offset}`);
+  }
+  const sign = match[1] === '-' ? -1 : 1;
+  const hours = Number(match[2]);
+  const minutes = Number(match[3]);
+  return sign * (hours * 60 + minutes) * 60 * 1000;
+}
+
+/**
  * Whether a UTC timestamp falls within [startYMD, endYMD] (inclusive)
  * when interpreted in the given timezone.
  */

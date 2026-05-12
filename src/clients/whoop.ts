@@ -1125,6 +1125,100 @@ export class WhoopClient {
   }
 
   /**
+   * Fetch a single Whoop sleep by UUID (v2). Returns null for 404 or sleeps
+   * that aren't SCORED. Caller is responsible for handling naps if relevant.
+   */
+  async getSleepById(sleepId: string): Promise<WhoopSleep | null> {
+    let sleep: WhoopSleep;
+    try {
+      sleep = await this.fetch<WhoopSleep>(`/activity/sleep/${sleepId}`, undefined, {
+        operation: 'fetch sleep by id',
+        resource: sleepId,
+      });
+    } catch (error) {
+      if (error instanceof WhoopApiError && error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+    if (sleep.score_state !== 'SCORED') return null;
+    return sleep;
+  }
+
+  /**
+   * Fetch the recovery for a Whoop cycle. Recoveries are keyed by cycle id
+   * (not by recovery id — there is no GET-by-recovery-id endpoint in v2).
+   * Returns null for 404 or recoveries that aren't SCORED.
+   */
+  async getRecoveryForCycle(cycleId: number | string): Promise<WhoopRecovery | null> {
+    let recovery: WhoopRecovery;
+    try {
+      recovery = await this.fetch<WhoopRecovery>(`/cycle/${cycleId}/recovery`, undefined, {
+        operation: 'fetch recovery for cycle',
+        resource: String(cycleId),
+      });
+    } catch (error) {
+      if (error instanceof WhoopApiError && error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+    if (recovery.score_state !== 'SCORED') return null;
+    return recovery;
+  }
+
+  /**
+   * Fetch raw `/activity/sleep` records for a date range, paginating via `next_token`.
+   * Includes naps; caller filters as needed.
+   */
+  async getRawSleeps(startDate: string, endDate: string): Promise<WhoopSleep[]> {
+    const all: WhoopSleep[] = [];
+    let nextToken: string | undefined;
+    do {
+      const params: Record<string, string> = {
+        start: `${startDate}T00:00:00.000Z`,
+        end: `${endDate}T23:59:59.999Z`,
+        limit: '25',
+      };
+      if (nextToken) {
+        params.nextToken = nextToken;
+      }
+      const resp = await this.fetch<{ records: WhoopSleep[]; next_token?: string }>(
+        '/activity/sleep',
+        params
+      );
+      all.push(...resp.records);
+      nextToken = resp.next_token;
+    } while (nextToken);
+    return all;
+  }
+
+  /**
+   * Fetch raw `/recovery` records for a date range, paginating via `next_token`.
+   */
+  async getRawRecoveries(startDate: string, endDate: string): Promise<WhoopRecovery[]> {
+    const all: WhoopRecovery[] = [];
+    let nextToken: string | undefined;
+    do {
+      const params: Record<string, string> = {
+        start: `${startDate}T00:00:00.000Z`,
+        end: `${endDate}T23:59:59.999Z`,
+        limit: '25',
+      };
+      if (nextToken) {
+        params.nextToken = nextToken;
+      }
+      const resp = await this.fetch<{ records: WhoopRecovery[]; next_token?: string }>(
+        '/recovery',
+        params
+      );
+      all.push(...resp.records);
+      nextToken = resp.next_token;
+    } while (nextToken);
+    return all;
+  }
+
+  /**
    * Fetch a single Whoop workout by ID (v2 uses UUID strings).
    * Returns null for 404 or workouts that aren't SCORED yet (no strain available).
    * Rethrows other errors.

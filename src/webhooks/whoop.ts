@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { createHmac } from 'crypto';
 import { secureCompare } from '../auth/middleware.js';
 import { findMatchingWhoopActivity, areActivityTypesCompatible } from '../utils/activity-matcher.js';
-import { addDaysToYMD, formatYMDInTimezone } from '../utils/tz.js';
+import { addDaysToYMD, formatYMDFromOffset, formatYMDInTimezone } from '../utils/tz.js';
 import {
   generateActivityDescription,
   type PlannedSummaryInput,
@@ -263,6 +263,14 @@ export async function dispatchWhoopWebhook(
   await refreshDailyWhoopStrain(todayYMD, deps);
   if (payload.type === 'sleep.updated') {
     await refreshDailyWhoopStrain(addDaysToYMD(todayYMD, -1), deps);
+    // payload.id is the sleep UUID; the metric is keyed by the sleep's end date.
+    await refreshSleepPerformance(payload.id, deps);
+  }
+  if (payload.type === 'recovery.updated') {
+    // payload.id is the *sleep* UUID associated with the recovery, per
+    // Whoop's v2 webhook spec. We use that sleep to compute the local
+    // end-date and to look up the cycle the recovery is scored against.
+    await refreshRecovery(payload.id, deps);
   }
 }
 
@@ -419,4 +427,71 @@ async function refreshDailyWhoopStrain(
   }
   await intervals.updateWellness(dateYMD, { WhoopStrain: day.strain_score });
   console.log(`[WhoopWebhook] Updated wellness ${dateYMD} WhoopStrain=${day.strain_score}`);
+}
+
+/**
+ * Fetch a Whoop sleep and write its sleep-performance percentage to the
+ * Intervals.icu wellness record for the sleep's local end date. Skips naps
+ * and sleeps without a sleep_performance_percentage.
+ */
+async function refreshSleepPerformance(
+  sleepId: string,
+  deps: WhoopWebhookDeps
+): Promise<void> {
+  const { intervals, whoop } = deps;
+  const sleep = await whoop.getSleepById(sleepId);
+  if (!sleep) {
+    console.log(
+      `[WhoopWebhook] sleep ${sleepId} not found or not SCORED — skipping WhoopSleepPerformance`
+    );
+    return;
+  }
+  if (sleep.nap) {
+    console.log(
+      `[WhoopWebhook] sleep ${sleepId} is a nap — skipping WhoopSleepPerformance`
+    );
+    return;
+  }
+  const performance = sleep.score?.sleep_performance_percentage;
+  if (performance == null) {
+    console.log(
+      `[WhoopWebhook] sleep ${sleepId} has no sleep_performance_percentage — skipping`
+    );
+    return;
+  }
+  const dateYMD = formatYMDFromOffset(sleep.end, sleep.timezone_offset);
+  await intervals.updateWellness(dateYMD, { WhoopSleepPerformance: performance });
+  console.log(
+    `[WhoopWebhook] Updated wellness ${dateYMD} WhoopSleepPerformance=${performance}`
+  );
+}
+
+/**
+ * Fetch the sleep that triggered a `recovery.updated` event, plus the
+ * recovery scored against that sleep's cycle, and write the recovery score
+ * to the Intervals.icu wellness record for the sleep's local end date.
+ */
+async function refreshRecovery(
+  sleepId: string,
+  deps: WhoopWebhookDeps
+): Promise<void> {
+  const { intervals, whoop } = deps;
+  const sleep = await whoop.getSleepById(sleepId);
+  if (!sleep) {
+    console.log(
+      `[WhoopWebhook] sleep ${sleepId} not found or not SCORED — skipping WhoopRecovery`
+    );
+    return;
+  }
+  const recovery = await whoop.getRecoveryForCycle(sleep.cycle_id);
+  if (!recovery) {
+    console.log(
+      `[WhoopWebhook] no SCORED recovery for cycle ${sleep.cycle_id} — skipping WhoopRecovery`
+    );
+    return;
+  }
+  const dateYMD = formatYMDFromOffset(sleep.end, sleep.timezone_offset);
+  const score = recovery.score.recovery_score;
+  await intervals.updateWellness(dateYMD, { WhoopRecovery: score });
+  console.log(`[WhoopWebhook] Updated wellness ${dateYMD} WhoopRecovery=${score}`);
 }
