@@ -23,6 +23,7 @@ import { WhoopClient } from '../clients/whoop.js';
 import { IntervalsClient } from '../clients/intervals.js';
 import { getRedisClient, closeRedis } from '../utils/redis.js';
 import { formatYMDFromOffset } from '../utils/tz.js';
+import { isMissingCustomFieldError } from '../errors/index.js';
 
 const HISTORY_START = '2009-01-01'; // Whoop launched in 2012; this is a safe floor.
 const BULK_CHUNK_SIZE = 100;
@@ -225,7 +226,24 @@ async function main() {
       if (r.WhoopRecovery != null) out.WhoopRecovery = r.WhoopRecovery;
       return out;
     });
-    await intervals.updateWellnessBulk(chunk);
+    try {
+      await intervals.updateWellnessBulk(chunk);
+    } catch (error) {
+      if (isMissingCustomFieldError(error)) {
+        console.error(
+          '\nIntervals.icu rejected the bulk write (422). One or more of these wellness ' +
+          'custom fields likely hasn\'t been created in your Intervals.icu settings:\n' +
+          '  - WhoopStrain\n' +
+          '  - WhoopSleepPerformance\n' +
+          '  - WhoopRecovery\n' +
+          '\nCreate them under Intervals.icu → Settings → Custom Fields → Wellness, then re-run.'
+        );
+        console.error(`\nResponse body: ${error.responseBody ?? '(empty)'}`);
+        await closeRedis();
+        process.exit(0);
+      }
+      throw error;
+    }
     written += chunk.length;
     console.log(`  ${written}/${records.length} (${chunk[0].id} -> ${chunk[chunk.length - 1].id})`);
   }

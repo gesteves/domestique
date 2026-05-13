@@ -209,6 +209,15 @@ export class IntervalsApiError extends ApiError {
           isRetryable: false,
           message: `I couldn't find${resourceInfo}. It may have been deleted or the ID might be incorrect.`,
         };
+      case 422:
+        return {
+          category: 'validation',
+          isRetryable: false,
+          message:
+            `Intervals.icu rejected the ${context.operation} request (422). ` +
+            `This commonly means a referenced custom field hasn't been created in Intervals.icu — ` +
+            `add it under Settings → Custom Fields.`,
+        };
       case 429:
         return {
           category: 'rate_limit',
@@ -252,6 +261,17 @@ export class IntervalsApiError extends ApiError {
       context
     );
   }
+}
+
+/**
+ * Heuristic: Intervals.icu returns 422 on writes that reference a custom field
+ * the user hasn't created in their settings. Other validation failures (bad
+ * dates, malformed payloads) come back as 400, so 422 on a write is reliably
+ * "the custom field isn't configured." Callers use this to swallow the error
+ * with a warning instead of failing the whole side effect.
+ */
+export function isMissingCustomFieldError(error: unknown): error is IntervalsApiError {
+  return error instanceof IntervalsApiError && error.statusCode === 422;
 }
 
 /**

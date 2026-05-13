@@ -8,6 +8,7 @@ import {
   type WhoopWebhookPayload,
   type WhoopWebhookDeps,
 } from '../../src/webhooks/whoop.js';
+import { IntervalsApiError } from '../../src/errors/index.js';
 
 const CLIENT_SECRET = 'test-whoop-client-secret';
 const ATHLETE_USER_ID = 10129;
@@ -884,6 +885,163 @@ describe('dispatchWhoopWebhook (direct)', () => {
       }
     );
     expect(fakes.intervals.updateActivity).not.toHaveBeenCalled();
+  });
+
+  it('swallows 422 on WhoopWorkoutStrain and still runs description generation', async () => {
+    const fakes = makeFakes();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+      id: 'workout-uuid',
+      activity_type: 'Running' as const,
+      start_time: '2024-12-15T10:00:00+00:00',
+      end_time: '2024-12-15T11:00:00+00:00',
+      duration: '1:00:00',
+      strain_score: 13.5,
+    });
+    fakes.intervals.getActivities.mockResolvedValueOnce([
+      {
+        id: 'icu-act-422',
+        start_time: '2024-12-15T10:02:00+00:00',
+        activity_type: 'Running',
+        source: 'intervals.icu',
+      },
+    ]);
+    fakes.intervals.getActivity.mockResolvedValueOnce({
+      id: 'icu-act-422',
+      start_time: '2024-12-15T10:02:00+00:00',
+      activity_type: 'Running',
+      source: 'intervals.icu',
+    });
+
+    // First updateActivity call (WhoopWorkoutStrain write) rejects with a 422
+    // simulating a missing custom field. Second call (description) succeeds.
+    fakes.intervals.updateActivity.mockImplementationOnce(() => {
+      throw IntervalsApiError.fromHttpStatus(
+        422,
+        { operation: 'update activity', resource: 'activity icu-act-422' },
+        '{"error":"Unknown field WhoopWorkoutStrain"}'
+      );
+    });
+
+    await expect(
+      dispatchWhoopWebhook(
+        {
+          user_id: ATHLETE_USER_ID,
+          id: 'workout-uuid',
+          type: 'workout.updated',
+          trace_id: 't-422',
+        },
+        {
+          intervals: fakes.intervals as unknown as WhoopWebhookDeps['intervals'],
+          whoop: fakes.whoop as unknown as WhoopWebhookDeps['whoop'],
+          trainerroad: fakes.trainerroad as unknown as WhoopWebhookDeps['trainerroad'],
+          clientSecret: CLIENT_SECRET,
+        }
+      )
+    ).resolves.toBeUndefined();
+
+    // Custom-field write attempted but failed; description write still happened.
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledTimes(2);
+    expect(fakes.intervals.updateActivity).toHaveBeenNthCalledWith(1, 'icu-act-422', {
+      WhoopWorkoutStrain: 13.5,
+    });
+    const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
+    expect(descriptionCall[0]).toBe('icu-act-422');
+    expect(typeof descriptionCall[1].description).toBe('string');
+
+    // Warning mentions the field and Intervals.icu setup path.
+    expect(warnSpy).toHaveBeenCalled();
+    const warnMessage = warnSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(warnMessage).toContain('WhoopWorkoutStrain');
+    expect(warnMessage).toContain('Custom Fields');
+
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  it('swallows 422 on daily WhoopStrain wellness writes and continues', async () => {
+    const fakes = makeFakes();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    fakes.whoop.getStrainData.mockResolvedValueOnce([
+      {
+        date: todayUTC(),
+        strain_score: 11.7,
+        strain_level: 'Moderate',
+        strain_level_description: '',
+        activities: [],
+      },
+    ]);
+    fakes.intervals.updateWellness.mockImplementationOnce(() => {
+      throw IntervalsApiError.fromHttpStatus(
+        422,
+        { operation: 'update wellness', resource: `wellness ${todayUTC()}` },
+        '{"error":"Unknown field WhoopStrain"}'
+      );
+    });
+
+    await expect(
+      dispatchWhoopWebhook(
+        {
+          user_id: ATHLETE_USER_ID,
+          id: 'recovery-uuid',
+          type: 'recovery.deleted',
+          trace_id: 't-422-wellness',
+        },
+        {
+          intervals: fakes.intervals as unknown as WhoopWebhookDeps['intervals'],
+          whoop: fakes.whoop as unknown as WhoopWebhookDeps['whoop'],
+          trainerroad: fakes.trainerroad as unknown as WhoopWebhookDeps['trainerroad'],
+          clientSecret: CLIENT_SECRET,
+        }
+      )
+    ).resolves.toBeUndefined();
+
+    expect(fakes.intervals.updateWellness).toHaveBeenCalledWith(todayUTC(), { WhoopStrain: 11.7 });
+    expect(warnSpy).toHaveBeenCalled();
+    const warnMessage = warnSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(warnMessage).toContain('WhoopStrain');
+
+    warnSpy.mockRestore();
+  });
+
+  it('propagates non-422 IntervalsApiError on custom-field writes', async () => {
+    const fakes = makeFakes();
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    fakes.whoop.getStrainData.mockResolvedValueOnce([
+      {
+        date: todayUTC(),
+        strain_score: 11.7,
+        strain_level: 'Moderate',
+        strain_level_description: '',
+        activities: [],
+      },
+    ]);
+    fakes.intervals.updateWellness.mockImplementationOnce(() => {
+      throw IntervalsApiError.fromHttpStatus(500, { operation: 'update wellness' });
+    });
+
+    await expect(
+      dispatchWhoopWebhook(
+        {
+          user_id: ATHLETE_USER_ID,
+          id: 'recovery-uuid',
+          type: 'recovery.deleted',
+          trace_id: 't-500',
+        },
+        {
+          intervals: fakes.intervals as unknown as WhoopWebhookDeps['intervals'],
+          whoop: fakes.whoop as unknown as WhoopWebhookDeps['whoop'],
+          trainerroad: fakes.trainerroad as unknown as WhoopWebhookDeps['trainerroad'],
+          clientSecret: CLIENT_SECRET,
+        }
+      )
+    ).rejects.toBeInstanceOf(IntervalsApiError);
+
+    errSpy.mockRestore();
   });
 });
 
