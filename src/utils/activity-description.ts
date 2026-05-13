@@ -482,12 +482,14 @@ const MusicSchema = z.object({
 
 const MUSIC_SYSTEM_PROMPT = `You pick up to 5 representative artists from a list of songs an athlete listened to during a workout, for their training-log activity description.
 
-- You will be given a list of played songs, one per line, in the form \`- Artist - Song Title\`. Each line is one scrobble; repeats mean the track was played more than once.
-- Pick up to 5 artists that best represent the playlist as a whole. You may use any criteria, including (but not limited to): artists with the most repeated tracks, artists with the most distinct songs played, artists whose tracks dominate stretches of the listening. A repeated track is a strong signal of taste.
+- You will be given a Markdown table of distinct tracks with columns \`Artist\`, \`Song title\`, \`Plays\`, and \`Loved\`. Each row is one unique track — the data is already aggregated, so you do not need to count or dedupe scrobbles.
+- \`Plays\` is the number of times the track was played during the workout. A high count is a strong signal of taste.
+- \`Loved\` is \`yes\` when the user has marked the track as a favorite on Last.fm, and blank otherwise. A blank \`Loved\` does NOT mean the user dislikes the track — it only means they haven't explicitly marked it as a favorite.
+- Pick up to 5 artists that best represent the playlist as a whole. You may use any criteria, including (but not limited to): artists with the highest \`Plays\` counts, artists with the most distinct tracks, artists with the most \`Loved\` tracks, artists that fit the overall vibe of the playlist, etc. Weigh these signals equally — none is decisive on its own.
 - **Normalize artist names**: collapse trivial variants to one canonical form. Examples: "Foo Fighters" and "The Foo Fighters" → "Foo Fighters"; "Beyoncé" and "Beyonce" → "Beyoncé". Choose the spelling most commonly used for the artist.
-- Do not invent artists. Every name you emit in \`top_artists\` must appear in the input (in the chosen canonical form).
+- Do not invent artists. Every name you emit in \`top_artists\` must appear in the input table (in the chosen canonical form).
 - If fewer than 5 unique artists are present (after normalization), return only those — do not pad.
-- \`remaining_artists\` is the count of unique artists (after normalization) NOT in \`top_artists\`. Think step by step: count distinct normalized artists in the input, subtract \`top_artists.length\`, floor at 0. Be precise — readers will compare this number against the playlist they remember.`;
+- \`remaining_artists\` is the count of unique artists (after normalization) NOT in \`top_artists\`. Think step by step: count distinct normalized artists in the input table, subtract \`top_artists.length\`, floor at 0. Be precise — readers will compare this number against the playlist they remember.`;
 
 /**
  * Pick up to 5 representative artists from a played-songs list, with the
@@ -505,14 +507,43 @@ export async function generateMusicSelection(
   const anthropic = getAnthropicClient();
   if (!anthropic) return null;
 
-  const lines: string[] = ['Played songs:'];
+  // Aggregate scrobbles by (artist, title) so the model sees one row per
+  // distinct track with an explicit Plays count and Loved flag instead of
+  // having to count duplicate lines. Variant collapsing (e.g. "The Foo
+  // Fighters" vs "Foo Fighters") is still the model's job — we key on the
+  // raw trimmed strings. Map insertion order preserves first-seen order.
+  type Row = { artist: string; title: string; plays: number; loved: boolean };
+  const rows = new Map<string, Row>();
   for (const song of playedSongs) {
     const artist = song.artist?.trim();
     const title = song.name?.trim();
     if (!artist || !title) continue;
-    lines.push(`- ${artist} - ${title}`);
+    const key = `${artist}\t${title}`;
+    const existing = rows.get(key);
+    if (existing) {
+      existing.plays += 1;
+      if (song.loved) existing.loved = true;
+    } else {
+      rows.set(key, { artist, title, plays: 1, loved: song.loved === true });
+    }
   }
-  if (lines.length === 1) return null; // every song was unusable
+  if (rows.size === 0) return null; // every song was unusable
+
+  // Last.fm titles can contain `|`; escape it so the row doesn't split. Newlines
+  // shouldn't appear in scrobble metadata but flatten them defensively.
+  const escapeCell = (s: string): string => s.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
+
+  const lines: string[] = [
+    'Played songs:',
+    '',
+    '| Artist | Song title | Plays | Loved |',
+    '| --- | --- | --- | --- |',
+  ];
+  for (const row of rows.values()) {
+    lines.push(
+      `| ${escapeCell(row.artist)} | ${escapeCell(row.title)} | ${row.plays} | ${row.loved ? 'yes' : ''} |`
+    );
+  }
 
   const message = await anthropic.messages.parse(
     {

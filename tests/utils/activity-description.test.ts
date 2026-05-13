@@ -514,7 +514,7 @@ describe('generateMusicSelection', () => {
     expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('passes scrobbles as plain `- Artist - Title` lines and never marks loved songs', async () => {
+  it('passes aggregated scrobbles as a Markdown table with Plays and Loved columns', async () => {
     mockParse.mockResolvedValueOnce({
       parsed_output: {
         top_artists: ['Radiohead', 'Foo Fighters'],
@@ -524,8 +524,11 @@ describe('generateMusicSelection', () => {
 
     const songs: PlayedSong[] = [
       song('Radiohead', { name: 'Karma Police' }),
+      song('Radiohead', { name: 'Karma Police' }),
+      song('Radiohead', { name: 'Karma Police' }),
       song('Foo Fighters', { name: 'The Pretender', loved: true }),
       song('The Foo Fighters', { name: 'Best of You' }),
+      song('Tracy Chapman', { name: 'Fast Car' }),
       song('Tracy Chapman', { name: 'Fast Car' }),
       song('Johnny Cash', { name: 'Hurt' }),
     ];
@@ -534,19 +537,35 @@ describe('generateMusicSelection', () => {
 
     const content = mockParse.mock.calls[0][0].messages[0].content as string;
     expect(content).toContain('Played songs:');
-    expect(content).toContain('- Radiohead - Karma Police');
-    expect(content).toContain('- Foo Fighters - The Pretender');
-    expect(content).toContain('- The Foo Fighters - Best of You');
-    expect(content).toContain('- Tracy Chapman - Fast Car');
-    expect(content).toContain('- Johnny Cash - Hurt');
-    // Loved flag is not forwarded:
-    expect(content).not.toContain('❤');
-    expect(content).not.toContain('loved');
+    expect(content).toContain('| Artist | Song title | Plays | Loved |');
+    expect(content).toContain('| --- | --- | --- | --- |');
+    // Repeated scrobbles aggregate into a single row with the correct count.
+    expect(content).toContain('| Radiohead | Karma Police | 3 |');
+    expect(content).toContain('| Tracy Chapman | Fast Car | 2 |');
+    // Loved cell is `yes` for loved tracks, blank otherwise.
+    expect(content).toContain('| Foo Fighters | The Pretender | 1 | yes |');
+    expect(content).toContain('| The Foo Fighters | Best of You | 1 |  |');
+    expect(content).toContain('| Johnny Cash | Hurt | 1 |  |');
     // Self-contained prompt — no cross-leakage.
     expect(mockParse.mock.calls[0][0].system).not.toContain('VO₂max');
     expect(mockParse.mock.calls[0][0].system).not.toContain('weather_emoji');
 
     expect(result).toEqual({ top_artists: ['Radiohead', 'Foo Fighters'], remaining_artists: 3 });
+  });
+
+  it('escapes pipe characters in artist and title cells', async () => {
+    mockParse.mockResolvedValueOnce({
+      parsed_output: { top_artists: ['A|B'], remaining_artists: 0 },
+    });
+
+    const songs: PlayedSong[] = [
+      song('A|B', { name: 'Track | One' }),
+    ];
+
+    await generateMusicSelection(songs, 'claude-sonnet-4-6');
+
+    const content = mockParse.mock.calls[0][0].messages[0].content as string;
+    expect(content).toContain('| A\\|B | Track \\| One | 1 |  |');
   });
 
   it('drops scrobbles missing an artist or title', async () => {
@@ -563,9 +582,9 @@ describe('generateMusicSelection', () => {
     await generateMusicSelection(songs, 'claude-sonnet-4-6');
 
     const content = mockParse.mock.calls[0][0].messages[0].content as string;
-    expect(content).toContain('- Radiohead - Karma Police');
-    expect(content).not.toMatch(/- X -/);
-    expect(content).not.toMatch(/- - Y/);
+    expect(content).toContain('| Radiohead | Karma Police | 1 |');
+    expect(content).not.toMatch(/\|\s*X\s*\|/);
+    expect(content).not.toMatch(/\|\s*Y\s*\|/);
   });
 
   it('returns null when the model returns an empty or null top_artists', async () => {
