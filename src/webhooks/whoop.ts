@@ -9,6 +9,7 @@ import {
 } from '../utils/activity-description.js';
 import { getDescriptionModel } from '../utils/classifier-model.js';
 import { runWithUnitPreferences } from '../utils/unit-context.js';
+import { isMissingCustomFieldError } from '../errors/index.js';
 import type { IntervalsClient } from '../clients/intervals.js';
 import type { WhoopClient } from '../clients/whoop.js';
 import type { TrainerRoadClient } from '../clients/trainerroad.js';
@@ -234,12 +235,14 @@ export async function dispatchWhoopWebhook(
       return;
     }
 
-    await intervals.updateActivity(match.id, {
-      WhoopWorkoutStrain: whoopActivity.strain_score,
-    });
-    console.log(
-      `[WhoopWebhook] workout.updated ${payload.id} → Intervals.icu activity ${match.id} ` +
-      `WhoopWorkoutStrain=${whoopActivity.strain_score}`
+    await writeCustomField(
+      () =>
+        intervals.updateActivity(match.id, {
+          WhoopWorkoutStrain: whoopActivity.strain_score,
+        }),
+      'WhoopWorkoutStrain',
+      `workout.updated ${payload.id} → activity ${match.id}`,
+      `value=${whoopActivity.strain_score}`
     );
 
     // Best-effort: regenerate the Strava-bound description. Isolated try/catch
@@ -425,8 +428,12 @@ async function refreshDailyWhoopStrain(
     console.log(`[WhoopWebhook] No Whoop strain data for ${dateYMD} — leaving wellness untouched`);
     return;
   }
-  await intervals.updateWellness(dateYMD, { WhoopStrain: day.strain_score });
-  console.log(`[WhoopWebhook] Updated wellness ${dateYMD} WhoopStrain=${day.strain_score}`);
+  await writeCustomField(
+    () => intervals.updateWellness(dateYMD, { WhoopStrain: day.strain_score }),
+    'WhoopStrain',
+    `wellness ${dateYMD}`,
+    `value=${day.strain_score}`
+  );
 }
 
 /**
@@ -460,9 +467,11 @@ async function refreshSleepPerformance(
     return;
   }
   const dateYMD = formatYMDFromOffset(sleep.end, sleep.timezone_offset);
-  await intervals.updateWellness(dateYMD, { WhoopSleepPerformance: performance });
-  console.log(
-    `[WhoopWebhook] Updated wellness ${dateYMD} WhoopSleepPerformance=${performance}`
+  await writeCustomField(
+    () => intervals.updateWellness(dateYMD, { WhoopSleepPerformance: performance }),
+    'WhoopSleepPerformance',
+    `wellness ${dateYMD}`,
+    `value=${performance}`
   );
 }
 
@@ -492,6 +501,38 @@ async function refreshRecovery(
   }
   const dateYMD = formatYMDFromOffset(sleep.end, sleep.timezone_offset);
   const score = recovery.score.recovery_score;
-  await intervals.updateWellness(dateYMD, { WhoopRecovery: score });
-  console.log(`[WhoopWebhook] Updated wellness ${dateYMD} WhoopRecovery=${score}`);
+  await writeCustomField(
+    () => intervals.updateWellness(dateYMD, { WhoopRecovery: score }),
+    'WhoopRecovery',
+    `wellness ${dateYMD}`,
+    `value=${score}`
+  );
+}
+
+/**
+ * Run a write that targets a custom Intervals.icu field. If the field hasn't
+ * been created in the athlete's settings, Intervals.icu responds 422; we log
+ * a clear warning and continue so a missing custom field can't poison the
+ * rest of the webhook side effects. Any other error propagates normally.
+ */
+async function writeCustomField(
+  write: () => Promise<unknown>,
+  fieldName: string,
+  target: string,
+  successDetail: string
+): Promise<void> {
+  try {
+    await write();
+    console.log(`[WhoopWebhook] Updated ${target} ${fieldName} ${successDetail}`);
+  } catch (error) {
+    if (isMissingCustomFieldError(error)) {
+      console.warn(
+        `[WhoopWebhook] ${target}: Intervals.icu rejected ${fieldName} (422). ` +
+        `Create the custom field in Intervals.icu → Settings → Custom Fields to enable this. ` +
+        `Response: ${error.responseBody ?? '(empty)'}`
+      );
+      return;
+    }
+    throw error;
+  }
 }

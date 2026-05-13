@@ -4,6 +4,7 @@ import {
   DateParseError,
   IntervalsApiError,
   TrainerRoadApiError,
+  isMissingCustomFieldError,
 } from '../../src/errors/index.js';
 
 describe('Error Classes', () => {
@@ -176,6 +177,42 @@ describe('Error Classes', () => {
       expect(error.isRetryable).toBe(true);
       expect(error.message).toContain('trouble connecting');
       expect(error.message).toContain('Connection refused');
+    });
+
+    it('should categorize 422 as validation with a custom-field hint', () => {
+      const error = IntervalsApiError.fromHttpStatus(
+        422,
+        { operation: 'update wellness', resource: 'wellness 2026-05-13' },
+        '{"error":"Unknown field WhoopStrain"}'
+      );
+
+      expect(error.category).toBe('validation');
+      expect(error.isRetryable).toBe(false);
+      expect(error.statusCode).toBe(422);
+      expect(error.message).toContain('422');
+      expect(error.message).toContain('custom field');
+      expect(error.message).toContain('update wellness');
+      expect(error.responseBody).toBe('{"error":"Unknown field WhoopStrain"}');
+    });
+  });
+
+  describe('isMissingCustomFieldError', () => {
+    it('returns true for an IntervalsApiError with status 422', () => {
+      const error = IntervalsApiError.fromHttpStatus(422, { operation: 'update wellness' });
+      expect(isMissingCustomFieldError(error)).toBe(true);
+    });
+
+    it('returns false for an IntervalsApiError with a different status', () => {
+      const error = IntervalsApiError.fromHttpStatus(500, { operation: 'update wellness' });
+      expect(isMissingCustomFieldError(error)).toBe(false);
+    });
+
+    it('returns false for non-Intervals errors and non-errors', () => {
+      const trError = TrainerRoadApiError.fromHttpStatus(422, { operation: 'fetch calendar' });
+      expect(isMissingCustomFieldError(trError)).toBe(false);
+      expect(isMissingCustomFieldError(new Error('boom'))).toBe(false);
+      expect(isMissingCustomFieldError(null)).toBe(false);
+      expect(isMissingCustomFieldError(undefined)).toBe(false);
     });
   });
 
