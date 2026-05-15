@@ -6,6 +6,7 @@ import { validateToken, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
 import { logMcpRequest, isMcpRequestLoggingEnabled } from './utils/request-logger.js';
 import { createWhoopWebhookHandler } from './webhooks/whoop.js';
+import { createLocationWebhookHandler } from './webhooks/location.js';
 
 export interface ServerOptions {
   port: number;
@@ -59,6 +60,29 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
   if (isMcpRequestLoggingEnabled()) {
     console.log('[MCP Request] Logging enabled (LOG_MCP_REQUESTS=true)');
+  }
+
+  // Location webhook receiver (nightly iOS Shortcut). Authenticated with a
+  // dedicated shared secret (no HMAC), so it can run after express.json() and
+  // read the parsed body. Registered only when the secret and the Google
+  // geocoding/timezone clients are configured.
+  const geocodingForLocation = toolRegistry.getGoogleGeocodingClient();
+  const timezoneForLocation = toolRegistry.getGoogleTimezoneClient();
+  if (config.locationWebhookSecret && geocodingForLocation && timezoneForLocation) {
+    app.post(
+      '/webhooks/location',
+      createLocationWebhookHandler({
+        intervals: toolRegistry.getIntervalsClient(),
+        geocoding: geocodingForLocation,
+        timezone: timezoneForLocation,
+        secret: config.locationWebhookSecret,
+      })
+    );
+    console.log('Location webhook receiver registered at POST /webhooks/location');
+  } else {
+    console.log(
+      'Location webhook receiver not registered (set LOCATION_WEBHOOK_SECRET and GOOGLE_API_KEY)'
+    );
   }
 
   // Store active transports and servers by sessionId

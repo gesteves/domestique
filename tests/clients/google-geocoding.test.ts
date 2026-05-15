@@ -159,4 +159,36 @@ describe('GoogleGeocodingClient', () => {
       expect(err.isRetryable).toBe(true);
     });
   });
+
+  describe('reverseGeocode', () => {
+    it('GETs /geocode/json with latlng/result_type/language params and returns results[0]', async () => {
+      const result = {
+        formatted_address: 'Jackson, WY, USA',
+        address_components: [
+          { long_name: 'Jackson', short_name: 'Jackson', types: ['locality'] },
+        ],
+      };
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({ status: 'OK', results: [result, { formatted_address: 'other' }] })
+      );
+
+      const out = await client.reverseGeocode(43.4799, -110.7624);
+
+      expect(out).toEqual(result);
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/geocode/json');
+      expect(calledUrl).toContain('latlng=43.4799%2C-110.7624');
+      expect(calledUrl).toContain('result_type=political');
+      expect(calledUrl).toContain('language=en');
+      expect(calledUrl).toContain('key=test-api-key');
+    });
+
+    it('returns null when the API returns no results (ZERO_RESULTS)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({ status: 'ZERO_RESULTS', results: [] })
+      );
+
+      expect(await client.reverseGeocode(0, 0)).toBeNull();
+    });
+  });
 });

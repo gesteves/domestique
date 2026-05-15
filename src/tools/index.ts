@@ -243,6 +243,8 @@ export class ToolRegistry {
   private intervalsClient: IntervalsClient;
   private whoopClient: WhoopClient | null;
   private trainerroadClient: TrainerRoadClient | null;
+  private googleGeocodingClient: GoogleGeocodingClient | null;
+  private googleTimezoneClient: GoogleTimezoneClient | null;
   // Track optional client presence so registerTools can skip tools whose data
   // source isn't connected — better to hide a tool than register one that
   // returns empty results without explanation.
@@ -279,6 +281,8 @@ export class ToolRegistry {
     const googleTimezoneClient = config.googleTimezone
       ? new GoogleTimezoneClient(config.googleTimezone)
       : null;
+    this.googleGeocodingClient = googleGeocodingClient;
+    this.googleTimezoneClient = googleTimezoneClient;
     this.hasWhoop = whoopClient !== null;
     this.hasTrainerRoad = trainerroadClient !== null;
     this.hasLastFm = lastfmClient !== null;
@@ -325,6 +329,16 @@ export class ToolRegistry {
   /** Access the shared TrainerRoad client, or null if TR isn't configured. */
   getTrainerRoadClient(): TrainerRoadClient | null {
     return this.trainerroadClient;
+  }
+
+  /** Access the shared Google Geocoding client, or null if not configured. */
+  getGoogleGeocodingClient(): GoogleGeocodingClient | null {
+    return this.googleGeocodingClient;
+  }
+
+  /** Access the shared Google Time Zone client, or null if not configured. */
+  getGoogleTimezoneClient(): GoogleTimezoneClient | null {
+    return this.googleTimezoneClient;
   }
 
   /**
@@ -734,6 +748,19 @@ export class ToolRegistry {
       handler: async (args: UpdateHeatAdaptationScoreInput) =>
         this.planningTools.updateHeatAdaptationScore(args),
     });
+
+    if (this.googleGeocodingClient && this.googleTimezoneClient) {
+      register({
+        name: 'update_location',
+        title: 'Update Location',
+        description: `Sets the user's current location on Intervals.icu from coordinates or a place name: updates the athlete profile (city, state, country, timezone) and replaces the weather config with a single forecast at that location. Pass \`latitude\`+\`longitude\`, or a free-text \`location\` (city, address, landmark) which is geocoded to coordinates. Each write is skipped when Intervals.icu already matches, so it's safe to call repeatedly. This is the same operation the nightly location webhook performs; use it for one-off "I'm in <place> now" updates or to correct the configured location before checking the weather.`,
+        inputSchema: schemas.updateLocationInputSchema,
+        outputSchema: schemas.updateLocationOutputSchema,
+        annotations: MODIFIES_EXTERNAL,
+        handler: async (args: { latitude?: number; longitude?: number; location?: string }) =>
+          this.currentTools.updateLocation(args),
+      });
+    }
 
     // ============================================
     // Analysis Tools

@@ -13,12 +13,19 @@ export interface GoogleGeocodingConfig {
   apiKey: string;
 }
 
+export interface GoogleAddressComponent {
+  long_name?: string;
+  short_name?: string;
+  types?: string[];
+}
+
 export interface GoogleGeocodingResult {
   formatted_address?: string;
   geometry?: {
     location?: { lat?: number; lng?: number };
     location_type?: string;
   };
+  address_components?: GoogleAddressComponent[];
   place_id?: string;
   types?: string[];
   [key: string]: unknown;
@@ -142,5 +149,43 @@ export class GoogleGeocodingClient {
       latitude: lat,
       longitude: lng,
     };
+  }
+
+  /**
+   * GET /geocode/json?latlng=<lat>,<lng>&result_type=political&language=en&key=<key>
+   *
+   * Reverse-geocodes coordinates to the most specific political place. Returns
+   * the top result (`results[0]`) with its full `address_components` and
+   * `formatted_address` so callers can extract locality/region/country, or
+   * `null` when the API returns no results (e.g. mid-ocean coordinates).
+   * @see https://developers.google.com/maps/documentation/geocoding/requests-reverse-geocoding
+   */
+  async reverseGeocode(
+    latitude: number,
+    longitude: number
+  ): Promise<GoogleGeocodingResult | null> {
+    const url = new URL(`${GOOGLE_GEOCODING_API_BASE}/json`);
+    url.searchParams.set('latlng', `${latitude},${longitude}`);
+    url.searchParams.set('result_type', 'political');
+    url.searchParams.set('language', 'en');
+    url.searchParams.set('key', this.config.apiKey);
+
+    console.log(
+      `[GoogleGeocoding] Making API call to /geocode/json for ${latitude},${longitude}`
+    );
+
+    const context: ErrorContext = {
+      operation: 'reverse geocode coordinates',
+      resource: `${latitude},${longitude}`,
+    };
+
+    const response = await httpRequestJson<GoogleGeocodingResponse>({
+      url: url.toString(),
+      headers: { Accept: 'application/json' },
+      context,
+      ...googleGeocodingHttpErrorBuilders,
+    });
+
+    return response.results?.[0] ?? null;
   }
 }

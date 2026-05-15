@@ -177,7 +177,7 @@ interface IntervalsAthleteProfile {
 }
 
 // Weather forecast configuration from /athlete/{id}/weather-config endpoint
-interface IntervalsWeatherForecastLocation {
+export interface IntervalsWeatherForecastLocation {
   enabled: boolean;
   id: number;
   label: string;
@@ -734,10 +734,15 @@ export class IntervalsClient {
 
   // Session-lifetime memoized fetchers. Each gives single-flight + cache-on-success
   // for endpoints that return effectively-constant profile/settings data.
-  private fetchTimezone = memoize(async () => {
-    const profile = await this.fetch<IntervalsAthleteProfile>('/profile');
-    return profile.athlete.timezone ?? 'UTC';
-  });
+  // Reassignable so invalidateAthleteCaches() can drop a stale value after a
+  // location/timezone write (memoize has no clear method by design).
+  private fetchTimezone = this.buildTimezoneCache();
+  private buildTimezoneCache() {
+    return memoize(async () => {
+      const profile = await this.fetch<IntervalsAthleteProfile>('/profile');
+      return profile.athlete.timezone ?? 'UTC';
+    });
+  }
   private fetchSportSettingsCached = memoize(() =>
     this.fetch<IntervalsSportSettings[]>('/sport-settings')
   );
@@ -773,10 +778,25 @@ export class IntervalsClient {
     assign(athlete.whoop_wellness_keys, 'whoop');
     return sources;
   });
-  private fetchWeatherConfigCached = memoize(async () => {
-    const response = await this.fetch<IntervalsWeatherConfig>('/weather-config');
-    return response.forecasts ?? [];
-  });
+  // Reassignable so invalidateAthleteCaches() can drop stale forecast locations
+  // after a weather-config write.
+  private fetchWeatherConfigCached = this.buildWeatherConfigCache();
+  private buildWeatherConfigCache() {
+    return memoize(async () => {
+      const response = await this.fetch<IntervalsWeatherConfig>('/weather-config');
+      return response.forecasts ?? [];
+    });
+  }
+
+  /**
+   * Drop the session-memoized timezone and weather-config caches so subsequent
+   * reads reflect a just-written athlete profile / weather config. Call after a
+   * successful location update on a long-running server.
+   */
+  invalidateAthleteCaches(): void {
+    this.fetchTimezone = this.buildTimezoneCache();
+    this.fetchWeatherConfigCached = this.buildWeatherConfigCache();
+  }
 
   constructor(config: IntervalsConfig) {
     this.config = config;
@@ -942,6 +962,43 @@ export class IntervalsClient {
         longitude: l.lon,
         location: l.location,
       }));
+  }
+
+  /**
+   * Fetch the raw weather-config forecast locations, bypassing the session
+   * cache. Use for read-before-write comparisons; reads on the hot path should
+   * use the memoized getEnabledWeatherLocations().
+   */
+  async getWeatherForecastsRaw(): Promise<IntervalsWeatherForecastLocation[]> {
+    const response = await this.fetch<IntervalsWeatherConfig>('/weather-config');
+    return response.forecasts ?? [];
+  }
+
+  /**
+   * Update the athlete's profile location fields via PUT /athlete/{id}.
+   * Only the provided keys are sent.
+   */
+  async updateAthleteProfile(updates: {
+    city?: string;
+    state?: string;
+    country?: string;
+    timezone?: string;
+  }): Promise<void> {
+    await this.putJson('', updates, { operation: 'update athlete profile' });
+  }
+
+  /**
+   * Replace the athlete's weather-config forecast locations via
+   * PUT /athlete/{id}/weather-config.
+   */
+  async updateWeatherConfig(
+    forecasts: IntervalsWeatherForecastLocation[]
+  ): Promise<void> {
+    await this.putJson(
+      '/weather-config',
+      { forecasts },
+      { operation: 'update weather config' }
+    );
   }
 
   /**

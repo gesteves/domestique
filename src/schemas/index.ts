@@ -1103,3 +1103,20 @@ export const updateHeatAdaptationScoreOutputSchema = {
   date: z.string().describe('Date the score was set on'),
   heat_adaptation_score: z.string().describe('Updated heat adaptation score'),
 } as const;
+
+export const updateLocationInputSchema = {
+  latitude: z.number().optional().describe('Latitude in decimal degrees. Provide with longitude, or use location instead'),
+  longitude: z.number().optional().describe('Longitude in decimal degrees. Provide with latitude, or use location instead'),
+  location: z.string().optional().describe('Free-text place query (city, address, landmark) resolved to coordinates. Use instead of latitude/longitude'),
+} as const;
+
+export const updateLocationOutputSchema = {
+  location: z.string().describe('Resolved location string written to Intervals.icu (e.g. "Jackson Hole, Wyoming, United States")'),
+  label: z.string().describe('Human-readable display label for the location'),
+  timezone: z.string().describe('Resolved IANA timezone'),
+  city: z.string().optional().describe('Resolved city'),
+  state: z.string().optional().describe('Resolved state/region'),
+  country: z.string().optional().describe('Resolved country'),
+  profile_updated: z.boolean().describe('Whether the Intervals.icu athlete profile was changed (false if already current)'),
+  weather_config_updated: z.boolean().describe('Whether the Intervals.icu weather config was changed (false if already current)'),
+} as const;

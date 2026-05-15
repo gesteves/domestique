@@ -28,6 +28,9 @@ vi.mock('../src/tools/index.js', () => ({
       }),
       getIntervalsClient: vi.fn(),
       getWhoopClient: vi.fn().mockReturnValue(null),
+      getTrainerRoadClient: vi.fn().mockReturnValue(null),
+      getGoogleGeocodingClient: vi.fn().mockReturnValue(null),
+      getGoogleTimezoneClient: vi.fn().mockReturnValue(null),
     };
   }),
 }));

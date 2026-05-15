@@ -14,6 +14,8 @@ import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts }
 import { mergeAnnotations } from '../utils/annotation-utils.js';
 import { mergeRaces } from '../utils/race-utils.js';
 import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
+import { isValidCoordinates } from '../utils/location-context.js';
+import { applyLocation } from '../services/location-sync.js';
 import type {
   StrainData,
   AthleteProfile,
@@ -301,6 +303,63 @@ export class CurrentTools {
    * "tomorrow", "in 3 days"). The resolved date must be within today through
    * today+10 in each location's tz.
    */
+  /**
+   * Resolve coordinates (or a free-text place) and push the location to
+   * Intervals.icu: athlete profile (city/state/country/timezone) and a single
+   * current-location weather forecast. Each write is skipped when already
+   * current. Shares the same core as the location webhook.
+   */
+  async updateLocation(args: {
+    latitude?: number;
+    longitude?: number;
+    location?: string;
+  }): Promise<{
+    location: string;
+    label: string;
+    timezone: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    profile_updated: boolean;
+    weather_config_updated: boolean;
+  }> {
+    if (!this.googleGeocoding || !this.googleTimezone) {
+      throw new Error(
+        'Location updates require the Google geocoding and time zone APIs (set GOOGLE_API_KEY).'
+      );
+    }
+
+    let lat = args.latitude;
+    let lng = args.longitude;
+    if (args.location && (lat === undefined || lng === undefined)) {
+      const resolved = await this.googleGeocoding.geocode(args.location);
+      lat = resolved.latitude;
+      lng = resolved.longitude;
+    }
+    if (!isValidCoordinates(lat, lng)) {
+      throw new Error(
+        'Provide a valid latitude/longitude pair, or a `location` that can be resolved to coordinates.'
+      );
+    }
+
+    const result = await applyLocation(lat, lng as number, {
+      intervals: this.intervals,
+      geocoding: this.googleGeocoding,
+      timezone: this.googleTimezone,
+    });
+
+    return {
+      location: result.location,
+      label: result.label,
+      timezone: result.timezone,
+      city: result.city,
+      state: result.state,
+      country: result.country,
+      profile_updated: result.profileUpdated,
+      weather_config_updated: result.weatherConfigUpdated,
+    };
+  }
+
   async getWeatherForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {
     const athleteTimezone = await this.intervals.getAthleteTimezone();
     const currentDateTime = getCurrentTimeInTimezone(athleteTimezone);
