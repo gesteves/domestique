@@ -7,6 +7,18 @@ import type { PlannedWorkout } from '../../src/types/index.js';
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/trainerroad.js');
 
+// Stub the Claude-backed converter so unit tests don't hit Anthropic. The fake
+// returns `structure` verbatim, which lets the pre-existing assertions on the
+// stored description body keep working (they were written against the now-
+// removed `workout_doc` input — identity passthrough preserves them).
+const mockGenerateWorkoutDoc = vi.fn(
+  async ({ structure }: { sport: 'cycling' | 'running'; structure: string }) => structure
+);
+vi.mock('../../src/utils/workout-generator.js', () => ({
+  generateWorkoutDoc: (...args: Parameters<typeof mockGenerateWorkoutDoc>) =>
+    mockGenerateWorkoutDoc(...args),
+}));
+
 describe('PlanningTools sync operations', () => {
   let tools: PlanningTools;
   let mockIntervalsClient: IntervalsClient;
@@ -14,6 +26,8 @@ describe('PlanningTools sync operations', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGenerateWorkoutDoc.mockClear();
+    mockGenerateWorkoutDoc.mockImplementation(async ({ structure }) => structure);
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
 
@@ -52,7 +66,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'running',
         scheduled_for: '2024-12-16',
         name: 'Test Run',
-        workout_doc: 'Warmup\n- 10m Z2 Pace',
+        structure: 'Warmup\n- 10m Z2 Pace',
       });
 
       expect(result.id).toBe(123);
@@ -76,7 +90,7 @@ describe('PlanningTools sync operations', () => {
         scheduled_for: '2024-12-17',
         name: 'Interval Run',
         description: 'RPE-based intervals',
-        workout_doc: 'Main Set 5x\n- 3m Z4 Pace',
+        structure: 'Main Set 5x\n- 3m Z4 Pace',
         trainerroad_uid: 'tr-789',
       });
 
@@ -94,7 +108,7 @@ describe('PlanningTools sync operations', () => {
       );
     });
 
-    it('should put description before workout_doc', async () => {
+    it('should put description before structure in the stored body', async () => {
       vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
         id: 128,
         uid: 'uid-128',
@@ -109,7 +123,7 @@ describe('PlanningTools sync operations', () => {
         scheduled_for: '2024-12-22',
         name: 'Ordered Run',
         description: 'Notes about the run',
-        workout_doc: 'Warmup\n- 10m Z2 Pace',
+        structure: 'Warmup\n- 10m Z2 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -133,7 +147,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'running',
         scheduled_for: '2024-12-23',
         name: 'Date Only Run',
-        workout_doc: '- 10m Z2 Pace',
+        structure: '- 10m Z2 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -157,7 +171,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'running',
         scheduled_for: '2024-12-24T14:30:00',
         name: 'Datetime Run',
-        workout_doc: '- 10m Z2 Pace',
+        structure: '- 10m Z2 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -181,7 +195,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'running',
         scheduled_for: '2024-12-18',
         name: 'Tagged Run',
-        workout_doc: '- 30m Z2 Pace',
+        structure: '- 30m Z2 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -205,7 +219,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'running',
         scheduled_for: '2024-12-19',
         name: 'Synced Run',
-        workout_doc: '- 20m Z3 Pace',
+        structure: '- 20m Z3 Pace',
         trainerroad_uid: 'tr-abc-123',
       });
 
@@ -226,7 +240,7 @@ describe('PlanningTools sync operations', () => {
           sport: 'running',
           scheduled_for: '2024-12-20',
           name: 'Failed Run',
-          workout_doc: '- 10m Z1 Pace',
+          structure: '- 10m Z1 Pace',
         })
       ).rejects.toThrow('API request failed');
     });
@@ -245,7 +259,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'running',
         scheduled_for: '2024-12-21',
         name: 'Structure Test',
-        workout_doc: '- 15m Z2 Pace',
+        structure: '- 15m Z2 Pace',
       });
 
       expect(result).toHaveProperty('id');
@@ -271,7 +285,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'cycling',
         scheduled_for: '2024-12-16',
         name: 'Sweet Spot Intervals',
-        workout_doc: 'Warmup\n- 10m ramp 50-75% 90rpm\n\nMain Set 3x\n- 15m 88-92% 85rpm\n- 5m 55% 90rpm\n\nCooldown\n- 10m ramp 55-40% 85rpm',
+        structure: 'Warmup\n- 10m ramp 50-75% 90rpm\n\nMain Set 3x\n- 15m 88-92% 85rpm\n- 5m 55% 90rpm\n\nCooldown\n- 10m ramp 55-40% 85rpm',
       });
 
       expect(result.id).toBe(200);
@@ -295,7 +309,7 @@ describe('PlanningTools sync operations', () => {
         scheduled_for: '2024-12-17',
         name: 'VO2 Max Workout',
         description: 'High intensity intervals for VO2 max development',
-        workout_doc: 'Main Set 5x\n- 3m 120% 100rpm\n- 2m 50% 85rpm',
+        structure: 'Main Set 5x\n- 3m 120% 100rpm\n- 2m 50% 85rpm',
       });
 
       expect(result.id).toBe(201);
@@ -311,7 +325,7 @@ describe('PlanningTools sync operations', () => {
       );
     });
 
-    it('should put description before workout_doc', async () => {
+    it('should put description before structure in the stored body', async () => {
       vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
         id: 202,
         uid: 'uid-202',
@@ -326,7 +340,7 @@ describe('PlanningTools sync operations', () => {
         scheduled_for: '2024-12-22',
         name: 'Ordered Ride',
         description: 'Notes about the workout',
-        workout_doc: 'Warmup\n- 10m 75% 90rpm',
+        structure: 'Warmup\n- 10m 75% 90rpm',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -350,7 +364,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'cycling',
         scheduled_for: '2024-12-23',
         name: 'Date Only Ride',
-        workout_doc: '- 60m 75% 90rpm',
+        structure: '- 60m 75% 90rpm',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -374,7 +388,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'cycling',
         scheduled_for: '2024-12-24T14:30:00',
         name: 'Datetime Ride',
-        workout_doc: '- 60m 75% 90rpm',
+        structure: '- 60m 75% 90rpm',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -398,7 +412,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'cycling',
         scheduled_for: '2024-12-18',
         name: 'Tagged Ride',
-        workout_doc: '- 90m 65-75% 85-95rpm',
+        structure: '- 90m 65-75% 85-95rpm',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -422,7 +436,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'cycling',
         scheduled_for: '2024-12-19',
         name: 'Ride Type Test',
-        workout_doc: '- 30m 100% 90rpm',
+        structure: '- 30m 100% 90rpm',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -446,7 +460,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'cycling',
         scheduled_for: '2024-12-20',
         name: 'No External ID',
-        workout_doc: '- 45m 80% 90rpm',
+        structure: '- 45m 80% 90rpm',
       });
 
       const callArgs = vi.mocked(mockIntervalsClient.createEvent).mock.calls[0][0];
@@ -463,7 +477,7 @@ describe('PlanningTools sync operations', () => {
           sport: 'cycling',
           scheduled_for: '2024-12-20',
           name: 'Failed Ride',
-          workout_doc: '- 10m 50% 90rpm',
+          structure: '- 10m 50% 90rpm',
         })
       ).rejects.toThrow('API request failed');
     });
@@ -482,7 +496,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'cycling',
         scheduled_for: '2024-12-21',
         name: 'Structure Test',
-        workout_doc: '- 15m 88% 85rpm',
+        structure: '- 15m 88% 85rpm',
       });
 
       expect(result).toHaveProperty('id');
@@ -508,7 +522,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'swimming',
         scheduled_for: '2024-12-16',
         name: 'Threshold 10x100',
-        workout_doc: 'Warmup\n- 400m easy\n\nMain Set 10x\n- 100m Z4 Pace\n- 20s rest\n\nCooldown\n- 200m easy',
+        structure: 'Warmup\n- 400m easy\n\nMain Set 10x\n- 100m Z4 Pace\n- 20s rest\n\nCooldown\n- 200m easy',
       });
 
       expect(result.id).toBe(300);
@@ -532,7 +546,7 @@ describe('PlanningTools sync operations', () => {
         scheduled_for: '2024-12-17',
         name: 'Endurance Swim',
         description: 'Focus on long steady sets',
-        workout_doc: 'Main Set\n- 2000m Z2 Pace',
+        structure: 'Main Set\n- 2000m Z2 Pace',
       });
 
       expect(result.id).toBe(301);
@@ -548,7 +562,7 @@ describe('PlanningTools sync operations', () => {
       );
     });
 
-    it('should put description before workout_doc', async () => {
+    it('should put description before structure in the stored body', async () => {
       vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
         id: 302,
         uid: 'uid-302',
@@ -563,7 +577,7 @@ describe('PlanningTools sync operations', () => {
         scheduled_for: '2024-12-22',
         name: 'Ordered Swim',
         description: 'Notes about the swim',
-        workout_doc: 'Warmup\n- 400m easy',
+        structure: 'Warmup\n- 400m easy',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -587,7 +601,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'swimming',
         scheduled_for: '2024-12-23',
         name: 'Date Only Swim',
-        workout_doc: '- 1000m Z2 Pace',
+        structure: '- 1000m Z2 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -611,7 +625,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'swimming',
         scheduled_for: '2024-12-24T06:00:00',
         name: 'Datetime Swim',
-        workout_doc: '- 1500m Z3 Pace',
+        structure: '- 1500m Z3 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -635,7 +649,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'swimming',
         scheduled_for: '2024-12-18',
         name: 'Tagged Swim',
-        workout_doc: '- 800m Z2 Pace',
+        structure: '- 800m Z2 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -659,7 +673,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'swimming',
         scheduled_for: '2024-12-19',
         name: 'Swim Type Test',
-        workout_doc: '- 500m Z3 Pace',
+        structure: '- 500m Z3 Pace',
       });
 
       expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
@@ -683,7 +697,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'swimming',
         scheduled_for: '2024-12-20',
         name: 'No External ID',
-        workout_doc: '- 1000m Z2 Pace',
+        structure: '- 1000m Z2 Pace',
       });
 
       const callArgs = vi.mocked(mockIntervalsClient.createEvent).mock.calls[0][0];
@@ -700,7 +714,7 @@ describe('PlanningTools sync operations', () => {
           sport: 'swimming',
           scheduled_for: '2024-12-20',
           name: 'Failed Swim',
-          workout_doc: '- 400m Z1 Pace',
+          structure: '- 400m Z1 Pace',
         })
       ).rejects.toThrow('API request failed');
     });
@@ -719,7 +733,7 @@ describe('PlanningTools sync operations', () => {
         sport: 'swimming',
         scheduled_for: '2024-12-21',
         name: 'Structure Test',
-        workout_doc: '- 600m Z2 Pace',
+        structure: '- 600m Z2 Pace',
       });
 
       expect(result).toHaveProperty('id');
@@ -727,6 +741,83 @@ describe('PlanningTools sync operations', () => {
       expect(result).toHaveProperty('name');
       expect(result).toHaveProperty('scheduled_for');
       expect(result).toHaveProperty('intervals_icu_url');
+    });
+  });
+
+  describe('createWorkout (structure conversion)', () => {
+    it('calls generateWorkoutDoc with the right sport for cycling', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 400, uid: 'uid-400', name: 'Sweet Spot', start_date_local: '2024-12-16',
+        type: 'Ride', category: 'WORKOUT',
+      });
+      mockGenerateWorkoutDoc.mockResolvedValueOnce('Warmup\n- 10m 65%');
+
+      const result = await tools.createWorkout({
+        sport: 'cycling',
+        scheduled_for: '2024-12-16',
+        name: 'Sweet Spot',
+        structure: '10 min warmup at 65% FTP',
+      });
+
+      expect(mockGenerateWorkoutDoc).toHaveBeenCalledWith({
+        sport: 'cycling',
+        structure: '10 min warmup at 65% FTP',
+      });
+      expect(result.workout_doc).toBe('Warmup\n- 10m 65%');
+    });
+
+    it('calls generateWorkoutDoc with the right sport for running', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 401, uid: 'uid-401', name: 'Tempo', start_date_local: '2024-12-16',
+        type: 'Run', category: 'WORKOUT',
+      });
+      mockGenerateWorkoutDoc.mockResolvedValueOnce('Main Set\n- 20m 4:30/km Pace');
+
+      const result = await tools.createWorkout({
+        sport: 'running',
+        scheduled_for: '2024-12-16',
+        name: 'Tempo',
+        structure: '20 minutes at 4:30/km',
+      });
+
+      expect(mockGenerateWorkoutDoc).toHaveBeenCalledWith({
+        sport: 'running',
+        structure: '20 minutes at 4:30/km',
+      });
+      expect(result.workout_doc).toBe('Main Set\n- 20m 4:30/km Pace');
+    });
+
+    it('does NOT call generateWorkoutDoc for swimming; stores structure verbatim', async () => {
+      vi.mocked(mockIntervalsClient.createEvent).mockResolvedValue({
+        id: 402, uid: 'uid-402', name: 'Threshold Set', start_date_local: '2024-12-16',
+        type: 'Swim', category: 'WORKOUT',
+      });
+
+      const result = await tools.createWorkout({
+        sport: 'swimming',
+        scheduled_for: '2024-12-16',
+        name: 'Threshold Set',
+        structure: '10x100m on 1:45',
+      });
+
+      expect(mockGenerateWorkoutDoc).not.toHaveBeenCalled();
+      expect(result.workout_doc).toBe('10x100m on 1:45');
+      expect(mockIntervalsClient.createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ description: '10x100m on 1:45' })
+      );
+    });
+
+    it('throws when structure is empty', async () => {
+      await expect(
+        tools.createWorkout({
+          sport: 'cycling',
+          scheduled_for: '2024-12-16',
+          name: 'Empty',
+          structure: '   ',
+        })
+      ).rejects.toThrow(/`structure` is required/);
+      expect(mockGenerateWorkoutDoc).not.toHaveBeenCalled();
+      expect(mockIntervalsClient.createEvent).not.toHaveBeenCalled();
     });
   });
 

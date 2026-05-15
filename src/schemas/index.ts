@@ -1010,6 +1010,7 @@ export const createWorkoutOutputSchema = {
   name: z.string().optional().describe('Name of the created workout'),
   scheduled_for: z.string().optional().describe('Scheduled date/time'),
   intervals_icu_url: z.string().optional().describe('URL to view the workout in Intervals.icu'),
+  workout_doc: z.string().optional().describe('The Intervals.icu workout-doc syntax stored on the calendar — the result of converting `structure` for cycling/running, or the verbatim `structure` for swimming. Show to the athlete so they can verify what was created.'),
 } as const;
 
 export const deleteWorkoutOutputSchema = {
@@ -1024,6 +1025,7 @@ export const updateWorkoutOutputSchema = {
   scheduled_for: z.string().optional().describe('Scheduled date/time'),
   intervals_icu_url: z.string().optional().describe('URL to view the workout in Intervals.icu'),
   updated_fields: z.array(z.string()).optional().describe('Fields that were updated'),
+  workout_doc: z.string().optional().describe('The Intervals.icu workout-doc syntax stored on the calendar after the update — the freshly converted/stored value when `structure` was provided, otherwise the pre-existing syntax.'),
 } as const;
 
 export const createAnnotationOutputSchema = {

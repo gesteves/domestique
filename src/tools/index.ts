@@ -555,18 +555,18 @@ export class ToolRegistry {
     register({
       name: 'create_workout',
       title: 'Create Workout',
-      description: `Creates a structured workout on the user's Intervals.icu calendar; cycling and running workouts then sync to Zwift and Garmin. The caller is responsible for generating valid Intervals.icu workout-doc syntax — there is no schema validation, so a malformed doc will create a broken workout. When mirroring a TrainerRoad run, set \`sport\` to "running", pass the TR workout UID as \`trainerroad_uid\` so orphan tracking can detect later changes (the field is ignored for other sports), and pass the TR workout's name **verbatim** as \`name\` — case-sensitive, no decoration — so the Whoop-webhook headline matcher can later identify the completed activity by substring match against names like \`Zwift - Intervals.icu: <name>\`. Created workouts are tagged \`domestique\`, which is the gating condition for the matching update / delete tools — fix mistakes by deleting and recreating.`,
+      description: `Creates a structured workout on the user's Intervals.icu calendar; cycling and running workouts then sync to Zwift and Garmin. Provide the workout as plain language in \`structure\` — Domestique converts it server-side into Intervals.icu workout-doc syntax for cycling and running (Sonnet handles the conversion); for swimming the \`structure\` text is stored verbatim. Two distinct text fields, do not confuse them: \`description\` is athlete-facing prose (goals / focus / rationale), \`structure\` is the actual step-by-step prescription (warmup, intervals, recoveries, cooldown). The generated syntax is returned as \`workout_doc\` so the caller can show the athlete what was written. When mirroring a TrainerRoad run, set \`sport\` to "running", pass the TR workout UID as \`trainerroad_uid\` so orphan tracking can detect later changes (the field is ignored for other sports), and pass the TR workout's name **verbatim** as \`name\` — case-sensitive, no decoration — so the Whoop-webhook headline matcher can later identify the completed activity by substring match against names like \`Zwift - Intervals.icu: <name>\`. Created workouts are tagged \`domestique\`, which is the gating condition for the matching update / delete tools — fix mistakes by deleting and recreating.`,
       inputSchema: {
         sport: z.enum(['cycling', 'running', 'swimming']).describe('Sport for the workout'),
         scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
         name: z.string().describe('Workout name'),
-        description: z.string().optional().describe('Optional notes/description'),
-        workout_doc: z.string().describe('Structured workout in Intervals.icu syntax'),
+        description: z.string().optional().describe('Optional athlete-facing prose: goals, focus, rationale. NOT the structure — that goes in `structure`. Example: "Recovery spin before tomorrow\'s threshold session."'),
+        structure: z.string().describe('Plain-language description of the workout steps — warmup, intervals, recoveries, cooldown. NOT goals or rationale (those go in `description`). Cycling/running structures are converted server-side into Intervals.icu workout-doc syntax via Claude; swimming structures are stored verbatim. Example: "10 min warmup ramping 50→65% FTP, then 4×8 min at 95% FTP with 4 min recoveries at 55% FTP, then 10 min cooldown."'),
         trainerroad_uid: z.string().optional().describe('TrainerRoad workout UID for orphan tracking. Only meaningful when sport is "running"'),
       },
       outputSchema: schemas.createWorkoutOutputSchema,
       annotations: CREATES_EXTERNAL,
-      handler: async (args: { sport: 'cycling' | 'running' | 'swimming'; scheduled_for: string; name: string; description?: string; workout_doc: string; trainerroad_uid?: string }) =>
+      handler: async (args: { sport: 'cycling' | 'running' | 'swimming'; scheduled_for: string; name: string; description?: string; structure: string; trainerroad_uid?: string }) =>
         this.planningTools.createWorkout(args),
     });
 
@@ -586,18 +586,18 @@ export class ToolRegistry {
     register({
       name: 'update_workout',
       title: 'Update Workout',
-      description: `Updates a Domestique-created planned workout (name, description, scheduled date, sport \`type\`, or structured \`workout_doc\`). Only works on events tagged \`domestique\`; the tag is preserved on update. Pass only the fields you want to change — omitted fields are left intact. Changing \`type\` (e.g., Run to Ride) without also updating \`workout_doc\` can leave the doc in a syntax invalid for the new sport. Event IDs are surfaced anywhere planned workouts are listed (today's snapshot, upcoming-workouts queries).`,
+      description: `Updates a Domestique-created planned workout (name, description, scheduled date, sport \`type\`, or \`structure\`). Only works on events tagged \`domestique\`; the tag is preserved on update. Pass only the fields you want to change — omitted fields are left intact. Same two text fields as \`create_workout\`: \`description\` is athlete-facing prose (goals / focus / rationale), \`structure\` is the step-by-step prescription. When \`structure\` is provided for cycling or running, Domestique converts it server-side into Intervals.icu workout-doc syntax via Claude; swimming structures are stored verbatim. The converted/stored syntax is returned as \`workout_doc\`. Changing \`type\` (e.g., Run to Ride) without also updating \`structure\` can leave the doc in a syntax invalid for the new sport. Event IDs are surfaced anywhere planned workouts are listed (today's snapshot, upcoming-workouts queries).`,
       inputSchema: {
         event_id: z.string().describe('Intervals.icu event ID to update'),
         name: z.string().optional().describe('New workout name'),
-        description: z.string().optional().describe('New description/notes'),
-        workout_doc: z.string().optional().describe('New structured workout in Intervals.icu syntax'),
+        description: z.string().optional().describe('New athlete-facing prose: goals, focus, rationale. NOT the structure — that goes in `structure`.'),
+        structure: z.string().optional().describe('New plain-language description of the workout steps. NOT goals or rationale (those go in `description`). Cycling/running structures are converted server-side into Intervals.icu workout-doc syntax via Claude; swimming structures are stored verbatim.'),
         scheduled_for: z.string().optional().describe('New date (YYYY-MM-DD) or datetime'),
         type: z.string().optional().describe('New event type (e.g., "Run", "Ride")'),
       },
       outputSchema: schemas.updateWorkoutOutputSchema,
       annotations: MODIFIES_EXTERNAL,
-      handler: async (args: { event_id: string; name?: string; description?: string; workout_doc?: string; scheduled_for?: string; type?: string }) =>
+      handler: async (args: { event_id: string; name?: string; description?: string; structure?: string; scheduled_for?: string; type?: string }) =>
         this.planningTools.updateWorkout(args),
     });
 

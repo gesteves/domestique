@@ -484,10 +484,15 @@ export interface CreateWorkoutInput {
   scheduled_for: string;
   /** Workout name */
   name: string;
-  /** Optional description/notes */
+  /** Optional prose description: goals, focus, rationale. NOT the structure. */
   description?: string;
-  /** Structured workout definition in Intervals.icu syntax */
-  workout_doc: string;
+  /**
+   * Plain-language description of the workout's steps (warmup, intervals,
+   * recoveries, cooldown). For cycling/running, this is converted server-side
+   * into Intervals.icu workout-doc syntax via Claude. For swimming, it is
+   * stored verbatim (Intervals.icu has no structured swim syntax).
+   */
+  structure: string;
   /** TrainerRoad workout UID for orphan tracking. Only meaningful for runs. */
   trainerroad_uid?: string;
 }
@@ -506,6 +511,13 @@ export interface CreateWorkoutResponse {
   scheduled_for: string;
   /** URL to view the workout in Intervals.icu */
   intervals_icu_url: string;
+  /**
+   * The generated/stored Intervals.icu workout-doc syntax. For cycling and
+   * running this is Claude's conversion of `structure`; for swimming it is
+   * `structure` verbatim. Surfaced so the caller can show the user what was
+   * actually written to the calendar.
+   */
+  workout_doc: string;
 }
 
 /**
@@ -516,10 +528,14 @@ export interface UpdateWorkoutInput {
   event_id: string;
   /** New workout name (optional) */
   name?: string;
-  /** New description/notes (optional) */
+  /** New prose description (optional). NOT the structure. */
   description?: string;
-  /** New structured workout definition in Intervals.icu syntax (optional) */
-  workout_doc?: string;
+  /**
+   * New plain-language description of the workout's steps (optional).
+   * Converted server-side via Claude for cycling/running; stored verbatim
+   * for swimming.
+   */
+  structure?: string;
   /** New scheduled date in YYYY-MM-DD format or ISO datetime (optional) */
   scheduled_for?: string;
   /** New event type - e.g., "Run", "Ride" (optional) */
@@ -542,6 +558,13 @@ export interface UpdateWorkoutResponse {
   intervals_icu_url: string;
   /** Fields that were updated */
   updated_fields: string[];
+  /**
+   * The Intervals.icu workout-doc syntax stored after the update — the freshly
+   * converted/stored value when `structure` was provided, otherwise the
+   * pre-existing syntax. Surfaced so the caller can show the user what's now
+   * on the calendar.
+   */
+  workout_doc: string;
 }
 
 /**

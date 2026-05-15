@@ -6,6 +6,7 @@ import { formatPercent } from '../utils/format-units.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
 import { mergeRaces } from '../utils/race-utils.js';
+import { generateWorkoutDoc } from '../utils/workout-generator.js';
 import type {
   PlannedWorkout,
   Annotation,
@@ -65,6 +66,19 @@ function defaultAnnotationName(category: CreatableAnnotationCategory): string {
     case 'note': return 'Note';
     case 'season_start': return 'Season start';
   }
+}
+
+/**
+ * Map an Intervals.icu activity `type` (e.g. "Run", "VirtualRide", "OpenWaterSwim")
+ * to one of the three high-level sports the workout-structure converter
+ * understands. Returns null for sports the converter doesn't handle (strength,
+ * skiing, etc.) — callers should refuse to convert `structure` in that case.
+ */
+function sportFromIntervalsType(type: string): 'cycling' | 'running' | 'swimming' | null {
+  if (/Swim/i.test(type)) return 'swimming';
+  if (/Run/i.test(type)) return 'running';
+  if (/Ride|Cyclocross/i.test(type)) return 'cycling';
+  return null;
 }
 
 export class PlanningTools {
@@ -191,11 +205,18 @@ export class PlanningTools {
    */
   async createWorkout(input: CreateWorkoutInput): Promise<CreateWorkoutResponse> {
     const typeMap = { cycling: 'Ride', running: 'Run', swimming: 'Swim' } as const;
+    const structure = input.structure?.trim();
+    if (!structure) {
+      throw new Error('`structure` is required: a plain-language description of the workout.');
+    }
+    const workoutDoc = input.sport === 'swimming'
+      ? structure
+      : await generateWorkoutDoc({ sport: input.sport, structure });
     return this.createWorkoutInternal({
       scheduled_for: input.scheduled_for,
       name: input.name,
       description: input.description,
-      workout_doc: input.workout_doc,
+      workout_doc: workoutDoc,
       type: typeMap[input.sport],
       external_id: input.sport === 'running' ? input.trainerroad_uid : undefined,
     });
@@ -244,6 +265,7 @@ export class PlanningTools {
       name: response.name,
       scheduled_for: response.start_date_local,
       intervals_icu_url: `https://intervals.icu/calendar/${scheduledDate.split('T')[0]}`,
+      workout_doc: params.workout_doc,
     };
   }
 
@@ -275,7 +297,7 @@ export class PlanningTools {
    * Only updates workouts tagged with 'domestique'.
    */
   async updateWorkout(input: UpdateWorkoutInput): Promise<UpdateWorkoutResponse> {
-    const { event_id, name, description, workout_doc, scheduled_for, type } = input;
+    const { event_id, name, description, structure, scheduled_for, type } = input;
 
     // First, verify the workout exists and has the domestique tag
     const existingEvent = await this.intervals.getEvent(event_id);
@@ -296,27 +318,53 @@ export class PlanningTools {
       updatedFields.push('name');
     }
 
-    // Handle description + workout_doc combination.
-    // Both are stored concatenated as `${description}\n\n${workout_doc}` in
-    // Intervals.icu's single `description` field. When only one is provided,
-    // we recover the other so the omitted half isn't wiped. Intervals.icu
-    // exposes the parsed prose half as `workout_doc.description`, so we use
-    // that as a reliable boundary instead of guessing.
-    if (description !== undefined || workout_doc !== undefined) {
-      const existingCombined = existingEvent.description ?? '';
-      const existingDescription = existingEvent.workout_doc?.description ?? '';
-      const prefix = existingDescription ? `${existingDescription}\n\n` : '';
-      const existingWorkoutDoc = existingCombined.startsWith(prefix)
-        ? existingCombined.slice(prefix.length)
-        : existingCombined;
+    // Recover the existing prose/syntax split so we can replace either half
+    // independently. Intervals.icu stores them concatenated as
+    // `${description}\n\n${workout_doc}` in the event's `description` field
+    // but exposes the parsed prose as `workout_doc.description` on read,
+    // which we use as a reliable boundary. For swimming, `workout_doc` is
+    // not parsed (it was stored verbatim), so `workout_doc.description` is
+    // empty and the recovered "workout_doc" half ends up being the whole
+    // blob — same fallback the previous implementation had.
+    const existingCombined = existingEvent.description ?? '';
+    const existingProse = existingEvent.workout_doc?.description ?? '';
+    const prefix = existingProse ? `${existingProse}\n\n` : '';
+    const existingWorkoutDoc = existingCombined.startsWith(prefix)
+      ? existingCombined.slice(prefix.length)
+      : existingCombined;
 
-      const newDescription = description ?? existingDescription;
-      const newWorkoutDoc = workout_doc ?? existingWorkoutDoc;
-      updatePayload.description = newDescription && newWorkoutDoc
-        ? `${newDescription}\n\n${newWorkoutDoc}`
-        : newDescription || newWorkoutDoc;
+    let newWorkoutDoc = existingWorkoutDoc;
+
+    if (structure !== undefined) {
+      const trimmedStructure = structure.trim();
+      if (!trimmedStructure) {
+        throw new Error(
+          '`structure` is empty: provide a plain-language description of the workout, or omit the field to leave it unchanged.'
+        );
+      }
+      // Resolve the sport — prefer the new `type` when it's being updated,
+      // otherwise fall back to the existing event's type. Needed to pick the
+      // right system prompt for Claude (and to skip the call for swimming).
+      const sportType = type ?? existingEvent.type ?? '';
+      const sport = sportFromIntervalsType(sportType);
+      if (!sport) {
+        throw new Error(
+          `Cannot determine sport from event type "${sportType}". ` +
+          `Pass \`type\` ("Run", "Ride", or "Swim") alongside \`structure\`.`
+        );
+      }
+      newWorkoutDoc = sport === 'swimming'
+        ? trimmedStructure
+        : await generateWorkoutDoc({ sport, structure: trimmedStructure });
+      updatedFields.push('structure');
+    }
+
+    if (description !== undefined || structure !== undefined) {
+      const newProse = description ?? existingProse;
+      updatePayload.description = newProse && newWorkoutDoc
+        ? `${newProse}\n\n${newWorkoutDoc}`
+        : newProse || newWorkoutDoc;
       if (description !== undefined) updatedFields.push('description');
-      if (workout_doc !== undefined) updatedFields.push('workout_doc');
     }
 
     if (scheduled_for !== undefined) {
@@ -340,7 +388,7 @@ export class PlanningTools {
     // Check if there's anything to update (besides tags)
     if (updatedFields.length === 0) {
       throw new Error(
-        'No fields provided to update. Specify at least one of: name, description, workout_doc, scheduled_for, type'
+        'No fields provided to update. Specify at least one of: name, description, structure, scheduled_for, type'
       );
     }
 
@@ -359,6 +407,7 @@ export class PlanningTools {
       scheduled_for: response.start_date_local,
       intervals_icu_url: `https://intervals.icu/calendar/${scheduledDate.split('T')[0]}`,
       updated_fields: updatedFields,
+      workout_doc: newWorkoutDoc,
     };
   }
 

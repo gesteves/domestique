@@ -6,6 +6,17 @@ import { TrainerRoadClient } from '../../src/clients/trainerroad.js';
 vi.mock('../../src/clients/intervals.js');
 vi.mock('../../src/clients/trainerroad.js');
 
+// Identity-passthrough mock so the recovery-logic tests (which were written
+// against the now-removed `workout_doc` input) keep working unchanged when the
+// input field is renamed to `structure`.
+const mockGenerateWorkoutDoc = vi.fn(
+  async ({ structure }: { sport: 'cycling' | 'running'; structure: string }) => structure
+);
+vi.mock('../../src/utils/workout-generator.js', () => ({
+  generateWorkoutDoc: (...args: Parameters<typeof mockGenerateWorkoutDoc>) =>
+    mockGenerateWorkoutDoc(...args),
+}));
+
 describe('PlanningTools updateWorkout', () => {
   let tools: PlanningTools;
   let mockIntervalsClient: IntervalsClient;
@@ -13,6 +24,8 @@ describe('PlanningTools updateWorkout', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGenerateWorkoutDoc.mockClear();
+    mockGenerateWorkoutDoc.mockImplementation(async ({ structure }) => structure);
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-12-15T12:00:00Z'));
 
@@ -103,7 +116,7 @@ describe('PlanningTools updateWorkout', () => {
       );
     });
 
-    it('should update workout_doc', async () => {
+    it('should update structure', async () => {
       vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
         id: 125,
         uid: 'uid-125',
@@ -126,10 +139,10 @@ describe('PlanningTools updateWorkout', () => {
 
       const result = await tools.updateWorkout({
         event_id: '125',
-        workout_doc: 'Warmup\n- 10m Z2 Pace\n\nMain Set 5x\n- 3m Z4 Pace',
+        structure: 'Warmup\n- 10m Z2 Pace\n\nMain Set 5x\n- 3m Z4 Pace',
       });
 
-      expect(result.updated_fields).toContain('workout_doc');
+      expect(result.updated_fields).toContain('structure');
       expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
         '125',
         expect.objectContaining({
@@ -139,7 +152,7 @@ describe('PlanningTools updateWorkout', () => {
       );
     });
 
-    it('should combine description and workout_doc', async () => {
+    it('should combine description and structure', async () => {
       vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
         id: 126,
         uid: 'uid-126',
@@ -163,11 +176,11 @@ describe('PlanningTools updateWorkout', () => {
       const result = await tools.updateWorkout({
         event_id: '126',
         description: 'RPE based intervals',
-        workout_doc: 'Main Set 3x\n- 5m Z3 Pace',
+        structure: 'Main Set 3x\n- 5m Z3 Pace',
       });
 
       expect(result.updated_fields).toContain('description');
-      expect(result.updated_fields).toContain('workout_doc');
+      expect(result.updated_fields).toContain('structure');
       expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
         '126',
         expect.objectContaining({
@@ -212,7 +225,7 @@ describe('PlanningTools updateWorkout', () => {
       );
     });
 
-    it('preserves multi-paragraph description when only workout_doc is updated', async () => {
+    it('preserves multi-paragraph description when only structure is updated', async () => {
       // The prose half of an existing description can itself contain blank
       // lines, so a naive `split on first \n\n` would corrupt it. Using
       // workout_doc.description as the boundary handles this correctly.
@@ -240,7 +253,7 @@ describe('PlanningTools updateWorkout', () => {
 
       await tools.updateWorkout({
         event_id: '141',
-        workout_doc: 'Cooldown\n- 5m Z1 Pace',
+        structure: 'Cooldown\n- 5m Z1 Pace',
       });
 
       expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(

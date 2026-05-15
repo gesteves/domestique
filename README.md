@@ -36,8 +36,8 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_upcoming_activities` - Planned workouts (TrainerRoad + Intervals.icu) and races for a future date range, plus calendar annotations.
 
 ### Workout Management
-- `create_workout` - Create a structured cycling/running/swimming workout in Intervals.icu syntax.
-- `update_workout` - Update a Domestique-created workout.
+- `create_workout` - Create a structured cycling/running/swimming workout from a plain-language description.
+- `update_workout` - Update a Domestique-created workout..
 - `delete_workout` - Delete a Domestique-created workout.
 - `sync_trainerroad_runs` - Sync running workouts from TrainerRoad to Intervals.icu, detecting changes and orphans.
 - `set_workout_intervals` - Set intervals on a completed activity.
@@ -109,10 +109,11 @@ For Last.fm integration (optional):
 
 When both are set, `get_workout_details` and `get_todays_activities` include tracks played during the workout. ("Why not use Spotify?" you may be wondering. Ingesting Spotify data into AI is against their [developer policy](https://developer.spotify.com/policy).)
 
-For Anthropic API integration (optional):
-- `ANTHROPIC_API_KEY` - Enables Claude for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note), triathlon race priority extraction (A/B/C from the umbrella description), auto-generated activity descriptions on `workout.updated` Whoop webhooks, and debug token counting.
+For Anthropic API integration:
+- `ANTHROPIC_API_KEY` - Required for `create_workout` and `update_workout` on cycling and running (server converts the plain-language `structure` field into Intervals.icu workout-doc syntax). Also enables, when set, Claude for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note), triathlon race priority extraction (A/B/C from the umbrella description), auto-generated activity descriptions on `workout.updated` Whoop webhooks, and debug token counting.
 - `ANTHROPIC_CLASSIFIER_MODEL` - Optional override for the model used by the annotation and race-priority classifiers. Defaults to `claude-haiku-4-5`.
 - `ANTHROPIC_DESCRIPTION_MODEL` - Optional override for the model used by the activity-description generator. Defaults to `claude-sonnet-4-6`.
+- `ANTHROPIC_WORKOUT_MODEL` - Optional override for the model used by the `create_workout` / `update_workout` structure-to-syntax converter. Defaults to `claude-sonnet-4-6`.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.

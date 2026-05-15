@@ -21,3 +21,16 @@ export const DEFAULT_DESCRIPTION_MODEL = 'claude-sonnet-4-6';
 export function getDescriptionModel(): string {
   return process.env.ANTHROPIC_DESCRIPTION_MODEL?.trim() || DEFAULT_DESCRIPTION_MODEL;
 }
+
+/**
+ * Resolves the Claude model used by the workout-structure converter
+ * (plain-language `structure` → Intervals.icu workout-doc syntax for
+ * `create_workout` / `update_workout`). Defaults to Sonnet for syntax
+ * fidelity; override via `ANTHROPIC_WORKOUT_MODEL`.
+ */
+
+export const DEFAULT_WORKOUT_MODEL = 'claude-sonnet-4-6';
+
+export function getWorkoutModel(): string {
+  return process.env.ANTHROPIC_WORKOUT_MODEL?.trim() || DEFAULT_WORKOUT_MODEL;
+}
