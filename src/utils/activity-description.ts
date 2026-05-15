@@ -18,6 +18,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { NormalizedWorkout, PlayedSong, WhoopMatchedData } from '../types/index.js';
 import { formatPercent, isSwimmingActivity } from './format-units.js';
+import { loadPrompt } from './load-prompt.js';
 
 /**
  * Detect lines that lead with a pictographic emoji. Used by
@@ -315,31 +316,7 @@ const PlannedSummarySchema = z.object({
     ),
 });
 
-const PLANNED_SUMMARY_SYSTEM_PROMPT = `You write a one-sentence SUMMARY of an athlete's planned workout, for inclusion in their training-log activity description. The output will appear as a single stat line (an emoji prefix is added by the caller — do not include one yourself).
-
-- You will be given exactly one planned-workout description. Summarize it in one sentence.
-- **No trailing period.** The output appears as a stat line, alongside lines like "Mostly sunny with light W winds" — they have no terminal punctuation.
-- **Match the brevity and shape of the examples below.** Target 6–14 words. The examples are the ceiling, not the floor.
-- Mention only the workout's **structure**: total duration, interval pattern (count × duration), target intensity (% FTP, pace zone like "5K pace", or zone name like "endurance", "tempo", "sweet spot", "VO₂max", "threshold"), and recovery intervals when present. Omit the warmup and cooldown.
-- Use "VO₂max" (subscript 2, no dot) when referencing VO₂max efforts.
-- **Do not include**, even if the source description mentions them: physiological purpose ("targeting fat metabolism", "aerobic power development", "lactate shuttling"), training adaptations, perceived-exertion guidance, cadence/RPM specs (unless cadence IS the workout's defining feature, e.g. a cadence drill), gearing notes, coaching rationale, or any "why" behind the workout.
-- Tone: objective, neutral, technical. No exclamation marks. No marketing language ("crushed", "epic", "smashed", "huge", "killer"). Output prose only — no emojis.
-- Scope: describe only the *planned* workout. Do not reference weather, perceived effort, fatigue, Whoop strain, or any post-activity outcome.
-- If the planned-workout description is too sparse to summarize faithfully, return null rather than inventing structure.
-
-Examples (study the length and how they strip rationale to just structure):
-- 2 hours of endurance at 70-75% FTP
-- 7×3-minute intervals at 5K pace with 3-minute recoveries
-- 6×5-min at 10K pace with 3-min recoveries
-- 1 hour of VO₂max with two sets of 3×2.5 min at 118% FTP
-- 3×12-min over-unders at 90–103% FTP, with 2×24-min endurance blocks
-- 2-hour tempo ride at 65–90% FTP
-
-Counter-example — DO NOT produce summaries like this:
-- ❌ "2-hour aerobic endurance ride at 68–75% FTP, targeting fat metabolism and aerobic power development with cadence above 85 rpm."
-- ✅ "2 hours of endurance at 68–75% FTP"
-
-Return \`planned_summary\` as raw text. Do not wrap the output in quotation marks.`;
+const PLANNED_SUMMARY_SYSTEM_PROMPT = loadPrompt('planned-summary.md');
 
 /**
  * Summarize a planned-workout description into a one-sentence stat-line
@@ -397,30 +374,7 @@ const WeatherSchema = z.object({
     ),
 });
 
-const WEATHER_SYSTEM_PROMPT = `You rewrite raw weather data into one sentence of natural prose for an athlete's training-log activity description, and pick a single representative emoji.
-
-- Rewrite the provided weather data as one sentence of natural flowing prose — not a list of data points. Prioritize readability over completeness; omit minor data points if they disrupt the flow.
-- Open the sentence with a summary of the conditions, chosen from (but not limited to): clear, sunny, mostly sunny, partly cloudy, overcast, windy, light rain, heavy rain, snow. Infer this from wind speeds, precipitation amount, and cloud coverage in the input.
-- Assume any missing data point is zero (no cloud percentage in the input → 0% cloud; no rain field → no rain; etc.).
-- Use the same units as the source data. Round all numbers.
-- If — and only if — the source data mentions wind direction relative to the route (tailwind, headwind, crosswind), preserve that phrasing. Never invent route-relative wind information; use compass direction (W, WSW, NNE, etc.) when the source provides only that.
-- \`weather_emoji\` is a single emoji that best represents the conditions overall.
-
-Style:
-- Sentence case, no trailing period.
-- Use the serial comma.
-- Use en dashes for ranges where both ends are positive (e.g. 3–5°C, 7–21 km/h).
-- Use "to" instead of an en dash when one or both ends of the range are negative (e.g. "−2 to 2°C", "−3 to −1°C").
-- Add a space before non-temperature units (20 km/h, not 20km/h).
-- Do not add a space before temperature units (55°F, not 55 °F).
-
-Examples:
-- 🌤️ Mostly sunny with light W winds of 7–21 km/h gusting to 26, temps 10–14°C (feels like 5–9°C), and a slight tailwind
-- ☁️ Overcast with light-to-moderate WSW winds of 14–23 km/h gusting to 31, temps 8–13°C (feels like 2–8°C)
-- ☁️ Overcast with a light NNW breeze of 3–7 km/h gusting to 21, temps around 20°C (feels like 17°C), and mostly tailwind
-- ☀️ Sunny skies with SW winds of 1–5 mph and gusts up to 11 mph, temperatures ranging from 51–61°F with an average feel of 49°F
-
-Return \`weather_sentence\` as raw text. Do not wrap the output in quotation marks.`;
+const WEATHER_SYSTEM_PROMPT = loadPrompt('weather-sentence.md');
 
 /**
  * Rewrite a raw weather description as one sentence + a leading emoji.
@@ -480,16 +434,7 @@ const MusicSchema = z.object({
     ),
 });
 
-const MUSIC_SYSTEM_PROMPT = `You pick up to 5 representative artists from a list of songs an athlete listened to during a workout, for their training-log activity description.
-
-- You will be given a Markdown table of distinct tracks with columns \`Artist\`, \`Song title\`, \`Plays\`, and \`Loved\`. Each row is one unique track — the data is already aggregated, so you do not need to count or dedupe scrobbles.
-- \`Plays\` is the number of times the track was played during the workout. A high count is a strong signal of taste.
-- \`Loved\` is \`yes\` when the user has marked the track as a favorite on Last.fm, and blank otherwise. A blank \`Loved\` does NOT mean the user dislikes the track — it only means they haven't explicitly marked it as a favorite.
-- Pick up to 5 artists that best represent the playlist as a whole. You may use any criteria, including (but not limited to): artists with the highest \`Plays\` counts, artists with the most distinct tracks, artists with the most \`Loved\` tracks, artists that fit the overall vibe of the playlist, etc. Weigh these signals equally — none is decisive on its own.
-- **Normalize artist names**: collapse trivial variants to one canonical form. Examples: "Foo Fighters" and "The Foo Fighters" → "Foo Fighters"; "Beyoncé" and "Beyonce" → "Beyoncé". Choose the spelling most commonly used for the artist.
-- Do not invent artists. Every name you emit in \`top_artists\` must appear in the input table (in the chosen canonical form).
-- If fewer than 5 unique artists are present (after normalization), return only those — do not pad.
-- \`remaining_artists\` is the count of unique artists (after normalization) NOT in \`top_artists\`. Think step by step: count distinct normalized artists in the input table, subtract \`top_artists.length\`, floor at 0. Be precise — readers will compare this number against the playlist they remember.`;
+const MUSIC_SYSTEM_PROMPT = loadPrompt('music-selection.md');
 
 /**
  * Pick up to 5 representative artists from a played-songs list, with the

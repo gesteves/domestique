@@ -16,6 +16,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { AnnotationCategory } from '../types/index.js';
 import { getClassifierModel } from './classifier-model.js';
+import { loadPrompt } from './load-prompt.js';
 import { redisGetJson, redisSetJson } from './redis.js';
 
 const CACHE_KEY_PREFIX = 'domestique:annotation-category:v1:';
@@ -25,13 +26,7 @@ const CategorySchema = z.object({
   category: z.enum(['Sick', 'Injured', 'Holiday', 'Note']),
 });
 
-const SYSTEM_PROMPT =
-  'You classify TrainerRoad calendar annotations into one of four Intervals.icu categories: ' +
-  'Sick (illness, cold, flu, fever, infection, etc.), ' +
-  'Injured (physical injury, soreness from injury, recovering from injury, surgery, etc.), ' +
-  'Holiday (vacation, travel, time off, family trip, etc.), ' +
-  'or Note (anything else: training notes, races, work events, conferences, life events, reminders). ' +
-  'When in doubt, choose Note.';
+const SYSTEM_PROMPT = loadPrompt('annotation-category.md');
 
 let client: Anthropic | null = null;
 

@@ -24,6 +24,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { RacePriority } from '../types/index.js';
 import { getClassifierModel } from './classifier-model.js';
+import { loadPrompt } from './load-prompt.js';
 import { redisGetJson, redisSetJson } from './redis.js';
 
 const CACHE_KEY_PREFIX = 'domestique:race-priority:v1:';
@@ -33,18 +34,7 @@ const PrioritySchema = z.object({
   priority: z.enum(['A', 'B', 'C', 'none']),
 });
 
-const SYSTEM_PROMPT = [
-  'You extract the priority of an upcoming triathlon (A, B, or C) from a calendar event description that the athlete authored.',
-  '',
-  'Definitions:',
-  '- A = primary goal race / peak event for the season.',
-  '- B = important but secondary race.',
-  '- C = training race, low-stakes tune-up.',
-  '',
-  "Return 'A', 'B', or 'C' ONLY when the description EXPLICITLY states the priority — for example: \"A race\", \"B-race\", \"priority: A\", \"this is my A goal\", \"C-priority\".",
-  '',
-  "If the description does NOT clearly state a priority, return 'none'. Do NOT guess, infer, or invent a priority based on the race name, distance, location, or perceived importance. When in doubt, return 'none'.",
-].join('\n');
+const SYSTEM_PROMPT = loadPrompt('race-priority.md');
 
 let client: Anthropic | null = null;
 

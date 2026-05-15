@@ -13,25 +13,14 @@
  * failures also throw and are surfaced to the caller.
  */
 
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { getWorkoutModel } from './classifier-model.js';
+import { loadPrompt } from './load-prompt.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPTS_DIR = join(__dirname, '..', 'prompts');
-
-const CYCLING_SYSTEM_PROMPT = readFileSync(
-  join(PROMPTS_DIR, 'cycling-workout-structure.md'),
-  'utf8'
-);
-const RUNNING_SYSTEM_PROMPT = readFileSync(
-  join(PROMPTS_DIR, 'running-workout-structure.md'),
-  'utf8'
-);
+const CYCLING_SYSTEM_PROMPT = loadPrompt('cycling-workout-structure.md');
+const RUNNING_SYSTEM_PROMPT = loadPrompt('running-workout-structure.md');
 
 const WorkoutDocSchema = z.object({
   workout_doc: z
