@@ -401,7 +401,7 @@ describe('generatePlannedSummary', () => {
     expect(call.system).not.toContain('weather_emoji');
     expect(call.system).not.toContain('top_artists');
     // Prompt instructs the model to emit no leading emoji (composer adds 🗓️):
-    expect(call.system).toContain('emoji prefix is added by the caller');
+    expect(call.system).toContain('no emojis');
   });
 
   it('returns null when the model declines to summarize', async () => {
