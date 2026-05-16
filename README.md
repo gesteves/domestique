@@ -114,6 +114,7 @@ For Anthropic API integration:
 - `ANTHROPIC_CLASSIFIER_MODEL` - Optional override for the model used by the annotation and race-priority classifiers. Defaults to `claude-haiku-4-5`.
 - `ANTHROPIC_DESCRIPTION_MODEL` - Optional override for the model used by the activity-description generator. Defaults to `claude-sonnet-4-6`.
 - `ANTHROPIC_WORKOUT_MODEL` - Optional override for the model used by the `create_workout` / `update_workout` structure-to-syntax converter. Defaults to `claude-sonnet-4-6`.
+- `ANTHROPIC_TOKEN_COUNTER_MODEL` - Optional override for the model used by dev-only debug token counting. Defaults to `claude-haiku-4-5`.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.

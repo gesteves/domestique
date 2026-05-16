@@ -5,6 +5,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logWarn, logApiCall } from './logger.js';
+import { getTokenCounterModel } from './classifier-model.js';
 
 let client: Anthropic | null = null;
 
@@ -29,9 +30,10 @@ export async function countTokens(content: string): Promise<number | null> {
   if (!anthropic) return null;
 
   try {
-    logApiCall('Anthropic', 'token-count (model=claude-sonnet-4-5)', 'messages.countTokens');
+    const model = getTokenCounterModel();
+    logApiCall('Anthropic', `token-count (model=${model})`, 'messages.countTokens');
     const { input_tokens } = await anthropic.messages.countTokens({
-      model: 'claude-sonnet-4-5',
+      model,
       messages: [{ role: 'user', content }],
     });
     return input_tokens;

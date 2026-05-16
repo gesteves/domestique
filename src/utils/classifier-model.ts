@@ -34,3 +34,16 @@ export const DEFAULT_WORKOUT_MODEL = 'claude-sonnet-4-6';
 export function getWorkoutModel(): string {
   return process.env.ANTHROPIC_WORKOUT_MODEL?.trim() || DEFAULT_WORKOUT_MODEL;
 }
+
+/**
+ * Resolves the Claude model used for dev-only token counting (the debug
+ * `_meta.token_count` field). Defaults to Haiku — it's just tokenizer
+ * estimation, equivalent across the 4.x family, so use the cheapest model.
+ * Override via `ANTHROPIC_TOKEN_COUNTER_MODEL`.
+ */
+
+export const DEFAULT_TOKEN_COUNTER_MODEL = 'claude-haiku-4-5';
+
+export function getTokenCounterModel(): string {
+  return process.env.ANTHROPIC_TOKEN_COUNTER_MODEL?.trim() || DEFAULT_TOKEN_COUNTER_MODEL;
+}
