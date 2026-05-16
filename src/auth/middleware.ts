@@ -96,7 +96,7 @@ export function getConfig() {
   return {
     port: parseInt(process.env.PORT ?? '3000', 10),
     mcpAuthToken: process.env.MCP_AUTH_TOKEN!,
-    locationWebhookSecret: process.env.LOCATION_WEBHOOK_SECRET ?? null,
+    webhookSecret: process.env.WEBHOOK_SECRET ?? null,
     intervals: {
       apiKey: process.env.INTERVALS_API_KEY!,
       athleteId: process.env.INTERVALS_ATHLETE_ID!,
