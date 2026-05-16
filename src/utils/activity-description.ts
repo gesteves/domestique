@@ -21,6 +21,10 @@ import type { NormalizedWorkout, PlayedSong, WhoopMatchedData } from '../types/i
 import { formatPercent, isSwimmingActivity } from './format-units.js';
 import { loadPrompt } from './load-prompt.js';
 
+// ──────────────────────────────────────────────────────────────────────────
+// Pure block builders & composition (no I/O — safe to unit-test in isolation)
+// ──────────────────────────────────────────────────────────────────────────
+
 /**
  * Detect lines that lead with a pictographic emoji. Used by
  * `splitExistingDescription` to strip our own stat lines (and any
@@ -259,9 +263,9 @@ export function composeBlocks(input: ComposeBlocksInput): string {
   return emojiSection;
 }
 
-// ============================================================================
-// Anthropic-backed helpers
-// ============================================================================
+// ──────────────────────────────────────────────────────────────────────────
+// Anthropic-backed helpers (network I/O — generators call messages.parse())
+// ──────────────────────────────────────────────────────────────────────────
 
 export interface PlannedSummaryInput {
   /** The planned workout's description (e.g. TR's structured workout text). */

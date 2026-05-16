@@ -14,6 +14,10 @@ const METERS_TO_FEET = 3.2808399;
 const KG_TO_LB = 2.20462262;
 const METERS_TO_INCHES = 39.3700787;
 
+// ──────────────────────────────────────────────────────────────────────────
+// Duration, distance, pace, speed & swim-specific formatters and parsers
+// ──────────────────────────────────────────────────────────────────────────
+
 /**
  * Format duration in seconds to human-readable string.
  * Always uses h:mm:ss format to avoid ambiguity.
@@ -222,6 +226,10 @@ export function formatDurationLabel(seconds: number): string {
   return `${hours}hr`;
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Core metric formatters (power, HR, temperature, weight, energy, cadence, …)
+// ──────────────────────────────────────────────────────────────────────────
+
 /**
  * Format power in watts.
  * @param watts Power in watts
@@ -427,6 +435,10 @@ const FEEL_LABELS: Record<number, string> = {
   4: 'Poor',
   5: 'Weak',
 };
+
+// ──────────────────────────────────────────────────────────────────────────
+// Wellness 1–10 / 1–4 scale formatters (RPE, feel, soreness, mood, …)
+// ──────────────────────────────────────────────────────────────────────────
 
 /**
  * Format an RPE value (1–10) as "[number] - label".

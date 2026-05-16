@@ -793,6 +793,13 @@ export class IntervalsClient {
    * Drop the session-memoized timezone and weather-config caches so subsequent
    * reads reflect a just-written athlete profile / weather config. Call after a
    * successful location update on a long-running server.
+   *
+   * Only timezone and weather-config are reset because those are the only fields
+   * a location update mutates. The other memoized caches — sport settings
+   * (`fetchSportSettingsCached`), unit preferences (`fetchUnitPreferencesCached`),
+   * and wellness sources (`fetchWellnessSourcesCached`) — are intentionally
+   * session-permanent: nothing in this server writes them, so they can't go
+   * stale within a session. The asymmetry is deliberate, not an oversight.
    */
   invalidateAthleteCaches(): void {
     this.fetchTimezone = this.buildTimezoneCache();

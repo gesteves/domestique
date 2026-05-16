@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { secureCompare } from '../auth/middleware.js';
-import { isValidCoordinates } from '../utils/location-context.js';
+import { parseCoordinates } from '../utils/location-context.js';
 import { applyLocation, type LocationSyncDeps } from '../services/location-sync.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -49,18 +49,18 @@ export function createLocationWebhookHandler(deps: LocationWebhookDeps) {
 
     // --- Body ---
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const latitude = toNumber(body.latitude);
-    const longitude = toNumber(body.longitude);
-    if (!isValidCoordinates(latitude, longitude)) {
+    const coords = parseCoordinates(toNumber(body.latitude), toNumber(body.longitude));
+    if (!coords) {
       res.status(400).json({
         error: 'Body must include valid numeric latitude and longitude',
       });
       return;
     }
+    const { latitude, longitude } = coords;
 
     logInfo('LocationWebhook', `Received location update (${latitude},${longitude})`);
     try {
-      const result = await applyLocation(latitude, longitude as number, deps);
+      const result = await applyLocation(latitude, longitude, deps);
       logInfo('LocationWebhook', `Applied location update (${latitude},${longitude})`);
       res.status(200).json({ ok: true, ...result });
     } catch (error) {

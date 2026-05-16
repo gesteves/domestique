@@ -688,6 +688,96 @@ describe('CurrentTools', () => {
       expect(result.races).toEqual([]);
     });
 
+    it('should include a single-discipline Intervals.icu race (merged, not TR-only)', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const icuRace: Race = {
+        scheduled_for: '2024-12-15T08:00:00Z',
+        name: 'Club 10-Miler',
+        sport: 'Run',
+      };
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([icuRace]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
+
+      const result = await tools.getTodaysActivities();
+
+      expect(result.races).toEqual([icuRace]);
+      vi.useRealTimers();
+    });
+
+    it('should degrade to no race (not throw) when the Intervals.icu race source rejects', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const trRace: Race = {
+        scheduled_for: '2024-12-15T08:00:00Z',
+        name: 'Local Tri',
+        sport: 'Triathlon',
+      };
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getRaces).mockRejectedValue(new Error('ICU down'));
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([trRace]);
+
+      const result = await tools.getTodaysActivities();
+
+      expect(result.races).toEqual([trRace]);
+      vi.useRealTimers();
+    });
+
+    it('should degrade to the Intervals.icu race when the TrainerRoad race source rejects', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      const icuRace: Race = {
+        scheduled_for: '2024-12-15T08:00:00Z',
+        name: 'Club 10-Miler',
+        sport: 'Run',
+      };
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([icuRace]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockRejectedValue(new Error('TR down'));
+
+      const result = await tools.getTodaysActivities();
+
+      expect(result.races).toEqual([icuRace]);
+      vi.useRealTimers();
+    });
+
+    it('should not reject the tool when race merging throws (terminal guard)', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+
+      // A malformed race with no scheduled_for makes the synchronous
+      // merge/find throw; the helper's terminal catch must absorb it.
+      const badRace = { name: 'Broken', sport: 'Run' } as unknown as Race;
+
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getRaces).mockResolvedValue([badRace]);
+      vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
+
+      const result = await tools.getTodaysActivities();
+
+      expect(result.races).toEqual([]);
+      vi.useRealTimers();
+    });
+
     it('should zero out races when type is "workouts"', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));

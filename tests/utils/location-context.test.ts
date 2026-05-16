@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   formatLocation,
-  isValidCoordinates,
+  parseCoordinates,
   resolveLocationContext,
 } from '../../src/utils/location-context.js';
 import type { GoogleAddressComponent } from '../../src/clients/google-geocoding.js';
@@ -12,22 +12,22 @@ function comp(long_name: string, types: string[]): C {
   return { long_name, short_name: long_name, types };
 }
 
-describe('isValidCoordinates', () => {
-  it('accepts valid coordinates', () => {
-    expect(isValidCoordinates(43.48, -110.76)).toBe(true);
-    expect(isValidCoordinates(0, 0)).toBe(true);
-    expect(isValidCoordinates(-90, 180)).toBe(true);
+describe('parseCoordinates', () => {
+  it('returns the typed pair for valid coordinates', () => {
+    expect(parseCoordinates(43.48, -110.76)).toEqual({ latitude: 43.48, longitude: -110.76 });
+    expect(parseCoordinates(0, 0)).toEqual({ latitude: 0, longitude: 0 });
+    expect(parseCoordinates(-90, 180)).toEqual({ latitude: -90, longitude: 180 });
   });
 
-  it('rejects out-of-range, non-finite, and non-numeric values', () => {
-    expect(isValidCoordinates(91, 0)).toBe(false);
-    expect(isValidCoordinates(0, 181)).toBe(false);
-    expect(isValidCoordinates(-91, 0)).toBe(false);
-    expect(isValidCoordinates(0, -181)).toBe(false);
-    expect(isValidCoordinates(NaN, 0)).toBe(false);
-    expect(isValidCoordinates(Infinity, 0)).toBe(false);
-    expect(isValidCoordinates('43', '-110')).toBe(false);
-    expect(isValidCoordinates(undefined, undefined)).toBe(false);
+  it('returns null for out-of-range, non-finite, and non-numeric values', () => {
+    expect(parseCoordinates(91, 0)).toBeNull();
+    expect(parseCoordinates(0, 181)).toBeNull();
+    expect(parseCoordinates(-91, 0)).toBeNull();
+    expect(parseCoordinates(0, -181)).toBeNull();
+    expect(parseCoordinates(NaN, 0)).toBeNull();
+    expect(parseCoordinates(Infinity, 0)).toBeNull();
+    expect(parseCoordinates('43', '-110')).toBeNull();
+    expect(parseCoordinates(undefined, undefined)).toBeNull();
   });
 });
 

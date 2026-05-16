@@ -15,7 +15,7 @@ import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts }
 import { mergeAnnotations } from '../utils/annotation-utils.js';
 import { mergeRaces } from '../utils/race-utils.js';
 import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
-import { isValidCoordinates } from '../utils/location-context.js';
+import { parseCoordinates } from '../utils/location-context.js';
 import { applyLocation } from '../services/location-sync.js';
 import type {
   StrainData,
@@ -337,13 +337,14 @@ export class CurrentTools {
       lat = resolved.latitude;
       lng = resolved.longitude;
     }
-    if (!isValidCoordinates(lat, lng)) {
+    const coords = parseCoordinates(lat, lng);
+    if (!coords) {
       throw new Error(
         'Provide a valid latitude/longitude pair, or a `location` that can be resolved to coordinates.'
       );
     }
 
-    const result = await applyLocation(lat, lng as number, {
+    const result = await applyLocation(coords.latitude, coords.longitude, {
       intervals: this.intervals,
       geocoding: this.googleGeocoding,
       timezone: this.googleTimezone,
@@ -576,6 +577,39 @@ export class CurrentTools {
   }
 
   /**
+   * Today's race (a single race, if any) merged across sources: Intervals.icu
+   * provides single-discipline races with native A/B/C priority; TrainerRoad
+   * provides triathlons. Each source is fetched independently and degrades to
+   * no race on failure, and the synchronous merge is guarded too, so a single
+   * upstream (or merge) error never rejects the calling tool. Shared by
+   * getTodaysSummary and getTodaysActivities so both report the same race.
+   */
+  private async getTodaysRace(timezone: string, today: string): Promise<Race | null> {
+    try {
+      const [icuRaces, trRaces] = await Promise.all([
+        this.intervals.getRaces(today, today).catch((e) => {
+          logWarn('CurrentTools', 'Error fetching Intervals.icu races for today', e);
+          return [] as Race[];
+        }),
+        this.trainerroad
+          ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
+              logWarn('CurrentTools', 'Error fetching TrainerRoad races for today', e);
+              return [] as Race[];
+            })
+          : Promise.resolve([] as Race[]),
+      ]);
+      return (
+        mergeRaces(icuRaces, trRaces).find((race) =>
+          race.scheduled_for.startsWith(today)
+        ) ?? null
+      );
+    } catch (e) {
+      logWarn('CurrentTools', "Error resolving today's race", e);
+      return null;
+    }
+  }
+
+  /**
    * Get today's activities — completed workouts (with full per-activity details),
    * planned workouts, today's race (if any), and active calendar annotations.
    * A leaner alternative to getTodaysSummary that only returns activity-and-event data.
@@ -618,14 +652,7 @@ export class CurrentTools {
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
-      this.trainerroad
-        ? this.trainerroad.getUpcomingRaces(timezone).then((races) =>
-            races.find((race) => race.scheduled_for.startsWith(today)) ?? null
-          ).catch((e) => {
-            logWarn('CurrentTools', 'Error fetching races for todays activities', e);
-            return null as Race | null;
-          })
-        : Promise.resolve(null as Race | null),
+      this.getTodaysRace(timezone, today),
     ]);
 
     const annotations = mergeAnnotations(intervalsAnnotations, [
@@ -748,23 +775,9 @@ export class CurrentTools {
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
-      // Today's race: merge ICU (single-discipline, native A/B/C priority)
-      // with TR (triathlons via umbrella+legs). Both fetched in parallel.
-      Promise.all([
-        this.intervals.getRaces(today, today).catch((e) => {
-          logWarn('CurrentTools', 'Error fetching Intervals.icu races for daily summary', e);
-          return [] as Race[];
-        }),
-        this.trainerroad
-          ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
-              logWarn('CurrentTools', 'Error fetching TrainerRoad races for daily summary', e);
-              return [] as Race[];
-            })
-          : Promise.resolve([] as Race[]),
-      ]).then(([icuRaces, trRaces]) => {
-        const merged = mergeRaces(icuRaces, trRaces);
-        return merged.find((race) => race.scheduled_for.startsWith(today)) ?? null;
-      }),
+      // Today's race: ICU (single-discipline, native A/B/C priority) merged
+      // with TR (triathlons via umbrella+legs); self-guarding helper.
+      this.getTodaysRace(timezone, today),
       this.buildForecasts(timezone, new Date()).catch((e) => {
         logWarn('CurrentTools', 'Error building forecast for daily summary', e);
         return [] as LocationForecast[];

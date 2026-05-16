@@ -26,17 +26,20 @@ export interface LocationContextDeps {
 }
 
 /**
- * Validate latitude/longitude. Port of kona's `valid_coordinates?`.
+ * Validate and narrow a latitude/longitude pair. Port of kona's
+ * `valid_coordinates?`. Returns the typed pair when valid, or `null` so callers
+ * can use both coordinates as `number` without casts. A type predicate can only
+ * narrow one parameter, which is why this returns the pair instead.
  */
-export function isValidCoordinates(
+export function parseCoordinates(
   latitude: unknown,
   longitude: unknown
-): latitude is number {
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') return false;
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
-  if (latitude < -90 || latitude > 90) return false;
-  if (longitude < -180 || longitude > 180) return false;
-  return true;
+): { latitude: number; longitude: number } | null {
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90) return null;
+  if (longitude < -180 || longitude > 180) return null;
+  return { latitude, longitude };
 }
 
 /** First component whose `types` include `type`, returning its `long_name`. */
