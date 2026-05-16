@@ -46,6 +46,12 @@ Tests run on the host (or the test Docker target), **not** in the dev container 
 - TypeScript strict mode, async/await, named exports only (no default exports)
 - JSDoc on public APIs
 
+### Logging
+
+- Never call `console.*` directly in `src/` (except inside `src/utils/logger.ts` and operator scripts in `src/scripts/`). Use the helpers from `src/utils/logger.ts`: `logInfo` / `logWarn` / `logError` / `logDebug`, plus `logApiCall(source, path, method?)` for outbound API calls and `logToolCall(name)` for MCP tool entry.
+- Every line is `[scope] message`; pass the service/module as the scope (e.g. `Whoop`, `Intervals`, `WhoopWebhook`, `CurrentTools`). Don't put the scope in the message — the helper adds the bracket.
+- `logError` always emits and reports to Bugsnag (synthesizes an Error if none is passed). Use it only for genuine failures. For best-effort degradations whose underlying API error was already reported at the client layer (`logApiError`), use `logWarn` to avoid double-reporting. `logDebug` is suppressed unless `LOG_LEVEL=debug` — use it for high-volume internal churn (token refresh, lock dance).
+
 ### Unit conventions
 
 Tool responses use **unit-in-value** strings.

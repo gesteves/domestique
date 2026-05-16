@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { logApiError, logUnexpectedError, initBugsnag, getBugsnagClient, _setBugsnagClientForTesting } from '../../src/utils/logger.js';
+import { logApiError, logUnexpectedError, initBugsnag, getBugsnagClient, _setBugsnagClientForTesting, logDebug, logInfo, logWarn, logError, logApiCall, logToolCall } from '../../src/utils/logger.js';
 import { IntervalsApiError, TrainerRoadApiError } from '../../src/errors/index.js';
 
 describe('Logger', () => {
@@ -240,6 +240,101 @@ describe('Logger', () => {
 
       // Just verify no crash - console.error was called for logging
       expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('structured logging API', () => {
+    let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+    let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+    const originalLevel = process.env.LOG_LEVEL;
+
+    beforeEach(() => {
+      consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      if (originalLevel === undefined) delete process.env.LOG_LEVEL;
+      else process.env.LOG_LEVEL = originalLevel;
+    });
+
+    it('formats every line as [scope] message', () => {
+      delete process.env.LOG_LEVEL;
+      logInfo('Whoop', 'hello');
+      expect(consoleLogSpy).toHaveBeenCalledWith('[Whoop] hello');
+    });
+
+    it('suppresses debug lines at the default (info) level', () => {
+      delete process.env.LOG_LEVEL;
+      logDebug('Whoop', 'token churn');
+      expect(consoleLogSpy).not.toHaveBeenCalled();
+    });
+
+    it('emits debug lines when LOG_LEVEL=debug', () => {
+      process.env.LOG_LEVEL = 'debug';
+      logDebug('Whoop', 'token churn');
+      expect(consoleLogSpy).toHaveBeenCalledWith('[Whoop] token churn');
+    });
+
+    it('suppresses info lines when LOG_LEVEL=warn', () => {
+      process.env.LOG_LEVEL = 'warn';
+      logInfo('Server', 'noisy');
+      expect(consoleLogSpy).not.toHaveBeenCalled();
+    });
+
+    it('logWarn appends the cause when given an error', () => {
+      delete process.env.LOG_LEVEL;
+      logWarn('CurrentTools', 'Error fetching weather', new Error('boom'));
+      expect(consoleWarnSpy).toHaveBeenCalledWith('[CurrentTools] Error fetching weather: boom');
+    });
+
+    it('logWarn does not report to Bugsnag', () => {
+      const mockNotify = vi.fn();
+      _setBugsnagClientForTesting({ notify: mockNotify });
+      logWarn('CurrentTools', 'degraded', new Error('x'));
+      expect(mockNotify).not.toHaveBeenCalled();
+    });
+
+    it('logError always emits and reports to Bugsnag with scope context', () => {
+      process.env.LOG_LEVEL = 'error';
+      const mockNotify = vi.fn();
+      _setBugsnagClientForTesting({ notify: mockNotify });
+
+      const err = new Error('refresh dead');
+      logError('Whoop', 'Token refresh failed', err);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[Whoop] Token refresh failed');
+      expect(mockNotify).toHaveBeenCalledWith(err, expect.any(Function));
+
+      const callback = mockNotify.mock.calls[0][1];
+      const mockEvent = { context: '', addMetadata: vi.fn() };
+      callback(mockEvent);
+      expect(mockEvent.context).toBe('Whoop');
+      expect(mockEvent.addMetadata).toHaveBeenCalledWith('log', {
+        scope: 'Whoop',
+        message: 'Token refresh failed',
+      });
+    });
+
+    it('logError synthesizes an Error when none is passed', () => {
+      const mockNotify = vi.fn();
+      _setBugsnagClientForTesting({ notify: mockNotify });
+      logError('Auth', 'MCP_AUTH_TOKEN not set');
+      expect(mockNotify).toHaveBeenCalledWith(expect.any(Error), expect.any(Function));
+    });
+
+    it('logApiCall renders [Source] METHOD path, defaulting to GET', () => {
+      delete process.env.LOG_LEVEL;
+      logApiCall('Intervals', '/activity/i123');
+      logApiCall('Intervals', '/wellness-bulk', 'PUT');
+      expect(consoleLogSpy).toHaveBeenCalledWith('[Intervals] GET /activity/i123');
+      expect(consoleLogSpy).toHaveBeenCalledWith('[Intervals] PUT /wellness-bulk');
+    });
+
+    it('logToolCall renders [Tool] <name> called', () => {
+      delete process.env.LOG_LEVEL;
+      logToolCall('get_todays_summary');
+      expect(consoleLogSpy).toHaveBeenCalledWith('[Tool] get_todays_summary called');
     });
   });
 });

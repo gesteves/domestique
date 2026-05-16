@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { logError } from '../utils/logger.js';
 
 /**
  * Validate MCP authentication token from Authorization header or query parameter.
@@ -14,7 +15,7 @@ export function validateToken(
   const expectedToken = process.env.MCP_AUTH_TOKEN;
 
   if (!expectedToken) {
-    console.error('MCP_AUTH_TOKEN environment variable not set');
+    logError('Auth', 'MCP_AUTH_TOKEN environment variable not set');
     res.status(500).json({ error: 'Server configuration error' });
     return;
   }

@@ -66,7 +66,7 @@ import {
   paceCurveProgressHint,
 } from '../utils/hints/index.js';
 import { ApiError, DateParseError } from '../errors/index.js';
-import { logUnexpectedError } from '../utils/logger.js';
+import { logUnexpectedError, logToolCall, logWarn } from '../utils/logger.js';
 
 interface ResponseOptions<TResult = unknown> {
   /** Optional metadata for ChatGPT widgets (surfaced via _meta, not visible to the model). */
@@ -186,13 +186,13 @@ function withToolResponse<TArgs, TResult>(
   getUnitPreferences?: () => Promise<UnitPreferences>
 ): (args: TArgs) => Promise<ToolResponse | ErrorResponse> {
   return async (args: TArgs) => {
-    console.log(`[Tool] Calling tool: ${toolName}`);
+    logToolCall(toolName);
     let prefs: UnitPreferences = METRIC_DEFAULTS;
     if (getUnitPreferences) {
       try {
         prefs = await getUnitPreferences();
       } catch (error) {
-        console.error(`[Tool] Failed to fetch unit preferences for ${toolName}, defaulting to metric:`, error);
+        logWarn('Tool', `Failed to fetch unit preferences for ${toolName}, defaulting to metric`, error);
       }
     }
     return runWithUnitPreferences(prefs, async () => {

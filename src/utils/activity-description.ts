@@ -14,6 +14,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { logWarn, logApiCall } from './logger.js';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { NormalizedWorkout, PlayedSong, WhoopMatchedData } from '../types/index.js';
@@ -336,6 +337,7 @@ export async function generatePlannedSummary(
   const anthropic = getAnthropicClient();
   if (!anthropic) return null;
 
+  logApiCall('Anthropic', `planned-summary (model=${model})`, 'messages.parse');
   const message = await anthropic.messages.parse(
     {
       model,
@@ -393,6 +395,7 @@ export async function generateWeatherSentence(
   const anthropic = getAnthropicClient();
   if (!anthropic) return null;
 
+  logApiCall('Anthropic', `weather-sentence (model=${model})`, 'messages.parse');
   const message = await anthropic.messages.parse(
     {
       model,
@@ -490,6 +493,7 @@ export async function generateMusicSelection(
     );
   }
 
+  logApiCall('Anthropic', `music-selection (model=${model})`, 'messages.parse');
   const message = await anthropic.messages.parse(
     {
       model,
@@ -535,7 +539,7 @@ function settled<T>(
   label: string
 ): T | null {
   if (result.status === 'fulfilled') return result.value;
-  console.warn(`[ActivityDescription] ${label} call failed:`, result.reason);
+  logWarn('ActivityDescription', `${label} call failed`, result.reason);
   return null;
 }
 

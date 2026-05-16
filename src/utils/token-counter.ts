@@ -4,6 +4,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { logWarn, logApiCall } from './logger.js';
 
 let client: Anthropic | null = null;
 
@@ -28,6 +29,7 @@ export async function countTokens(content: string): Promise<number | null> {
   if (!anthropic) return null;
 
   try {
+    logApiCall('Anthropic', 'token-count (model=claude-sonnet-4-5)', 'messages.countTokens');
     const { input_tokens } = await anthropic.messages.countTokens({
       model: 'claude-sonnet-4-5',
       messages: [{ role: 'user', content }],
@@ -35,7 +37,7 @@ export async function countTokens(content: string): Promise<number | null> {
     return input_tokens;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('[token-counter] Failed to count tokens:', message);
+    logWarn('token-counter', `Failed to count tokens: ${message}`);
     return null;
   }
 }

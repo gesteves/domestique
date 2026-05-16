@@ -7,6 +7,8 @@
  * ChatGPT documents its `_meta` payload, but Claude's is undocumented.
  */
 
+import { logInfo } from './logger.js';
+
 interface JsonRpcMessage {
   method?: string;
   id?: unknown;
@@ -47,6 +49,6 @@ export function logMcpRequest(body: unknown): void {
       summary.meta = params._meta;
     }
 
-    console.log('[MCP Request]', JSON.stringify(summary, null, 2));
+    logInfo('MCP Request', JSON.stringify(summary, null, 2));
   }
 }

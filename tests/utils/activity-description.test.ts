@@ -850,8 +850,7 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(description).toContain('🎧 Radiohead');
 
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[ActivityDescription] plannedSummary call failed:'),
-      expect.any(Error)
+      expect.stringContaining('[ActivityDescription] plannedSummary call failed:')
     );
   });
 
@@ -1030,8 +1029,7 @@ describe('generateActivityDescription (orchestrator)', () => {
     const names = musicLine!.replace(/^🎧 /, '').split(', ');
     expect(new Set(names)).toEqual(new Set(['Radiohead', 'Foo Fighters', 'Tracy Chapman']));
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[ActivityDescription] music call failed:'),
-      expect.any(Error)
+      expect.stringContaining('[ActivityDescription] music call failed:')
     );
   });
 

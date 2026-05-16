@@ -5,6 +5,7 @@ import {
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
+import { logApiCall } from '../utils/logger.js';
 
 const GOOGLE_POLLEN_API_BASE = 'https://pollen.googleapis.com/v1';
 
@@ -132,7 +133,7 @@ export class GooglePollenClient {
     url.searchParams.set('days', String(days));
     url.searchParams.set('plantsDescription', 'false');
 
-    console.log(`[GooglePollen] Making API call to /forecast:lookup for ${latitude},${longitude}`);
+    logApiCall('GooglePollen', `/forecast:lookup (${latitude},${longitude})`);
 
     return httpRequestJson<GooglePollenForecastResponse>({
       url: url.toString(),

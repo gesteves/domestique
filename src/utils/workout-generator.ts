@@ -18,6 +18,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { getWorkoutModel } from './classifier-model.js';
 import { loadPrompt } from './load-prompt.js';
+import { logApiCall } from './logger.js';
 
 const CYCLING_SYSTEM_PROMPT = loadPrompt('cycling-workout-structure.md');
 const RUNNING_SYSTEM_PROMPT = loadPrompt('running-workout-structure.md');
@@ -78,6 +79,7 @@ export async function generateWorkoutDoc(input: GenerateWorkoutDocInput): Promis
     );
   }
 
+  logApiCall('Anthropic', `workout-doc:${input.sport} (model=${getWorkoutModel()})`, 'messages.parse');
   const message = await anthropic.messages.parse(
     {
       model: getWorkoutModel(),

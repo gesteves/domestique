@@ -1,3 +1,4 @@
+import { logWarn } from '../utils/logger.js';
 import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
@@ -130,34 +131,34 @@ export class PlanningTools {
         timezone
       ),
       this.intervals.getAnnotations(startDateStr, endDateStr).catch((e) => {
-        console.error('Error fetching Intervals.icu annotations for upcoming activities:', e);
+        logWarn('PlanningTools', 'Error fetching Intervals.icu annotations for upcoming activities', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(startDateStr, endDateStr, timezone).catch((e) => {
-            console.error('Error fetching TrainerRoad annotations for upcoming activities:', e);
+            logWarn('PlanningTools', 'Error fetching TrainerRoad annotations for upcoming activities', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(startDateStr, endDateStr).catch((e) => {
-            console.error('Error fetching TrainerRoad phase starts for upcoming activities:', e);
+            logWarn('PlanningTools', 'Error fetching TrainerRoad phase starts for upcoming activities', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getCurrentTrainingPhase(startDateStr).catch((e) => {
-            console.error('Error fetching current training phase for upcoming activities:', e);
+            logWarn('PlanningTools', 'Error fetching current training phase for upcoming activities', e);
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
       this.intervals.getRaces(startDateStr, endDateStr).catch((e) => {
-        console.error('Error fetching Intervals.icu races for upcoming activities:', e);
+        logWarn('PlanningTools', 'Error fetching Intervals.icu races for upcoming activities', e);
         return [] as Race[];
       }),
       this.trainerroad
         ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
-            console.error('Error fetching upcoming races for upcoming activities:', e);
+            logWarn('PlanningTools', 'Error fetching upcoming races for upcoming activities', e);
             return [] as Race[];
           })
         : Promise.resolve([] as Race[]),

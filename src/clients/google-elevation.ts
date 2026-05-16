@@ -5,6 +5,7 @@ import {
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
+import { logApiCall } from '../utils/logger.js';
 
 const GOOGLE_ELEVATION_API_BASE = 'https://maps.googleapis.com/maps/api/elevation';
 
@@ -94,7 +95,7 @@ export class GoogleElevationClient {
     url.searchParams.set('locations', `${latitude},${longitude}`);
     url.searchParams.set('key', this.config.apiKey);
 
-    console.log(`[GoogleElevation] Making API call to /elevation/json for ${latitude},${longitude}`);
+    logApiCall('GoogleElevation', `/elevation/json (${latitude},${longitude})`);
 
     return httpRequestJson<GoogleElevationResponse>({
       url: url.toString(),

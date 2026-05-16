@@ -7,6 +7,7 @@ import { ToolRegistry } from './tools/index.js';
 import { logMcpRequest, isMcpRequestLoggingEnabled } from './utils/request-logger.js';
 import { createWhoopWebhookHandler } from './webhooks/whoop.js';
 import { createLocationWebhookHandler } from './webhooks/location.js';
+import { logInfo, logError } from './utils/logger.js';
 
 export interface ServerOptions {
   port: number;
@@ -31,7 +32,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     googleTimezone: config.googleTimezone,
   });
 
-  console.log('Tool registry created');
+  logInfo('Server', 'Tool registry created');
 
   // Whoop webhook receiver. Authenticates incoming requests via Whoop's HMAC
   // signature (signed with WHOOP_CLIENT_SECRET), so no separate auth token is
@@ -51,15 +52,15 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
       express.raw({ type: '*/*', limit: '64kb' }),
       whoopWebhookHandler
     );
-    console.log('Whoop webhook receiver registered at POST /webhooks/whoop');
+    logInfo('Server', 'Whoop webhook receiver registered at POST /webhooks/whoop');
   } else {
-    console.log('Whoop webhook receiver not registered (Whoop is not configured)');
+    logInfo('Server', 'Whoop webhook receiver not registered (Whoop is not configured)');
   }
 
   app.use(express.json());
 
   if (isMcpRequestLoggingEnabled()) {
-    console.log('[MCP Request] Logging enabled (LOG_MCP_REQUESTS=true)');
+    logInfo('MCP Request', 'Logging enabled (LOG_MCP_REQUESTS=true)');
   }
 
   // Location webhook receiver (nightly iOS Shortcut). Authenticated with a
@@ -78,9 +79,10 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
         secret: config.locationWebhookSecret,
       })
     );
-    console.log('Location webhook receiver registered at POST /webhooks/location');
+    logInfo('Server', 'Location webhook receiver registered at POST /webhooks/location');
   } else {
-    console.log(
+    logInfo(
+      'Server',
       'Location webhook receiver not registered (set LOCATION_WEBHOOK_SECRET and GOOGLE_API_KEY)'
     );
   }
@@ -210,11 +212,11 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
         await server.sendToolListChanged();
         notified++;
       } catch (error) {
-        console.error(`Failed to notify session ${sessionId}:`, error);
+        logError('Server', `Failed to notify session ${sessionId}`, error);
       }
     }
 
-    console.log(`Notified ${notified}/${sessionIds.length} sessions of tool list change`);
+    logInfo('Server', `Notified ${notified}/${sessionIds.length} sessions of tool list change`);
     res.json({
       success: true,
       sessions_notified: notified,
@@ -237,7 +239,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
       try {
         await transport.handleRequest(req, res, req.body);
       } catch (error) {
-        console.error('Error handling MCP request:', error);
+        logError('Server', 'Error handling MCP request', error);
         if (!res.headersSent) {
           res.status(500).json({ error: 'Internal server error' });
         }
@@ -250,7 +252,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     // Per the MCP spec, 404 signals "session not found" and the client should
     // start a new session by sending a fresh initialization request.
     if (sessionId) {
-      console.log(`Unknown session ID: ${sessionId}, returning 404 to trigger re-initialization`);
+      logInfo('Server', `Unknown session ID: ${sessionId}, returning 404 to trigger re-initialization`);
       res.status(404).json({
         jsonrpc: '2.0',
         error: { code: -32001, message: 'Session not found' },
@@ -271,11 +273,11 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (newSessionId) => {
-        console.log(`Session initialized: ${newSessionId}`);
+        logInfo('Server', `Session initialized: ${newSessionId}`);
         sessions[newSessionId] = { transport, server: mcpServer };
       },
       onsessionclosed: (closedSessionId) => {
-        console.log(`Session closed: ${closedSessionId}`);
+        logInfo('Server', `Session closed: ${closedSessionId}`);
         delete sessions[closedSessionId];
       },
     });
@@ -287,7 +289,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     try {
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
-      console.error('Error handling MCP request:', error);
+      logError('Server', 'Error handling MCP request', error);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -296,7 +298,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
   // Error handling middleware
   app.use((err: Error, _req: Request, res: Response, _next: express.NextFunction) => {
-    console.error('Server error:', err);
+    logError('Server', 'Unhandled server error', err);
     res.status(500).json({ error: 'Internal server error' });
   });
 
@@ -307,8 +309,8 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const app = await createServer(options);
 
   app.listen(options.port, () => {
-    console.log(`Domestique MCP server running on port ${options.port}`);
-    console.log(`Health check: http://localhost:${options.port}/health`);
-    console.log(`MCP endpoint: http://localhost:${options.port}/mcp`);
+    logInfo('Server', `Domestique MCP server running on port ${options.port}`);
+    logInfo('Server', `Health check: http://localhost:${options.port}/health`);
+    logInfo('Server', `MCP endpoint: http://localhost:${options.port}/mcp`);
   });
 }

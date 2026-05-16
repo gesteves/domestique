@@ -1,4 +1,5 @@
 import { createClient, RedisClientType } from 'redis';
+import { logDebug, logInfo, logError } from './logger.js';
 
 let redisClient: RedisClientType | null = null;
 let connectionPromise: Promise<RedisClientType> | null = null;
@@ -30,18 +31,18 @@ export async function getRedisClient(): Promise<RedisClientType | null> {
       const client = createClient({ url: redisUrl });
 
       client.on('error', (err) => {
-        console.error('Redis client error:', err);
+        logError('Redis', 'Client error', err);
       });
 
       client.on('connect', () => {
-        console.log('Redis connected');
+        logInfo('Redis', 'Connected');
       });
 
       await client.connect();
       redisClient = client as RedisClientType;
       return redisClient;
     } catch (error) {
-      console.error('Failed to connect to Redis:', error);
+      logError('Redis', 'Failed to connect', error);
       connectionPromise = null;
       throw error;
     }
@@ -81,7 +82,7 @@ export async function redisSet(
     }
     return true;
   } catch (error) {
-    console.error('Redis SET error:', error);
+    logError('Redis', 'SET error', error);
     return false;
   }
 }
@@ -96,7 +97,7 @@ export async function redisGet(key: string): Promise<string | null> {
 
     return await client.get(key);
   } catch (error) {
-    console.error('Redis GET error:', error);
+    logError('Redis', 'GET error', error);
     return null;
   }
 }
@@ -112,7 +113,7 @@ export async function redisDel(key: string): Promise<boolean> {
     await client.del(key);
     return true;
   } catch (error) {
-    console.error('Redis DEL error:', error);
+    logError('Redis', 'DEL error', error);
     return false;
   }
 }
@@ -184,7 +185,7 @@ export async function acquireRefreshLock(lockId: string): Promise<boolean> {
     const client = await getRedisClient();
     if (!client) {
       // No Redis = no distributed locking, allow the refresh
-      console.log('[Redis] No Redis client, skipping lock acquisition');
+      logDebug('Redis', 'No Redis client, skipping lock acquisition');
       return true;
     }
 
@@ -195,10 +196,10 @@ export async function acquireRefreshLock(lockId: string): Promise<boolean> {
     });
 
     const acquired = result === 'OK';
-    console.log(`[Redis] Lock acquisition attempt: ${acquired ? 'SUCCESS' : 'FAILED (held by another)'}`);
+    logDebug('Redis', `Lock acquisition attempt: ${acquired ? 'SUCCESS' : 'FAILED (held by another)'}`);
     return acquired;
   } catch (error) {
-    console.error('[Redis] Error acquiring refresh lock:', error);
+    logError('Redis', 'Error acquiring refresh lock', error);
     // On error, allow the refresh to proceed (fail open)
     return true;
   }
@@ -217,12 +218,12 @@ export async function releaseRefreshLock(lockId: string): Promise<void> {
     const currentLockId = await client.get(WHOOP_REFRESH_LOCK_KEY);
     if (currentLockId === lockId) {
       await client.del(WHOOP_REFRESH_LOCK_KEY);
-      console.log('[Redis] Lock released');
+      logDebug('Redis', 'Lock released');
     } else {
-      console.log('[Redis] Lock not released (not owner or already expired)');
+      logDebug('Redis', 'Lock not released (not owner or already expired)');
     }
   } catch (error) {
-    console.error('[Redis] Error releasing refresh lock:', error);
+    logError('Redis', 'Error releasing refresh lock', error);
   }
 }
 
@@ -237,7 +238,7 @@ export async function isRefreshLockHeld(): Promise<boolean> {
     const lockValue = await client.get(WHOOP_REFRESH_LOCK_KEY);
     return lockValue !== null;
   } catch (error) {
-    console.error('[Redis] Error checking refresh lock:', error);
+    logError('Redis', 'Error checking refresh lock', error);
     return false;
   }
 }
@@ -253,11 +254,11 @@ export async function storeWhoopTokens(tokens: WhoopTokens): Promise<{ success: 
 
   // Validate tokens
   if (!tokens.accessToken || typeof tokens.accessToken !== 'string') {
-    console.error('Invalid access token:', typeof tokens.accessToken);
+    logError('Redis', `Invalid access token: ${typeof tokens.accessToken}`);
     return { success: false, version: 0 };
   }
   if (!tokens.refreshToken || typeof tokens.refreshToken !== 'string') {
-    console.error('Invalid refresh token:', typeof tokens.refreshToken);
+    logError('Redis', `Invalid refresh token: ${typeof tokens.refreshToken}`);
     return { success: false, version: 0 };
   }
 
@@ -292,10 +293,10 @@ export async function storeWhoopTokens(tokens: WhoopTokens): Promise<{ success: 
       JSON.stringify(storedRefreshToken)
     );
 
-    console.log(`[Redis] Stored tokens with version ${newVersion}`);
+    logDebug('Redis', `Stored tokens with version ${newVersion}`);
     return { success: true, version: newVersion };
   } catch (error) {
-    console.error('Error storing Whoop tokens:', error);
+    logError('Redis', 'Error storing Whoop tokens', error);
     return { success: false, version: 0 };
   }
 }
@@ -342,10 +343,10 @@ export async function invalidateWhoopAccessToken(): Promise<boolean> {
     if (!client) return false;
 
     await client.del(WHOOP_ACCESS_TOKEN_KEY);
-    console.log('[Redis] Access token invalidated');
+    logDebug('Redis', 'Access token invalidated');
     return true;
   } catch (error) {
-    console.error('[Redis] Error invalidating access token:', error);
+    logError('Redis', 'Error invalidating access token', error);
     return false;
   }
 }

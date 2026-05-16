@@ -172,15 +172,15 @@ describe('classifyRacePriority', () => {
   it('returns null and does not cache when the API call throws', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
     mockParse.mockRejectedValueOnce(new Error('boom'));
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { classifyRacePriority } = await loadModule();
 
     const result = await classifyRacePriority({ name: 'whatever' });
 
     expect(result).toBeNull();
     expect(mockRedisSetJson).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalled();
-    errorSpy.mockRestore();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it('produces stable cache keys for the same name + description', async () => {

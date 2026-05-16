@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { secureCompare } from '../auth/middleware.js';
 import { isValidCoordinates } from '../utils/location-context.js';
 import { applyLocation, type LocationSyncDeps } from '../services/location-sync.js';
+import { logInfo, logError } from '../utils/logger.js';
 
 export interface LocationWebhookDeps extends LocationSyncDeps {
   /** Shared secret the iOS Shortcut must present (Bearer header or ?token=). */
@@ -57,11 +58,13 @@ export function createLocationWebhookHandler(deps: LocationWebhookDeps) {
       return;
     }
 
+    logInfo('LocationWebhook', `Received location update (${latitude},${longitude})`);
     try {
       const result = await applyLocation(latitude, longitude as number, deps);
+      logInfo('LocationWebhook', `Applied location update (${latitude},${longitude})`);
       res.status(200).json({ ok: true, ...result });
     } catch (error) {
-      console.error('[LocationWebhook] Failed to apply location update:', error);
+      logError('LocationWebhook', 'Failed to apply location update', error);
       res.status(500).json({ error: 'Failed to apply location update' });
     }
   };

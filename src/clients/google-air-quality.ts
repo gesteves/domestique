@@ -5,6 +5,7 @@ import {
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
+import { logApiCall } from '../utils/logger.js';
 
 const GOOGLE_AIR_QUALITY_API_BASE = 'https://airquality.googleapis.com/v1';
 
@@ -135,7 +136,7 @@ export class GoogleAirQualityClient {
     latitude: number,
     longitude: number
   ): Promise<GoogleCurrentAirQualityResponse> {
-    console.log(`[GoogleAirQuality] Making API call to /currentConditions:lookup for ${latitude},${longitude}`);
+    logApiCall('GoogleAirQuality', `/currentConditions:lookup (${latitude},${longitude})`);
 
     return httpRequestJson<GoogleCurrentAirQualityResponse>({
       url: this.url('/currentConditions:lookup'),
@@ -177,7 +178,7 @@ export class GoogleAirQualityClient {
       nextTopOfHour(now).getTime() + hours * 60 * 60 * 1000
     ).toISOString();
 
-    console.log(`[GoogleAirQuality] Making API call to /forecast:lookup for ${latitude},${longitude}`);
+    logApiCall('GoogleAirQuality', `/forecast:lookup (${latitude},${longitude})`);
 
     return httpRequestJson<GoogleAirQualityHourlyResponse>({
       url: this.url('/forecast:lookup'),

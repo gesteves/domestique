@@ -1,6 +1,6 @@
 import type { PlayedSong } from '../types/index.js';
 import { LastFmApiError, type ErrorContext } from '../errors/index.js';
-import { logApiError } from '../utils/logger.js';
+import { logApiError, logApiCall } from '../utils/logger.js';
 import { httpRequestText } from './http.js';
 
 const LASTFM_API_BASE = 'https://ws.audioscrobbler.com/2.0/';
@@ -93,7 +93,7 @@ export class LastFmClient {
     });
     const url = `${LASTFM_API_BASE}?${params.toString()}`;
 
-    console.log(`[Last.fm] Making API call to ${LASTFM_API_BASE}?method=user.getrecenttracks&user=${this.config.username}&from=${fromSec}&to=${toSec}&limit=${limit}&extended=1`);
+    logApiCall('Last.fm', `user.getrecenttracks (from=${fromSec}, to=${toSec})`);
 
     const bodyText = await httpRequestText({
       url,

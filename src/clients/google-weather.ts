@@ -5,6 +5,7 @@ import {
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
+import { logApiCall } from '../utils/logger.js';
 
 const GOOGLE_WEATHER_API_BASE = 'https://weather.googleapis.com/v1';
 
@@ -300,7 +301,7 @@ export class GoogleWeatherClient {
     longitude: number
   ): Promise<GoogleCurrentConditionsResponse> {
     const url = this.buildUrl('/currentConditions:lookup', latitude, longitude, { units: true });
-    console.log(`[GoogleWeather] Making API call to /currentConditions:lookup for ${latitude},${longitude}`);
+    logApiCall('GoogleWeather', `/currentConditions:lookup (${latitude},${longitude})`);
 
     return httpRequestJson<GoogleCurrentConditionsResponse>({
       url: url.toString(),
@@ -352,8 +353,9 @@ export class GoogleWeatherClient {
       if (pageToken) url.searchParams.set('pageToken', pageToken);
 
       pageNumber += 1;
-      console.log(
-        `[GoogleWeather] Making API call to /forecast/hours:lookup for ${latitude},${longitude} (hours=${totalHours}, pageSize=${pageSize}, page=${pageNumber})`
+      logApiCall(
+        'GoogleWeather',
+        `/forecast/hours:lookup (${latitude},${longitude}, hours=${totalHours}, page=${pageNumber})`
       );
 
       const page = await httpRequestJson<GoogleHourlyForecastResponse>({
@@ -386,7 +388,7 @@ export class GoogleWeatherClient {
     longitude: number
   ): Promise<GoogleDailyForecastResponse> {
     const url = this.buildUrl('/forecast/days:lookup', latitude, longitude, { units: true });
-    console.log(`[GoogleWeather] Making API call to /forecast/days:lookup for ${latitude},${longitude}`);
+    logApiCall('GoogleWeather', `/forecast/days:lookup (${latitude},${longitude})`);
 
     return httpRequestJson<GoogleDailyForecastResponse>({
       url: url.toString(),
@@ -408,7 +410,7 @@ export class GoogleWeatherClient {
     longitude: number
   ): Promise<GoogleWeatherAlertsResponse> {
     const url = this.buildUrl('/publicAlerts:lookup', latitude, longitude);
-    console.log(`[GoogleWeather] Making API call to /publicAlerts:lookup for ${latitude},${longitude}`);
+    logApiCall('GoogleWeather', `/publicAlerts:lookup (${latitude},${longitude})`);
 
     return httpRequestJson<GoogleWeatherAlertsResponse>({
       url: url.toString(),

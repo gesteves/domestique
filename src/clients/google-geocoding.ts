@@ -5,6 +5,7 @@ import {
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
+import { logApiCall } from '../utils/logger.js';
 
 const GOOGLE_GEOCODING_API_BASE = 'https://maps.googleapis.com/maps/api/geocode';
 
@@ -123,7 +124,7 @@ export class GoogleGeocodingClient {
     url.searchParams.set('address', query);
     url.searchParams.set('key', this.config.apiKey);
 
-    console.log(`[GoogleGeocoding] Making API call to /geocode/json for "${query}"`);
+    logApiCall('GoogleGeocoding', `/geocode/json ("${query}")`);
 
     const context: ErrorContext = {
       operation: 'geocode address',
@@ -170,9 +171,7 @@ export class GoogleGeocodingClient {
     url.searchParams.set('language', 'en');
     url.searchParams.set('key', this.config.apiKey);
 
-    console.log(
-      `[GoogleGeocoding] Making API call to /geocode/json for ${latitude},${longitude}`
-    );
+    logApiCall('GoogleGeocoding', `/geocode/json (${latitude},${longitude})`);
 
     const context: ErrorContext = {
       operation: 'reverse geocode coordinates',

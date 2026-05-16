@@ -1,3 +1,4 @@
+import { logWarn } from '../utils/logger.js';
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
@@ -98,7 +99,7 @@ export class CurrentTools {
           const timezone = await tzClient.getTimezone(loc.latitude, loc.longitude);
           return { ...loc, timezone };
         } catch (e) {
-          console.error(`Error resolving timezone for "${loc.label}":`, e);
+          logWarn('CurrentTools', `Error resolving timezone for "${loc.label}"`, e);
           return { ...loc, timezone: fallbackTimezone };
         }
       })
@@ -118,7 +119,7 @@ export class CurrentTools {
     try {
       return await fn();
     } catch (e) {
-      console.error(`Error fetching ${what} for "${label}":`, e);
+      logWarn('CurrentTools', `Error fetching ${what} for "${label}"`, e);
       return undefined;
     }
   }
@@ -138,7 +139,7 @@ export class CurrentTools {
     try {
       enabled = await this.intervals.getEnabledWeatherLocations();
     } catch (e) {
-      console.error('Error fetching weather config from Intervals.icu:', e);
+      logWarn('CurrentTools', 'Error fetching weather config from Intervals.icu', e);
       return [];
     }
 
@@ -212,7 +213,7 @@ export class CurrentTools {
         elevation
       );
     } catch (e) {
-      console.error(`Error fetching forecast for "${loc.label}":`, e);
+      logWarn('CurrentTools', `Error fetching forecast for "${loc.label}"`, e);
       return null;
     }
   }
@@ -284,7 +285,7 @@ export class CurrentTools {
         alerts
       );
     } catch (e) {
-      console.error(`Error fetching forecast for "${loc.label}":`, e);
+      logWarn('CurrentTools', `Error fetching forecast for "${loc.label}"`, e);
       return null;
     }
   }
@@ -407,7 +408,7 @@ export class CurrentTools {
           longitude: loc.longitude,
         }));
       } catch (e) {
-        console.error('Error fetching weather config from Intervals.icu:', e);
+        logWarn('CurrentTools', 'Error fetching weather config from Intervals.icu', e);
         return { current_time: currentDateTime, forecasts: [] };
       }
     }
@@ -588,32 +589,32 @@ export class CurrentTools {
 
     const [completedResponse, plannedResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, todaysRace] = await Promise.all([
       this.getTodaysCompletedWorkouts().catch((e) => {
-        console.error('Error fetching completed workouts for todays activities:', e);
+        logWarn('CurrentTools', 'Error fetching completed workouts for todays activities', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysCompletedWorkoutsResponse;
       }),
       this.getTodaysPlannedWorkouts().catch((e) => {
-        console.error('Error fetching planned workouts for todays activities:', e);
+        logWarn('CurrentTools', 'Error fetching planned workouts for todays activities', e);
         return { current_time: currentDateTime, workouts: [] } as TodaysPlannedWorkoutsResponse;
       }),
       this.intervals.getAnnotations(today, today).catch((e) => {
-        console.error('Error fetching Intervals.icu annotations for todays activities:', e);
+        logWarn('CurrentTools', 'Error fetching Intervals.icu annotations for todays activities', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(today, today, timezone).catch((e) => {
-            console.error('Error fetching TrainerRoad annotations for todays activities:', e);
+            logWarn('CurrentTools', 'Error fetching TrainerRoad annotations for todays activities', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(today, today).catch((e) => {
-            console.error('Error fetching TrainerRoad phase starts for todays activities:', e);
+            logWarn('CurrentTools', 'Error fetching TrainerRoad phase starts for todays activities', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getCurrentTrainingPhase(today).catch((e) => {
-            console.error('Error fetching current training phase for todays activities:', e);
+            logWarn('CurrentTools', 'Error fetching current training phase for todays activities', e);
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
@@ -621,7 +622,7 @@ export class CurrentTools {
         ? this.trainerroad.getUpcomingRaces(timezone).then((races) =>
             races.find((race) => race.scheduled_for.startsWith(today)) ?? null
           ).catch((e) => {
-            console.error('Error fetching races for todays activities:', e);
+            logWarn('CurrentTools', 'Error fetching races for todays activities', e);
             return null as Race | null;
           })
         : Promise.resolve(null as Race | null),
@@ -698,52 +699,52 @@ export class CurrentTools {
     // Fetch all data in parallel for efficiency
     const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, todaysRace, forecast] = await Promise.all([
       this.getTodaysRecovery().catch((e) => {
-        console.error('Error fetching recovery for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching recovery for daily summary', e);
         return { current_time: getCurrentTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
       }),
       this.getTodaysStrain().catch((e) => {
-        console.error('Error fetching strain for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching strain for daily summary', e);
         return { current_time: getCurrentTimeInTimezone(timezone), whoop: { strain: null } };
       }),
       this.whoop?.getBodyMeasurements().catch((e) => {
-        console.error('Error fetching body measurements for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching body measurements for daily summary', e);
         return null;
       }) ?? Promise.resolve(null),
       this.intervals.getTodayFitness().catch((e) => {
-        console.error('Error fetching fitness for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching fitness for daily summary', e);
         return null;
       }),
       this.intervals.getTodayWellness().catch((e) => {
-        console.error('Error fetching wellness for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching wellness for daily summary', e);
         return null;
       }),
       this.getTodaysCompletedWorkouts().catch((e) => {
-        console.error('Error fetching completed workouts for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching completed workouts for daily summary', e);
         return { current_time: getCurrentTimeInTimezone(timezone), workouts: [] };
       }),
       this.getTodaysPlannedWorkouts().catch((e) => {
-        console.error('Error fetching planned workouts for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching planned workouts for daily summary', e);
         return { current_time: getCurrentTimeInTimezone(timezone), workouts: [] };
       }),
       this.intervals.getAnnotations(today, today).catch((e) => {
-        console.error('Error fetching Intervals.icu annotations for daily summary:', e);
+        logWarn('CurrentTools', 'Error fetching Intervals.icu annotations for daily summary', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(today, today, timezone).catch((e) => {
-            console.error('Error fetching TrainerRoad annotations for daily summary:', e);
+            logWarn('CurrentTools', 'Error fetching TrainerRoad annotations for daily summary', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(today, today).catch((e) => {
-            console.error('Error fetching TrainerRoad phase starts for daily summary:', e);
+            logWarn('CurrentTools', 'Error fetching TrainerRoad phase starts for daily summary', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getCurrentTrainingPhase(today).catch((e) => {
-            console.error('Error fetching current training phase for daily summary:', e);
+            logWarn('CurrentTools', 'Error fetching current training phase for daily summary', e);
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
@@ -751,12 +752,12 @@ export class CurrentTools {
       // with TR (triathlons via umbrella+legs). Both fetched in parallel.
       Promise.all([
         this.intervals.getRaces(today, today).catch((e) => {
-          console.error('Error fetching Intervals.icu races for daily summary:', e);
+          logWarn('CurrentTools', 'Error fetching Intervals.icu races for daily summary', e);
           return [] as Race[];
         }),
         this.trainerroad
           ? this.trainerroad.getUpcomingRaces(timezone).catch((e) => {
-              console.error('Error fetching TrainerRoad races for daily summary:', e);
+              logWarn('CurrentTools', 'Error fetching TrainerRoad races for daily summary', e);
               return [] as Race[];
             })
           : Promise.resolve([] as Race[]),
@@ -765,7 +766,7 @@ export class CurrentTools {
         return merged.find((race) => race.scheduled_for.startsWith(today)) ?? null;
       }),
       this.buildForecasts(timezone, new Date()).catch((e) => {
-        console.error('Error building forecast for daily summary:', e);
+        logWarn('CurrentTools', 'Error building forecast for daily summary', e);
         return [] as LocationForecast[];
       }),
     ]);

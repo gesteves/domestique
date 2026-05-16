@@ -5,6 +5,7 @@ import {
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
+import { logApiCall } from '../utils/logger.js';
 
 const GOOGLE_TIMEZONE_API_BASE = 'https://maps.googleapis.com/maps/api/timezone';
 
@@ -104,7 +105,7 @@ export class GoogleTimezoneClient {
     url.searchParams.set('timestamp', String(ts));
     url.searchParams.set('key', this.config.apiKey);
 
-    console.log(`[GoogleTimezone] Making API call to /timezone/json for ${latitude},${longitude}`);
+    logApiCall('GoogleTimezone', `/timezone/json (${latitude},${longitude})`);
 
     const context: ErrorContext = {
       operation: 'fetch time zone',

@@ -5,6 +5,14 @@ describe('request-logger', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   const originalEnv = process.env.LOG_MCP_REQUESTS;
 
+  // The logger emits a single `[MCP Request] <json>` line. Strip the scope
+  // prefix and parse the JSON payload back out for assertions.
+  const parsePayload = (callIndex = 0): any => {
+    const line = consoleLogSpy.mock.calls[callIndex][0] as string;
+    expect(line.startsWith('[MCP Request] ')).toBe(true);
+    return JSON.parse(line.slice('[MCP Request] '.length));
+  };
+
   beforeEach(() => {
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   });
@@ -61,9 +69,7 @@ describe('request-logger', () => {
       });
 
       expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-      const [prefix, payload] = consoleLogSpy.mock.calls[0];
-      expect(prefix).toBe('[MCP Request]');
-      const parsed = JSON.parse(payload as string);
+      const parsed = parsePayload(0);
       expect(parsed).toEqual({
         method: 'tools/call',
         id: 7,
@@ -87,7 +93,7 @@ describe('request-logger', () => {
       });
 
       expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-      const parsed = JSON.parse(consoleLogSpy.mock.calls[0][1] as string);
+      const parsed = parsePayload(0);
       expect(parsed).toEqual({
         method: 'initialize',
         id: 1,
@@ -106,7 +112,7 @@ describe('request-logger', () => {
         params: { name: 'get_athlete_profile', arguments: {} },
       });
 
-      const parsed = JSON.parse(consoleLogSpy.mock.calls[0][1] as string);
+      const parsed = parsePayload(0);
       expect(parsed).not.toHaveProperty('meta');
       expect(parsed.tool).toBe('get_athlete_profile');
     });
@@ -119,7 +125,7 @@ describe('request-logger', () => {
         method: 'tools/list',
       });
 
-      const parsed = JSON.parse(consoleLogSpy.mock.calls[0][1] as string);
+      const parsed = parsePayload(0);
       expect(parsed).toEqual({ method: 'tools/list', id: 3 });
     });
 
@@ -155,7 +161,7 @@ describe('request-logger', () => {
       process.env.LOG_MCP_REQUESTS = 'true';
       logMcpRequest({ jsonrpc: '2.0', id: 4, method: 'ping' });
       expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-      const parsed = JSON.parse(consoleLogSpy.mock.calls[0][1] as string);
+      const parsed = parsePayload(0);
       expect(parsed).toEqual({ method: 'ping', id: 4 });
     });
   });

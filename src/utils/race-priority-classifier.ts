@@ -20,6 +20,7 @@
 
 import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
+import { logWarn, logApiCall } from './logger.js';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { RacePriority } from '../types/index.js';
@@ -81,6 +82,7 @@ export async function classifyRacePriority(
 
   let raw: 'A' | 'B' | 'C' | 'none' | null = null;
   try {
+    logApiCall('Anthropic', `race-priority (model=${getClassifierModel()})`, 'messages.parse');
     const message = await anthropic.messages.parse({
       model: getClassifierModel(),
       max_tokens: 64,
@@ -98,7 +100,7 @@ export async function classifyRacePriority(
     raw = message.parsed_output?.priority ?? null;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('[race-priority-classifier] Failed to classify priority:', msg);
+    logWarn('race-priority-classifier', `Failed to classify priority: ${msg}`);
     return null;
   }
 

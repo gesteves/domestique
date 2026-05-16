@@ -92,6 +92,7 @@ import {
 } from '../utils/temperature-metrics.js';
 import { IntervalsApiError, type ErrorContext } from '../errors/index.js';
 import { httpRequestJson, httpRequestVoid } from './http.js';
+import { logApiCall, logWarn } from '../utils/logger.js';
 import { memoize } from '../utils/memo.js';
 import { subDays, format, parseISO } from 'date-fns';
 
@@ -825,7 +826,7 @@ export class IntervalsClient {
     try {
       return await this.fetchTimezone();
     } catch (error) {
-      console.error('Error fetching athlete timezone, defaulting to UTC:', error);
+      logWarn('Intervals', 'Error fetching athlete timezone, defaulting to UTC', error);
       return 'UTC';
     }
   }
@@ -1393,11 +1394,7 @@ export class IntervalsClient {
     params?: Record<string, string>,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
-    if (endpoint) {
-      console.log(`[Intervals] Making API call to ${endpoint}`);
-    } else {
-      console.log(`[Intervals] Making API call`);
-    }
+    logApiCall('Intervals', endpoint || '/');
 
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
     if (params) {
@@ -1430,7 +1427,7 @@ export class IntervalsClient {
     endpoint: string,
     context?: { operation: string }
   ): Promise<T> {
-    console.log(`[Intervals] Making API call to /activity/${activityId}${endpoint}`);
+    logApiCall('Intervals', `/activity/${activityId}${endpoint}`);
 
     const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
 
@@ -2225,7 +2222,7 @@ export class IntervalsClient {
     } catch (error) {
       // Source attribution is best-effort: never let a profile-fetch failure
       // sink the whole wellness call. Surface the wellness data without sources.
-      console.error('Error fetching wellness source configuration:', error);
+      logWarn('Intervals', 'Error fetching wellness source configuration', error);
       return wellness;
     }
     const sources: Record<string, string> = {};
@@ -2307,6 +2304,7 @@ export class IntervalsClient {
   async updateWellnessBulk(
     records: Array<Partial<IntervalsWellness> & { id: string }>
   ): Promise<void> {
+    logApiCall('Intervals', '/wellness-bulk', 'PUT');
     const url = new URL(
       `${INTERVALS_API_BASE}/athlete/${this.config.athleteId}/wellness-bulk`
     );
@@ -3095,6 +3093,7 @@ export class IntervalsClient {
     body: unknown,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
+    logApiCall('Intervals', endpoint, 'POST');
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
     return httpRequestJson<T>({
       url: url.toString(),
@@ -3118,6 +3117,7 @@ export class IntervalsClient {
     body: unknown,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
+    logApiCall('Intervals', endpoint, 'PUT');
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
     return httpRequestJson<T>({
       url: url.toString(),
@@ -3140,6 +3140,7 @@ export class IntervalsClient {
     endpoint: string,
     context?: { operation: string; resource?: string }
   ): Promise<void> {
+    logApiCall('Intervals', endpoint, 'DELETE');
     const url = new URL(`${INTERVALS_API_BASE}/athlete/${this.config.athleteId}${endpoint}`);
     return httpRequestVoid({
       url: url.toString(),
@@ -3164,6 +3165,7 @@ export class IntervalsClient {
     queryParams?: Record<string, string | boolean>,
     context?: { operation: string; resource?: string }
   ): Promise<T> {
+    logApiCall('Intervals', `/activity/${activityId}${endpoint}`, 'PUT');
     const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
 
     if (queryParams) {

@@ -6,6 +6,7 @@ import { formatDuration } from '../utils/format-units.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
 import { httpRequestText } from './http.js';
+import { logApiCall, logWarn, logError } from '../utils/logger.js';
 import { categorizeAnnotation } from '../utils/annotation-categorizer.js';
 import { classifyRacePriority } from '../utils/race-priority-classifier.js';
 import {
@@ -35,7 +36,7 @@ export class TrainerRoadClient {
    * Fetch and parse the iCalendar feed (always fresh, no caching)
    */
   private async fetchCalendar(): Promise<CalendarEvent[]> {
-    console.log(`[TrainerRoad] Fetching calendar`);
+    logApiCall('TrainerRoad', 'calendar');
 
     const errorContext = {
       operation: 'fetch planned workouts',
@@ -66,14 +67,16 @@ export class TrainerRoadClient {
 
       const event = component as ical.VEvent;
       if (!event.start || !event.summary) {
-        console.warn(
-          `[TrainerRoad] Skipping VEVENT missing start or summary (uid=${event.uid ?? 'unknown'})`
+        logWarn(
+          'TrainerRoad',
+          `Skipping VEVENT missing start or summary (uid=${event.uid ?? 'unknown'})`
         );
         continue;
       }
       if (!(event.start instanceof Date)) {
-        console.warn(
-          `[TrainerRoad] Skipping VEVENT with non-Date start (uid=${event.uid ?? 'unknown'})`
+        logWarn(
+          'TrainerRoad',
+          `Skipping VEVENT with non-Date start (uid=${event.uid ?? 'unknown'})`
         );
         continue;
       }
@@ -114,7 +117,7 @@ export class TrainerRoadClient {
         await rememberMarkers(seen);
       }
     } catch (error) {
-      console.error('[TrainerRoad] Failed to cache phase markers:', error);
+      logError('TrainerRoad', 'Failed to cache phase markers', error);
     }
   }
 

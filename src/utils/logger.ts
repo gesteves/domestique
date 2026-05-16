@@ -60,6 +60,100 @@ export function _setBugsnagClientForTesting(client: BugsnagClient | null): void 
   bugsnagClient = client;
 }
 
+/**
+ * Severity levels, lowest to highest. `debug` is suppressed unless
+ * `LOG_LEVEL=debug` so verbose, normally-uninteresting churn (Whoop token
+ * rotation, Redis lock dance) stays out of production logs but can be flipped
+ * back on without a code change when a token bug recurs.
+ */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const LEVEL_ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+
+/** Resolve the configured floor from LOG_LEVEL; anything below it is dropped. Defaults to `info`. */
+function configuredLevel(): LogLevel {
+  const raw = (process.env.LOG_LEVEL ?? 'info').toLowerCase();
+  return raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error' ? raw : 'info';
+}
+
+function shouldLog(level: LogLevel): boolean {
+  return LEVEL_ORDER[level] >= LEVEL_ORDER[configuredLevel()];
+}
+
+/** Every log line is `[scope] message`; Fly prepends its own timestamp and level. */
+function format(scope: string, message: string): string {
+  return `[${scope}] ${message}`;
+}
+
+/**
+ * Report a non-API error to Bugsnag. Synthesizes an Error from the message
+ * when the caller didn't have an Error in hand (e.g. a logged failure string),
+ * so failures are still grouped and visible in Bugsnag.
+ */
+function reportToBugsnag(scope: string, message: string, error?: unknown): void {
+  if (!bugsnagClient) return;
+  const err = error instanceof Error ? error : new Error(`${scope}: ${message}`);
+  bugsnagClient.notify(err, (event) => {
+    event.context = scope;
+    event.addMetadata('log', { scope, message });
+  });
+}
+
+/** Verbose diagnostic line, suppressed unless `LOG_LEVEL=debug`. */
+export function logDebug(scope: string, message: string): void {
+  if (shouldLog('debug')) console.log(format(scope, message));
+}
+
+/** Normal operational line (API calls, tool invocations, webhook lifecycle). */
+export function logInfo(scope: string, message: string): void {
+  if (shouldLog('info')) console.log(format(scope, message));
+}
+
+/** Render an optional thrown value into a trailing `: <reason>` suffix. */
+function withCause(message: string, error?: unknown): string {
+  if (error === undefined) return message;
+  const reason = error instanceof Error ? error.message : String(error);
+  return `${message}: ${reason}`;
+}
+
+/**
+ * Recoverable / expected-but-notable condition. Not reported to Bugsnag —
+ * use this for best-effort degradations whose underlying API error was
+ * already logged and reported at the client layer (`logApiError`), so we
+ * don't double-report.
+ */
+export function logWarn(scope: string, message: string, error?: unknown): void {
+  if (shouldLog('warn')) console.warn(format(scope, withCause(message, error)));
+}
+
+/**
+ * Failure. Always emitted (regardless of LOG_LEVEL) and always reported to
+ * Bugsnag when configured. Pass the originating error for a stack trace and
+ * accurate Bugsnag grouping.
+ */
+export function logError(scope: string, message: string, error?: unknown): void {
+  console.error(format(scope, message));
+  if (error instanceof Error && error.stack) {
+    console.error(format(scope, `Stack: ${error.stack}`));
+  } else if (error !== undefined && !(error instanceof Error)) {
+    console.error(format(scope, `Cause: ${String(error)}`));
+  }
+  reportToBugsnag(scope, message, error);
+}
+
+/**
+ * Standardized outbound-API-call line: `[Source] METHOD path`. Use the
+ * service name as the scope (e.g. `Intervals`, `Whoop`, `GoogleGeocoding`).
+ */
+export function logApiCall(source: string, path: string, method: string = 'GET'): void {
+  logInfo(source, `${method} ${path}`);
+}
+
+/** Standardized MCP-tool-invocation line: `[Tool] <name> called`. */
+export function logToolCall(toolName: string): void {
+  logInfo('Tool', `${toolName} called`);
+}
+
 interface ApiErrorLogContext {
   /** The source service (intervals, whoop, trainerroad) */
   source: string;

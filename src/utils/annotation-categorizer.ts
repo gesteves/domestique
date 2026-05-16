@@ -12,6 +12,7 @@
 
 import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
+import { logWarn, logApiCall } from './logger.js';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import type { AnnotationCategory } from '../types/index.js';
@@ -69,6 +70,7 @@ export async function categorizeAnnotation(
 
   let category: AnnotationCategory | null = null;
   try {
+    logApiCall('Anthropic', `annotation-categorizer (model=${getClassifierModel()})`, 'messages.parse');
     const message = await anthropic.messages.parse({
       model: getClassifierModel(),
       max_tokens: 256,
@@ -86,7 +88,7 @@ export async function categorizeAnnotation(
     category = message.parsed_output?.category ?? null;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('[annotation-categorizer] Failed to classify annotation:', msg);
+    logWarn('annotation-categorizer', `Failed to classify annotation: ${msg}`);
     return null;
   }
 

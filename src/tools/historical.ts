@@ -1,3 +1,4 @@
+import { logWarn } from '../utils/logger.js';
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { LastFmClient } from '../clients/lastfm.js';
@@ -93,18 +94,18 @@ export class HistoricalTools {
         skipExpensiveCalls: true,
       }),
       this.intervals.getAnnotations(startDate, endDate).catch((e) => {
-        console.error('Error fetching Intervals.icu annotations for activity history:', e);
+        logWarn('HistoricalTools', 'Error fetching Intervals.icu annotations for activity history', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(startDate, endDate, timezone).catch((e) => {
-            console.error('Error fetching TrainerRoad annotations for activity history:', e);
+            logWarn('HistoricalTools', 'Error fetching TrainerRoad annotations for activity history', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(startDate, endDate).catch((e) => {
-            console.error('Error fetching TrainerRoad phase starts for activity history:', e);
+            logWarn('HistoricalTools', 'Error fetching TrainerRoad phase starts for activity history', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),

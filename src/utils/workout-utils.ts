@@ -1,3 +1,4 @@
+import { logWarn } from './logger.js';
 import { findMatchingWhoopActivity } from './activity-matcher.js';
 import type { IntervalsClient } from '../clients/intervals.js';
 import type { WhoopClient } from '../clients/whoop.js';
@@ -109,7 +110,7 @@ export async function enrichWorkoutsWithWhoop(
     const whoopActivities = await whoop.getWorkouts(startDate, endDate);
     return workouts.map((w) => ({ ...w, whoop: matchWhoopActivity(w, whoopActivities) }));
   } catch (error) {
-    console.error('Error fetching Whoop activities for matching:', error);
+    logWarn('WorkoutUtils', 'Error fetching Whoop activities for matching', error);
     return workouts.map((w) => ({ ...w, whoop: null, whoop_unavailable: true }));
   }
 }
@@ -162,11 +163,11 @@ export async function fetchAndMergePlannedWorkouts(
 ): Promise<PlannedWorkout[]> {
   const [trWorkouts, icuWorkouts] = await Promise.all([
     trainerroad?.getPlannedWorkouts(startDate, endDate, timezone).catch((e) => {
-      console.error('Error fetching TrainerRoad workouts:', e);
+      logWarn('WorkoutUtils', 'Error fetching TrainerRoad workouts', e);
       return [];
     }) ?? Promise.resolve([]),
     intervals.getPlannedEvents(startDate, endDate).catch((e) => {
-      console.error('Error fetching Intervals.icu events:', e);
+      logWarn('WorkoutUtils', 'Error fetching Intervals.icu events', e);
       return [];
     }),
   ]);

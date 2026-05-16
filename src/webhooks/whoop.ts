@@ -9,6 +9,7 @@ import {
 } from '../utils/activity-description.js';
 import { getDescriptionModel } from '../utils/classifier-model.js';
 import { runWithUnitPreferences } from '../utils/unit-context.js';
+import { logInfo, logWarn, logError } from '../utils/logger.js';
 import { isMissingCustomFieldError } from '../errors/index.js';
 import type { IntervalsClient } from '../clients/intervals.js';
 import type { WhoopClient } from '../clients/whoop.js';
@@ -107,7 +108,7 @@ export function createWhoopWebhookHandler(deps: WhoopWebhookDeps) {
   return async (req: Request, res: Response): Promise<void> => {
     const rawBody = req.body as Buffer;
     if (!Buffer.isBuffer(rawBody)) {
-      console.error('[WhoopWebhook] Handler invoked without a raw Buffer body — check route middleware');
+      logError('WhoopWebhook', 'Handler invoked without a raw Buffer body — check route middleware');
       res.status(500).json({ error: 'Server configuration error' });
       return;
     }
@@ -147,29 +148,39 @@ export function createWhoopWebhookHandler(deps: WhoopWebhookDeps) {
     try {
       expectedUserId = await deps.whoop.getUserId();
     } catch (error) {
-      console.error('[WhoopWebhook] Failed to resolve authenticated Whoop user_id:', error);
+      logError('WhoopWebhook', 'Failed to resolve authenticated Whoop user_id', error);
       res.status(500).json({ error: 'Unable to verify user identity' });
       return;
     }
 
     if (payload.user_id !== expectedUserId) {
-      console.warn(
-        `[WhoopWebhook] Rejecting event for user_id=${payload.user_id} ` +
+      logWarn(
+        'WhoopWebhook',
+        `Rejecting event for user_id=${payload.user_id} ` +
         `(expected ${expectedUserId}, type=${payload.type}, trace=${payload.trace_id})`
       );
       res.status(403).json({ error: 'user_id does not match configured athlete' });
       return;
     }
 
+    logInfo('WhoopWebhook', `Received ${payload.type} (id=${payload.id}, trace=${payload.trace_id})`);
     res.status(200).json({ ok: true });
 
     // Fire-and-forget. Errors logged; cannot reach Whoop after we've responded.
-    void dispatchWhoopWebhook(payload, deps).catch((error) => {
-      console.error(
-        `[WhoopWebhook] Dispatch failed for trace=${payload.trace_id} type=${payload.type}:`,
-        error
-      );
-    });
+    void dispatchWhoopWebhook(payload, deps)
+      .then(() =>
+        logInfo(
+          'WhoopWebhook',
+          `Processed ${payload.type} (trace=${payload.trace_id})`
+        )
+      )
+      .catch((error) => {
+        logError(
+          'WhoopWebhook',
+          `Dispatch failed for ${payload.type} (trace=${payload.trace_id})`,
+          error
+        );
+      });
   };
 }
 
@@ -202,8 +213,9 @@ export async function dispatchWhoopWebhook(
   if (payload.type === 'workout.updated') {
     const whoopActivity = await whoop.getWorkoutById(payload.id);
     if (!whoopActivity) {
-      console.log(
-        `[WhoopWebhook] workout.updated ${payload.id} not found or not SCORED yet — skipping`
+      logInfo(
+        'WhoopWebhook',
+        `workout.updated ${payload.id} not found or not SCORED yet — skipping`
       );
       return;
     }
@@ -228,8 +240,9 @@ export async function dispatchWhoopWebhook(
     );
 
     if (!match) {
-      console.log(
-        `[WhoopWebhook] workout.updated ${payload.id}: no matching Intervals.icu activity ` +
+      logInfo(
+        'WhoopWebhook',
+        `workout.updated ${payload.id}: no matching Intervals.icu activity ` +
         `on ${workoutYMD} — skipping (will reconcile on read)`
       );
       return;
@@ -251,9 +264,9 @@ export async function dispatchWhoopWebhook(
     try {
       await maybeGenerateActivityDescription(match.id, whoopActivity, deps);
     } catch (error) {
-      console.error(
-        `[WhoopWebhook] description-generation failed for activity ${match.id} ` +
-        `(trace=${payload.trace_id}):`,
+      logError(
+        'WhoopWebhook',
+        `description-generation failed for activity ${match.id} (trace=${payload.trace_id})`,
         error
       );
     }
@@ -290,8 +303,9 @@ async function maybeGenerateActivityDescription(
   deps: WhoopWebhookDeps
 ): Promise<void> {
   if (inFlightDescriptions.has(activityId)) {
-    console.log(
-      `[WhoopWebhook] activity ${activityId}: description already being generated — skipping duplicate`
+    logInfo(
+      'WhoopWebhook',
+      `activity ${activityId}: description already being generated — skipping duplicate`
     );
     return;
   }
@@ -316,8 +330,9 @@ async function runDescriptionGeneration(
     const full = await intervals.getActivity(activityId);
 
     if (full.pool_length) {
-      console.log(
-        `[WhoopWebhook] activity ${activityId} is a pool swim — skipping description generation`
+      logInfo(
+        'WhoopWebhook',
+        `activity ${activityId} is a pool swim — skipping description generation`
       );
       return;
     }
@@ -346,12 +361,12 @@ async function runDescriptionGeneration(
     });
 
     if (!description) {
-      console.log(`[WhoopWebhook] activity ${activityId}: composed description was empty — skipping write`);
+      logInfo('WhoopWebhook', `activity ${activityId}: composed description was empty — skipping write`);
       return;
     }
 
     await intervals.updateActivity(activityId, { description });
-    console.log(`[WhoopWebhook] activity ${activityId}: description updated (${description.length} chars)`);
+    logInfo('WhoopWebhook', `activity ${activityId}: description updated (${description.length} chars)`);
   });
 }
 
@@ -378,7 +393,7 @@ async function resolvePlannedSummary(
   const timezone = await deps.intervals.getAthleteTimezone();
 
   const planned = await deps.trainerroad.getPlannedWorkouts(date, date, timezone).catch((error) => {
-    console.warn(`[WhoopWebhook] failed to fetch TrainerRoad planned workouts for ${date}:`, error);
+    logWarn('WhoopWebhook', `failed to fetch TrainerRoad planned workouts for ${date}: ${error instanceof Error ? error.message : String(error)}`);
     return [];
   });
 
@@ -392,15 +407,17 @@ async function resolvePlannedSummary(
   );
 
   if (matches.length === 0) {
-    console.log(
-      `[WhoopWebhook] no TR planned workout name appears in activity name "${activityName}" on ${date} — no headline`
+    logInfo(
+      'WhoopWebhook',
+      `no TR planned workout name appears in activity name "${activityName}" on ${date} — no headline`
     );
     return null;
   }
 
   if (matches.length > 1) {
-    console.warn(
-      `[WhoopWebhook] ambiguous TR name match for activity "${activityName}" on ${date}: ` +
+    logWarn(
+      'WhoopWebhook',
+      `ambiguous TR name match for activity "${activityName}" on ${date}: ` +
       `${matches.map((m) => m.name).join(', ')} — refusing to pick, skipping headline`
     );
     return null;
@@ -408,8 +425,9 @@ async function resolvePlannedSummary(
 
   const match = matches[0];
   if (!match.description || !match.description.trim()) {
-    console.log(
-      `[WhoopWebhook] TR planned workout "${match.name}" has no description on ${date} — no headline`
+    logInfo(
+      'WhoopWebhook',
+      `TR planned workout "${match.name}" has no description on ${date} — no headline`
     );
     return null;
   }
@@ -425,7 +443,7 @@ async function refreshDailyWhoopStrain(
   const days = await whoop.getStrainData(dateYMD, dateYMD);
   const day = days.find((d) => d.date === dateYMD);
   if (!day) {
-    console.log(`[WhoopWebhook] No Whoop strain data for ${dateYMD} — leaving wellness untouched`);
+    logInfo('WhoopWebhook', `No Whoop strain data for ${dateYMD} — leaving wellness untouched`);
     return;
   }
   await writeCustomField(
@@ -448,21 +466,24 @@ async function refreshSleepPerformance(
   const { intervals, whoop } = deps;
   const sleep = await whoop.getSleepById(sleepId);
   if (!sleep) {
-    console.log(
-      `[WhoopWebhook] sleep ${sleepId} not found or not SCORED — skipping WhoopSleepPerformance`
+    logInfo(
+      'WhoopWebhook',
+      `sleep ${sleepId} not found or not SCORED — skipping WhoopSleepPerformance`
     );
     return;
   }
   if (sleep.nap) {
-    console.log(
-      `[WhoopWebhook] sleep ${sleepId} is a nap — skipping WhoopSleepPerformance`
+    logInfo(
+      'WhoopWebhook',
+      `sleep ${sleepId} is a nap — skipping WhoopSleepPerformance`
     );
     return;
   }
   const performance = sleep.score?.sleep_performance_percentage;
   if (performance == null) {
-    console.log(
-      `[WhoopWebhook] sleep ${sleepId} has no sleep_performance_percentage — skipping`
+    logInfo(
+      'WhoopWebhook',
+      `sleep ${sleepId} has no sleep_performance_percentage — skipping`
     );
     return;
   }
@@ -487,15 +508,17 @@ async function refreshRecovery(
   const { intervals, whoop } = deps;
   const sleep = await whoop.getSleepById(sleepId);
   if (!sleep) {
-    console.log(
-      `[WhoopWebhook] sleep ${sleepId} not found or not SCORED — skipping WhoopRecovery`
+    logInfo(
+      'WhoopWebhook',
+      `sleep ${sleepId} not found or not SCORED — skipping WhoopRecovery`
     );
     return;
   }
   const recovery = await whoop.getRecoveryForCycle(sleep.cycle_id);
   if (!recovery) {
-    console.log(
-      `[WhoopWebhook] no SCORED recovery for cycle ${sleep.cycle_id} — skipping WhoopRecovery`
+    logInfo(
+      'WhoopWebhook',
+      `no SCORED recovery for cycle ${sleep.cycle_id} — skipping WhoopRecovery`
     );
     return;
   }
@@ -523,11 +546,12 @@ async function writeCustomField(
 ): Promise<void> {
   try {
     await write();
-    console.log(`[WhoopWebhook] Updated ${target} ${fieldName} ${successDetail}`);
+    logInfo('WhoopWebhook', `Updated ${target} ${fieldName} ${successDetail}`);
   } catch (error) {
     if (isMissingCustomFieldError(error)) {
-      console.warn(
-        `[WhoopWebhook] ${target}: Intervals.icu rejected ${fieldName} (422). ` +
+      logWarn(
+        'WhoopWebhook',
+        `${target}: Intervals.icu rejected ${fieldName} (422). ` +
         `Create the custom field in Intervals.icu → Settings → Custom Fields to enable this. ` +
         `Response: ${error.responseBody ?? '(empty)'}`
       );
