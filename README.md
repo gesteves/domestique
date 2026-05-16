@@ -116,6 +116,9 @@ For Anthropic API integration:
 - `ANTHROPIC_WORKOUT_MODEL` - Optional override for the model used by the `create_workout` / `update_workout` structure-to-syntax converter. Defaults to `claude-sonnet-4-6`.
 - `ANTHROPIC_TOKEN_COUNTER_MODEL` - Optional override for the model used by dev-only debug token counting. Defaults to `claude-haiku-4-5`.
 
+For shared-secret webhooks (optional):
+- `WEBHOOK_SECRET` - Authenticates `POST /webhooks/location` and `POST /webhooks/regenerate-descriptions` (Bearer header or `?token=`). Generate with `openssl rand -hex 32`.
+
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.
 
@@ -144,6 +147,10 @@ When Whoop is configured, Domestique exposes `POST /webhooks/whoop` and uses it 
 - Activity: `WhoopWorkoutStrain` (Number)
 
 **One-time setup in Whoop** — in your Whoop developer dashboard, add the webhook URL `https://{your-host}/webhooks/whoop` and select **Model Version: v2**.
+
+### Regenerate-descriptions Webhook (optional)
+
+When `WEBHOOK_SECRET` is set, Domestique exposes `POST /webhooks/regenerate-descriptions`, which regenerates the descriptions of a day's activities exactly as the Whoop `workout.updated` webhook does per-activity. Send an optional JSON body `{ "date": "YYYY-MM-DD" }` (defaults to today in the athlete's timezone); it's authenticated with the shared `WEBHOOK_SECRET` and processes in the background.
 
 ## Local Development
 

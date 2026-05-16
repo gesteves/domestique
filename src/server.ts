@@ -7,6 +7,7 @@ import { ToolRegistry } from './tools/index.js';
 import { logMcpRequest, isMcpRequestLoggingEnabled } from './utils/request-logger.js';
 import { createWhoopWebhookHandler } from './webhooks/whoop.js';
 import { createLocationWebhookHandler } from './webhooks/location.js';
+import { createRegenerateDescriptionsWebhookHandler } from './webhooks/regenerate-descriptions.js';
 import { logInfo, logError } from './utils/logger.js';
 
 export interface ServerOptions {
@@ -69,21 +70,46 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
   // geocoding/timezone clients are configured.
   const geocodingForLocation = toolRegistry.getGoogleGeocodingClient();
   const timezoneForLocation = toolRegistry.getGoogleTimezoneClient();
-  if (config.locationWebhookSecret && geocodingForLocation && timezoneForLocation) {
+  if (config.webhookSecret && geocodingForLocation && timezoneForLocation) {
     app.post(
       '/webhooks/location',
       createLocationWebhookHandler({
         intervals: toolRegistry.getIntervalsClient(),
         geocoding: geocodingForLocation,
         timezone: timezoneForLocation,
-        secret: config.locationWebhookSecret,
+        secret: config.webhookSecret,
       })
     );
     logInfo('Server', 'Location webhook receiver registered at POST /webhooks/location');
   } else {
     logInfo(
       'Server',
-      'Location webhook receiver not registered (set LOCATION_WEBHOOK_SECRET and GOOGLE_API_KEY)'
+      'Location webhook receiver not registered (set WEBHOOK_SECRET and GOOGLE_API_KEY)'
+    );
+  }
+
+  // Regenerate-descriptions webhook receiver. Authenticated with the same
+  // shared secret as the location webhook (no HMAC), so it can run after
+  // express.json() and read the parsed body. Whoop/TrainerRoad are optional —
+  // without them the description just omits the Whoop strain / planned lines.
+  if (config.webhookSecret) {
+    app.post(
+      '/webhooks/regenerate-descriptions',
+      createRegenerateDescriptionsWebhookHandler({
+        intervals: toolRegistry.getIntervalsClient(),
+        whoop: toolRegistry.getWhoopClient(),
+        trainerroad: toolRegistry.getTrainerRoadClient(),
+        secret: config.webhookSecret,
+      })
+    );
+    logInfo(
+      'Server',
+      'Regenerate-descriptions webhook receiver registered at POST /webhooks/regenerate-descriptions'
+    );
+  } else {
+    logInfo(
+      'Server',
+      'Regenerate-descriptions webhook receiver not registered (set WEBHOOK_SECRET)'
     );
   }
 

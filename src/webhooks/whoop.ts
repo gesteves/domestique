@@ -1,20 +1,15 @@
 import type { Request, Response } from 'express';
 import { createHmac } from 'crypto';
 import { secureCompare } from '../auth/middleware.js';
-import { findMatchingWhoopActivity, areActivityTypesCompatible } from '../utils/activity-matcher.js';
+import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import { addDaysToYMD, formatYMDFromOffset, formatYMDInTimezone } from '../utils/tz.js';
 import {
-  generateActivityDescription,
-  type PlannedSummaryInput,
-} from '../utils/activity-description.js';
-import { getDescriptionModel } from '../utils/classifier-model.js';
-import { runWithUnitPreferences } from '../utils/unit-context.js';
+  maybeGenerateActivityDescription,
+  type DescriptionRegenDeps,
+} from '../services/description-regen.js';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
 import { isMissingCustomFieldError } from '../errors/index.js';
-import type { IntervalsClient } from '../clients/intervals.js';
 import type { WhoopClient } from '../clients/whoop.js';
-import type { TrainerRoadClient } from '../clients/trainerroad.js';
-import type { ActivityType, NormalizedWorkout, StrainActivity, WhoopMatchedData } from '../types/index.js';
 
 /** Maximum clock skew tolerated between Whoop's signing timestamp and our clock. */
 const MAX_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
@@ -36,29 +31,12 @@ export interface WhoopWebhookPayload {
   trace_id: string;
 }
 
-export interface WhoopWebhookDeps {
-  intervals: IntervalsClient;
+export interface WhoopWebhookDeps extends DescriptionRegenDeps {
+  /** Whoop client is required for the Whoop webhook (HMAC + workout/sleep lookups). */
   whoop: WhoopClient;
-  /** Optional — required only for headline generation on workout.updated. */
-  trainerroad: TrainerRoadClient | null;
   /** Whoop OAuth client_secret — used as the HMAC signing key. */
   clientSecret: string;
 }
-
-/** Activity types eligible for an LLM-generated headline. */
-const HEADLINE_SPORTS: ReadonlySet<ActivityType> = new Set<ActivityType>(['Cycling', 'Running']);
-
-/**
- * Activity IDs currently being processed for description generation, used
- * to dedupe rapid duplicate `workout.updated` webhooks for the same
- * activity. Two events ~100ms apart would otherwise both spawn full
- * description-generation passes — 2× LLM tokens, redundant PUTs, and the
- * second clobbering the first.
- *
- * Scope: single-process only. Multi-process or rolling-restart races
- * aren't addressed — those are bounded enough not to warrant Redis.
- */
-const inFlightDescriptions = new Set<string>();
 
 /**
  * Runtime shape check for a Whoop webhook payload. The HMAC has already
@@ -288,151 +266,6 @@ export async function dispatchWhoopWebhook(
     // end-date and to look up the cycle the recovery is scored against.
     await refreshRecovery(payload.id, deps);
   }
-}
-
-/**
- * Compose a description for the matched Intervals.icu activity and PUT it
- * back. Skips pool swims. Deduped against concurrent webhooks for the same
- * activity via `inFlightDescriptions`. Runs under the athlete's unit
- * preferences so pre-formatted strings (power, temperature, etc.) on the
- * activity respect their settings.
- */
-async function maybeGenerateActivityDescription(
-  activityId: string,
-  whoopActivity: StrainActivity,
-  deps: WhoopWebhookDeps
-): Promise<void> {
-  if (inFlightDescriptions.has(activityId)) {
-    logInfo(
-      'WhoopWebhook',
-      `activity ${activityId}: description already being generated — skipping duplicate`
-    );
-    return;
-  }
-  inFlightDescriptions.add(activityId);
-  try {
-    await runDescriptionGeneration(activityId, whoopActivity, deps);
-  } finally {
-    inFlightDescriptions.delete(activityId);
-  }
-}
-
-async function runDescriptionGeneration(
-  activityId: string,
-  whoopActivity: StrainActivity,
-  deps: WhoopWebhookDeps
-): Promise<void> {
-  const { intervals } = deps;
-
-  const prefs = await intervals.getUnitPreferences();
-
-  await runWithUnitPreferences(prefs, async () => {
-    const full = await intervals.getActivity(activityId);
-
-    if (full.pool_length) {
-      logInfo(
-        'WhoopWebhook',
-        `activity ${activityId} is a pool swim — skipping description generation`
-      );
-      return;
-    }
-
-    const plannedSummary = await resolvePlannedSummary(full, deps);
-    const activityDate = full.start_time.slice(0, 10);
-    const heatAdaptationScore = await intervals.getCoreHeatAdaptationScore(activityDate);
-
-    const whoopMatched: WhoopMatchedData = {
-      id: whoopActivity.id,
-      strain_score: whoopActivity.strain_score,
-      average_heart_rate: whoopActivity.average_heart_rate,
-      max_heart_rate: whoopActivity.max_heart_rate,
-      calories: whoopActivity.calories,
-      distance: whoopActivity.distance,
-      elevation_gain: whoopActivity.elevation_gain,
-      zone_durations: whoopActivity.zone_durations,
-    };
-
-    const description = await generateActivityDescription({
-      activity: full,
-      whoop: whoopMatched,
-      plannedSummary,
-      heatAdaptationScore,
-      model: getDescriptionModel(),
-    });
-
-    if (!description) {
-      logInfo('WhoopWebhook', `activity ${activityId}: composed description was empty — skipping write`);
-      return;
-    }
-
-    await intervals.updateActivity(activityId, { description });
-    logInfo('WhoopWebhook', `activity ${activityId}: description updated (${description.length} chars)`);
-  });
-}
-
-/**
- * Resolve the single TrainerRoad planned workout whose name appears verbatim
- * in the completed activity's name, scoped to cycling and running only.
- *
- * Rules:
- *   - Cycling and Running only — other sports never get a headline.
- *   - Requires `activity.name` and a configured TrainerRoad client.
- *   - Same-day, sport-compatible planned workouts only.
- *   - **Case-sensitive** `activity.name.includes(planned.name)` match.
- *   - Exactly one match → return it. Zero or ≥2 (ambiguous) → null.
- */
-async function resolvePlannedSummary(
-  activity: NormalizedWorkout,
-  deps: WhoopWebhookDeps
-): Promise<PlannedSummaryInput | null> {
-  if (!activity.activity_type || !HEADLINE_SPORTS.has(activity.activity_type)) return null;
-  if (!deps.trainerroad) return null;
-  if (!activity.name) return null;
-
-  const date = activity.start_time.slice(0, 10);
-  const timezone = await deps.intervals.getAthleteTimezone();
-
-  const planned = await deps.trainerroad.getPlannedWorkouts(date, date, timezone).catch((error) => {
-    logWarn('WhoopWebhook', `failed to fetch TrainerRoad planned workouts for ${date}: ${error instanceof Error ? error.message : String(error)}`);
-    return [];
-  });
-
-  const activityName = activity.name;
-  const matches = planned.filter(
-    (p) =>
-      p.sport &&
-      areActivityTypesCompatible(activity.activity_type!, p.sport) &&
-      p.name &&
-      activityName.includes(p.name)
-  );
-
-  if (matches.length === 0) {
-    logInfo(
-      'WhoopWebhook',
-      `no TR planned workout name appears in activity name "${activityName}" on ${date} — no headline`
-    );
-    return null;
-  }
-
-  if (matches.length > 1) {
-    logWarn(
-      'WhoopWebhook',
-      `ambiguous TR name match for activity "${activityName}" on ${date}: ` +
-      `${matches.map((m) => m.name).join(', ')} — refusing to pick, skipping headline`
-    );
-    return null;
-  }
-
-  const match = matches[0];
-  if (!match.description || !match.description.trim()) {
-    logInfo(
-      'WhoopWebhook',
-      `TR planned workout "${match.name}" has no description on ${date} — no headline`
-    );
-    return null;
-  }
-
-  return { description: match.description };
 }
 
 async function refreshDailyWhoopStrain(
