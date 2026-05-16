@@ -1,16 +1,18 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import { IntervalsClient } from '../clients/intervals.js';
-import { WhoopClient } from '../clients/whoop.js';
-import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { LastFmClient } from '../clients/lastfm.js';
-import { GoogleWeatherClient } from '../clients/google-weather.js';
-import { GoogleAirQualityClient } from '../clients/google-air-quality.js';
-import { GooglePollenClient } from '../clients/google-pollen.js';
-import { GoogleElevationClient } from '../clients/google-elevation.js';
-import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
-import { GoogleTimezoneClient } from '../clients/google-timezone.js';
+import {
+  IntervalsClient,
+  WhoopClient,
+  TrainerRoadClient,
+  LastFmClient,
+  GoogleWeatherClient,
+  GoogleAirQualityClient,
+  GooglePollenClient,
+  GoogleElevationClient,
+  GoogleGeocodingClient,
+  GoogleTimezoneClient,
+} from '../clients/index.js';
 import { CurrentTools } from './current.js';
 
 // Common annotation presets for tool categories. All four hints are set
