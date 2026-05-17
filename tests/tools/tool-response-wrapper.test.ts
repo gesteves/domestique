@@ -209,7 +209,7 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(25);
+      expect(registeredHandlers.size).toBe(26);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_todays_summary')).toBe(true);
@@ -237,6 +237,7 @@ describe('Tool Response Wrapper', () => {
       expect(registeredHandlers.has('create_annotation')).toBe(true);
       expect(registeredHandlers.has('update_annotation')).toBe(true);
       expect(registeredHandlers.has('delete_annotation')).toBe(true);
+      expect(registeredHandlers.has('regenerate_descriptions')).toBe(true);
     });
 
     it('should set up timezone getter when Whoop client is configured', async () => {

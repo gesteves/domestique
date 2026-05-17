@@ -764,6 +764,17 @@ export class ToolRegistry {
       });
     }
 
+    register({
+      name: 'regenerate_descriptions',
+      title: 'Regenerate Activity Descriptions',
+      description: `Regenerates the Strava-ready descriptions of every eligible activity on a day, exactly as the Whoop \`workout.updated\` webhook does per-activity — useful when descriptions are missing or stale (e.g. after editing an activity, or a Whoop match arriving late). Pass \`date\` as YYYY-MM-DD; omit for today in the athlete's timezone. Pool swims and unavailable Strava imports are skipped; activities without a Whoop match still get a description, just without the strain line. Returns which activity IDs were regenerated vs. skipped. Requires \`ANTHROPIC_API_KEY\` (the description generator); without it every activity fails and \`regenerated\` is empty. This is the same operation the \`POST /api/activities/descriptions\` endpoint performs.`,
+      inputSchema: schemas.regenerateDescriptionsInputSchema,
+      outputSchema: schemas.regenerateDescriptionsOutputSchema,
+      annotations: MODIFIES_EXTERNAL,
+      handler: async (args: { date?: string }) =>
+        this.currentTools.regenerateDescriptions(args),
+    });
+
     // ============================================
     // Analysis Tools
     // ============================================

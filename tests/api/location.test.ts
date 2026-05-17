@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
-import { createLocationWebhookHandler } from '../../src/webhooks/location.js';
+import { createLocationApiHandler } from '../../src/api/location.js';
 import type { IntervalsClient } from '../../src/clients/intervals.js';
 
-const SECRET = 'location-webhook-secret';
+const SECRET = 'location-api-secret';
 
 const JACKSON_COMPONENTS = [
   { long_name: 'Wilson', short_name: 'Wilson', types: ['locality'] },
@@ -37,11 +37,11 @@ function makeDeps() {
 function makeApp(deps: ReturnType<typeof makeDeps>['deps']) {
   const app = express();
   app.use(express.json());
-  app.post('/webhooks/location', createLocationWebhookHandler(deps as never));
+  app.put('/api/location', createLocationApiHandler(deps as never));
   return app;
 }
 
-async function post(
+async function put(
   app: express.Express,
   body: unknown,
   opts: { auth?: string; query?: string } = {}
@@ -53,8 +53,8 @@ async function post(
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (opts.auth) headers.Authorization = opts.auth;
         const res = await fetch(
-          `http://127.0.0.1:${port}/webhooks/location${opts.query ?? ''}`,
-          { method: 'POST', headers, body: JSON.stringify(body) }
+          `http://127.0.0.1:${port}/api/location${opts.query ?? ''}`,
+          { method: 'PUT', headers, body: JSON.stringify(body) }
         );
         const json = await res.json().catch(() => ({}));
         server.close();
@@ -67,18 +67,29 @@ async function post(
   });
 }
 
-describe('location webhook', () => {
+describe('PUT /api/location', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('401 when no token is provided', async () => {
     const { deps } = makeDeps();
-    const res = await post(makeApp(deps), { latitude: 43.48, longitude: -110.76 });
+    const res = await put(makeApp(deps), { latitude: 43.48, longitude: -110.76 });
     expect(res.status).toBe(401);
+  });
+
+  it('401 when the secret is only supplied as a query parameter', async () => {
+    const { deps, intervals } = makeDeps();
+    const res = await put(
+      makeApp(deps),
+      { latitude: 43.48, longitude: -110.76 },
+      { query: `?token=${SECRET}` }
+    );
+    expect(res.status).toBe(401);
+    expect(intervals.updateAthleteProfile).not.toHaveBeenCalled();
   });
 
   it('403 when the token is wrong', async () => {
     const { deps } = makeDeps();
-    const res = await post(makeApp(deps), { latitude: 43.48, longitude: -110.76 }, {
+    const res = await put(makeApp(deps), { latitude: 43.48, longitude: -110.76 }, {
       auth: 'Bearer nope',
     });
     expect(res.status).toBe(403);
@@ -86,7 +97,7 @@ describe('location webhook', () => {
 
   it('400 when coordinates are missing or invalid', async () => {
     const { deps } = makeDeps();
-    const res = await post(makeApp(deps), { latitude: 999, longitude: 'x' }, {
+    const res = await put(makeApp(deps), { latitude: 999, longitude: 'x' }, {
       auth: `Bearer ${SECRET}`,
     });
     expect(res.status).toBe(400);
@@ -94,7 +105,7 @@ describe('location webhook', () => {
 
   it('200 and applies the location with a valid Bearer token', async () => {
     const { deps, intervals } = makeDeps();
-    const res = await post(makeApp(deps), { latitude: 43.48, longitude: -110.76 }, {
+    const res = await put(makeApp(deps), { latitude: 43.48, longitude: -110.76 }, {
       auth: `Bearer ${SECRET}`,
     });
     expect(res.status).toBe(200);
@@ -105,12 +116,12 @@ describe('location webhook', () => {
     expect(intervals.updateWeatherConfig).toHaveBeenCalled();
   });
 
-  it('accepts the secret via ?token= and string coordinates', async () => {
+  it('accepts string coordinates with a valid Bearer token', async () => {
     const { deps } = makeDeps();
-    const res = await post(
+    const res = await put(
       makeApp(deps),
       { latitude: '43.48', longitude: '-110.76' },
-      { query: `?token=${SECRET}` }
+      { auth: `Bearer ${SECRET}` }
     );
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);

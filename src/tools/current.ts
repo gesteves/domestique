@@ -9,7 +9,7 @@ import { GoogleElevationClient } from '../clients/google-elevation.js';
 import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
 import { GoogleTimezoneClient } from '../clients/google-timezone.js';
 import { fromZonedTime } from 'date-fns-tz';
-import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD } from '../utils/tz.js';
+import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD, parseYMD } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
 import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
@@ -17,6 +17,7 @@ import { mergeRaces } from '../utils/race-utils.js';
 import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
 import { parseCoordinates } from '../utils/location-context.js';
 import { applyLocation } from '../services/location-sync.js';
+import { regenerateDayDescriptions, type RegenerateDayResult } from '../services/description-regen.js';
 import type {
   StrainData,
   AthleteProfile,
@@ -360,6 +361,29 @@ export class CurrentTools {
       profile_updated: result.profileUpdated,
       weather_config_updated: result.weatherConfigUpdated,
     };
+  }
+
+  /**
+   * Regenerate the Strava-ready descriptions of every eligible activity on a
+   * day, exactly as the Whoop `workout.updated` webhook does per-activity.
+   * `date` is strict YYYY-MM-DD; omit for today in the athlete's timezone.
+   * Unlike the fire-and-forget `POST /api/activities/descriptions` endpoint,
+   * this awaits the work and returns the structured result. Shares the same
+   * core (`regenerateDayDescriptions`).
+   */
+  async regenerateDescriptions(args: { date?: string } = {}): Promise<RegenerateDayResult> {
+    let date: string | null = null;
+    if (args.date !== undefined && args.date !== null && String(args.date) !== '') {
+      date = parseYMD(args.date);
+      if (!date) {
+        throw new Error('date must be a valid YYYY-MM-DD string');
+      }
+    }
+    return await regenerateDayDescriptions(date, {
+      intervals: this.intervals,
+      whoop: this.whoop,
+      trainerroad: this.trainerroad,
+    });
   }
 
   async getWeatherForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {

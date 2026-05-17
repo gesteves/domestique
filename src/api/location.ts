@@ -4,8 +4,8 @@ import { parseCoordinates } from '../utils/location-context.js';
 import { applyLocation, type LocationSyncDeps } from '../services/location-sync.js';
 import { logInfo, logError } from '../utils/logger.js';
 
-export interface LocationWebhookDeps extends LocationSyncDeps {
-  /** Shared secret the iOS Shortcut must present (Bearer header or ?token=). */
+export interface LocationApiDeps extends LocationSyncDeps {
+  /** Shared secret the caller must present as `Authorization: Bearer <secret>`. */
   secret: string;
 }
 
@@ -20,24 +20,22 @@ function toNumber(value: unknown): number | undefined {
 }
 
 /**
- * Webhook receiver for nightly location updates from an iOS Shortcut. Accepts
- * `POST { latitude, longitude }`, authenticated with a dedicated shared secret
- * (Authorization: Bearer <secret>, or ?token=<secret>). Unlike the Whoop
- * webhook this processes synchronously and returns the result, since the
- * Shortcut/user benefits from a real success/failure response and the work is
- * a few API calls.
+ * `PUT /api/location` — sets the athlete's current location from a JSON body
+ * `{ latitude, longitude }` (typically an iOS Shortcut posting the device's
+ * GPS). Idempotent: `applyLocation` skips Intervals.icu writes that would be
+ * no-ops, so it's safe to call repeatedly. Authenticated with a dedicated
+ * shared secret presented as `Authorization: Bearer <secret>` — no
+ * query-string auth or inputs. Processes synchronously and returns the result,
+ * since the caller benefits from a real success/failure response and the work
+ * is only a few API calls.
  */
-export function createLocationWebhookHandler(deps: LocationWebhookDeps) {
+export function createLocationApiHandler(deps: LocationApiDeps) {
   return async (req: Request, res: Response): Promise<void> => {
-    // --- Auth (mirrors validateToken: Bearer header, then ?token= query) ---
-    let providedToken: string | undefined;
+    // --- Auth: Authorization: Bearer <secret> only ---
     const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      providedToken = authHeader.slice(7);
-    }
-    if (!providedToken && typeof req.query.token === 'string') {
-      providedToken = req.query.token;
-    }
+    const providedToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : undefined;
     if (!providedToken) {
       res.status(401).json({ error: 'Authentication token required' });
       return;
@@ -58,13 +56,13 @@ export function createLocationWebhookHandler(deps: LocationWebhookDeps) {
     }
     const { latitude, longitude } = coords;
 
-    logInfo('LocationWebhook', `Received location update (${latitude},${longitude})`);
+    logInfo('LocationApi', `Received location update (${latitude},${longitude})`);
     try {
       const result = await applyLocation(latitude, longitude, deps);
-      logInfo('LocationWebhook', `Applied location update (${latitude},${longitude})`);
+      logInfo('LocationApi', `Applied location update (${latitude},${longitude})`);
       res.status(200).json({ ok: true, ...result });
     } catch (error) {
-      logError('LocationWebhook', 'Failed to apply location update', error);
+      logError('LocationApi', 'Failed to apply location update', error);
       res.status(500).json({ error: 'Failed to apply location update' });
     }
   };

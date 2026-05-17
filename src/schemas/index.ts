@@ -1120,3 +1120,13 @@ export const updateLocationOutputSchema = {
   profile_updated: z.boolean().describe('Whether the Intervals.icu athlete profile was changed (false if already current)'),
   weather_config_updated: z.boolean().describe('Whether the Intervals.icu weather config was changed (false if already current)'),
 } as const;
+
+export const regenerateDescriptionsInputSchema = {
+  date: z.string().optional().describe('Day to regenerate, as YYYY-MM-DD. Omit for today in the athlete\'s timezone'),
+} as const;
+
+export const regenerateDescriptionsOutputSchema = {
+  date: z.string().describe('The day whose activity descriptions were regenerated (YYYY-MM-DD)'),
+  regenerated: z.array(z.string()).describe('Activity IDs a description regeneration was attempted for'),
+  skipped: z.array(z.string()).describe('Activity IDs skipped (pool swim or unavailable Strava import)'),
+} as const;

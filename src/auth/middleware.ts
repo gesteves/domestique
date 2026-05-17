@@ -96,7 +96,8 @@ export function getConfig() {
   return {
     port: parseInt(process.env.PORT ?? '3000', 10),
     mcpAuthToken: process.env.MCP_AUTH_TOKEN!,
-    webhookSecret: process.env.WEBHOOK_SECRET ?? null,
+    // Authenticates the caller-initiated /api endpoints.
+    apiSecret: process.env.API_SECRET ?? null,
     intervals: {
       apiKey: process.env.INTERVALS_API_KEY!,
       athleteId: process.env.INTERVALS_ATHLETE_ID!,

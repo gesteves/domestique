@@ -16,6 +16,30 @@ export function getTodayInTimezone(timezone: string): string {
 }
 
 /**
+ * Strict YYYY-MM-DD parse that also rejects impossible calendar dates
+ * (e.g. 2026-02-30). Returns the trimmed date string when valid, else null.
+ * Does not resolve relative dates ("today") — callers that need a default
+ * should substitute one explicitly.
+ */
+export function parseYMD(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!m) return null;
+  const [, y, mo, d] = m;
+  const date = new Date(`${trimmed}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  if (
+    date.getUTCFullYear() !== Number(y) ||
+    date.getUTCMonth() + 1 !== Number(mo) ||
+    date.getUTCDate() !== Number(d)
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+/**
  * Add a (possibly negative) number of days to a YYYY-MM-DD string.
  * Operates on UTC components only, so the result is independent of the JS runtime's timezone.
  */

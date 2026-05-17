@@ -7,7 +7,8 @@
  *     the matched workout) and by the day orchestrator below.
  *   - `regenerateDayDescriptions` — every eligible activity on a given day
  *     (or today), matching Whoop workouts where possible. Used by the
- *     `/webhooks/regenerate-descriptions` webhook.
+ *     `POST /api/activities/descriptions` endpoint and the
+ *     `regenerate_descriptions` MCP tool.
  */
 
 import {

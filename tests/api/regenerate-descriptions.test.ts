@@ -7,18 +7,18 @@ vi.mock('../../src/services/description-regen.js', () => ({
     .mockResolvedValue({ date: '2024-12-15', regenerated: [], skipped: [] }),
 }));
 
-import { createRegenerateDescriptionsWebhookHandler } from '../../src/webhooks/regenerate-descriptions.js';
+import { createRegenerateDescriptionsApiHandler } from '../../src/api/regenerate-descriptions.js';
 import { regenerateDayDescriptions } from '../../src/services/description-regen.js';
 
-const SECRET = 'webhook-secret';
+const SECRET = 'api-secret';
 const regenMock = regenerateDayDescriptions as unknown as ReturnType<typeof vi.fn>;
 
 function makeApp() {
   const app = express();
   app.use(express.json());
   app.post(
-    '/webhooks/regenerate-descriptions',
-    createRegenerateDescriptionsWebhookHandler({
+    '/api/activities/descriptions',
+    createRegenerateDescriptionsApiHandler({
       intervals: {} as never,
       whoop: null,
       trainerroad: null,
@@ -40,7 +40,7 @@ async function post(
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (opts.auth) headers.Authorization = opts.auth;
         const res = await fetch(
-          `http://127.0.0.1:${port}/webhooks/regenerate-descriptions${opts.query ?? ''}`,
+          `http://127.0.0.1:${port}/api/activities/descriptions${opts.query ?? ''}`,
           { method: 'POST', headers, body: JSON.stringify(body) }
         );
         const json = await res.json().catch(() => ({}));
@@ -54,19 +54,26 @@ async function post(
   });
 }
 
-/** Drain the fire-and-forget Promise chain scheduled after the 200 response. */
+/** Drain the fire-and-forget Promise chain scheduled after the 202 response. */
 async function flushAsync(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
   await Promise.resolve();
   await Promise.resolve();
 }
 
-describe('regenerate-descriptions webhook', () => {
+describe('POST /api/activities/descriptions', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('401 when no token is provided', async () => {
     const res = await post({});
     expect(res.status).toBe(401);
+    expect(regenMock).not.toHaveBeenCalled();
+  });
+
+  it('401 when the secret is only supplied as a query parameter', async () => {
+    const res = await post({ date: '2024-12-15' }, { query: `?token=${SECRET}` });
+    expect(res.status).toBe(401);
+    await flushAsync();
     expect(regenMock).not.toHaveBeenCalled();
   });
 
@@ -82,18 +89,18 @@ describe('regenerate-descriptions webhook', () => {
     expect(regenMock).not.toHaveBeenCalled();
   });
 
-  it('200 immediately and regenerates today when no date is given', async () => {
+  it('202 immediately and regenerates today when no date is given', async () => {
     const res = await post({}, { auth: `Bearer ${SECRET}` });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect(res.body.ok).toBe(true);
     await flushAsync();
     expect(regenMock).toHaveBeenCalledTimes(1);
     expect(regenMock.mock.calls[0][0]).toBeNull();
   });
 
-  it('200 and regenerates the given date, accepting the secret via ?token=', async () => {
-    const res = await post({ date: '2024-12-15' }, { query: `?token=${SECRET}` });
-    expect(res.status).toBe(200);
+  it('202 and regenerates the given date with a valid Bearer token', async () => {
+    const res = await post({ date: '2024-12-15' }, { auth: `Bearer ${SECRET}` });
+    expect(res.status).toBe(202);
     await flushAsync();
     expect(regenMock).toHaveBeenCalledTimes(1);
     expect(regenMock.mock.calls[0][0]).toBe('2024-12-15');
