@@ -90,6 +90,43 @@ END:VCALENDAR`;
       expect(result[0].source).toBe('trainerroad');
     });
 
+    it('should trim trailing whitespace from the SUMMARY name', async () => {
+      // TrainerRoad iCal SUMMARY values can carry a trailing space, e.g.
+      // "2:00 - Tortoise Shell ". Left intact it breaks `activity.name`
+      // `includes(planned.name)` matching for activity-description headlines.
+      // Trailing space built explicitly so editors/linters can't silently strip it.
+      const summaryLine = `SUMMARY:2:00 - Tortoise Shell${' '}`;
+      const icsWithTrailingSpace = [
+        'BEGIN:VCALENDAR',
+        'PRODID:-// Trainer Road LLC// Cycling// EN',
+        'VERSION:2.0',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        'TRANSP:TRANSPARENT',
+        'DTSTART;VALUE=DATE:20241216',
+        'DTEND;VALUE=DATE:20241217',
+        'DTSTAMP:20241215T120000Z',
+        'UID:workout-ts@trainerroad.com',
+        'STATUS:CONFIRMED',
+        summaryLine,
+        'DESCRIPTION:TSS 86, IF 0.66, kJ(Cal) 1332.  Description: Aerobic endurance.',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(icsWithTrailingSpace),
+      });
+
+      const result = await client.getPlannedWorkouts('2024-12-16', '2024-12-16');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Tortoise Shell');
+      expect('Zwift - TrainerRoad: Tortoise Shell'.includes(result[0].name)).toBe(true);
+    });
+
     it('should parse TSS from description', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
