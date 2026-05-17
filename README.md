@@ -11,7 +11,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Fitness trends (CTL/ATL/TSB) and detailed workout analysis with intervals, notes, and weather
 - Heat strain and heat adaptation score from a [CORE Body Temperature](https://corebodytemp.com/) sensor
 - Weather, AQI, and pollen forecasts up to 10 days out for Intervals.icu weather locations or any geocoded place
-- Whoop webhook receiver: refreshes daily Whoop strain on Intervals.icu wellness, sets per-activity Whoop strain on the matched Intervals.icu activity, and auto-generates an activity description on completion
+- Generates activity descriptions for Strava
 
 **Note:** Workouts imported from Strava can't be analyzed due to API restrictions. Sync them from Zwift, Garmin Connect, Dropbox, etc. instead.
 
