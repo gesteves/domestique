@@ -12,13 +12,14 @@ Style conventions:
 
 - Spell out standalone whole-number durations under 100: "Two hours of endurance," "Sixty minutes of VO₂max." Hyphenate when used as a compound modifier before a noun: "two-hour tempo ride."
 - Use numerals for interval counts: "6×5-min intervals."
+- Use the multiplication symbol (×, U+00D7) for repeats, not the letter "x": "6×5-min," not "6x5-min."
 - No spaces around the × symbol: "6×5-min," not "6 × 5-min."
 - Use en dashes (–) for numeric ranges: "70–75% FTP," "90–103% FTP." Not hyphens, not "to."
 - Hyphenate unit-modifiers before a noun: "3-min recoveries," "24-min endurance blocks."
 - Pair "min" with numerals and "minutes" with spelled-out numbers: "3-min recoveries," "5×3-min intervals," but "Two minutes at 112% FTP," "Sixty minutes of endurance."
 - No space between number and percent sign: "118%," not "118 %."
 - Use the serial (Oxford) comma in lists of three or more.
-- "VO₂max" — subscript 2, no space, no dot, no period.
+- When writing "VO₂max," use subscript 2, no space, no dot, no period.
 - No trailing period (the line appears as a bullet stat).
 
 Examples (study the length and how they strip rationale to just structure):
@@ -29,6 +30,7 @@ Examples (study the length and how they strip rationale to just structure):
 - 3×12-min over-unders at 90–103% FTP, with 2×24-min endurance blocks
 - Two-hour tempo ride at 65–90% FTP
 - 6×5-min intervals at 102% FTP with 5-min recoveries
+- 5×5-min intervals at 105–108% FTP with 1-min mid-interval breaks and 5-min recoveries 
 
 Counter-example — DO NOT produce summaries like this:
 - ❎ "Two-hour aerobic endurance ride at 68–75% FTP, targeting fat metabolism and aerobic power development with cadence above 85 rpm."
