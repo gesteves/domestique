@@ -40,14 +40,14 @@ describe('CurrentTools.regenerateDescriptions', () => {
     const result = await tools.regenerateDescriptions();
     expect(result).toEqual({ date: '2024-12-15', regenerated: ['a1'], skipped: ['a2'] });
     expect(regenMock).toHaveBeenCalledTimes(1);
-    expect(regenMock.mock.calls[0][0]).toBeNull();
+    expect(regenMock.mock.calls[0][0]).toEqual({ date: null });
     expect(regenMock.mock.calls[0][1]).toEqual({ intervals, whoop, trainerroad });
   });
 
   it('passes a valid YYYY-MM-DD date through', async () => {
     const { tools } = makeTools();
     await tools.regenerateDescriptions({ date: '2024-12-15' });
-    expect(regenMock.mock.calls[0][0]).toBe('2024-12-15');
+    expect(regenMock.mock.calls[0][0]).toEqual({ date: '2024-12-15' });
   });
 
   it('rejects an impossible date without calling the service', async () => {
@@ -56,5 +56,13 @@ describe('CurrentTools.regenerateDescriptions', () => {
       /valid YYYY-MM-DD/i
     );
     expect(regenMock).not.toHaveBeenCalled();
+  });
+
+  it('passes activity_id through, taking precedence over (and not validating) date', async () => {
+    const { tools } = makeTools();
+    await tools.regenerateDescriptions({ activity_id: ' i123 ', date: '2024-13-40' });
+    // Trimmed; date is ignored entirely (not validated) when activity_id is set.
+    expect(regenMock).toHaveBeenCalledTimes(1);
+    expect(regenMock.mock.calls[0][0]).toEqual({ activityId: 'i123' });
   });
 });

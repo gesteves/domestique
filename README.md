@@ -42,7 +42,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `sync_trainerroad_runs` - Sync running workouts from TrainerRoad to Intervals.icu, detecting changes and orphans.
 - `set_workout_intervals` - Set intervals on a completed activity.
 - `update_activity` - Update name and/or description of a completed activity.
-- `regenerate_descriptions` - Regenerate the descriptions of a day's completed activities.
+- `regenerate_descriptions` - Regenerate the descriptions of a day's completed activities, or a single activity by ID.
 
 ### Calendar Annotations
 - `create_annotation` - Add a sick/injured/holiday/note annotation to the Intervals.icu calendar.
@@ -154,7 +154,7 @@ When Whoop is configured, Domestique exposes `POST /webhooks/whoop` and uses it 
 When `API_SECRET` is set, Domestique exposes two HTTP endpoints for callers like iOS Shortcuts, authenticated with `Authorization: Bearer <API_SECRET>`:
 
 - `PUT /api/location` — sets the athlete's current location from a JSON body `{ "latitude", "longitude" }` (also requires `GOOGLE_API_KEY`). Same as the `update_location` tool.
-- `POST /api/activities/descriptions` — regenerates a day's activity descriptions. Optional JSON body `{ "date": "YYYY-MM-DD" }`, defaults to today. Same as the `regenerate_descriptions` tool.
+- `POST /api/activities/descriptions` — regenerates a day's activity descriptions. Optional JSON body `{ "date": "YYYY-MM-DD" }` (defaults to today) or `{ "activity_id": "..." }` to regenerate a single activity (takes precedence over `date`). Same as the `regenerate_descriptions` tool.
 
 ## Local Development
 

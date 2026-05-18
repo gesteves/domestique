@@ -15,10 +15,11 @@ export interface RegenerateDescriptionsApiDeps extends DescriptionRegenDeps {
 /**
  * `POST /api/activities/descriptions` — regenerates the descriptions of a
  * day's activities, just as the Whoop `workout.updated` webhook does
- * per-activity. Accepts an optional JSON body `{ date: "YYYY-MM-DD" }`; with
- * no date it uses the current day in the athlete's timezone. Authenticated
- * with a dedicated shared secret presented as `Authorization: Bearer
- * <secret>` — no query-string auth or inputs.
+ * per-activity. Accepts an optional JSON body `{ date: "YYYY-MM-DD",
+ * activity_id: "..." }`; `activity_id` regenerates just that one activity and
+ * takes precedence over `date`, with no date it uses the current day in the
+ * athlete's timezone. Authenticated with a dedicated shared secret presented
+ * as `Authorization: Bearer <secret>` — no query-string auth or inputs.
  *
  * Non-idempotent batch processing action: a day can be several activities ×
  * multiple LLM calls, so it's fire-and-forget — we respond `202 Accepted`
@@ -44,26 +45,36 @@ export function createRegenerateDescriptionsApiHandler(
       return;
     }
 
-    // --- Body: optional date (defaults to today in the athlete's tz) ---
+    // --- Body: optional activity_id (precedence) or date (defaults to today) ---
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const rawDate = body.date;
+
+    const rawActivityId = body.activity_id;
+    const activityId =
+      rawActivityId != null && String(rawActivityId).trim() !== ''
+        ? String(rawActivityId).trim()
+        : null;
+
     let date: string | null = null;
-    if (rawDate !== undefined && rawDate !== null && rawDate !== '') {
-      date = parseYMD(rawDate);
-      if (!date) {
-        res.status(400).json({ error: 'date must be a valid YYYY-MM-DD string' });
-        return;
+    if (!activityId) {
+      const rawDate = body.date;
+      if (rawDate !== undefined && rawDate !== null && rawDate !== '') {
+        date = parseYMD(rawDate);
+        if (!date) {
+          res.status(400).json({ error: 'date must be a valid YYYY-MM-DD string' });
+          return;
+        }
       }
     }
 
+    const targetLabel = activityId ? `activity ${activityId}` : `date ${date ?? 'today'}`;
     logInfo(
       'DescriptionApi',
-      `Received regenerate-descriptions request (date=${date ?? 'today'})`
+      `Received regenerate-descriptions request (${targetLabel})`
     );
     res.status(202).json({ ok: true });
 
     // Fire-and-forget. Errors logged; cannot reach the caller after we respond.
-    void regenerateDayDescriptions(date, deps)
+    void regenerateDayDescriptions({ activityId, date }, deps)
       .then((result) =>
         logInfo(
           'DescriptionApi',
@@ -74,7 +85,7 @@ export function createRegenerateDescriptionsApiHandler(
       .catch((error) => {
         logError(
           'DescriptionApi',
-          `Failed to regenerate descriptions (date=${date ?? 'today'})`,
+          `Failed to regenerate descriptions (${targetLabel})`,
           error
         );
       });

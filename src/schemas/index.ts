@@ -1122,7 +1122,8 @@ export const updateLocationOutputSchema = {
 } as const;
 
 export const regenerateDescriptionsInputSchema = {
-  date: z.string().optional().describe('Day to regenerate, as YYYY-MM-DD. Omit for today in the athlete\'s timezone'),
+  activity_id: z.string().optional().describe('Intervals.icu activity ID to regenerate. Takes precedence over date; when set, only this activity is regenerated'),
+  date: z.string().optional().describe('Day to regenerate, as YYYY-MM-DD. Omit for today in the athlete\'s timezone. Ignored when activity_id is set'),
 } as const;
 
 export const regenerateDescriptionsOutputSchema = {

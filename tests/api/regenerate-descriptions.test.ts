@@ -95,7 +95,7 @@ describe('POST /api/activities/descriptions', () => {
     expect(res.body.ok).toBe(true);
     await flushAsync();
     expect(regenMock).toHaveBeenCalledTimes(1);
-    expect(regenMock.mock.calls[0][0]).toBeNull();
+    expect(regenMock.mock.calls[0][0]).toEqual({ activityId: null, date: null });
   });
 
   it('202 and regenerates the given date with a valid Bearer token', async () => {
@@ -103,6 +103,18 @@ describe('POST /api/activities/descriptions', () => {
     expect(res.status).toBe(202);
     await flushAsync();
     expect(regenMock).toHaveBeenCalledTimes(1);
-    expect(regenMock.mock.calls[0][0]).toBe('2024-12-15');
+    expect(regenMock.mock.calls[0][0]).toEqual({ activityId: null, date: '2024-12-15' });
+  });
+
+  it('202 and regenerates a single activity_id, taking precedence over date', async () => {
+    // Malformed date must NOT 400 when activity_id is present (date ignored).
+    const res = await post(
+      { activity_id: ' i123 ', date: '2024-13-40' },
+      { auth: `Bearer ${SECRET}` }
+    );
+    expect(res.status).toBe(202);
+    await flushAsync();
+    expect(regenMock).toHaveBeenCalledTimes(1);
+    expect(regenMock.mock.calls[0][0]).toEqual({ activityId: 'i123', date: null });
   });
 });

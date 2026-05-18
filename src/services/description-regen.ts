@@ -69,21 +69,42 @@ export interface RegenerateDayResult {
   skipped: string[];
 }
 
+/** What to regenerate: a single activity, or a whole day. */
+export interface RegenerateTarget {
+  /**
+   * Regenerate just this activity. Takes precedence over `date` when both
+   * are given — `date` is then ignored entirely (not even validated by
+   * callers). The result's `date` is the activity's own start date.
+   */
+  activityId?: string | null;
+  /**
+   * Regenerate every eligible activity on this day (YYYY-MM-DD). Used only
+   * when `activityId` is absent; null/undefined → today in the athlete's
+   * timezone.
+   */
+  date?: string | null;
+}
+
 /**
- * Regenerate the descriptions of every eligible activity on a day. When
- * `dateYMD` is null, uses today in the athlete's timezone. Whoop workouts
- * for the day are matched per-activity where possible; activities without a
- * match still get a description (just no 🔥 Whoop strain line). Pool swims
- * and unavailable Strava imports are skipped. Per-activity failures are
- * isolated so one bad activity can't abort the rest.
+ * Regenerate Strava-ready activity descriptions for a single activity
+ * (`target.activityId`) or for every eligible activity on a day
+ * (`target.date`, or today when null). `activityId` takes precedence over
+ * `date`. Whoop workouts for the relevant day are matched per-activity where
+ * possible; activities without a match still get a description (just no 🔥
+ * Whoop strain line). Pool swims and unavailable Strava imports are skipped.
+ * Per-activity failures are isolated so one bad activity can't abort the rest.
  */
 export async function regenerateDayDescriptions(
-  dateYMD: string | null,
+  target: RegenerateTarget,
   deps: DescriptionRegenDeps
 ): Promise<RegenerateDayResult> {
+  if (target.activityId) {
+    return regenerateSingleActivityDescription(target.activityId, deps);
+  }
+
   const { intervals, whoop } = deps;
 
-  const date = dateYMD ?? getTodayInTimezone(await intervals.getAthleteTimezone());
+  const date = target.date ?? getTodayInTimezone(await intervals.getAthleteTimezone());
 
   const activities = await intervals.getActivities(date, date, undefined, {
     skipExpensiveCalls: true,
@@ -129,6 +150,58 @@ export async function regenerateDayDescriptions(
   );
 
   return { date, regenerated, skipped };
+}
+
+/**
+ * Regenerate the description for a single activity. The activity is fetched
+ * to derive its date (used for the result and for Whoop matching) and to
+ * apply the same pool-swim / unavailable-Strava-import skip rules as the
+ * day path. A per-activity failure is logged and yields an empty result
+ * (neither regenerated nor skipped), mirroring the day loop's isolation.
+ */
+async function regenerateSingleActivityDescription(
+  activityId: string,
+  deps: DescriptionRegenDeps
+): Promise<RegenerateDayResult> {
+  const { intervals, whoop } = deps;
+
+  const activity = await intervals.getActivity(activityId);
+  const date = activity.start_time.slice(0, 10);
+
+  if (activity.unavailable || activity.pool_length) {
+    logInfo(
+      'DescriptionRegen',
+      `${date}: activity ${activityId} skipped (pool swim or unavailable Strava import)`
+    );
+    return { date, regenerated: [], skipped: [activityId] };
+  }
+
+  let whoopWorkouts: StrainActivity[] = [];
+  if (whoop) {
+    try {
+      whoopWorkouts = await whoop.getWorkouts(date, date);
+    } catch (error) {
+      logWarn(
+        'DescriptionRegen',
+        `failed to fetch Whoop workouts for ${date} — proceeding without Whoop strain`,
+        error
+      );
+    }
+  }
+
+  const match = findMatchingWhoopActivity(activity, whoopWorkouts);
+  try {
+    await maybeGenerateActivityDescription(activityId, match, deps);
+    logInfo('DescriptionRegen', `${date}: regenerated activity ${activityId}`);
+    return { date, regenerated: [activityId], skipped: [] };
+  } catch (error) {
+    logError(
+      'DescriptionRegen',
+      `description-generation failed for activity ${activityId} on ${date}`,
+      error
+    );
+    return { date, regenerated: [], skipped: [] };
+  }
 }
 
 /**

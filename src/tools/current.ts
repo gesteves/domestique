@@ -367,11 +367,29 @@ export class CurrentTools {
    * Regenerate the Strava-ready descriptions of every eligible activity on a
    * day, exactly as the Whoop `workout.updated` webhook does per-activity.
    * `date` is strict YYYY-MM-DD; omit for today in the athlete's timezone.
-   * Unlike the fire-and-forget `POST /api/activities/descriptions` endpoint,
-   * this awaits the work and returns the structured result. Shares the same
-   * core (`regenerateDayDescriptions`).
+   * A specific `activity_id` regenerates just that activity and takes
+   * precedence over `date` (which is then ignored). Unlike the
+   * fire-and-forget `POST /api/activities/descriptions` endpoint, this awaits
+   * the work and returns the structured result. Shares the same core
+   * (`regenerateDayDescriptions`).
    */
-  async regenerateDescriptions(args: { date?: string } = {}): Promise<RegenerateDayResult> {
+  async regenerateDescriptions(
+    args: { date?: string; activity_id?: string } = {}
+  ): Promise<RegenerateDayResult> {
+    const deps = {
+      intervals: this.intervals,
+      whoop: this.whoop,
+      trainerroad: this.trainerroad,
+    };
+
+    const activityId =
+      args.activity_id != null && String(args.activity_id).trim() !== ''
+        ? String(args.activity_id).trim()
+        : null;
+    if (activityId) {
+      return await regenerateDayDescriptions({ activityId }, deps);
+    }
+
     let date: string | null = null;
     if (args.date !== undefined && args.date !== null && String(args.date) !== '') {
       date = parseYMD(args.date);
@@ -379,11 +397,7 @@ export class CurrentTools {
         throw new Error('date must be a valid YYYY-MM-DD string');
       }
     }
-    return await regenerateDayDescriptions(date, {
-      intervals: this.intervals,
-      whoop: this.whoop,
-      trainerroad: this.trainerroad,
-    });
+    return await regenerateDayDescriptions({ date }, deps);
   }
 
   async getWeatherForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {

@@ -87,7 +87,7 @@ describe('regenerateDayDescriptions', () => {
       ]),
     };
 
-    const result = await regenerateDayDescriptions('2024-12-15', makeDeps(intervals, whoop));
+    const result = await regenerateDayDescriptions({ date: '2024-12-15' }, makeDeps(intervals, whoop));
 
     expect(result.date).toBe('2024-12-15');
     expect(result.regenerated).toEqual(['run-1']);
@@ -103,7 +103,7 @@ describe('regenerateDayDescriptions', () => {
     const intervals = makeIntervals();
     const deps = makeDeps(intervals);
 
-    const result = await regenerateDayDescriptions(null, deps);
+    const result = await regenerateDayDescriptions({ date: null }, deps);
 
     expect(intervals.getAthleteTimezone).toHaveBeenCalled();
     expect(result.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -135,7 +135,7 @@ describe('regenerateDayDescriptions', () => {
       }),
     });
 
-    const result = await regenerateDayDescriptions('2024-12-15', makeDeps(intervals, null));
+    const result = await regenerateDayDescriptions({ date: '2024-12-15' }, makeDeps(intervals, null));
 
     expect(result.regenerated).toEqual(['ride-1']);
     const [, body] = intervals.updateActivity.mock.calls[0];
@@ -161,10 +161,107 @@ describe('regenerateDayDescriptions', () => {
         }),
     });
 
-    const result = await regenerateDayDescriptions('2024-12-15', makeDeps(intervals));
+    const result = await regenerateDayDescriptions({ date: '2024-12-15' }, makeDeps(intervals));
 
     expect(result.regenerated).toEqual(['good']);
     expect(intervals.updateActivity).toHaveBeenCalledTimes(1);
     expect(intervals.updateActivity.mock.calls[0][0]).toBe('good');
+  });
+
+  describe('single activity_id target', () => {
+    it('regenerates only the given activity, deriving its date and matching Whoop', async () => {
+      const intervals = makeIntervals({
+        getActivity: vi.fn().mockResolvedValue({
+          id: 'run-9',
+          start_time: '2024-12-20T10:00:00+00:00',
+          activity_type: 'Running',
+          source: 'intervals.icu',
+        }),
+      });
+      const whoop = {
+        getWorkouts: vi.fn().mockResolvedValue([
+          {
+            id: 'w-9',
+            activity_type: 'Running',
+            start_time: '2024-12-20T10:01:00+00:00',
+            end_time: '2024-12-20T11:00:00+00:00',
+            duration: '1:00:00',
+            strain_score: 11.2,
+          },
+        ]),
+      };
+
+      const result = await regenerateDayDescriptions(
+        { activityId: 'run-9' },
+        makeDeps(intervals, whoop)
+      );
+
+      expect(result.date).toBe('2024-12-20');
+      expect(result.regenerated).toEqual(['run-9']);
+      expect(result.skipped).toEqual([]);
+      // Day listing must not be used on the single-activity path.
+      expect(intervals.getActivities).not.toHaveBeenCalled();
+      expect(whoop.getWorkouts).toHaveBeenCalledWith('2024-12-20', '2024-12-20');
+      const [id, body] = intervals.updateActivity.mock.calls[0];
+      expect(id).toBe('run-9');
+      expect(body.description).toContain('🔥 Whoop strain 11.2');
+    });
+
+    it('takes precedence over date and skips pool/unavailable activities', async () => {
+      const intervals = makeIntervals({
+        getActivity: vi.fn().mockResolvedValue({
+          id: 'pool-9',
+          start_time: '2024-12-20T07:00:00+00:00',
+          activity_type: 'Swimming',
+          pool_length: '25 m',
+        }),
+      });
+
+      const result = await regenerateDayDescriptions(
+        { activityId: 'pool-9', date: '2024-12-15' },
+        makeDeps(intervals)
+      );
+
+      expect(result.date).toBe('2024-12-20');
+      expect(result.regenerated).toEqual([]);
+      expect(result.skipped).toEqual(['pool-9']);
+      expect(intervals.getActivities).not.toHaveBeenCalled();
+      expect(intervals.updateActivity).not.toHaveBeenCalled();
+    });
+
+    it('propagates the initial fetch error (no date can be derived)', async () => {
+      const intervals = makeIntervals({
+        getActivity: vi.fn().mockRejectedValue(new Error('boom')),
+      });
+
+      await expect(
+        regenerateDayDescriptions({ activityId: 'broken' }, makeDeps(intervals))
+      ).rejects.toThrow('boom');
+    });
+
+    it('isolates a generation failure into an empty result', async () => {
+      // First getActivity (date derivation) succeeds; the second one, inside
+      // runDescriptionGeneration, fails — that failure is caught and isolated.
+      const intervals = makeIntervals({
+        getActivity: vi
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'run-9',
+            start_time: '2024-12-20T10:00:00+00:00',
+            activity_type: 'Running',
+          })
+          .mockRejectedValueOnce(new Error('boom')),
+      });
+
+      const result = await regenerateDayDescriptions(
+        { activityId: 'run-9' },
+        makeDeps(intervals)
+      );
+
+      expect(result.date).toBe('2024-12-20');
+      expect(result.regenerated).toEqual([]);
+      expect(result.skipped).toEqual([]);
+      expect(intervals.updateActivity).not.toHaveBeenCalled();
+    });
   });
 });
