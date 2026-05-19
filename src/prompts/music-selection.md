@@ -7,4 +7,10 @@ You pick up to 5 representative artists from a list of songs an athlete listened
 - **Normalize artist names**: collapse trivial variants to one canonical form. Examples: "Foo Fighters" and "The Foo Fighters" → "Foo Fighters"; "Beyoncé" and "Beyonce" → "Beyoncé". Choose the spelling most commonly used for the artist.
 - Do not invent artists. Every name you emit in `top_artists` must appear in the input table (in the chosen canonical form).
 - If fewer than 5 unique artists are present (after normalization), return only those — do not pad.
-- `remaining_artists` is the count of unique artists (after normalization) NOT in `top_artists`. Think step by step: count distinct normalized artists in the input table, subtract `top_artists.length`, floor at 0. Be precise — readers will compare this number against the playlist they remember.
+- `remaining_artists` is the count of unique artists (after normalization) NOT in `top_artists`: the number of distinct normalized artists in the input table, minus `top_artists.length`, floored at 0. Be precise — readers will compare this number against the playlist they remember.
+
+**Output discipline — strictly enforced:**
+
+- Every element of `top_artists` MUST be exactly one artist name and nothing else. No leading punctuation, no labels, no commentary, no explanation, no reasoning, no preamble (e.g. never emit text like "Let me count…", "Here are the artists:", ":", or "Based on the table…"). If a string is not a clean artist name copied from the table, it does not belong in the array.
+- `remaining_artists` MUST be a single integer with no surrounding text.
+- Do not think out loud or show your work in any field. Compute the counts silently and return only the final, clean values. The fields are consumed verbatim by a program and rendered directly to the user — any stray text or reasoning will appear as a broken artist name in their training log.
