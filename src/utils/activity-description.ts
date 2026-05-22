@@ -7,10 +7,11 @@
  * Whoop strain · Music. Pool swims are out of scope for the Whoop-webhook
  * caller; the orchestrator only handles non-pool activities.
  *
- * Planned summary, weather sentence, and music artist picks each come from
- * their own focused Anthropic `messages.parse()` call. The orchestrator
- * fires the three concurrently with `Promise.allSettled`, so a single
- * failed call loses only its own line instead of the entire description.
+ * The planned summary and weather sentence each come from their own focused
+ * Anthropic `messages.parse()` call; the orchestrator fires them concurrently
+ * with `Promise.allSettled`, so a single failed call loses only its own line
+ * instead of the entire description. The music line is built programmatically
+ * from the scrobbled-songs list — no LLM involved.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -141,50 +142,98 @@ export function buildWaterTempBlock(activity: NormalizedWorkout): string | null 
 }
 
 /**
- * Build the music line from the LLM's pre-picked artist list.
+ * Build the music line.
  *
  * Format: 🎧 Tracy Chapman, Radiohead, Crowded House, Johnny Cash, Tears for Fears, and 18 more
- * The "and N more" suffix is added only when `remaining` is a positive integer.
- *
- * Defensive against an over-eager model: caps `topArtists` at 5 and floors
- * `remaining` at 0.
+ * The "and N more" suffix is added only when more than 5 unique artists exist.
  */
-export function buildMusicBlock(
-  topArtists: string[] | null | undefined,
-  remaining: number | null | undefined
-): string | null {
-  if (!topArtists || topArtists.length === 0) return null;
-  const top = topArtists.slice(0, 5);
-  const safeRemaining =
-    typeof remaining === 'number' && Number.isFinite(remaining) ? Math.max(0, Math.floor(remaining)) : 0;
-  const suffix = safeRemaining > 0 ? `, and ${safeRemaining} more` : '';
+export function buildMusicBlock(songs: PlayedSong[] | undefined): string | null {
+  if (!songs || songs.length === 0) return null;
+  const { top, remaining } = pickTopArtists(songs);
+  if (top.length === 0) return null;
+  const suffix = remaining > 0 ? `, and ${remaining} more` : '';
   return `🎧 ${top.join(', ')}${suffix}`;
 }
 
 /**
- * Pick up to 5 unique artists at random from a played-songs list. Used as a
- * fallback only when `ANTHROPIC_API_KEY` is unset — the LLM normally handles
- * artist selection (with name normalization). This fallback is intentionally
- * dumb: case-sensitive uniqueness, no variant collapsing.
+ * Pick the top-5 artists from a played-songs list and report how many other
+ * unique artists were dropped. Scoring is deterministic:
+ *
+ *   score = 2 × (notable-track count) + (total play count)
+ *
+ * A track counts as **notable** if the athlete loved it OR played it more
+ * than once during this activity — repeating a track during a workout is
+ * treated as a "love"-equivalent signal of taste. The +2 boost is per unique
+ * notable track, so an artist with several notable tracks compounds.
+ *
+ * Ties break: score desc → total plays desc → earliest first-play-time asc
+ * (chronological — the artist that kicked off the playlist wins). When even
+ * that ties, the insertion order of the underlying Map (first-seen) holds
+ * via stable sort.
  */
-export function pickRandomArtists(
-  songs: PlayedSong[] | undefined
+export function pickTopArtists(
+  songs: PlayedSong[]
 ): { top: string[]; remaining: number } {
-  if (!songs || songs.length === 0) return { top: [], remaining: 0 };
-  const seen = new Set<string>();
-  const unique: string[] = [];
+  if (songs.length === 0) return { top: [], remaining: 0 };
+
+  interface TrackStat {
+    plays: number;
+    loved: boolean;
+  }
+
+  interface ArtistAggregate {
+    plays: number;
+    firstPlayedAt: string;
+    tracks: Map<string, TrackStat>;
+  }
+
+  const byArtist = new Map<string, ArtistAggregate>();
   for (const song of songs) {
     const artist = song.artist?.trim();
-    if (!artist || seen.has(artist)) continue;
-    seen.add(artist);
-    unique.push(artist);
+    if (!artist) continue;
+    const trackName = song.name?.trim() ?? '';
+
+    let agg = byArtist.get(artist);
+    if (!agg) {
+      agg = { plays: 0, firstPlayedAt: song.played_at, tracks: new Map() };
+      byArtist.set(artist, agg);
+    }
+
+    agg.plays += 1;
+    if (song.played_at && song.played_at < agg.firstPlayedAt) {
+      agg.firstPlayedAt = song.played_at;
+    }
+
+    const track = agg.tracks.get(trackName) ?? { plays: 0, loved: false };
+    track.plays += 1;
+    if (song.loved) track.loved = true;
+    agg.tracks.set(trackName, track);
   }
-  for (let i = unique.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [unique[i], unique[j]] = [unique[j], unique[i]];
-  }
-  const top = unique.slice(0, 5);
-  const remaining = Math.max(0, unique.length - top.length);
+
+  const ranked = Array.from(byArtist.entries())
+    .map(([artist, agg]) => {
+      let notableTracks = 0;
+      for (const track of agg.tracks.values()) {
+        if (track.loved || track.plays > 1) notableTracks += 1;
+      }
+      return {
+        artist,
+        plays: agg.plays,
+        notableTracks,
+        firstPlayedAt: agg.firstPlayedAt,
+        score: 2 * notableTracks + agg.plays,
+      };
+    })
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.plays !== a.plays) return b.plays - a.plays;
+      // Chronological by first appearance in the playlist (earliest wins).
+      // ISO 8601 strings are lexicographically ordered, so string compare works.
+      return a.firstPlayedAt.localeCompare(b.firstPlayedAt);
+    });
+
+  const top = ranked.slice(0, 5).map((r) => r.artist);
+  const remaining = Math.max(0, ranked.length - top.length);
   return { top, remaining };
 }
 
@@ -277,17 +326,12 @@ export interface WeatherSentence {
   sentence: string;
 }
 
-export interface MusicSelection {
-  top_artists: string[];
-  remaining_artists: number;
-}
-
 /**
  * Per-call timeout for `messages.parse`. Generous for these tight prompts
- * (a 6–14 word headline, a one-sentence weather rewrite, or a list of 5
- * artist names) — anything longer is a degenerate stall. The webhook has
- * already responded 200 by the time these fire, so the timeout isn't on
- * the user-facing critical path; it bounds pile-up when Anthropic hiccups.
+ * (a 6–14 word headline or a one-sentence weather rewrite) — anything longer
+ * is a degenerate stall. The webhook has already responded 200 by the time
+ * these fire, so the timeout isn't on the user-facing critical path; it
+ * bounds pile-up when Anthropic hiccups.
  */
 const ANTHROPIC_TIMEOUT_MS = 30_000;
 
@@ -421,103 +465,6 @@ export async function generateWeatherSentence(
   return { emoji: parsed.weather_emoji, sentence: parsed.weather_sentence };
 }
 
-// ---------------------------------------------------------------------------
-// Music
-// ---------------------------------------------------------------------------
-
-const MusicSchema = z.object({
-  top_artists: z
-    .array(z.string())
-    .nullable()
-    .describe(
-      'Up to 5 artist names that best represent the played-songs list. Collapse trivial variants (e.g. "The Foo Fighters" → "Foo Fighters", "Beyonce" → "Beyoncé") to one canonical form, choosing the form most commonly used for the artist.'
-    ),
-  remaining_artists: z
-    .number()
-    .int()
-    .nullable()
-    .describe(
-      'Count of unique artists in the input — after the same normalization — NOT named in top_artists. 0 when 5 or fewer unique artists exist after normalization.'
-    ),
-});
-
-const MUSIC_SYSTEM_PROMPT = loadPrompt('music-selection.md');
-
-/**
- * Pick up to 5 representative artists from a played-songs list, with the
- * model handling variant-name normalization (e.g. "Foo Fighters" vs
- * "The Foo Fighters").
- *
- * Returns null when no songs are provided, when no API key is configured, or
- * when the model declined to pick. Throws on transport/parse failure.
- */
-export async function generateMusicSelection(
-  playedSongs: PlayedSong[],
-  model: string
-): Promise<MusicSelection | null> {
-  if (!playedSongs || playedSongs.length === 0) return null;
-  const anthropic = getAnthropicClient();
-  if (!anthropic) return null;
-
-  // Aggregate scrobbles by (artist, title) so the model sees one row per
-  // distinct track with an explicit Plays count and Loved flag instead of
-  // having to count duplicate lines. Variant collapsing (e.g. "The Foo
-  // Fighters" vs "Foo Fighters") is still the model's job — we key on the
-  // raw trimmed strings. Map insertion order preserves first-seen order.
-  type Row = { artist: string; title: string; plays: number; loved: boolean };
-  const rows = new Map<string, Row>();
-  for (const song of playedSongs) {
-    const artist = song.artist?.trim();
-    const title = song.name?.trim();
-    if (!artist || !title) continue;
-    const key = `${artist}\t${title}`;
-    const existing = rows.get(key);
-    if (existing) {
-      existing.plays += 1;
-      if (song.loved) existing.loved = true;
-    } else {
-      rows.set(key, { artist, title, plays: 1, loved: song.loved === true });
-    }
-  }
-  if (rows.size === 0) return null; // every song was unusable
-
-  // Last.fm titles can contain `|`; escape it so the row doesn't split. Newlines
-  // shouldn't appear in scrobble metadata but flatten them defensively.
-  const escapeCell = (s: string): string => s.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
-
-  const lines: string[] = [
-    'Played songs:',
-    '',
-    '| Artist | Song title | Plays | Loved |',
-    '| --- | --- | --- | --- |',
-  ];
-  for (const row of rows.values()) {
-    lines.push(
-      `| ${escapeCell(row.artist)} | ${escapeCell(row.title)} | ${row.plays} | ${row.loved ? 'yes' : ''} |`
-    );
-  }
-
-  logApiCall('Anthropic', `music-selection (model=${model})`, 'messages.parse');
-  const message = await anthropic.messages.parse(
-    {
-      model,
-      max_tokens: 256,
-      system: MUSIC_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: lines.join('\n') }],
-      output_config: { format: zodOutputFormat(MusicSchema) },
-    },
-    { timeout: ANTHROPIC_TIMEOUT_MS }
-  );
-
-  const parsed = message.parsed_output;
-  if (!parsed?.top_artists || parsed.top_artists.length === 0) return null;
-  return {
-    top_artists: parsed.top_artists,
-    remaining_artists:
-      typeof parsed.remaining_artists === 'number' ? parsed.remaining_artists : 0,
-  };
-}
-
 // ============================================================================
 // Orchestrator
 // ============================================================================
@@ -535,8 +482,8 @@ export interface GenerateDescriptionInput {
 /**
  * Unwrap a `Promise.allSettled` result, logging the rejection (with the
  * given label) and returning null when the promise rejected. Letting the
- * three LLM calls fail independently is the whole point of the split — a
- * flaky music call shouldn't lose the headline.
+ * two LLM calls fail independently is the whole point of the split — a
+ * flaky weather call shouldn't lose the planned summary.
  */
 function settled<T>(
   result: PromiseSettledResult<T>,
@@ -554,9 +501,10 @@ function settled<T>(
  *     call is made must not bubble out of the Whoop webhook handler).
  *
  * Per-LLM-call failures are absorbed via `Promise.allSettled`: if e.g. the
- * music call rejects, the description is still composed from the surviving
- * headline + weather blocks (and the music line is dropped), with a
- * `[ActivityDescription]` warning logged.
+ * weather call rejects, the description is still composed from the surviving
+ * planned-summary block (and the weather line is dropped), with a
+ * `[ActivityDescription]` warning logged. The music line is built
+ * programmatically and never depends on an LLM call.
  */
 export async function generateActivityDescription(
   input: GenerateDescriptionInput
@@ -579,33 +527,15 @@ export async function generateActivityDescription(
     model
   );
 
-  const musicPromise = generateMusicSelection(activity.played_songs ?? [], model);
-
-  const [plannedResult, weatherResult, musicResult] = await Promise.allSettled([
+  const [plannedResult, weatherResult] = await Promise.allSettled([
     plannedPromise,
     weatherPromise,
-    musicPromise,
   ]);
 
   const planned = settled(plannedResult, 'plannedSummary');
   const weather = settled(weatherResult, 'weather');
-  const music = settled(musicResult, 'music');
 
   const weatherBlock = weather ? `${weather.emoji} ${weather.sentence}` : null;
-
-  // Random fallback whenever the LLM didn't give us artists but the
-  // activity has scrobbles. Covers: no API key (the call short-circuits to
-  // null), the call rejected (settled returned null), or the model
-  // explicitly declined. The other LLM-driven fields (planned summary,
-  // weather) have no programmatic fallback because they're prose; artists
-  // are just a list.
-  let topArtists = music?.top_artists ?? null;
-  let remainingArtists = music?.remaining_artists ?? null;
-  if (topArtists === null && activity.played_songs && activity.played_songs.length > 0) {
-    const fallback = pickRandomArtists(activity.played_songs);
-    topArtists = fallback.top;
-    remainingArtists = fallback.remaining;
-  }
 
   return composeBlocks({
     headline: existingHeadline,
@@ -615,6 +545,6 @@ export async function generateActivityDescription(
     power: buildPowerBlock(activity),
     heat: buildHeatBlock(activity, heatAdaptationScore),
     whoop: buildWhoopBlock(activity, whoop),
-    music: buildMusicBlock(topArtists, remainingArtists),
+    music: buildMusicBlock(activity.played_songs),
   });
 }

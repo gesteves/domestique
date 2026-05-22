@@ -6,12 +6,11 @@ import {
   buildWhoopBlock,
   buildWaterTempBlock,
   buildMusicBlock,
-  pickRandomArtists,
+  pickTopArtists,
   splitExistingDescription,
   composeBlocks,
   generatePlannedSummary,
   generateWeatherSentence,
-  generateMusicSelection,
   generateActivityDescription,
   _resetDescriptionClientForTesting,
 } from '../../src/utils/activity-description.js';
@@ -162,71 +161,126 @@ describe('buildWaterTempBlock', () => {
   });
 });
 
-describe('buildMusicBlock', () => {
-  it('joins the LLM-picked artists with commas and omits suffix when remaining=0', () => {
-    expect(buildMusicBlock(['A', 'B', 'C'], 0)).toBe('🎧 A, B, C');
-  });
-
-  it('appends "and N more" when remaining > 0', () => {
-    expect(buildMusicBlock(['A', 'B', 'C', 'D', 'E'], 2)).toBe('🎧 A, B, C, D, E, and 2 more');
-  });
-
-  it('returns null when topArtists is null/undefined/empty', () => {
-    expect(buildMusicBlock(null, null)).toBeNull();
-    expect(buildMusicBlock(undefined, undefined)).toBeNull();
-    expect(buildMusicBlock([], 5)).toBeNull();
-  });
-
-  it('caps an over-eager model at 5 artists', () => {
-    expect(buildMusicBlock(['A', 'B', 'C', 'D', 'E', 'F', 'G'], 0)).toBe(
-      '🎧 A, B, C, D, E'
-    );
-  });
-
-  it('floors a negative or non-integer remaining at 0', () => {
-    expect(buildMusicBlock(['A', 'B'], -3)).toBe('🎧 A, B');
-    expect(buildMusicBlock(['A', 'B'], NaN as unknown as number)).toBe('🎧 A, B');
-    expect(buildMusicBlock(['A', 'B'], 2.7)).toBe('🎧 A, B, and 2 more');
-  });
-});
-
-describe('pickRandomArtists', () => {
+describe('pickTopArtists', () => {
   it('returns empty on empty input', () => {
-    expect(pickRandomArtists(undefined)).toEqual({ top: [], remaining: 0 });
-    expect(pickRandomArtists([])).toEqual({ top: [], remaining: 0 });
+    expect(pickTopArtists([])).toEqual({ top: [], remaining: 0 });
   });
 
-  it('returns every unique artist when 5 or fewer exist', () => {
-    const { top, remaining } = pickRandomArtists([
+  it('ranks by play count', () => {
+    const songs = [
       song('A'), song('A'), song('A'),
       song('B'), song('B'),
       song('C'),
-    ]);
-    expect(top.sort()).toEqual(['A', 'B', 'C']);
+    ];
+    const { top, remaining } = pickTopArtists(songs);
+    expect(top).toEqual(['A', 'B', 'C']);
     expect(remaining).toBe(0);
   });
 
-  it('picks 5 and reports remaining when there are more than 5 unique artists', () => {
-    const { top, remaining } = pickRandomArtists([
-      song('A'), song('B'), song('C'), song('D'),
-      song('E'), song('F'), song('G'), song('H'),
-    ]);
-    expect(top).toHaveLength(5);
-    expect(new Set(top).size).toBe(5);
-    for (const artist of top) {
-      expect(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']).toContain(artist);
-    }
+  it('weights notable (loved) tracks (+2 each)', () => {
+    // X: 1 loved track, 1 play → notable=1, score = 2*1 + 1 = 3
+    // Y: 2 distinct unloved tracks, 1 play each → notable=0, score = 0 + 2 = 2
+    const songs = [
+      song('X', { loved: true }),
+      song('Y', { name: 'Y - track A' }),
+      song('Y', { name: 'Y - track B' }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['X', 'Y']);
+  });
+
+  it('treats a repeated track as notable (love-equivalent)', () => {
+    // A: 1 unique track played twice → notable=1 (repeated), score = 2 + 2 = 4
+    // B: 2 distinct tracks played once each → notable=0, score = 0 + 2 = 2
+    const songs = [
+      song('A', { name: 'A - track 1' }),
+      song('A', { name: 'A - track 1' }),
+      song('B', { name: 'B - track 1' }),
+      song('B', { name: 'B - track 2' }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['A', 'B']);
+  });
+
+  it('compounds the notable bonus across multiple notable tracks', () => {
+    // A: 3 distinct tracks, all repeated → notable=3, plays=6, score = 6 + 6 = 12
+    // B: 1 loved track played 5 times → notable=1, plays=5, score = 2 + 5 = 7
+    const songs = [
+      song('A', { name: 'A - 1' }), song('A', { name: 'A - 1' }),
+      song('A', { name: 'A - 2' }), song('A', { name: 'A - 2' }),
+      song('A', { name: 'A - 3' }), song('A', { name: 'A - 3' }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+      song('B', { loved: true }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['A', 'B']);
+  });
+
+  it('caps at 5 and reports remaining unique artists', () => {
+    const songs = [
+      song('A'), song('A'), song('A'), song('A'),
+      song('B'), song('B'), song('B'),
+      song('C'), song('C'),
+      song('D'), song('D'),
+      song('E'),
+      song('F'),
+      song('G'),
+      song('H'),
+    ];
+    const { top, remaining } = pickTopArtists(songs);
+    expect(top).toEqual(['A', 'B', 'C', 'D', 'E']);
     expect(remaining).toBe(3);
   });
 
-  it('skips blank/missing artists and treats names case-sensitively', () => {
-    const { top, remaining } = pickRandomArtists([
-      song('A'),
-      song('a'),
-      { name: 'X', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: '' },
-    ]);
-    expect(top.sort()).toEqual(['A', 'a']);
-    expect(remaining).toBe(0);
+  it('breaks score/plays ties chronologically by first play (earliest first)', () => {
+    // Both score=1, plays=1. Bee was scrobbled first → wins the tiebreak.
+    const songs = [
+      song('Bee', { playedAt: '2024-12-15T10:00:00Z' }),
+      song('Alpha', { playedAt: '2024-12-15T11:00:00Z' }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['Bee', 'Alpha']);
+  });
+
+  it('uses the earliest scrobble across an artist for the chronological tiebreak', () => {
+    // Both end up at score=2, plays=2. Z's first play (10:00) precedes Y's
+    // first play (10:30), so Z wins despite appearing later in the input.
+    const songs = [
+      song('Y', { name: 'Y - 1', playedAt: '2024-12-15T10:30:00Z' }),
+      song('Z', { name: 'Z - 1', playedAt: '2024-12-15T10:00:00Z' }),
+      song('Y', { name: 'Y - 2', playedAt: '2024-12-15T11:00:00Z' }),
+      song('Z', { name: 'Z - 2', playedAt: '2024-12-15T11:30:00Z' }),
+    ];
+    const { top } = pickTopArtists(songs);
+    expect(top).toEqual(['Z', 'Y']);
+  });
+});
+
+describe('buildMusicBlock', () => {
+  it('joins top artists with comma', () => {
+    expect(buildMusicBlock([song('A'), song('B'), song('C')])).toBe('🎧 A, B, C');
+  });
+
+  it('appends "and N more" when over 5 unique artists', () => {
+    const songs = [
+      song('A'), song('A'),
+      song('B'),
+      song('C'),
+      song('D'),
+      song('E'),
+      song('F'),
+      song('G'),
+    ];
+    const block = buildMusicBlock(songs);
+    expect(block).toBe('🎧 A, B, C, D, E, and 2 more');
+  });
+
+  it('returns null when no songs', () => {
+    expect(buildMusicBlock([])).toBeNull();
+    expect(buildMusicBlock(undefined)).toBeNull();
   });
 });
 
@@ -397,9 +451,8 @@ describe('generatePlannedSummary', () => {
     const call = mockParse.mock.calls[0][0];
     expect(call.model).toBe('claude-sonnet-4-6');
     expect(call.messages[0].content).toContain('7 reps × 3 min at 5k pace');
-    // The planned-summary prompt is self-contained — no weather/music leakage.
+    // The planned-summary prompt is self-contained — no weather leakage.
     expect(call.system).not.toContain('weather_emoji');
-    expect(call.system).not.toContain('top_artists');
     // Prompt instructs the model to emit no leading emoji (composer adds 🗓️):
     expect(call.system).toContain('no emojis');
   });
@@ -465,7 +518,6 @@ describe('generateWeatherSentence', () => {
     expect(call.messages[0].content).toContain('Mostly sunny, light W winds');
     // Self-contained prompt — no cross-leakage.
     expect(call.system).not.toContain('VO₂max');
-    expect(call.system).not.toContain('top_artists');
   });
 
   it('returns null when the model returns only one of the two weather fields', async () => {
@@ -477,163 +529,27 @@ describe('generateWeatherSentence', () => {
 });
 
 // --------------------------------------------------------------------------
-// generateMusicSelection
-// --------------------------------------------------------------------------
-
-describe('generateMusicSelection', () => {
-  beforeEach(() => {
-    mockParse.mockReset();
-    _resetDescriptionClientForTesting();
-    process.env.ANTHROPIC_API_KEY = 'test-key';
-  });
-
-  afterEach(() => {
-    delete process.env.ANTHROPIC_API_KEY;
-  });
-
-  it('returns null without calling the API when no songs are provided', async () => {
-    expect(await generateMusicSelection([], 'claude-sonnet-4-6')).toBeNull();
-    expect(mockParse).not.toHaveBeenCalled();
-  });
-
-  it('returns null when every song is missing an artist or title', async () => {
-    const songs: PlayedSong[] = [
-      { name: '', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: 'X' },
-      { name: 'Y', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: '' },
-    ];
-    expect(await generateMusicSelection(songs, 'claude-sonnet-4-6')).toBeNull();
-    expect(mockParse).not.toHaveBeenCalled();
-  });
-
-  it('returns null when no API key is set', async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    _resetDescriptionClientForTesting();
-    expect(
-      await generateMusicSelection([song('A')], 'claude-sonnet-4-6')
-    ).toBeNull();
-    expect(mockParse).not.toHaveBeenCalled();
-  });
-
-  it('passes aggregated scrobbles as a Markdown table with Plays and Loved columns', async () => {
-    mockParse.mockResolvedValueOnce({
-      parsed_output: {
-        top_artists: ['Radiohead', 'Foo Fighters'],
-        remaining_artists: 3,
-      },
-    });
-
-    const songs: PlayedSong[] = [
-      song('Radiohead', { name: 'Karma Police' }),
-      song('Radiohead', { name: 'Karma Police' }),
-      song('Radiohead', { name: 'Karma Police' }),
-      song('Foo Fighters', { name: 'The Pretender', loved: true }),
-      song('The Foo Fighters', { name: 'Best of You' }),
-      song('Tracy Chapman', { name: 'Fast Car' }),
-      song('Tracy Chapman', { name: 'Fast Car' }),
-      song('Johnny Cash', { name: 'Hurt' }),
-    ];
-
-    const result = await generateMusicSelection(songs, 'claude-sonnet-4-6');
-
-    const content = mockParse.mock.calls[0][0].messages[0].content as string;
-    expect(content).toContain('Played songs:');
-    expect(content).toContain('| Artist | Song title | Plays | Loved |');
-    expect(content).toContain('| --- | --- | --- | --- |');
-    // Repeated scrobbles aggregate into a single row with the correct count.
-    expect(content).toContain('| Radiohead | Karma Police | 3 |');
-    expect(content).toContain('| Tracy Chapman | Fast Car | 2 |');
-    // Loved cell is `yes` for loved tracks, blank otherwise.
-    expect(content).toContain('| Foo Fighters | The Pretender | 1 | yes |');
-    expect(content).toContain('| The Foo Fighters | Best of You | 1 |  |');
-    expect(content).toContain('| Johnny Cash | Hurt | 1 |  |');
-    // Self-contained prompt — no cross-leakage.
-    expect(mockParse.mock.calls[0][0].system).not.toContain('VO₂max');
-    expect(mockParse.mock.calls[0][0].system).not.toContain('weather_emoji');
-
-    expect(result).toEqual({ top_artists: ['Radiohead', 'Foo Fighters'], remaining_artists: 3 });
-  });
-
-  it('escapes pipe characters in artist and title cells', async () => {
-    mockParse.mockResolvedValueOnce({
-      parsed_output: { top_artists: ['A|B'], remaining_artists: 0 },
-    });
-
-    const songs: PlayedSong[] = [
-      song('A|B', { name: 'Track | One' }),
-    ];
-
-    await generateMusicSelection(songs, 'claude-sonnet-4-6');
-
-    const content = mockParse.mock.calls[0][0].messages[0].content as string;
-    expect(content).toContain('| A\\|B | Track \\| One | 1 |  |');
-  });
-
-  it('drops scrobbles missing an artist or title', async () => {
-    mockParse.mockResolvedValueOnce({
-      parsed_output: { top_artists: ['Radiohead'], remaining_artists: 0 },
-    });
-
-    const songs: PlayedSong[] = [
-      song('Radiohead', { name: 'Karma Police' }),
-      { name: '', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: 'X' },
-      { name: 'Y', played_at: '2024-12-15T10:00:00Z', url: '', album: '', artist: '' },
-    ];
-
-    await generateMusicSelection(songs, 'claude-sonnet-4-6');
-
-    const content = mockParse.mock.calls[0][0].messages[0].content as string;
-    expect(content).toContain('| Radiohead | Karma Police | 1 |');
-    expect(content).not.toMatch(/\|\s*X\s*\|/);
-    expect(content).not.toMatch(/\|\s*Y\s*\|/);
-  });
-
-  it('returns null when the model returns an empty or null top_artists', async () => {
-    mockParse.mockResolvedValueOnce({
-      parsed_output: { top_artists: null, remaining_artists: null },
-    });
-    expect(await generateMusicSelection([song('A')], 'claude-sonnet-4-6')).toBeNull();
-
-    mockParse.mockResolvedValueOnce({
-      parsed_output: { top_artists: [], remaining_artists: 0 },
-    });
-    expect(await generateMusicSelection([song('A')], 'claude-sonnet-4-6')).toBeNull();
-  });
-
-  it('defaults remaining_artists to 0 when the model omits it', async () => {
-    mockParse.mockResolvedValueOnce({
-      parsed_output: { top_artists: ['A', 'B'], remaining_artists: null },
-    });
-    expect(await generateMusicSelection([song('A'), song('B')], 'claude-sonnet-4-6')).toEqual({
-      top_artists: ['A', 'B'],
-      remaining_artists: 0,
-    });
-  });
-});
-
-// --------------------------------------------------------------------------
 // Orchestrator
 // --------------------------------------------------------------------------
 
 /**
  * Match each call to the right `parsed_output` by inspecting its user
- * message. Order-of-arrival isn't guaranteed across the three concurrent
+ * message. Order-of-arrival isn't guaranteed across the two concurrent
  * `Promise.allSettled` calls, so we discriminate on the user-content prefix
  * — production strings, no test-only markers.
  */
 function callKind(args: {
   messages?: Array<{ role: string; content: string }>;
-}): 'planned' | 'weather' | 'music' | 'unknown' {
+}): 'planned' | 'weather' | 'unknown' {
   const content = args.messages?.[0]?.content ?? '';
   if (content.startsWith('Planned workout description')) return 'planned';
   if (content.startsWith('Weather data:')) return 'weather';
-  if (content.startsWith('Played songs:')) return 'music';
   return 'unknown';
 }
 
 function dispatchMockParse(byCall: {
   planned?: unknown;
   weather?: unknown;
-  music?: unknown;
 }): void {
   mockParse.mockImplementation((args) => {
     const kind = callKind(args);
@@ -696,15 +612,9 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(description).toContain('🔥 Whoop strain 14.2');
   });
 
-  it('emits planned + music alongside an existing user headline, skipping the indoor weather call', async () => {
+  it('emits planned + a programmatic music line alongside an existing user headline, skipping the indoor weather call', async () => {
     dispatchMockParse({
       planned: { parsed_output: { planned_summary: '90 minutes of endurance at 65-75% FTP' } },
-      music: {
-        parsed_output: {
-          top_artists: ['Radiohead', 'Foo Fighters', 'Tracy Chapman'],
-          remaining_artists: 4,
-        },
-      },
     });
 
     const description = await generateActivityDescription({
@@ -712,6 +622,7 @@ describe('generateActivityDescription (orchestrator)', () => {
         activity_type: 'Cycling',
         description: 'Felt great today!',
         is_indoor: true,
+        // Foo Fighters' track is loved → notable, score 3; Radiohead score 1.
         played_songs: [song('Radiohead'), song('Foo Fighters', { loved: true })],
       }),
       whoop: null,
@@ -721,12 +632,11 @@ describe('generateActivityDescription (orchestrator)', () => {
     });
 
     expect(description.startsWith('Felt great today!\n\n🗓️ 90 minutes of endurance at 65-75% FTP')).toBe(true);
-    expect(description).toContain('🎧 Radiohead, Foo Fighters, Tracy Chapman, and 4 more');
-    // Planned + music fire; weather does NOT (indoor short-circuit):
+    expect(description).toContain('🎧 Foo Fighters, Radiohead');
+    // Only the planned call fires; weather is skipped (indoor) and music is
+    // built programmatically — no LLM call:
     const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
-    expect(kinds).toContain('planned');
-    expect(kinds).not.toContain('weather');
-    expect(kinds).toContain('music');
+    expect(kinds).toEqual(['planned']);
   });
 
   it('strips a stale Zwift map line from the input and leads with the planned-summary line', async () => {
@@ -758,19 +668,13 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(description.indexOf('🗓️')).toBeLessThan(description.indexOf('⚡️'));
   });
 
-  it('composes a full description from all three LLM calls', async () => {
+  it('composes a full description from both LLM calls and the programmatic music line', async () => {
     dispatchMockParse({
       planned: { parsed_output: { planned_summary: '1-hour endurance ride at 65-75% FTP' } },
       weather: {
         parsed_output: {
           weather_emoji: '🌤️',
           weather_sentence: 'Mostly sunny with light W winds of 7–12 km/h, temps 10–14°C',
-        },
-      },
-      music: {
-        parsed_output: {
-          top_artists: ['Radiohead', 'Tracy Chapman', 'Foo Fighters'],
-          remaining_artists: 2,
         },
       },
     });
@@ -781,6 +685,8 @@ describe('generateActivityDescription (orchestrator)', () => {
         is_indoor: false,
         weather_description: 'Mostly sunny',
         average_power: '200 W',
+        // Six artists, each played once → all tie at score 1; first-seen
+        // order holds, so the first five lead and one falls into "more".
         played_songs: [
           song('Radiohead'),
           song('Tracy Chapman'),
@@ -799,17 +705,18 @@ describe('generateActivityDescription (orchestrator)', () => {
     // No top-level headline; planned summary leads the emoji block.
     expect(description.startsWith('🗓️ 1-hour endurance ride at 65-75% FTP')).toBe(true);
     expect(description).toContain('🌤️ Mostly sunny with light W winds');
-    expect(description).toContain('🎧 Radiohead, Tracy Chapman, Foo Fighters, and 2 more');
+    expect(description).toContain(
+      '🎧 Radiohead, Tracy Chapman, Foo Fighters, The Foo Fighters, Johnny Cash, and 1 more'
+    );
     // Planned summary precedes weather:
     expect(description.indexOf('🗓️')).toBeLessThan(description.indexOf('🌤️'));
 
     const kinds = mockParse.mock.calls.map((c) => callKind(c[0]));
     expect(kinds.filter((k) => k === 'planned')).toHaveLength(1);
     expect(kinds.filter((k) => k === 'weather')).toHaveLength(1);
-    expect(kinds.filter((k) => k === 'music')).toHaveLength(1);
   });
 
-  it('degrades gracefully when one of the three calls rejects', async () => {
+  it('degrades gracefully when one of the two LLM calls rejects', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     mockParse.mockImplementation((args) => {
@@ -821,11 +728,6 @@ describe('generateActivityDescription (orchestrator)', () => {
             weather_emoji: '🌤️',
             weather_sentence: 'Mostly sunny',
           },
-        });
-      }
-      if (kind === 'music') {
-        return Promise.resolve({
-          parsed_output: { top_artists: ['Radiohead'], remaining_artists: 0 },
         });
       }
       return Promise.reject(new Error('unexpected'));
@@ -844,7 +746,8 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
-    // Planned summary failed → no 🗓️ line; weather + music survived:
+    // Planned summary failed → no 🗓️ line; weather + the programmatic
+    // music line survived:
     expect(description).not.toContain('🗓️');
     expect(description.startsWith('🌤️')).toBe(true);
     expect(description).toContain('🎧 Radiohead');
@@ -866,7 +769,7 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(mockParse).not.toHaveBeenCalled();
   });
 
-  it('falls back to a random artist pick when ANTHROPIC_API_KEY is unset', async () => {
+  it('still builds the programmatic music line when ANTHROPIC_API_KEY is unset', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     _resetDescriptionClientForTesting();
 
@@ -875,6 +778,8 @@ describe('generateActivityDescription (orchestrator)', () => {
         activity_type: 'Cycling',
         is_indoor: true,
         average_power: '200 W',
+        // Seven artists, each played once → all tie at score 1; first-seen
+        // order holds.
         played_songs: [
           song('Radiohead'),
           song('Foo Fighters'),
@@ -891,25 +796,11 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
+    // No API key → no LLM call, but the music line is still composed.
     expect(mockParse).not.toHaveBeenCalled();
-
-    const musicLine = description.split('\n').find((line) => line.startsWith('🎧 '));
-    expect(musicLine).toBeDefined();
-    expect(musicLine).toMatch(/, and 2 more$/);
-    const names = musicLine!.replace(/^🎧 /, '').replace(/, and 2 more$/, '').split(', ');
-    expect(names).toHaveLength(5);
-    for (const name of names) {
-      expect([
-        'Radiohead',
-        'Foo Fighters',
-        'Tracy Chapman',
-        'Johnny Cash',
-        'Crowded House',
-        'Tears for Fears',
-        'Beyoncé',
-      ]).toContain(name);
-    }
-    expect(new Set(names).size).toBe(5);
+    expect(description).toContain(
+      '🎧 Radiohead, Foo Fighters, Tracy Chapman, Johnny Cash, Crowded House, and 2 more'
+    );
   });
 
   it('does not duplicate emoji stat lines when regenerating, including the planned-summary line', async () => {
@@ -968,9 +859,6 @@ describe('generateActivityDescription (orchestrator)', () => {
   it('preserves multi-paragraph user prose as the headline on regenerate, alongside a fresh planned-summary line', async () => {
     dispatchMockParse({
       planned: { parsed_output: { planned_summary: '30 minutes of Z2 endurance' } },
-      music: {
-        parsed_output: { top_artists: ['Radiohead'], remaining_artists: 0 },
-      },
     });
 
     const description = await generateActivityDescription({
@@ -997,17 +885,9 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(kinds).not.toContain('weather');
   });
 
-  it('falls back to a random artist pick when the music LLM call rejects with a key set', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    mockParse.mockImplementation((args) => {
-      const kind = callKind(args);
-      if (kind === 'music') return Promise.reject(new Error('music boom'));
-      return Promise.resolve({
-        parsed_output: { planned_summary: null, weather_emoji: null, weather_sentence: null },
-      });
-    });
-
+  it('builds the music line from scrobbles without making any LLM call', async () => {
+    // Indoor + no planned summary → neither LLM call fires. The music line
+    // is built purely from the played-songs list.
     const description = await generateActivityDescription({
       activity: workout({
         activity_type: 'Cycling',
@@ -1024,37 +904,7 @@ describe('generateActivityDescription (orchestrator)', () => {
       model: 'claude-sonnet-4-6',
     });
 
-    const musicLine = description.split('\n').find((line) => line.startsWith('🎧 '));
-    expect(musicLine).toBeDefined();
-    const names = musicLine!.replace(/^🎧 /, '').split(', ');
-    expect(new Set(names)).toEqual(new Set(['Radiohead', 'Foo Fighters', 'Tracy Chapman']));
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[ActivityDescription] music call failed:')
-    );
-  });
-
-  it('falls back to a random artist pick when the music LLM returns an explicit null', async () => {
-    dispatchMockParse({
-      music: {
-        parsed_output: { top_artists: null, remaining_artists: null },
-      },
-    });
-
-    const description = await generateActivityDescription({
-      activity: workout({
-        activity_type: 'Cycling',
-        is_indoor: true,
-        played_songs: [song('Radiohead'), song('Foo Fighters')],
-      }),
-      whoop: null,
-      plannedSummary: null,
-      heatAdaptationScore: null,
-      model: 'claude-sonnet-4-6',
-    });
-
-    const musicLine = description.split('\n').find((line) => line.startsWith('🎧 '));
-    expect(musicLine).toBeDefined();
-    const names = musicLine!.replace(/^🎧 /, '').split(', ');
-    expect(new Set(names)).toEqual(new Set(['Radiohead', 'Foo Fighters']));
+    expect(mockParse).not.toHaveBeenCalled();
+    expect(description).toBe('🎧 Radiohead, Foo Fighters, Tracy Chapman');
   });
 });
