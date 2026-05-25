@@ -132,13 +132,16 @@ export function buildWhoopBlock(
 
 /**
  * Build the open-water swim water-temperature line. Pool swims (which have
- * `pool_length` set) and non-swim activities return null.
+ * `pool_length` set) and non-swim activities return null. `formatTemperature`
+ * always emits one decimal (`.toFixed(1)`); strip a trailing `.0` so whole
+ * degrees render as `59 °F` rather than `59.0 °F`.
  */
 export function buildWaterTempBlock(activity: NormalizedWorkout): string | null {
   if (activity.activity_type !== 'Swimming') return null;
   if (activity.pool_length) return null; // pool swim — out of scope for this caller anyway
   if (!activity.median_ambient_temperature) return null;
-  return `💧 Water temperature ${activity.median_ambient_temperature}`;
+  const temp = activity.median_ambient_temperature.replace(/\.0(?=\s|$)/, '');
+  return `💧 Water temperature ${temp}`;
 }
 
 /**

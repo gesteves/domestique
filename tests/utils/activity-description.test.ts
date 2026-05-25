@@ -144,6 +144,22 @@ describe('buildWaterTempBlock', () => {
     expect(block).toBe('💧 Water temperature 21°C');
   });
 
+  it('strips a trailing .0 from whole-number temperatures', () => {
+    expect(
+      buildWaterTempBlock(
+        workout({ activity_type: 'Swimming', median_ambient_temperature: '59.0 °F' })
+      )
+    ).toBe('💧 Water temperature 59 °F');
+  });
+
+  it('preserves non-zero decimals', () => {
+    expect(
+      buildWaterTempBlock(
+        workout({ activity_type: 'Swimming', median_ambient_temperature: '59.1 °F' })
+      )
+    ).toBe('💧 Water temperature 59.1 °F');
+  });
+
   it('is skipped for pool swims (pool_length present)', () => {
     expect(
       buildWaterTempBlock(
