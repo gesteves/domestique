@@ -127,7 +127,7 @@ export function buildWhoopBlock(
 ): string | null {
   if (!activity.activity_type || isSwimmingActivity(activity.activity_type)) return null;
   if (!whoop || whoop.strain_score == null) return null;
-  return `🔥 Whoop strain ${whoop.strain_score.toFixed(1)}`;
+  return `🔥 ${whoop.strain_score.toFixed(1)} Whoop Strain`;
 }
 
 /**

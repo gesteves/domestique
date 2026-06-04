@@ -123,7 +123,7 @@ describe('buildWhoopBlock', () => {
   const whoop: WhoopMatchedData = { id: 'w1', strain_score: 16.42 };
 
   it('renders the strain score rounded to one decimal', () => {
-    expect(buildWhoopBlock(workout(), whoop)).toBe('🔥 Whoop strain 16.4');
+    expect(buildWhoopBlock(workout(), whoop)).toBe('🔥 16.4 Whoop Strain');
   });
 
   it('returns null when no whoop data', () => {
@@ -366,9 +366,9 @@ describe('composeBlocks', () => {
       headline: null,
       weather: '🌤️ Sunny',
       power: '⚡️ NP 200 W',
-      whoop: '🔥 Whoop strain 14.2',
+      whoop: '🔥 14.2 Whoop Strain',
     });
-    expect(out).toBe('🌤️ Sunny\n⚡️ NP 200 W\n🔥 Whoop strain 14.2');
+    expect(out).toBe('🌤️ Sunny\n⚡️ NP 200 W\n🔥 14.2 Whoop Strain');
   });
 
   it('drops null/undefined/empty blocks', () => {
@@ -625,7 +625,7 @@ describe('generateActivityDescription (orchestrator)', () => {
     expect(description.startsWith('Felt great today!\n\n🗓️ 1-hour endurance ride at 65-75% FTP')).toBe(true);
     expect(description).toContain('☁️ Overcast with light NW winds');
     expect(description).toContain('⚡️ Avg 200 W · NP 210 W · IF 0.71 · TSS 98');
-    expect(description).toContain('🔥 Whoop strain 14.2');
+    expect(description).toContain('🔥 14.2 Whoop Strain');
   });
 
   it('emits planned + a programmatic music line alongside an existing user headline, skipping the indoor weather call', async () => {
@@ -864,7 +864,7 @@ describe('generateActivityDescription (orchestrator)', () => {
     // The new lines are the fresh ones, not the stale ones:
     expect(description).toContain('🗓️ 1-hour endurance ride at 65-75% FTP');
     expect(description).toContain('⚡️ Avg 200 W · NP 210 W · IF 0.71 · TSS 98');
-    expect(description).toContain('🔥 Whoop strain 14.2');
+    expect(description).toContain('🔥 14.2 Whoop Strain');
     expect(description).toContain('☁️ Overcast with light NW winds');
     expect(description).not.toContain('Old plan summary');
     expect(description).not.toContain('Old weather');

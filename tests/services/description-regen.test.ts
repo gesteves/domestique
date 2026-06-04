@@ -96,7 +96,7 @@ describe('regenerateDayDescriptions', () => {
     expect(intervals.updateActivity).toHaveBeenCalledTimes(1);
     const [id, body] = intervals.updateActivity.mock.calls[0];
     expect(id).toBe('run-1');
-    expect(body.description).toContain('🔥 Whoop strain 13.5');
+    expect(body.description).toContain('🔥 13.5 Whoop Strain');
   });
 
   it('defaults to today in the athlete timezone when no date is given', async () => {
@@ -204,7 +204,7 @@ describe('regenerateDayDescriptions', () => {
       expect(whoop.getWorkouts).toHaveBeenCalledWith('2024-12-20', '2024-12-20');
       const [id, body] = intervals.updateActivity.mock.calls[0];
       expect(id).toBe('run-9');
-      expect(body.description).toContain('🔥 Whoop strain 11.2');
+      expect(body.description).toContain('🔥 11.2 Whoop Strain');
     });
 
     it('takes precedence over date and skips pool/unavailable activities', async () => {

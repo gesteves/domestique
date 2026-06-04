@@ -337,7 +337,7 @@ describe('Whoop webhook handler', () => {
     const descriptionCall = fakes.intervals.updateActivity.mock.calls[1];
     expect(descriptionCall[0]).toBe('icu-act-1');
     expect(typeof descriptionCall[1].description).toBe('string');
-    expect(descriptionCall[1].description).toContain('🔥 Whoop strain 13.5');
+    expect(descriptionCall[1].description).toContain('🔥 13.5 Whoop Strain');
   });
 
   it('on workout.updated for a pool swim, writes WhoopWorkoutStrain but skips description generation', async () => {
@@ -429,7 +429,7 @@ describe('Whoop webhook handler', () => {
     expect(descriptionCall[0]).toBe('icu-ride-1');
     expect(typeof descriptionCall[1].description).toBe('string');
     expect(descriptionCall[1].description).toContain('⚡️ Avg 200 W · NP 210 W · IF 0.70 · TSS 98');
-    expect(descriptionCall[1].description).toContain('🔥 Whoop strain 14.2');
+    expect(descriptionCall[1].description).toContain('🔥 14.2 Whoop Strain');
     // No headline (no planned candidate, no existing description):
     expect(descriptionCall[1].description.startsWith('⚡️')).toBe(true);
     logSpy.mockRestore();
