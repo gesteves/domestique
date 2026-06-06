@@ -28,7 +28,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.100.1",
+    "@anthropic-ai/sdk": "^0.101.0",
     "@bugsnag/js": "^8.9.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "chrono-node": "^2.9.1",
