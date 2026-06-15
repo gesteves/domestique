@@ -1129,5 +1129,5 @@ export const regenerateDescriptionsInputSchema = {
 export const regenerateDescriptionsOutputSchema = {
   date: z.string().describe('The day whose activity descriptions were regenerated (YYYY-MM-DD)'),
   regenerated: z.array(z.string()).describe('Activity IDs a description regeneration was attempted for'),
-  skipped: z.array(z.string()).describe('Activity IDs skipped (pool swim or unavailable Strava import)'),
+  skipped: z.array(z.string()).describe('Activity IDs skipped (not swim/bike/run, pool swim, or unavailable Strava import)'),
 } as const;

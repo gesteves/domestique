@@ -45,7 +45,7 @@ describe('regenerateDayDescriptions', () => {
     _resetDescriptionClientForTesting();
   });
 
-  it('regenerates eligible activities, matches Whoop, and skips pool/unavailable', async () => {
+  it('regenerates eligible activities, matches Whoop, and skips non swim/bike/run, pool, and unavailable', async () => {
     const intervals = makeIntervals({
       getActivities: vi.fn().mockResolvedValue([
         {
@@ -65,6 +65,12 @@ describe('regenerateDayDescriptions', () => {
           start_time: '2024-12-15T07:00:00+00:00',
           activity_type: 'Swimming',
           pool_length: '25 m',
+        },
+        {
+          id: 'strength-1',
+          start_time: '2024-12-15T18:00:00+00:00',
+          activity_type: 'Strength',
+          source: 'intervals.icu',
         },
       ]),
       getActivity: vi.fn().mockResolvedValue({
@@ -91,7 +97,7 @@ describe('regenerateDayDescriptions', () => {
 
     expect(result.date).toBe('2024-12-15');
     expect(result.regenerated).toEqual(['run-1']);
-    expect(result.skipped).toEqual(['strava-1', 'pool-1']);
+    expect(result.skipped).toEqual(['strava-1', 'pool-1', 'strength-1']);
     expect(whoop.getWorkouts).toHaveBeenCalledWith('2024-12-15', '2024-12-15');
     expect(intervals.updateActivity).toHaveBeenCalledTimes(1);
     const [id, body] = intervals.updateActivity.mock.calls[0];
@@ -225,6 +231,29 @@ describe('regenerateDayDescriptions', () => {
       expect(result.date).toBe('2024-12-20');
       expect(result.regenerated).toEqual([]);
       expect(result.skipped).toEqual(['pool-9']);
+      expect(intervals.getActivities).not.toHaveBeenCalled();
+      expect(intervals.updateActivity).not.toHaveBeenCalled();
+    });
+
+    it('skips a non swim/bike/run activity', async () => {
+      const intervals = makeIntervals({
+        getActivity: vi.fn().mockResolvedValue({
+          id: 'strength-9',
+          start_time: '2024-12-20T18:00:00+00:00',
+          activity_type: 'Strength',
+          source: 'intervals.icu',
+        }),
+      });
+
+      const result = await regenerateDayDescriptions(
+        { activityId: 'strength-9' },
+        makeDeps(intervals)
+      );
+
+      expect(result.date).toBe('2024-12-20');
+      expect(result.regenerated).toEqual([]);
+      expect(result.skipped).toEqual(['strength-9']);
+      // Gated before any Whoop lookup or write.
       expect(intervals.getActivities).not.toHaveBeenCalled();
       expect(intervals.updateActivity).not.toHaveBeenCalled();
     });

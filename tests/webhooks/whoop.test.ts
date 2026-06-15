@@ -382,6 +382,44 @@ describe('Whoop webhook handler', () => {
     logSpy.mockRestore();
   });
 
+  it('on workout.updated for a non swim/bike/run activity, writes WhoopWorkoutStrain but skips description generation', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fakes.whoop.getWorkoutById.mockResolvedValueOnce({
+      id: 'strength-uuid',
+      activity_type: 'Strength' as const,
+      start_time: '2024-12-15T18:00:00+00:00',
+      end_time: '2024-12-15T18:45:00+00:00',
+      duration: '0:45:00',
+      strain_score: 7.2,
+    });
+    fakes.intervals.getActivities.mockResolvedValueOnce([
+      {
+        id: 'icu-strength-1',
+        start_time: '2024-12-15T18:01:00+00:00',
+        activity_type: 'Strength',
+        source: 'intervals.icu',
+      },
+    ]);
+
+    const res = await postWebhook(app, {
+      user_id: ATHLETE_USER_ID,
+      id: 'strength-uuid',
+      type: 'workout.updated',
+      trace_id: 'trace-strength',
+    });
+    expect(res.status).toBe(200);
+    await flushAsync();
+
+    // WhoopWorkoutStrain is written, but no description PUT and no activity
+    // fetch for description generation.
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledTimes(1);
+    expect(fakes.intervals.updateActivity).toHaveBeenCalledWith('icu-strength-1', {
+      WhoopWorkoutStrain: 7.2,
+    });
+    expect(fakes.intervals.getActivity).not.toHaveBeenCalled();
+    logSpy.mockRestore();
+  });
+
   it('on workout.updated for an unpaired outdoor ride with no plausible plan, writes a description without a headline', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 

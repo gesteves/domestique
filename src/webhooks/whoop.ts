@@ -5,6 +5,7 @@ import { findMatchingWhoopActivity } from '../utils/activity-matcher.js';
 import { addDaysToYMD, formatYMDFromOffset, formatYMDInTimezone } from '../utils/tz.js';
 import {
   maybeGenerateActivityDescription,
+  isDescriptionEligibleSport,
   type DescriptionRegenDeps,
 } from '../services/description-regen.js';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
@@ -235,6 +236,18 @@ export async function dispatchWhoopWebhook(
       `workout.updated ${payload.id} → activity ${match.id}`,
       `value=${whoopActivity.strain_score}`
     );
+
+    // Auto-descriptions are limited to swim/bike/run. Other sports still got
+    // their WhoopWorkoutStrain written above; they just don't get a description.
+    if (!isDescriptionEligibleSport(match.activity_type)) {
+      logInfo(
+        'WhoopWebhook',
+        `workout.updated ${payload.id} → activity ${match.id}: ` +
+        `activity_type=${match.activity_type ?? 'unknown'} is not swim/bike/run — ` +
+        `skipping auto-description`
+      );
+      return;
+    }
 
     // Best-effort: regenerate the Strava-bound description. Isolated try/catch
     // so a flaky Anthropic call or Intervals.icu hiccup never reverses the

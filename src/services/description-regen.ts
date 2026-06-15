@@ -48,6 +48,30 @@ const HEADLINE_SPORTS: ReadonlySet<ActivityType> = new Set<ActivityType>([
 ]);
 
 /**
+ * Activity types eligible for a programmatically-generated description —
+ * swim/bike/run only. The description blocks (power, pace, weather, Whoop
+ * strain, etc.) are only meaningful for these. Other activity types (strength,
+ * hiking, rowing, …) are skipped by every caller: the `regenerate_descriptions`
+ * tool, the `/api/activities/descriptions` endpoint, and the Whoop webhook.
+ */
+const DESCRIPTION_SPORTS: ReadonlySet<ActivityType> = new Set<ActivityType>([
+  'Cycling',
+  'Running',
+  'Swimming',
+]);
+
+/**
+ * Whether an activity type is eligible for a programmatically-generated
+ * description. Returns false for an undefined type (e.g. unavailable
+ * Strava-only imports).
+ */
+export function isDescriptionEligibleSport(
+  activityType: ActivityType | undefined
+): boolean {
+  return activityType != null && DESCRIPTION_SPORTS.has(activityType);
+}
+
+/**
  * Activity IDs currently being processed for description generation, used
  * to dedupe rapid duplicate triggers for the same activity (e.g. two
  * `workout.updated` webhooks ~100ms apart, or a day-regen overlapping a
@@ -65,7 +89,7 @@ export interface RegenerateDayResult {
   date: string;
   /** Activity IDs a description regeneration was attempted for. */
   regenerated: string[];
-  /** Activity IDs skipped (pool swim or unavailable Strava import). */
+  /** Activity IDs skipped (not swim/bike/run, pool swim, or unavailable Strava import). */
   skipped: string[];
 }
 
@@ -91,8 +115,9 @@ export interface RegenerateTarget {
  * (`target.date`, or today when null). `activityId` takes precedence over
  * `date`. Whoop workouts for the relevant day are matched per-activity where
  * possible; activities without a match still get a description (just no 🔥
- * Whoop strain line). Pool swims and unavailable Strava imports are skipped.
- * Per-activity failures are isolated so one bad activity can't abort the rest.
+ * Whoop strain line). Only swim/bike/run are eligible — other sports, pool
+ * swims, and unavailable Strava imports are skipped. Per-activity failures are
+ * isolated so one bad activity can't abort the rest.
  */
 export async function regenerateDayDescriptions(
   target: RegenerateTarget,
@@ -127,7 +152,11 @@ export async function regenerateDayDescriptions(
   const skipped: string[] = [];
 
   for (const activity of activities) {
-    if (activity.unavailable || activity.pool_length) {
+    if (
+      activity.unavailable ||
+      activity.pool_length ||
+      !isDescriptionEligibleSport(activity.activity_type)
+    ) {
       skipped.push(activity.id);
       continue;
     }
@@ -168,10 +197,15 @@ async function regenerateSingleActivityDescription(
   const activity = await intervals.getActivity(activityId);
   const date = activity.start_time.slice(0, 10);
 
-  if (activity.unavailable || activity.pool_length) {
+  if (
+    activity.unavailable ||
+    activity.pool_length ||
+    !isDescriptionEligibleSport(activity.activity_type)
+  ) {
     logInfo(
       'DescriptionRegen',
-      `${date}: activity ${activityId} skipped (pool swim or unavailable Strava import)`
+      `${date}: activity ${activityId} skipped ` +
+        `(not swim/bike/run, pool swim, or unavailable Strava import)`
     );
     return { date, regenerated: [], skipped: [activityId] };
   }
@@ -243,6 +277,15 @@ async function runDescriptionGeneration(
 
   await runWithUnitPreferences(prefs, async () => {
     const full = await intervals.getActivity(activityId);
+
+    if (!isDescriptionEligibleSport(full.activity_type)) {
+      logInfo(
+        'DescriptionRegen',
+        `activity ${activityId} is not swim/bike/run ` +
+          `(activity_type=${full.activity_type ?? 'unknown'}) — skipping description generation`
+      );
+      return;
+    }
 
     if (full.pool_length) {
       logInfo(
