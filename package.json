@@ -28,10 +28,10 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.110.0",
-    "@bugsnag/js": "^8.9.0",
+    "@anthropic-ai/sdk": "^0.112.3",
+    "@bugsnag/js": "^8.10.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "chrono-node": "^2.9.1",
+    "chrono-node": "^2.10.0",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "express": "^5.2.1",
