@@ -25,7 +25,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `get_sports_settings` - FTP, zones, and thresholds per sport.
 
 ### Historical/Trends
-- `get_strain_history` - Whoop strain and activities over a date range.
+- `get_strain_history` - Whoop strain, steps, and activities over a date range.
 - `get_activity_history` - Past completed workouts with matched Whoop strain and calendar annotations.
 - `get_recovery_trends` - HRV, sleep, and recovery patterns over time.
 - `get_wellness_trends` - Daily Intervals.icu wellness metrics over a date range.

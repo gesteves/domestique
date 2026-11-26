@@ -69,10 +69,10 @@ vi.mock('../../src/clients/whoop.js', () => ({
         recovery: null,
         sleep: { sleep_performance: '84%', sleep_start: '2024-12-14T21:55:00-07:00', sleep_end: `${today}T06:23:00-07:00` },
       }),
-      getTodayStrain: vi.fn().mockResolvedValue({ date: today, strain_score: 0.2, activities: [] }),
+      getTodayStrain: vi.fn().mockResolvedValue({ date: today, strain_score: 0.2, steps: 55, activities: [] }),
       getWorkouts: vi.fn().mockResolvedValue([]),
       getBodyMeasurements: vi.fn().mockResolvedValue({ height: '171 cm', weight: '76.3 kg', max_heart_rate: '190 bpm' }),
-      getStrainData: vi.fn().mockResolvedValue([{ date: today, strain_score: 7.3, activities: [] }]),
+      getStrainData: vi.fn().mockResolvedValue([{ date: today, strain_score: 7.3, steps: 8234, activities: [] }]),
       getRecoveries: vi.fn().mockResolvedValue([]),
     };
   }),
@@ -130,6 +130,7 @@ describe('tool output validates against its outputSchema', () => {
     expect(Object.keys(out).slice(0, 6)).toEqual(['current_time', 'overview', 'readiness', 'load', 'workouts', 'weather']);
     expect(out.data_status).toMatchObject({ whoop_recovery: 'no_data', weather: 'not_configured' });
     expect((out.overview as { workouts: Record<string, number> }).workouts).toMatchObject({ planned: 1, planned_without_tss: 1 });
+    expect((out.load as { whoop_strain: { steps?: number } }).whoop_strain.steps).toBe(55);
   });
 
   it('get_todays_activities', async () => {
@@ -148,7 +149,8 @@ describe('tool output validates against its outputSchema', () => {
   });
 
   it('get_strain_history', async () => {
-    await call('get_strain_history', { oldest: '2024-12-10' });
+    const out = await call('get_strain_history', { oldest: '2024-12-10' });
+    expect((out.strain as Array<{ steps?: number }>)[0].steps).toBe(8234);
   });
 
   it('get_recovery_trends', async () => {

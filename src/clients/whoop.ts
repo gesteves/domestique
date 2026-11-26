@@ -332,6 +332,8 @@ interface WhoopCycle {
     average_heart_rate: number;
     max_heart_rate: number;
   };
+  /** Total steps during the cycle; null when Whoop has no step data (added 2026-09-23) */
+  step_count?: number | null;
 }
 
 interface WhoopWorkout {
@@ -1397,6 +1399,7 @@ export class WhoopClient {
           ? formatHR(cycle.score.max_heart_rate)
           : undefined,
       calories: formatCalories(cycle.score.kilojoule / 4.184),
+      steps: cycle.step_count ?? undefined,
       activities: await Promise.all(
         workouts.filter((w) => w.score !== null).map((w) => this.normalizeWorkout(w))
       ),

@@ -418,7 +418,7 @@ export class ToolRegistry {
       register({
         name: 'get_strain_history',
         title: 'Strain History',
-        description: `Daily Whoop strain (0-21, logarithmic) over a date range, plus the per-day list of activities the user logged in the Whoop app. Use this to spot strain trends, correlate strain against recovery trends, or identify high- or low-load periods. Date parameters accept ISO YYYY-MM-DD or natural language ("yesterday", "7 days ago", "last week").`,
+        description: `Daily Whoop strain (0-21, logarithmic) and step count over a date range, plus the per-day list of activities the user logged in the Whoop app. Use this to spot strain trends, correlate strain against recovery trends, or identify high- or low-load periods. Date parameters accept ISO YYYY-MM-DD or natural language ("yesterday", "7 days ago", "last week").`,
         inputSchema: {
           oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
           newest: z.string().optional().describe('End date (defaults to today)'),

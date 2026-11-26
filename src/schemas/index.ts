@@ -395,6 +395,7 @@ const StrainDataZ = z.object({
   average_heart_rate: z.string().optional().describe('Average heart rate across the entire day'),
   max_heart_rate: z.string().optional().describe('Peak heart rate reached during the day'),
   calories: z.string().optional().describe('Total estimated calories burned across the day, per Whoop'),
+  steps: z.number().optional().describe("Total steps Whoop counted during this cycle. A Whoop cycle runs from waking to the next wake, not midnight to midnight, so it can differ from a calendar-day step count from another device. Absent when Whoop has no step data"),
   activities: z.array(StrainActivityZ).optional().describe("Activities logged in the user's Whoop app on this day. May be empty"),
 }).passthrough();
 

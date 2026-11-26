@@ -657,6 +657,7 @@ describe('WhoopClient', () => {
               average_heart_rate: 70,
               max_heart_rate: 150,
             },
+            step_count: 4120,
           },
         ],
       };
@@ -675,6 +676,7 @@ describe('WhoopClient', () => {
 
       expect(result).not.toBeNull();
       expect(result?.strain_score).toBe(8.5);
+      expect(result?.steps).toBe(4120); // steps so far in the in-progress cycle
     });
 
     it('should return null when no in-progress cycle', async () => {
@@ -755,6 +757,7 @@ describe('WhoopClient', () => {
             average_heart_rate: 75,
             max_heart_rate: 185,
           },
+          step_count: 8234,
         },
       ],
     };
@@ -809,8 +812,29 @@ describe('WhoopClient', () => {
       expect(result[0].date).toBe('2024-12-15'); // Date from end time
       expect(result[0].strain_score).toBe(15.5);
       expect(result[0].calories).toBe('2868 kcal'); // 12000 / 4.184
+      expect(result[0].steps).toBe(8234);
       expect(result[0].activities).toHaveLength(1);
       expect(result[0].activities[0].activity_type).toBe('Cycling');
+    });
+
+    it.each([
+      ['null (no step data for the cycle)', { step_count: null }],
+      ['missing (payloads from before the field existed)', { step_count: undefined }],
+    ])('omits steps when step_count is %s', async (_label, override) => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [{ ...mockCycles.records[0], ...override }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ records: [] }),
+        });
+
+      const result = await client.getStrainData('2024-12-15', '2024-12-15');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].steps).toBeUndefined();
     });
 
     it('should filter out unscored cycles', async () => {

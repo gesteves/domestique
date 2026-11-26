@@ -362,6 +362,8 @@ export interface StrainData {
   average_heart_rate?: string;
   max_heart_rate?: string;
   calories?: string; // e.g., "650 kcal"
+  /** Total steps during the Whoop cycle (wake to wake). Absent when Whoop has no step data */
+  steps?: number;
   activities: StrainActivity[];
 }
 
