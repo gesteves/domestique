@@ -3,6 +3,12 @@ import { logApiError } from '../utils/logger.js';
 
 export interface HttpRequestOptions {
   url: string;
+  /**
+   * What to log in place of `url` on failure. Set this when the URL itself is
+   * a secret (e.g. TrainerRoad's private calendar feed URL). Credential query
+   * parameters such as Google's `key=` are redacted automatically either way.
+   */
+  logUrl?: string;
   method?: string;
   headers?: Record<string, string>;
   body?: string;
@@ -34,7 +40,7 @@ async function performFetch(opts: HttpRequestOptions): Promise<Response> {
       opts.context,
       error instanceof Error ? error : undefined
     );
-    logApiError(networkError, { method, url: opts.url });
+    logApiError(networkError, { method, url: opts.logUrl ?? opts.url });
     throw networkError;
   }
 }
@@ -56,7 +62,7 @@ async function throwIfNotOk(response: Response, opts: HttpRequestOptions): Promi
   const httpError = opts.toHttpError(response.status, opts.context, body);
   logApiError(httpError, {
     method: opts.method ?? 'GET',
-    url: opts.url,
+    url: opts.logUrl ?? opts.url,
     statusCode: response.status,
     responseBody: body,
   });

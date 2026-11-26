@@ -1,8 +1,7 @@
 import { logWarn } from '../utils/logger.js';
-import { addDays, format } from 'date-fns';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { parseDateStringInTimezone } from '../utils/tz.js';
+import { addDaysToYMD, parseDateStringInTimezone } from '../utils/tz.js';
 import { formatPercent } from '../utils/format-units.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
@@ -59,6 +58,45 @@ const ANNOTATION_API_TO_DISPLAY = {
   SEASON_START: 'SeasonStart',
 } as const satisfies Record<'SICK' | 'INJURED' | 'HOLIDAY' | 'NOTE' | 'SEASON_START', AnnotationCategory>;
 
+type ExistingEvent = { tags?: string[]; category?: string };
+
+/**
+ * Guard for the workout tools: the event must be Domestique-tagged AND a
+ * WORKOUT. The tag alone isn't enough — Domestique also tags the annotations
+ * it creates, so without the category check `delete_workout` could delete a
+ * sick/holiday annotation (and vice versa for the annotation tools).
+ */
+function assertDomestiqueWorkout(event: ExistingEvent, verb: 'update' | 'delete'): void {
+  if (!event.tags?.includes(DOMESTIQUE_TAG)) {
+    throw new Error(
+      `Cannot ${verb} this workout: it was not created by Domestique. ` +
+      `Only workouts tagged with "${DOMESTIQUE_TAG}" can be ${verb}d via this tool.`
+    );
+  }
+  if (event.category !== 'WORKOUT') {
+    throw new Error(
+      `Cannot ${verb} this event with the workout tool: it is a ${event.category ?? 'non-workout'} event, not a planned workout. ` +
+      `Use the ${verb}_annotation tool for calendar annotations.`
+    );
+  }
+}
+
+/** Guard for the annotation tools: Domestique-tagged AND an annotation category. */
+function assertDomestiqueAnnotation(event: ExistingEvent, verb: 'update' | 'delete'): void {
+  if (!event.tags?.includes(DOMESTIQUE_TAG)) {
+    throw new Error(
+      `Cannot ${verb} this annotation: it was not created by Domestique. ` +
+      `Only annotations tagged with "${DOMESTIQUE_TAG}" can be ${verb}d via this tool.`
+    );
+  }
+  if (!event.category || !(event.category in ANNOTATION_API_TO_DISPLAY)) {
+    throw new Error(
+      `Cannot ${verb} this event with the annotation tool: it is a ${event.category ?? 'uncategorized'} event, not a calendar annotation. ` +
+      `Use the ${verb}_workout tool for planned workouts.`
+    );
+  }
+}
+
 function defaultAnnotationName(category: CreatableAnnotationCategory): string {
   switch (category) {
     case 'sick': return 'Sick';
@@ -108,9 +146,7 @@ export class PlanningTools {
     if (newest) {
       endDateStr = parseDateStringInTimezone(newest, timezone, 'newest');
     } else {
-      const startDate = new Date(startDateStr + 'T00:00:00');
-      const endDate = addDays(startDate, 7);
-      endDateStr = format(endDate, 'yyyy-MM-dd');
+      endDateStr = addDaysToYMD(startDateStr, 7);
     }
 
     // Fetch, merge, and deduplicate from both sources; fetch overlapping annotations and races in parallel
@@ -277,13 +313,7 @@ export class PlanningTools {
   async deleteWorkout(eventId: string): Promise<{ deleted: boolean; message: string }> {
     // First, verify the workout exists and has the domestique tag
     const event = await this.intervals.getEvent(eventId);
-
-    if (!event.tags?.includes(DOMESTIQUE_TAG)) {
-      throw new Error(
-        `Cannot delete this workout: it was not created by Domestique. ` +
-        `Only workouts tagged with "${DOMESTIQUE_TAG}" can be deleted via this tool.`
-      );
-    }
+    assertDomestiqueWorkout(event, 'delete');
 
     await this.intervals.deleteEvent(eventId);
 
@@ -302,13 +332,7 @@ export class PlanningTools {
 
     // First, verify the workout exists and has the domestique tag
     const existingEvent = await this.intervals.getEvent(event_id);
-
-    if (!existingEvent.tags?.includes(DOMESTIQUE_TAG)) {
-      throw new Error(
-        `Cannot update this workout: it was not created by Domestique. ` +
-        `Only workouts tagged with "${DOMESTIQUE_TAG}" can be updated via this tool.`
-      );
-    }
+    assertDomestiqueWorkout(existingEvent, 'update');
 
     // Build the update payload - only include fields that were provided
     const updatePayload: Record<string, unknown> = {};
@@ -325,10 +349,23 @@ export class PlanningTools {
     // but exposes the parsed prose as `workout_doc.description` on read,
     // which we use as a reliable boundary. For swimming, `workout_doc` is
     // not parsed (it was stored verbatim), so `workout_doc.description` is
-    // empty and the recovered "workout_doc" half ends up being the whole
-    // blob — same fallback the previous implementation had.
+    // empty and there's no reliable boundary between the prose and the swim
+    // structure. Replacing only one half would then either duplicate the old
+    // description or drop it, so require both in that case.
     const existingCombined = existingEvent.description ?? '';
     const existingProse = existingEvent.workout_doc?.description ?? '';
+    const existingIsSwim = sportFromIntervalsType(existingEvent.type ?? '') === 'swimming';
+    if (
+      existingIsSwim &&
+      !existingProse &&
+      existingCombined &&
+      (description === undefined) !== (structure === undefined)
+    ) {
+      throw new Error(
+        'For swim workouts, pass both `description` and `structure` when changing either one: ' +
+        'the stored swim text has no reliable boundary between the two, so one cannot be replaced without the other.'
+      );
+    }
     const prefix = existingProse ? `${existingProse}\n\n` : '';
     const existingWorkoutDoc = existingCombined.startsWith(prefix)
       ? existingCombined.slice(prefix.length)
@@ -459,13 +496,7 @@ export class PlanningTools {
     const { event_id, category, start_date, end_date, name, description } = input;
 
     const existingEvent = await this.intervals.getEvent(event_id);
-
-    if (!existingEvent.tags?.includes(DOMESTIQUE_TAG)) {
-      throw new Error(
-        `Cannot update this annotation: it was not created by Domestique. ` +
-        `Only annotations tagged with "${DOMESTIQUE_TAG}" can be updated via this tool.`
-      );
-    }
+    assertDomestiqueAnnotation(existingEvent, 'update');
 
     const updatePayload: Record<string, unknown> = {};
     const updatedFields: string[] = [];
@@ -496,8 +527,17 @@ export class PlanningTools {
       updatedFields.push('end_date');
     }
 
-    if (resolvedStart && resolvedEnd && resolvedEnd < resolvedStart) {
-      throw new Error('end_date must be on or after start_date');
+    // Validate the resulting range, not just the fields passed in this call:
+    // moving only end_date before the existing start (or only start_date past
+    // the existing end) would otherwise write an inverted range.
+    const effectiveStart = resolvedStart ?? existingEvent.start_date_local?.slice(0, 10);
+    const effectiveEnd = end_date === ''
+      ? undefined
+      : resolvedEnd ?? existingEvent.end_date_local?.slice(0, 10);
+    if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+      throw new Error(
+        `end_date (${effectiveEnd}) must be on or after start_date (${effectiveStart})`
+      );
     }
 
     if (name !== undefined) {
@@ -548,13 +588,7 @@ export class PlanningTools {
    */
   async deleteAnnotation(eventId: string): Promise<{ deleted: boolean; message: string }> {
     const event = await this.intervals.getEvent(eventId);
-
-    if (!event.tags?.includes(DOMESTIQUE_TAG)) {
-      throw new Error(
-        `Cannot delete this annotation: it was not created by Domestique. ` +
-        `Only annotations tagged with "${DOMESTIQUE_TAG}" can be deleted via this tool.`
-      );
-    }
+    assertDomestiqueAnnotation(event, 'delete');
 
     await this.intervals.deleteEvent(eventId);
 
@@ -597,7 +631,9 @@ export class PlanningTools {
     );
     const endDate = params.newest
       ? parseDateStringInTimezone(params.newest, timezone, 'newest')
-      : format(addDays(new Date(startDate), 30), 'yyyy-MM-dd');
+      // Pure calendar arithmetic: `new Date('YYYY-MM-DD')` is UTC midnight and
+      // `format` reads local time, which made this start+29 on hosts west of UTC.
+      : addDaysToYMD(startDate, 30);
 
     // 1. Get TR running workouts
     const trWorkouts = await this.trainerroad.getPlannedWorkouts(startDate, endDate, timezone);

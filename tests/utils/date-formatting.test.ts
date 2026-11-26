@@ -71,6 +71,12 @@ describe('date-formatting', () => {
   });
 
   describe('formatResponseDates', () => {
+    it('interprets naive local datetimes in the athlete timezone, not the server timezone', () => {
+      // Tokyo is never the test host's timezone offset, so a server-local parse would differ.
+      const result = formatResponseDates({ date: '2024-12-15T19:00:00' }, 'Asia/Tokyo');
+      expect(result.date).toMatch(/^Sunday, December 15, 2024 at 7:00 PM GMT\+9$/);
+    });
+
     it('should format date-only fields', () => {
       const data = {
         date: '2024-12-15',

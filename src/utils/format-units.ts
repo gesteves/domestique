@@ -25,9 +25,12 @@ const METERS_TO_INCHES = 39.3700787;
  * @returns Formatted string like "1:30:00" or "0:05:00"
  */
 export function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.round(seconds % 60);
+  // Round once up front, then split: rounding the seconds component after
+  // flooring minutes can produce ":60" (e.g. 1799.6 s → "0:29:60").
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
 
   // Always use h:mm:ss format to avoid ambiguity (e.g., "0:05:00" not "5:00")
   return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -146,14 +149,14 @@ export function formatPace(secPerKm: number, isSwim: boolean): string {
   if (isSwim) {
     // Per-100 metric distance: convert sec/km → sec/100m, then optionally to sec/100yd.
     const secPer100m = secPerKm / 10;
-    const sec = isImperial ? secPer100m / METERS_TO_YARDS : secPer100m;
+    const sec = Math.round(isImperial ? secPer100m / METERS_TO_YARDS : secPer100m);
     const m = Math.floor(sec / 60);
-    const s = Math.round(sec % 60);
+    const s = sec % 60;
     return `${m}:${s.toString().padStart(2, '0')}/${isImperial ? '100yd' : '100m'}`;
   }
-  const sec = isImperial ? secPerKm / KM_TO_MILES : secPerKm;
+  const sec = Math.round(isImperial ? secPerKm / KM_TO_MILES : secPerKm);
   const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
+  const s = sec % 60;
   return `${m}:${s.toString().padStart(2, '0')}/${isImperial ? 'mi' : 'km'}`;
 }
 
@@ -204,9 +207,10 @@ export function parseDurationToSeconds(duration: string): number {
  * @returns Formatted string like "508:30:00" or "3:45:00"
  */
 export function formatLargeDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.round(seconds % 60);
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
 
   return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }

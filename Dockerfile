@@ -4,11 +4,10 @@ FROM node:26-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 
-# Install all dependencies (including dev)
-# Use npm install to generate lock file, or npm ci if lock file exists
-RUN npm install
+# Install all dependencies (including dev) exactly as pinned in package-lock.json
+RUN npm ci
 
 # Copy source files
 COPY tsconfig.json ./
@@ -37,10 +36,10 @@ RUN addgroup -g 1001 -S nodejs && \
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 
-# Install production dependencies only
-RUN npm install --omit=dev && npm cache clean --force
+# Install production dependencies only, exactly as pinned in package-lock.json
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist

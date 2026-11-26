@@ -98,3 +98,40 @@ export function googleErrorBuilders<E extends ApiError>(ErrorClass: {
       ErrorClass.networkError(context, err),
   };
 }
+
+/**
+ * The legacy Maps web services (Geocoding, Time Zone, Elevation) report
+ * logical failures as HTTP 200 with a non-OK `status`. Map the failure
+ * statuses onto the HTTP status whose category/message they correspond to.
+ * `OK` and `ZERO_RESULTS` aren't failures and map to nothing.
+ */
+const LEGACY_STATUS_TO_HTTP: Record<string, number> = {
+  INVALID_REQUEST: 400,
+  REQUEST_DENIED: 403,
+  OVER_QUERY_LIMIT: 429,
+  OVER_DAILY_LIMIT: 429,
+  UNKNOWN_ERROR: 500,
+};
+
+/**
+ * Build the client's ApiError for a failure `status` in a 200 response, or
+ * return null when `status` is OK / ZERO_RESULTS / absent. Without this a bad
+ * or unauthorized API key (`REQUEST_DENIED`) is misreported as "no results".
+ */
+export function buildGoogleErrorFromLegacyStatus<E extends ApiError>(
+  ErrorClass: GoogleErrorCtor<E>,
+  apiName: string,
+  status: string | undefined,
+  context: ErrorContext,
+  errorMessage?: string
+): E | null {
+  const httpEquivalent = status ? LEGACY_STATUS_TO_HTTP[status] : undefined;
+  if (httpEquivalent === undefined) return null;
+  return buildGoogleErrorFromHttpStatus(
+    ErrorClass,
+    apiName,
+    httpEquivalent,
+    context,
+    errorMessage ? `${status}: ${errorMessage}` : status
+  );
+}

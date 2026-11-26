@@ -926,6 +926,7 @@ describe('IntervalsClient', () => {
         type: 'Ride',
         category: 'WORKOUT',
         icu_training_load: 80,
+        icu_intensity: 85,
         moving_time: 3600,
       },
       {
@@ -959,9 +960,12 @@ describe('IntervalsClient', () => {
       expect(callUrl).not.toContain('RACE_C');
 
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('event-1');
+      // Numeric event id (what update/delete accept), not the uid.
+      expect(result[0].id).toBe('1');
       expect(result[0].name).toBe('Threshold Intervals');
       expect(result[0].expected_tss).toBe(80);
+      // icu_intensity is a percentage; expected_if is a ratio like TrainerRoad's.
+      expect(result[0].expected_if).toBe(0.85);
       expect(result[0].source).toBe('intervals.icu');
     });
   });
@@ -1007,7 +1011,7 @@ describe('IntervalsClient', () => {
       const result = await client.getAnnotations(rangeStart, rangeEnd);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
-        id: 'note-1',
+        id: '1',
         category: 'Note',
         name: 'Felt great',
         description: undefined,
@@ -1034,7 +1038,7 @@ describe('IntervalsClient', () => {
       const result = await client.getAnnotations(rangeStart, rangeEnd);
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        id: 'holiday-1',
+        id: '2',
         category: 'Holiday',
         start_date: '2025-05-05',
         end_date: '2025-05-12',
@@ -1149,7 +1153,7 @@ describe('IntervalsClient', () => {
       const result = await client.getAnnotations(rangeStart, rangeEnd);
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        id: 'season-2025',
+        id: '8',
         category: 'SeasonStart',
         name: '2025 season',
         description: 'Block 1: base',

@@ -1,11 +1,12 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
 import {
   buildGoogleErrorFromHttpStatus,
+  buildGoogleErrorFromLegacyStatus,
   buildGoogleNetworkError,
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
-import { logApiCall } from '../utils/logger.js';
+import { logApiCall, logApiError } from '../utils/logger.js';
 
 const GOOGLE_GEOCODING_API_BASE = 'https://maps.googleapis.com/maps/api/geocode';
 
@@ -101,9 +102,11 @@ const googleGeocodingHttpErrorBuilders = googleErrorBuilders(GoogleGeocodingApiE
  * must also be enabled on the project.
  *
  * Logical failures (`ZERO_RESULTS`, `REQUEST_DENIED`, etc.) come back as
- * HTTP 200 with a non-OK `status`. The `geocode()` method interprets those:
- * an empty `results` array throws `not_found`, anything else returns the
- * top result.
+ * HTTP 200 with a non-OK `status`. Failure statuses (`REQUEST_DENIED`,
+ * `OVER_QUERY_LIMIT`, `INVALID_REQUEST`, …) throw the matching error category
+ * from both methods. Otherwise `geocode()` throws `not_found` for an empty
+ * `results` array and returns the top result, and `reverseGeocode()` returns
+ * the top result or null.
  *
  * @see https://developers.google.com/maps/documentation/geocoding
  */
@@ -137,6 +140,8 @@ export class GoogleGeocodingClient {
       context,
       ...googleGeocodingHttpErrorBuilders,
     });
+
+    this.throwOnFailureStatus(response, context, url);
 
     const top = response.results?.[0];
     const lat = top?.geometry?.location?.lat;
@@ -185,6 +190,23 @@ export class GoogleGeocodingClient {
       ...googleGeocodingHttpErrorBuilders,
     });
 
+    this.throwOnFailureStatus(response, context, url);
+
     return response.results?.[0] ?? null;
+  }
+
+  /** Throw for a 200 response whose `status` is a failure (e.g. REQUEST_DENIED). */
+  private throwOnFailureStatus(response: GoogleGeocodingResponse, context: ErrorContext, url: URL): void {
+    const statusError = buildGoogleErrorFromLegacyStatus(
+      GoogleGeocodingApiError,
+      'Geocoding',
+      response.status,
+      context,
+      response.error_message
+    );
+    if (statusError) {
+      logApiError(statusError, { method: 'GET', url: url.toString(), responseBody: statusError.responseBody });
+      throw statusError;
+    }
   }
 }

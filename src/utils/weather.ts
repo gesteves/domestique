@@ -496,7 +496,7 @@ export function transformForecastHour(
 }
 
 /**
- * Filter the hourly forecast to "the rest of today" in the athlete's timezone:
+ * Filter the hourly forecast to "the rest of today" in the location's timezone:
  * keep hours that fall on today's local date and whose 1-hour window has not
  * fully elapsed (i.e. the in-progress hour and every later hour today).
  *
@@ -525,7 +525,7 @@ export function filterHourlyToRestOfDay(
 
 /**
  * Filter the hourly forecast to all hours that fall on a specific local date
- * in the athlete's timezone. Used for future-date forecasts where the full
+ * in the location's timezone. Used for future-date forecasts where the full
  * 24-hour day is relevant (no "remaining hours" cutoff).
  */
 export function filterHourlyToDate(
@@ -559,7 +559,7 @@ function formatDisplayDate(date: GoogleForecastDay['displayDate']): string | und
 
 /**
  * Pick the daily-forecast entry whose `displayDate` matches `targetDate` in
- * the athlete's timezone. Google returns one entry per local day in
+ * the location's timezone. Google returns one entry per local day in
  * `forecastDays[]`. Returns undefined when nothing matches.
  */
 function findDailyForecastForDate(
@@ -739,7 +739,7 @@ function localDayStartToUtcMs(targetDate: string, timezone: string): number {
  * field is just omitted on the output. Hourly AQ entries are matched to
  * weather hours by ISO timestamp (top-of-hour boundaries on both APIs), so a
  * missing entry for a given hour is silently skipped. The pollen response is
- * filtered to the entry whose date matches today in the athlete's timezone
+ * filtered to the entry whose date matches today in the location's timezone
  * (and to non-zero index values to keep the payload tight) — if nothing
  * remains, pollen is omitted from the location forecast.
  */
@@ -794,7 +794,7 @@ export function assembleLocationForecast(
  * - `alerts` are filtered to those whose effective window intersects the
  *   target local day; advisories issued today for tomorrow show up here.
  * - `hourly_forecast` covers the full 24 hours of the target date in the
- *   athlete's timezone.
+ *   location's timezone.
  * - `pollen` is included only when the caller passes a response that contains
  *   a matching `dailyInfo` entry (the calling code gates on the Pollen API's
  *   5-day window before bothering to fetch).

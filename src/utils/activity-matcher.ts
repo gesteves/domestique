@@ -12,9 +12,14 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   'ride': 'Cycling',
   'cycling': 'Cycling',
   'virtualride': 'Cycling',
+  'gravelride': 'Cycling',
+  'mountainbikeride': 'Cycling',
+  'ebikeride': 'Cycling',
+  'emountainbikeride': 'Cycling',
   'run': 'Running',
   'running': 'Running',
   'virtualrun': 'Running',
+  'trailrun': 'Running',
   'swim': 'Swimming',
   'swimming': 'Swimming',
   'openwaterswim': 'Swimming',
@@ -27,6 +32,7 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityType> = {
   'hiking': 'Hiking',
   'rowing': 'Rowing',
   'row': 'Rowing',
+  'virtualrow': 'Rowing',
   'weighttraining': 'Strength',
   'strength': 'Strength',
   'workout': 'Strength',
@@ -72,8 +78,9 @@ function getMatchingTimestamp(workout: NormalizedWorkout): string {
 
 /**
  * Find the best matching Whoop activity for a workout.
- * Returns high confidence matches only (timestamp within 5 minutes + same activity type).
- * Optionally excludes already-used activity IDs.
+ * Returns high confidence matches only (timestamp within 5 minutes + compatible
+ * activity type), choosing the closest start time and preferring an exact type
+ * match over an 'Other' wildcard. Optionally excludes already-used activity IDs.
  */
 function findBestMatch(
   workout: NormalizedWorkout,
@@ -88,6 +95,10 @@ function findBestMatch(
   const workoutTimestamp = getMatchingTimestamp(workout);
   const workoutStart = parseISO(workoutTimestamp);
 
+  // Pick the *closest* eligible candidate, preferring an exact type match over
+  // an 'Other' wildcard, rather than the first one in list order.
+  let best: StrainActivity | null = null;
+  let bestRank: [number, number] | null = null; // [wildcard ? 1 : 0, |Δt| ms]
   for (const activity of whoopActivities) {
     if (excludeIds?.has(activity.id)) continue;
 
@@ -100,11 +111,18 @@ function findBestMatch(
 
     // High confidence: timestamp match + type match
     if (timeDiff <= 5 && sameType) {
-      return activity;
+      const rank: [number, number] = [
+        workout.activity_type === activity.activity_type ? 0 : 1,
+        Math.abs(workoutStart.getTime() - activityStart.getTime()),
+      ];
+      if (!bestRank || rank[0] < bestRank[0] || (rank[0] === bestRank[0] && rank[1] < bestRank[1])) {
+        best = activity;
+        bestRank = rank;
+      }
     }
   }
 
-  return null;
+  return best;
 }
 
 /**
@@ -113,7 +131,8 @@ function findBestMatch(
  * - High confidence only: Start times within 5 minutes AND same activity type
  * - Workouts without high confidence matches are returned without Whoop data
  *
- * Uses UTC timestamps when available for accurate cross-platform matching.
+ * Start times carry UTC offsets, so comparisons are between absolute instants
+ * regardless of each platform's local timezone.
  */
 export function matchActivities(
   intervalsWorkouts: NormalizedWorkout[],
@@ -154,7 +173,8 @@ export function matchActivities(
 /**
  * Find a single matching Whoop activity for an Intervals workout.
  * Only returns high confidence matches (timestamp within 5 minutes + same activity type).
- * Uses UTC timestamps when available for accurate cross-platform matching.
+ * Start times carry UTC offsets, so comparisons are between absolute instants
+ * regardless of each platform's local timezone.
  */
 export function findMatchingWhoopActivity(
   workout: NormalizedWorkout,

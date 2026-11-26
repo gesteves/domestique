@@ -158,7 +158,21 @@ export async function closeRedis(): Promise<void> {
 const WHOOP_ACCESS_TOKEN_KEY = 'whoop:access_token';
 const WHOOP_REFRESH_TOKEN_KEY = 'whoop:refresh_token';
 const WHOOP_REFRESH_LOCK_KEY = 'whoop:refresh_lock';
-const LOCK_TTL_SECONDS = 10; // Max time to hold lock before auto-release
+/**
+ * Max time to hold the refresh lock before auto-release. Must exceed the
+ * worst-case refresh duration (3 attempts × 10 s fetch timeout + 3 s backoff
+ * in WhoopClient) so the lock can't expire while a single-use refresh token is
+ * in flight and let another process send the same token.
+ */
+export const LOCK_TTL_SECONDS = 45;
+
+/** Atomic compare-and-delete: only the lock's owner may release it. */
+const RELEASE_LOCK_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end`;
 
 export interface WhoopTokens {
   accessToken: string;
@@ -207,17 +221,20 @@ export async function acquireRefreshLock(lockId: string): Promise<boolean> {
 
 /**
  * Release the distributed lock for token refresh.
- * Only releases if the lock is held by the given lockId (prevents releasing someone else's lock).
+ * Only releases if the lock is held by the given lockId. The check and the
+ * delete run atomically in a Lua script, so a lock that expired and was
+ * re-acquired by another process between the two steps is never deleted.
  */
 export async function releaseRefreshLock(lockId: string): Promise<void> {
   try {
     const client = await getRedisClient();
     if (!client) return;
 
-    // Only delete if we own the lock (compare lockId)
-    const currentLockId = await client.get(WHOOP_REFRESH_LOCK_KEY);
-    if (currentLockId === lockId) {
-      await client.del(WHOOP_REFRESH_LOCK_KEY);
+    const released = await client.eval(RELEASE_LOCK_SCRIPT, {
+      keys: [WHOOP_REFRESH_LOCK_KEY],
+      arguments: [lockId],
+    });
+    if (released === 1) {
       logDebug('Redis', 'Lock released');
     } else {
       logDebug('Redis', 'Lock not released (not owner or already expired)');
@@ -249,7 +266,16 @@ export async function isRefreshLockHeld(): Promise<boolean> {
  * Refresh token is stored with version tracking for concurrent update detection
  */
 export async function storeWhoopTokens(tokens: WhoopTokens): Promise<{ success: boolean; version: number }> {
-  const client = await getRedisClient();
+  // Never throws: callers treat a failed store as { success: false }. A throw
+  // here (e.g. Redis connection failure) used to escape into the caller's
+  // retry loop and re-send an already-consumed refresh token.
+  let client: RedisClientType | null;
+  try {
+    client = await getRedisClient();
+  } catch (error) {
+    logError('Redis', 'Error connecting to store Whoop tokens', error);
+    return { success: false, version: 0 };
+  }
   if (!client) return { success: false, version: 0 };
 
   // Validate tokens

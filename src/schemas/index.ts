@@ -476,7 +476,7 @@ const WellnessDataZ = z.object(WellnessFieldsShape).passthrough();
 // ============================================
 
 const PlannedWorkoutZ = z.object({
-  id: z.string().optional().describe('Unique workout identifier'),
+  id: z.string().optional().describe('Unique workout identifier. For Intervals.icu workouts this is the event ID that update_workout / delete_workout accept'),
   scheduled_for: z.string().optional().describe("Scheduled date/time for the workout. Midnight means the user hasn't specified a time"),
   name: z.string().optional().describe('Workout name'),
   description: z.string().optional().describe('Workout description, possibly including structure'),
@@ -490,12 +490,12 @@ const PlannedWorkoutZ = z.object({
 }).passthrough();
 
 const AnnotationZ = z.object({
-  id: z.string().optional().describe('Unique annotation identifier'),
+  id: z.string().optional().describe('Unique annotation identifier. For Intervals.icu annotations this is the event ID that update_annotation / delete_annotation accept'),
   category: z.enum(['Sick', 'Injured', 'Holiday', 'Note', 'SeasonStart', 'TrainingPhaseStart']).describe('Annotation category. Sick and Injured explain training gaps; Holiday marks vacation; Note is a freeform calendar note; SeasonStart anchors the start of a training season; TrainingPhaseStart marks the day a TrainerRoad training phase (Base, Build, Specialty, Recovery Week) begins'),
   name: z.string().optional().describe('Annotation title'),
   description: z.string().optional().describe('Annotation body / details'),
-  start_date: z.string().describe('Local start date (YYYY-MM-DD)'),
-  end_date: z.string().optional().describe('Local end date (YYYY-MM-DD); absent for single-day annotations'),
+  start_date: z.string().describe('Local start date'),
+  end_date: z.string().optional().describe('Local end date (inclusive); absent for single-day annotations'),
   training_availability: z.enum(['Normal', 'Limited', 'Unavailable']).optional().describe('Training availability set on the annotation. Limited means the athlete can train in a reduced capacity; Unavailable means no training is possible'),
 }).passthrough();
 
@@ -503,10 +503,10 @@ const annotationsField = z.array(AnnotationZ).optional().describe('Non-workout c
 
 const TrainingPhaseZ = z.object({
   name: z.enum(['Base', 'Build', 'Specialty', 'Recovery Week']).describe('Active TrainerRoad training phase. Base builds aerobic capacity; Build adds intensity; Specialty sharpens for an A-race; Recovery Week is post-A-race recovery'),
-  started_on: z.string().describe('Local date the phase started (YYYY-MM-DD)'),
-  ends_on: z.string().nullable().describe('Local date the next phase begins (YYYY-MM-DD, exclusive). Null when no subsequent phase marker is known yet'),
+  started_on: z.string().describe('Local date the phase started'),
+  ends_on: z.string().nullable().optional().describe('Local date the next phase begins (exclusive). Omitted when no subsequent phase marker is known yet'),
   week: z.number().int().describe('1-indexed week number of the phase as of the queried date'),
-  weeks_remaining: z.number().int().nullable().describe('Whole weeks remaining in the phase as of the queried date. Null when ends_on is null'),
+  weeks_remaining: z.number().int().nullable().optional().describe('Whole weeks remaining in the phase as of the queried date. Omitted when ends_on is omitted'),
 }).passthrough();
 
 const trainingPhaseField = TrainingPhaseZ.nullable().optional().describe('Active TrainerRoad training phase as of the queried date, with computed week / weeks_remaining. Use to interpret the intent of the current block when judging workouts and recovery');
@@ -588,7 +588,7 @@ const PaceBestZ = z.object({
 }).passthrough();
 
 const PaceCurveSummaryZ = z.object({
-  best_400m: PaceBestZ.nullable().optional().describe('Best 400m time and pace (sprint/track)'),
+  best_400m: PaceBestZ.nullable().optional().describe('Best 400m time and pace (running sprint/track, or swimming)'),
   best_1km: PaceBestZ.nullable().optional().describe('Best 1km time and pace (middle distance)'),
   best_mile: PaceBestZ.nullable().optional().describe('Best mile time and pace'),
   best_5km: PaceBestZ.nullable().optional().describe('Best 5km time and pace (aerobic endurance)'),
@@ -605,8 +605,8 @@ const PaceCurveSummaryZ = z.object({
 
 const PaceCurveComparisonZ = z.object({
   distance_label: z.string().optional(),
-  current_time_seconds: z.number().optional().describe('Time in current period'),
-  previous_time_seconds: z.number().optional().describe('Time in previous period'),
+  current_seconds: z.number().optional().describe('Time in current period'),
+  previous_seconds: z.number().optional().describe('Time in previous period'),
   change_seconds: z.number().optional().describe('Absolute change in seconds (negative = faster)'),
   change_percent: z.string().optional().describe('Change from previous period (negative = faster)'),
   improved: z.boolean().optional().describe('Whether performance improved (true = faster)'),
@@ -683,7 +683,7 @@ const PollenIndexLevelZ = z.object({
 }).passthrough();
 
 const PollenZ = z.object({
-  date: z.string().describe("Date the pollen forecast applies to, in YYYY-MM-DD format in the athlete's timezone"),
+  date: z.string().describe("Date the pollen forecast applies to, in the location's timezone"),
   universal_pollen_index: z.array(PollenIndexLevelZ).describe('Pollen activity grouped by UPI value, sorted by value descending (worst conditions first). Only levels with at least one entry are present'),
 }).passthrough();
 
@@ -787,7 +787,7 @@ const LocationForecastZ = z.object({
   latitude: z.number().optional().describe('Location latitude'),
   longitude: z.number().optional().describe('Location longitude'),
   elevation: z.string().optional().describe('Elevation at the location'),
-  forecast_date: z.string().optional().describe("The date this forecast is for (YYYY-MM-DD) in the location's timezone"),
+  forecast_date: z.string().optional().describe("The date this forecast is for, in the location's timezone"),
   current_conditions: CurrentWeatherZ.nullable().optional().describe('Current conditions at the location. Only present when the forecast date is today; null if no current data is available'),
   daily_summary: DailySummaryZ.optional().describe('Daily forecast summary for the date (high/low temps, conditions, precipitation, wind)'),
   hourly_forecast: z.array(HourlyForecastZ).optional().describe("Hourly forecast for the forecast date in the location's timezone — remaining hours of the day when the date is today, all 24 hours otherwise"),
@@ -853,8 +853,8 @@ export const wellnessTrendsOutputSchema = {
 
 export const activityTotalsOutputSchema = {
   period: z.object({
-    start_date: z.string().optional().describe('Start date of the period (YYYY-MM-DD)'),
-    end_date: z.string().optional().describe('End date of the period (YYYY-MM-DD)'),
+    start_date: z.string().optional().describe('Start date of the period'),
+    end_date: z.string().optional().describe('End date of the period'),
     weeks: z.number().optional().describe('Number of weeks in the period'),
     days: z.number().optional().describe('Total days in the period'),
     active_days: z.number().optional().describe('Days with at least one activity'),
@@ -874,7 +874,7 @@ export const activityTotalsOutputSchema = {
 
 export const upcomingActivitiesOutputSchema = {
   workouts: z.array(PlannedWorkoutZ).describe('Planned workouts and fitness activities for the requested future range, from both TrainerRoad and Intervals.icu'),
-  races: z.array(RaceZ).describe('Upcoming races detected on the TrainerRoad calendar within the requested range'),
+  races: z.array(RaceZ).describe('Upcoming races within the requested range: single-discipline races from Intervals.icu and triathlons from the TrainerRoad calendar'),
   annotations: annotationsField,
   training_phase: trainingPhaseField,
   hints: hintsField,
@@ -903,7 +903,7 @@ export const powerCurveOutputSchema = {
     previous_period_end: z.string().optional().describe('End date of comparison period'),
     previous_activity_count: z.number().optional().describe('Number of activities in comparison period'),
     changes: z.array(PowerCurveComparisonZ).optional().describe('Changes at each duration between periods'),
-  }).passthrough().nullable().describe('Comparison data vs a previous period. Null when compare_to_* params were not supplied'),
+  }).passthrough().nullable().optional().describe('Comparison data vs a previous period. Omitted when compare_to_* params were not supplied'),
   hints: hintsField,
 } as const;
 
@@ -920,7 +920,7 @@ export const paceCurveOutputSchema = {
     previous_period_end: z.string().optional(),
     previous_activity_count: z.number().optional(),
     changes: z.array(PaceCurveComparisonZ).optional(),
-  }).passthrough().nullable().describe('Comparison data vs a previous period. Null when compare_to_* params were not supplied'),
+  }).passthrough().nullable().optional().describe('Comparison data vs a previous period. Omitted when compare_to_* params were not supplied'),
   hints: hintsField,
 } as const;
 
@@ -936,7 +936,7 @@ export const hrCurveOutputSchema = {
     previous_period_end: z.string().optional(),
     previous_activity_count: z.number().optional(),
     changes: z.array(HRCurveComparisonZ).optional(),
-  }).passthrough().nullable().describe('Comparison data vs a previous period. Null when compare_to_* params were not supplied'),
+  }).passthrough().nullable().optional().describe('Comparison data vs a previous period. Omitted when compare_to_* params were not supplied'),
 } as const;
 
 // ============================================
@@ -967,7 +967,7 @@ export const todaysSummaryOutputSchema = {
 } as const;
 
 export const forecastInputSchema = {
-  date: z.string().optional().describe("Date the forecast is for, accepting ISO YYYY-MM-DD or natural language (e.g., \"tomorrow\", \"in 3 days\"). Defaults to today. Must be within today through 10 days from today"),
+  date: z.string().optional().describe("Date the forecast is for, accepting ISO YYYY-MM-DD or natural language (e.g., \"tomorrow\", \"in 3 days\"). Defaults to today. Must be within today through 9 days from today"),
   location: z.string().optional().describe("Free-text place query: a city, postal code, neighborhood, landmark, venue, or street address. Prefer the most specific form available so the forecast reflects the spot's microclimate (e.g., narrow to the race start when known). When omitted, returns forecasts for the user's configured weather locations. The resolved place name is surfaced in the response"),
 } as const;
 
@@ -980,7 +980,7 @@ export const todaysActivitiesOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
   completed_workouts: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones) and matched Whoop strain data'),
   planned_workouts: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
-  races: z.array(RaceZ).describe("Today's race, if any (zero or one entry, detected from the TrainerRoad calendar)"),
+  races: z.array(RaceZ).describe("Today's races, if any: single-discipline races from Intervals.icu and triathlons from the TrainerRoad calendar"),
   annotations: annotationsField,
   training_phase: trainingPhaseField,
   workouts_completed: z.number().optional().describe('Number of workouts completed today'),
@@ -1023,8 +1023,8 @@ export const createAnnotationOutputSchema = {
   uid: z.string().optional().describe('Intervals.icu event UID'),
   category: z.enum(['Sick', 'Injured', 'Holiday', 'Note', 'SeasonStart']).optional().describe('Annotation category'),
   name: z.string().optional().describe('Annotation title'),
-  start_date: z.string().optional().describe('Local start date (YYYY-MM-DD)'),
-  end_date: z.string().optional().describe('Local end date (YYYY-MM-DD); absent for single-day annotations'),
+  start_date: z.string().optional().describe('Local start date'),
+  end_date: z.string().optional().describe('Local end date (inclusive); absent for single-day annotations'),
   intervals_icu_url: z.string().optional().describe('URL to view the annotation in Intervals.icu'),
 } as const;
 
@@ -1033,8 +1033,8 @@ export const updateAnnotationOutputSchema = {
   uid: z.string().optional().describe('Intervals.icu event UID'),
   category: z.enum(['Sick', 'Injured', 'Holiday', 'Note', 'SeasonStart']).optional().describe('Annotation category'),
   name: z.string().optional().describe('Annotation title'),
-  start_date: z.string().optional().describe('Local start date (YYYY-MM-DD)'),
-  end_date: z.string().optional().describe('Local end date (YYYY-MM-DD); absent for single-day annotations'),
+  start_date: z.string().optional().describe('Local start date'),
+  end_date: z.string().optional().describe('Local end date (inclusive); absent for single-day annotations'),
   intervals_icu_url: z.string().optional().describe('URL to view the annotation in Intervals.icu'),
   updated_fields: z.array(z.string()).optional().describe('Fields that were updated'),
 } as const;
@@ -1045,7 +1045,7 @@ export const deleteAnnotationOutputSchema = {
 } as const;
 
 export const syncTrainerRoadRunsOutputSchema = {
-  tr_runs_found: z.number().optional().describe('Number of TR runs found that need syncing'),
+  tr_runs_found: z.number().optional().describe('Number of TrainerRoad runs found in the date range (synced or not)'),
   orphans_deleted: z.number().optional().describe('Number of orphaned workouts deleted'),
   runs_to_sync: z.array(z.object({
     tr_uid: z.string().optional().describe('TrainerRoad workout UID'),

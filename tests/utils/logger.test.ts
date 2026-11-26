@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { logApiError, logUnexpectedError, initBugsnag, getBugsnagClient, _setBugsnagClientForTesting, logDebug, logInfo, logWarn, logError, logApiCall, logToolCall } from '../../src/utils/logger.js';
+import { logApiError, redactUrl, logUnexpectedError, initBugsnag, getBugsnagClient, _setBugsnagClientForTesting, logDebug, logInfo, logWarn, logError, logApiCall, logToolCall } from '../../src/utils/logger.js';
 import { IntervalsApiError, TrainerRoadApiError } from '../../src/errors/index.js';
 
 describe('Logger', () => {
@@ -15,7 +15,46 @@ describe('Logger', () => {
     vi.restoreAllMocks();
   });
 
+  describe('redactUrl', () => {
+    it('redacts credential query parameters', () => {
+      const out = redactUrl('https://weather.googleapis.com/v1/forecast/days:lookup?location.latitude=1&key=AIzaSECRET&token=abc');
+      expect(out).not.toContain('AIzaSECRET');
+      expect(out).not.toContain('abc');
+      expect(out).toContain('key=REDACTED');
+      expect(out).toContain('location.latitude=1');
+    });
+
+    it('strips userinfo credentials', () => {
+      expect(redactUrl('https://user:pass@example.test/x')).toBe('https://example.test/x');
+    });
+
+    it('leaves URLs without credentials unchanged', () => {
+      const url = 'https://intervals.icu/api/v1/activity/i123?types=watts';
+      expect(redactUrl(url)).toBe(url);
+    });
+
+    it('returns non-URL strings unchanged', () => {
+      expect(redactUrl('TrainerRoad calendar feed')).toBe('TrainerRoad calendar feed');
+    });
+  });
+
   describe('logApiError', () => {
+    it('never logs or reports an API key from the URL', () => {
+      const notify = vi.fn((_err: Error, cb?: (e: { context: string; addMetadata: (s: string, d: Record<string, unknown>) => void }) => void) => {
+        const metadata: Record<string, Record<string, unknown>> = {};
+        cb?.({ context: '', addMetadata: (section, data) => { metadata[section] = data; } });
+        notify.mock.lastMetadata = metadata;
+      }) as ReturnType<typeof vi.fn> & { mock: { lastMetadata?: Record<string, Record<string, unknown>> } };
+      _setBugsnagClientForTesting({ notify });
+
+      const error = IntervalsApiError.fromHttpStatus(429, { operation: 'fetch pollen' });
+      logApiError(error, { method: 'GET', url: 'https://pollen.googleapis.com/v1/forecast:lookup?key=AIzaSECRET' });
+
+      const logged = consoleErrorSpy.mock.calls.flat().join('\n');
+      expect(logged).not.toContain('AIzaSECRET');
+      expect(JSON.stringify(notify.mock.lastMetadata)).not.toContain('AIzaSECRET');
+    });
+
     it('should log error with source, operation, and message', () => {
       const error = IntervalsApiError.fromHttpStatus(500, {
         operation: 'update activity intervals',

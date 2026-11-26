@@ -227,6 +227,12 @@ describe('HistoricalTools', () => {
       expect(mockIntervalsClient.getActivities).not.toHaveBeenCalled();
     });
 
+    it('should reject a range that spans today without starting or ending on it', async () => {
+      await expect(
+        tools.getActivityHistory({ oldest: '2024-12-10', newest: '2024-12-20' })
+      ).rejects.toThrow("cannot be used for today's date");
+    });
+
     it('should reject newest set to today (ISO)', async () => {
       await expect(
         tools.getActivityHistory({ oldest: '2024-12-01', newest: '2024-12-15' })
@@ -862,7 +868,34 @@ describe('HistoricalTools', () => {
       expect(result.summary.best_100m).toBeDefined();
       expect(result.summary.best_100m?.time_seconds).toBe(90);
       // Running-specific fields should not be in swimming response
-      expect(result.summary.best_400m).toBeUndefined();
+      expect(result.summary.best_1km).toBeUndefined();
+      expect(result.summary.best_5km).toBeUndefined();
+      // 400 m / 800 m are swim distances too; null here because the curve lacks them.
+      expect(result.summary.best_400m).toBeNull();
+      expect(result.summary.best_800m).toBeNull();
+    });
+
+    it('reports swim 400 m and 800 m bests from the default distances', async () => {
+      vi.mocked(mockIntervalsClient.getPaceCurves).mockResolvedValue({
+        distances: [400, 800],
+        gap_adjusted: false,
+        activities: [
+          {
+            activity_id: 'i1',
+            date: '2024-12-10',
+            weight_kg: 75,
+            curve: [
+              { distance_meters: 400, distance_label: '400m', time_seconds: 380, pace: '1:35/100m' },
+              { distance_meters: 800, distance_label: '800m', time_seconds: 790, pace: '1:39/100m' },
+            ],
+          },
+        ],
+      });
+
+      const result = await tools.getPaceCurve({ oldest: '2024-12-01', sport: 'swimming' });
+
+      expect(result.summary.best_400m?.time_seconds).toBe(380);
+      expect(result.summary.best_800m?.time_seconds).toBe(790);
     });
 
     it('should use GAP when specified for running', async () => {

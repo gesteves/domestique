@@ -84,8 +84,8 @@ export class GoogleElevationClient {
   /**
    * GET /elevation/json?locations=<lat>,<lng>&key=<key>
    *
-   * Returns elevation in meters above the WGS84 reference ellipsoid for a single
-   * point. Logical failures (REQUEST_DENIED, OVER_QUERY_LIMIT, etc.) come back
+   * Returns elevation in meters relative to local mean sea level for a single
+   * point (negative below sea level). Logical failures (REQUEST_DENIED, OVER_QUERY_LIMIT, etc.) come back
    * as HTTP 200 with a non-OK `status`; this client returns the response as-is
    * for the caller to interpret.
    * @see https://developers.google.com/maps/documentation/elevation/requests-elevation

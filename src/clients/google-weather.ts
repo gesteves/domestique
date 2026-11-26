@@ -378,9 +378,10 @@ export class GoogleWeatherClient {
   }
 
   /**
-   * GET /v1/forecast/days:lookup — daily forecast. We only consume sun-event
-   * times today, so the default page size (which covers ≥10 days) is more
-   * than enough.
+   * GET /v1/forecast/days:lookup — daily forecast for today through today+9.
+   * The API's default `pageSize` is 5, so request all 10 days in one page
+   * explicitly; otherwise future-date forecasts past day 4 come back without
+   * a daily summary or sun/moon events.
    * @see https://developers.google.com/maps/documentation/weather/daily-forecast
    */
   async getDailyForecast(
@@ -388,6 +389,8 @@ export class GoogleWeatherClient {
     longitude: number
   ): Promise<GoogleDailyForecastResponse> {
     const url = this.buildUrl('/forecast/days:lookup', latitude, longitude, { units: true });
+    url.searchParams.set('days', '10');
+    url.searchParams.set('pageSize', '10');
     logApiCall('GoogleWeather', `/forecast/days:lookup (${latitude},${longitude})`);
 
     return httpRequestJson<GoogleDailyForecastResponse>({

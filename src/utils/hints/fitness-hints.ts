@@ -47,7 +47,7 @@ export const powerCurveProgressHint: HintGenerator<PowerCurvesResponse> = (data)
   const improvements = data.comparison.changes.filter((c) => c.improved && parseFloat(c.change_percent) >= 3);
   if (improvements.length > 0) {
     return (
-      `Significant power improvements detected. Use get_sports_settings with sport='cycling' to check ` +
+      `Significant power improvements detected. Use get_sports_settings with sports=['cycling'] to check ` +
       `if FTP and power zones should be updated based on these improvements.`
     );
   }
@@ -67,10 +67,15 @@ export const paceCurveProgressHint: HintGenerator<PaceCurvesResponse> = (data) =
     );
   }
 
-  const improvements = data.comparison.changes.filter((c) => c.improved && parseFloat(c.change_percent) >= 3);
+  // For pace, an improvement is a *faster* time, so change_percent is
+  // negative; compare its magnitude.
+  const improvements = data.comparison.changes.filter(
+    (c) => c.improved && Math.abs(parseFloat(c.change_percent)) >= 3
+  );
   if (improvements.length > 0) {
+    const sport = data.sport === 'swimming' ? 'swimming' : 'running';
     return (
-      `Significant pace improvements detected. Use get_sports_settings with sport='running' to check ` +
+      `Significant pace improvements detected. Use get_sports_settings with sports=['${sport}'] to check ` +
       `if pace zones should be updated based on these improvements.`
     );
   }

@@ -173,15 +173,55 @@ interface ApiErrorLogContext {
   parameters?: Record<string, unknown>;
 }
 
+/** Query parameters whose values are credentials and must never be logged. */
+const SENSITIVE_QUERY_PARAMS = new Set([
+  'key',
+  'api_key',
+  'apikey',
+  'token',
+  'access_token',
+  'refresh_token',
+  'client_secret',
+]);
+
+/**
+ * Replace credential-bearing query parameter values (e.g. Google's `key=`)
+ * with `REDACTED` so URLs can be logged and sent to Bugsnag safely. Returns
+ * the input unchanged if it isn't a parseable absolute URL.
+ */
+export function redactUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  let changed = false;
+  for (const name of [...parsed.searchParams.keys()]) {
+    if (SENSITIVE_QUERY_PARAMS.has(name.toLowerCase())) {
+      parsed.searchParams.set(name, 'REDACTED');
+      changed = true;
+    }
+  }
+  if (parsed.username || parsed.password) {
+    parsed.username = '';
+    parsed.password = '';
+    changed = true;
+  }
+  return changed ? parsed.toString() : url;
+}
+
 /**
  * Log an API error with full context for debugging.
- * Also reports to Bugsnag if configured.
+ * Also reports to Bugsnag if configured. Credential query parameters in
+ * `context.url` are redacted before logging (see {@link redactUrl}).
  */
 export function logApiError(error: ApiError, context?: Partial<ApiErrorLogContext>): void {
   const logContext: ApiErrorLogContext = {
     source: error.source,
     operation: error.context.operation,
     ...context,
+    url: context?.url !== undefined ? redactUrl(context.url) : undefined,
     resource: context?.resource ?? error.context.resource,
     parameters: context?.parameters ?? error.context.parameters,
   };

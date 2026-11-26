@@ -218,8 +218,13 @@ export function formatResponseDates<T>(data: T, timezone: string): T {
             ? formatInTimeZone(new Date(value), timezone, 'yyyy-MM-dd')
             : value.split('T')[0];
           result[key] = formatDateHumanReadable(localDate, timezone);
-        } else {
+        } else if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) {
           result[key] = formatDateTimeHumanReadable(value, timezone);
+        } else {
+          // Naive local datetime (e.g. Intervals.icu `start_date_local`):
+          // interpret it as wall-clock time in the athlete's timezone.
+          // `new Date(value)` would read it in the *server's* timezone.
+          result[key] = localStringToHumanReadable(value, timezone);
         }
       } else {
         result[key] = value;

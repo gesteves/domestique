@@ -10,6 +10,23 @@ export interface ServerOptions {
   port: number;
 }
 
+/** Escape a string for safe interpolation into HTML text or a quoted attribute. */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Read a query parameter as a single string (Express parses repeats as arrays). */
+function queryString(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  return undefined;
+}
+
 export async function createServer(options: ServerOptions): Promise<express.Express> {
   const app = express();
 
@@ -66,9 +83,11 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
   // OAuth callback page for Whoop authorization
   app.get('/callback', (req: Request, res: Response) => {
-    const code = req.query.code as string | undefined;
-    const error = req.query.error as string | undefined;
-    const errorDescription = req.query.error_description as string | undefined;
+    // All three are attacker-controllable (anyone can craft a /callback link),
+    // so they're HTML-escaped before interpolation below.
+    const code = queryString(req.query.code);
+    const error = queryString(req.query.error);
+    const errorDescription = queryString(req.query.error_description);
 
     let content: string;
     let statusClass: string;
@@ -80,7 +99,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
       icon = `<svg class="w-12 h-12 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
       content = `
         <h2 class="text-xl font-semibold ${statusClass} mb-2">Authorization Failed</h2>
-        <p class="text-gray-600 mb-4">${errorDescription || error}</p>
+        <p class="text-gray-600 mb-4">${escapeHtml(errorDescription || error)}</p>
         <p class="text-sm text-gray-500">Please close this window and try authorizing again.</p>
       `;
     } else if (code) {
@@ -94,7 +113,7 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
           <input
             type="text"
             id="code"
-            value="${code}"
+            value="${escapeHtml(code)}"
             readonly
             class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md bg-gray-50 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />

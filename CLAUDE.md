@@ -64,6 +64,7 @@ Tool responses use **unit-in-value** strings.
 ## MCP Compatibility
 
 - **`outputSchema` required for every tool.** Define the shape in `src/schemas/index.ts`. Handlers return a JSON object — wrap arrays at the registration site, e.g. `{ strain: await this.currentTools.getStrainHistory(args) }`. The return becomes `structuredContent`; it's also serialized into `content` for older clients. Field descriptions live in `.describe()` and ship via `tools/list`, not in every response.
+- **Nulls are stripped before output validation.** `buildToolResponse` removes every `null`, so an output field that can be null must be `.nullable().optional()` (or just `.optional()`), never `.nullable()` alone — otherwise the SDK rejects the response. `tests/tools/output-schema-conformance.test.ts` enforces this.
 - **No underscore-prefixed property names in `outputSchema`.** MCP Inspector treats `_*` as protocol-private and strips them, then flags the value as an unexpected additional property. Use plain names. `_meta` is reserved for genuine out-of-band metadata.
 - **No MCP resources or elicitations.** ChatGPT doesn't support resources; neither client supports elicitations. Don't suggest either. Before adding any non-tool MCP feature, check https://modelcontextprotocol.io/clients.md.
 

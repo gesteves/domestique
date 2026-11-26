@@ -347,5 +347,30 @@ describe('Server', () => {
       const response = await fetch(`${baseUrl}/callback`);
       expect(response.status).toBe(200);
     });
+
+    it('HTML-escapes the error description (no reflected XSS)', async () => {
+      const payload = encodeURIComponent('<script>alert(1)</script>');
+      const response = await fetch(`${baseUrl}/callback?error=x&error_description=${payload}`);
+      const body = await response.text();
+
+      expect(body).not.toContain('<script>alert(1)</script>');
+      expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    });
+
+    it('HTML-escapes the code so it cannot break out of the input attribute', async () => {
+      const payload = encodeURIComponent('"><img src=x onerror=alert(1)>');
+      const response = await fetch(`${baseUrl}/callback?code=${payload}`);
+      const body = await response.text();
+
+      expect(body).not.toContain('"><img');
+      expect(body).toContain('value="&quot;&gt;&lt;img src=x onerror=alert(1)&gt;"');
+    });
+
+    it('handles a repeated query parameter without crashing', async () => {
+      const response = await fetch(`${baseUrl}/callback?code=a&code=b`);
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain('value="a"');
+    });
   });
 });

@@ -922,6 +922,15 @@ describe('PlanningTools sync operations', () => {
       },
     ];
 
+    it('defaults newest to exactly 30 days after oldest', async () => {
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([]);
+
+      await tools.syncTRRuns({ oldest: '2024-12-15' });
+
+      expect(mockTrainerRoadClient.getPlannedWorkouts).toHaveBeenCalledWith('2024-12-15', '2025-01-14', 'UTC');
+    });
+
     it('should identify TR runs without matching ICU workout', async () => {
       vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue(trRuns);
       vi.mocked(mockIntervalsClient.getEventsByTag).mockResolvedValue([]);

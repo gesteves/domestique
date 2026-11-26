@@ -75,13 +75,20 @@ export function parseDateStringInTimezone(
   const offset = tryParseOffset(normalized, todayYMD);
   if (offset !== null) return offset;
 
-  // chrono fallback: reference at noon UTC of today-in-timezone keeps the
-  // calendar day stable when the JS runtime is UTC (CI/Docker default).
+  // chrono fallback: reference at noon UTC of today-in-timezone, and read the
+  // parsed *calendar components* rather than converting chrono's instant back
+  // through `timezone`. Converting the instant shifted the day for UTC+13/+14
+  // zones (noon UTC is already the next day in Pacific/Auckland in summer).
   const [y, m, d] = todayYMD.split('-').map(Number);
   const refDate = new Date(Date.UTC(y, m - 1, d, 12));
-  const result = chrono.parseDate(normalized, refDate);
-  if (result) {
-    return formatYMDInTimezone(result, timezone);
+  const parsed = chrono.parse(normalized, refDate)[0];
+  if (parsed) {
+    const c = parsed.start;
+    return [
+      String(c.get('year')),
+      String(c.get('month')).padStart(2, '0'),
+      String(c.get('day')).padStart(2, '0'),
+    ].join('-');
   }
 
   throw new DateParseError(input, parameterName);

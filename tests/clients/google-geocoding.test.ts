@@ -106,6 +106,26 @@ describe('GoogleGeocodingClient', () => {
       expect(err.category).toBe('not_found');
     });
 
+    it('throws authentication (not "no results") when the key is rejected (REQUEST_DENIED)', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({ status: 'REQUEST_DENIED', error_message: 'The provided API key is invalid.', results: [] })
+      );
+
+      const err = await client.geocode('Boulder, CO').catch((e) => e);
+      expect(err).toBeInstanceOf(GoogleGeocodingApiError);
+      expect(err.category).toBe('authentication');
+    });
+
+    it('throws rate_limit on OVER_QUERY_LIMIT', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch.mockResolvedValueOnce(createMockResponse({ status: 'OVER_QUERY_LIMIT', results: [] }));
+
+      const err = await client.geocode('Boulder, CO').catch((e) => e);
+      expect(err.category).toBe('rate_limit');
+      expect(err.isRetryable).toBe(true);
+    });
+
     it('throws not_found when geometry coordinates are missing', async () => {
       mockFetch.mockResolvedValueOnce(
         createMockResponse({

@@ -9,6 +9,15 @@ import type { NormalizedWorkout, StrainActivity } from '../../src/types/index.js
 
 describe('activity-matcher', () => {
   describe('normalizeActivityType', () => {
+    it('normalizes gravel, MTB, e-bike, trail-run and virtual-row types (not Other)', () => {
+      expect(normalizeActivityType('GravelRide')).toBe('Cycling');
+      expect(normalizeActivityType('MountainBikeRide')).toBe('Cycling');
+      expect(normalizeActivityType('EBikeRide')).toBe('Cycling');
+      expect(normalizeActivityType('EMountainBikeRide')).toBe('Cycling');
+      expect(normalizeActivityType('TrailRun')).toBe('Running');
+      expect(normalizeActivityType('VirtualRow')).toBe('Rowing');
+    });
+
     it('should normalize cycling types', () => {
       expect(normalizeActivityType('Ride')).toBe('Cycling');
       expect(normalizeActivityType('ride')).toBe('Cycling');
@@ -239,6 +248,25 @@ describe('activity-matcher', () => {
       const result = findMatchingWhoopActivity(workout, activities);
 
       expect(result?.id).toBe('a1');
+    });
+
+    it('picks the closest same-type activity, not the first one within the window', () => {
+      const activities: StrainActivity[] = [
+        { id: 'other-4min', start_time: '2024-12-15T10:04:00Z', end_time: '2024-12-15T11:00:00Z', activity_type: 'Other', strain_score: 5 },
+        { id: 'ride-3min', start_time: '2024-12-15T10:03:00Z', end_time: '2024-12-15T11:00:00Z', activity_type: 'Cycling', strain_score: 9 },
+        { id: 'ride-0min', start_time: '2024-12-15T10:00:00Z', end_time: '2024-12-15T11:00:00Z', activity_type: 'Cycling', strain_score: 12 },
+      ];
+
+      expect(findMatchingWhoopActivity(workout, activities)?.id).toBe('ride-0min');
+    });
+
+    it('prefers an exact type match over a closer Other wildcard', () => {
+      const activities: StrainActivity[] = [
+        { id: 'other-0min', start_time: '2024-12-15T10:00:00Z', end_time: '2024-12-15T11:00:00Z', activity_type: 'Other', strain_score: 5 },
+        { id: 'ride-2min', start_time: '2024-12-15T10:02:00Z', end_time: '2024-12-15T11:00:00Z', activity_type: 'Cycling', strain_score: 9 },
+      ];
+
+      expect(findMatchingWhoopActivity(workout, activities)?.id).toBe('ride-2min');
     });
 
     it('should return null when timestamps differ by more than 5 minutes', () => {

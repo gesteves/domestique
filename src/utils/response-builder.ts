@@ -70,9 +70,10 @@ export interface ToolResponse {
 /**
  * Builds a tool response with structured content per the 2026-07-28 MCP spec.
  *
- * The handler's data becomes structuredContent directly. Hints reach the model
- * via the content text block (narration); debug info and widget data live in
- * _meta where clients can choose whether to forward them.
+ * The handler's data becomes structuredContent directly (nulls stripped), with
+ * any hints injected as its `hints` field; `content` carries the same payload
+ * serialized as JSON. Debug info and widget data live in _meta where clients
+ * can choose whether to forward them.
  */
 export async function buildToolResponse(options: ResponseBuilderOptions): Promise<ToolResponse> {
   const { data, widgetMeta, hints } = options;

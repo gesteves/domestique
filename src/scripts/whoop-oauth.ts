@@ -16,6 +16,7 @@
  */
 
 import * as readline from 'readline';
+import { randomBytes } from 'crypto';
 import { storeWhoopTokens, getRedisClient, closeRedis } from '../utils/redis.js';
 
 const WHOOP_AUTH_BASE = 'https://api.prod.whoop.com/oauth/oauth2';
@@ -153,12 +154,8 @@ async function main() {
 }
 
 function generateState(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let state = '';
-  for (let i = 0; i < 32; i++) {
-    state += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return state;
+  // OAuth state must be unguessable; Math.random() is not a CSPRNG.
+  return randomBytes(24).toString('base64url');
 }
 
 function buildAuthorizationUrl(clientId: string, redirectUri: string): { url: string; state: string } {

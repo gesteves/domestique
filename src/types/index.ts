@@ -628,7 +628,7 @@ export interface UpdateAnnotationResponse {
  * Result from sync operation.
  */
 export interface SyncTRRunsResult {
-  /** Number of TR runs found that need syncing */
+  /** Number of TrainerRoad runs found in the date range (synced or not) */
   tr_runs_found: number;
   /** Number of orphaned workouts deleted */
   orphans_deleted: number;
@@ -1555,7 +1555,7 @@ export interface TodaysActivitiesResponse {
   completed_workouts: WorkoutWithWhoop[];
   /** Planned workouts from TrainerRoad and Intervals.icu */
   planned_workouts: PlannedWorkout[];
-  /** Today's race, if any (zero or one entry, detected from the TrainerRoad calendar) */
+  /** Today's races, if any: single-discipline races from Intervals.icu, triathlons from the TrainerRoad calendar */
   races: Race[];
   /** Active calendar annotations (sickness, injury, holiday, note, training-phase boundary) overlapping today */
   annotations: Annotation[];
@@ -1629,7 +1629,7 @@ export interface PowerCurvesResponse {
   activity_count: number;
   durations_analyzed: string[]; // Human-readable labels
   summary: PowerCurveSummary;
-  // Always present; null when compare_to_* params were not supplied.
+  // null when compare_to_* params were not supplied (omitted from the response, since nulls are stripped).
   comparison: {
     previous_period_start: string;
     previous_period_end: string;
@@ -1672,9 +1672,10 @@ export interface PaceCurveSummary {
   best_10km: PaceBest | null;
   best_half_marathon: PaceBest | null;
   best_marathon: PaceBest | null;
-  // Swimming-specific
+  // Swimming-specific (swims also report best_400m)
   best_100m: PaceBest | null;
   best_200m: PaceBest | null;
+  best_800m?: PaceBest | null;
   best_1500m: PaceBest | null;
   best_half_iron_swim: PaceBest | null;
   best_iron_swim: PaceBest | null;
@@ -1699,7 +1700,7 @@ export interface PaceCurvesResponse {
   activity_count: number;
   distances_analyzed: string[];
   summary: PaceCurveSummary;
-  // Always present; null when compare_to_* params were not supplied.
+  // null when compare_to_* params were not supplied (omitted from the response, since nulls are stripped).
   comparison: {
     previous_period_start: string;
     previous_period_end: string;
@@ -1757,7 +1758,7 @@ export interface HRCurvesResponse {
   activity_count: number;
   durations_analyzed: string[];
   summary: HRCurveSummary;
-  // Always present; null when compare_to_* params were not supplied.
+  // null when compare_to_* params were not supplied (omitted from the response, since nulls are stripped).
   comparison: {
     previous_period_start: string;
     previous_period_end: string;

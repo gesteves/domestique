@@ -637,4 +637,44 @@ describe('PlanningTools updateWorkout', () => {
       expect(result.updated_fields).toHaveLength(3);
     });
   });
+
+  describe('swim workouts (no parsed prose boundary)', () => {
+    const swimEvent = {
+      id: 300,
+      uid: 'uid-300',
+      name: 'CSS swim',
+      start_date_local: '2024-12-16T07:00:00',
+      type: 'Swim',
+      category: 'WORKOUT',
+      tags: ['domestique'],
+      description: 'Old notes\n\n400 warmup\n8x100 @ CSS',
+    };
+
+    it('refuses a description-only update rather than duplicating the old description', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(swimEvent);
+      await expect(tools.updateWorkout({ event_id: '300', description: 'New notes' })).rejects.toThrow(
+        'pass both `description` and `structure`'
+      );
+      expect(mockIntervalsClient.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('refuses a structure-only update rather than dropping the old description', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(swimEvent);
+      await expect(tools.updateWorkout({ event_id: '300', structure: '10x100 @ CSS' })).rejects.toThrow(
+        'pass both `description` and `structure`'
+      );
+    });
+
+    it('accepts description and structure together', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(swimEvent);
+      vi.mocked(mockIntervalsClient.updateEvent).mockResolvedValue({ ...swimEvent, name: 'CSS swim' });
+
+      await tools.updateWorkout({ event_id: '300', description: 'New notes', structure: '10x100 @ CSS' });
+
+      expect(mockIntervalsClient.updateEvent).toHaveBeenCalledWith(
+        '300',
+        expect.objectContaining({ description: 'New notes\n\n10x100 @ CSS' })
+      );
+    });
+  });
 });

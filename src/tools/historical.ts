@@ -77,10 +77,14 @@ export class HistoricalTools {
       ? parseDateStringInTimezone(params.newest, timezone, 'newest')
       : addDaysToYMD(today, -1);
 
-    if (startDate === today || endDate === today) {
+    // Reject any range that *includes* today, not just ranges that start or
+    // end on it (e.g. "7 days ago" → "tomorrow" spans today too).
+    const touchesToday = startDate === today || endDate === today;
+    const spansToday = startDate < today && endDate > today;
+    if (touchesToday || spansToday) {
       throw new Error(
         `get_activity_history cannot be used for today's date (${today}); ` +
-        `use get_todays_summary or get_todays_activities for today's data.`
+        `end the range yesterday at the latest, and use get_todays_summary or get_todays_activities for today's data.`
       );
     }
 
@@ -530,7 +534,7 @@ export class HistoricalTools {
   ): PaceCurveSummary {
     // Define target distances based on sport
     const targetDistances: { [key: string]: number } = isSwimming
-      ? { best_100m: 100, best_200m: 200, best_1500m: 1500, best_half_iron_swim: 1900, best_iron_swim: 3800 }
+      ? { best_100m: 100, best_200m: 200, best_400m: 400, best_800m: 800, best_1500m: 1500, best_half_iron_swim: 1900, best_iron_swim: 3800 }
       : { best_400m: 400, best_1km: 1000, best_mile: 1609, best_5km: 5000, best_10km: 10000, best_half_marathon: 21097, best_marathon: 42195 };
 
     // Only initialize fields relevant to the sport
@@ -538,6 +542,8 @@ export class HistoricalTools {
       ? {
           best_100m: null,
           best_200m: null,
+          best_400m: null,
+          best_800m: null,
           best_1500m: null,
           best_half_iron_swim: null,
           best_iron_swim: null,
@@ -588,7 +594,7 @@ export class HistoricalTools {
     const comparisons: PaceCurveComparison[] = [];
 
     const keys: (keyof PaceCurveSummary)[] = isSwimming
-      ? ['best_100m', 'best_200m', 'best_1500m', 'best_half_iron_swim', 'best_iron_swim']
+      ? ['best_100m', 'best_200m', 'best_400m', 'best_800m', 'best_1500m', 'best_half_iron_swim', 'best_iron_swim']
       : ['best_400m', 'best_1km', 'best_mile', 'best_5km', 'best_10km', 'best_half_marathon', 'best_marathon'];
 
     for (const key of keys) {

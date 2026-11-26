@@ -48,9 +48,10 @@ import {
   releaseRefreshLock,
   invalidateWhoopAccessToken,
   getRefreshTokenVersion,
+  LOCK_TTL_SECONDS,
 } from '../utils/redis.js';
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
-import { logApiError, logApiCall, logDebug, logWarn, logError } from '../utils/logger.js';
+import { logApiError, logApiCall, logDebug, logInfo, logWarn, logError } from '../utils/logger.js';
 
 const WHOOP_API_BASE = 'https://api.prod.whoop.com/developer/v2';
 const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
@@ -58,7 +59,11 @@ const WHOOP_AUTH_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
 const MAX_RETRY_ATTEMPTS = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const LOCK_WAIT_INTERVAL_MS = 500;
-const MAX_LOCK_WAIT_ATTEMPTS = 6; // 3 seconds total wait time
+// Wait at least as long as the refresh lock can be held (LOCK_TTL_SECONDS in
+// redis.ts) before giving up on another process's refresh.
+const MAX_LOCK_WAIT_ATTEMPTS = Math.ceil((LOCK_TTL_SECONDS * 1000) / LOCK_WAIT_INTERVAL_MS);
+/** Per-attempt timeout for the OAuth token endpoint. */
+const TOKEN_REFRESH_TIMEOUT_MS = 10_000;
 const MAX_RATE_LIMIT_RETRIES = 2;
 const RATE_LIMIT_BUFFER_MS = 500; // Extra buffer when waiting for rate limit reset
 const RATE_LIMIT_WARNING_THRESHOLD = 10; // Warn when fewer than this many requests remain
@@ -395,22 +400,27 @@ export class WhoopClient {
   private tokens: CachedTokenState;
   /** True once a successful refresh has occurred this process — Redis becomes the only valid source. */
   private hasRotated: boolean = false;
+  /**
+   * True when a refresh succeeded but the new tokens couldn't be written to
+   * Redis. Redis then holds the previous, already-consumed refresh token, so
+   * the in-memory tokens are authoritative until a store succeeds.
+   */
+  private unpersistedTokens: boolean = false;
   private timezoneGetter: (() => Promise<string>) | null = null;
   private refreshPromise: Promise<void> | null = null;
 
-  // Body measurements rarely change; memoize for the session with single-flight.
-  private fetchBodyMeasurementsCached = memoize(async (): Promise<WhoopBodyMeasurements> => {
-    const response = await this.fetch<WhoopBodyMeasurementResponse>(
-      '/user/measurement/body',
-      undefined,
-      { operation: 'get body measurements' }
-    );
-    return {
-      height: formatHeight(response.height_meter),
-      weight: formatWeight(response.weight_kilogram),
-      max_heart_rate: formatHR(response.max_heart_rate),
-    };
-  });
+  // Body measurements rarely change; cache the raw response (single-flight,
+  // 1 h TTL). Formatting happens per call in getBodyMeasurements, because the
+  // formatters depend on the current request's unit preferences.
+  private fetchBodyMeasurementsCached = memoize(
+    () =>
+      this.fetch<WhoopBodyMeasurementResponse>(
+        '/user/measurement/body',
+        undefined,
+        { operation: 'get body measurements' }
+      ),
+    60 * 60 * 1000
+  );
 
   constructor(config: WhoopConfig) {
     this.config = config;
@@ -427,6 +437,21 @@ export class WhoopClient {
    * Returns flags indicating which token classes were loaded.
    */
   private async syncFromRedis(): Promise<{ access: boolean; refresh: boolean }> {
+    if (this.unpersistedTokens) {
+      // Redis is stale (it still has the consumed refresh token). Try to
+      // persist ours again; until that works, never load from Redis.
+      const retry = await storeWhoopTokens({
+        accessToken: this.tokens.accessToken,
+        refreshToken: this.tokens.refreshToken,
+        expiresAt: this.tokens.tokenExpiresAt,
+      });
+      if (!retry.success) {
+        return { access: false, refresh: false };
+      }
+      this.unpersistedTokens = false;
+      logInfo('Whoop', 'Persisted previously unsaved tokens to Redis');
+    }
+
     const [access, refresh] = await Promise.all([
       getWhoopAccessToken(),
       getWhoopRefreshToken(),
@@ -503,7 +528,26 @@ export class WhoopClient {
       return;
     }
 
-    // Need to refresh - try to acquire distributed lock
+    // Re-check after the awaits above: concurrent callers in this process
+    // (e.g. a Promise.all of three Whoop fetches) all got past the first
+    // check. Whoever gets here first starts the refresh; the rest join it
+    // instead of contending for the Redis lock against their own process.
+    if (this.refreshPromise) {
+      await this.refreshPromise;
+      return;
+    }
+    this.refreshPromise = this.refreshWithLock().finally(() => {
+      this.refreshPromise = null;
+    });
+    await this.refreshPromise;
+  }
+
+  /**
+   * Acquire the distributed refresh lock and refresh, or wait for whichever
+   * process holds it. Run via `this.refreshPromise` so it's single-flight
+   * within this process.
+   */
+  private async refreshWithLock(): Promise<void> {
     const lockId = generateLockId();
     logDebug('Whoop', `Token expired, attempting refresh with lock ID: ${lockId}`);
 
@@ -516,12 +560,9 @@ export class WhoopClient {
     if (lockAcquired) {
       // We got the lock - perform the refresh
       logDebug('Whoop', 'Acquired refresh lock, starting token refresh');
-      this.refreshPromise = this.performTokenRefresh(lockId);
-
       try {
-        await this.refreshPromise;
+        await this.performTokenRefresh(lockId);
       } finally {
-        this.refreshPromise = null;
         await releaseRefreshLock(lockId);
       }
     } else {
@@ -601,10 +642,14 @@ export class WhoopClient {
     // If Redis has nothing AND we've already rotated tokens this process, the in-memory
     // refresh token is almost certainly the previous (single-use, now-invalidated) value;
     // bail rather than burn it on a guaranteed 400.
-    const storedRefreshToken = await getWhoopRefreshToken();
+    const storedRefreshToken = this.unpersistedTokens ? null : await getWhoopRefreshToken();
     let refreshToken: string;
     let tokenSource: string;
-    if (storedRefreshToken) {
+    if (this.unpersistedTokens) {
+      // Our in-memory token is newer than what Redis holds (see unpersistedTokens).
+      refreshToken = this.tokens.refreshToken;
+      tokenSource = 'memory (unpersisted)';
+    } else if (storedRefreshToken) {
       refreshToken = storedRefreshToken.token;
       tokenSource = 'Redis';
     } else if (!this.hasRotated) {
@@ -622,9 +667,12 @@ export class WhoopClient {
       `(in-memory loadedAt=${this.tokens.loadedAt}, hasRotated=${this.hasRotated})`
     );
 
-    // Refresh the token with retry logic
+    // Refresh the token with retry logic. Only failures *before* Whoop accepts
+    // the refresh token are retried: once a 2xx comes back the token is
+    // consumed, so anything that goes wrong afterwards must not re-send it.
     let lastError: Error | null = null;
     let attemptsMade = 0;
+    let okResponse: Response | null = null;
     for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
       attemptsMade = attempt;
       try {
@@ -640,34 +688,12 @@ export class WhoopClient {
             client_id: this.config.clientId,
             client_secret: this.config.clientSecret,
           }),
+          signal: AbortSignal.timeout(TOKEN_REFRESH_TIMEOUT_MS),
         });
 
         if (response.ok) {
-          const data = (await response.json()) as {
-            access_token: string;
-            refresh_token: string;
-            expires_in: number;
-          };
-
-          logDebug('Whoop', `Token refresh successful on attempt ${attempt}, new refresh token: ${this.maskToken(data.refresh_token)}, expires in ${data.expires_in}s`);
-
-          // Atomically replace this.tokens so concurrent readers never see a partial update.
-          this.tokens = {
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token,
-            tokenExpiresAt: Date.now() + data.expires_in * 1000,
-            loadedAt: Date.now(),
-          };
-          this.hasRotated = true;
-
-          // Store tokens in Redis for other processes to use
-          const storeResult = await storeWhoopTokens({
-            accessToken: this.tokens.accessToken,
-            refreshToken: this.tokens.refreshToken,
-            expiresAt: this.tokens.tokenExpiresAt,
-          });
-          logDebug('Whoop', `Tokens stored in Redis, version: ${storeResult.version}`);
-          return;
+          okResponse = response;
+          break;
         }
 
         // Log the error response
@@ -729,6 +755,11 @@ export class WhoopClient {
       }
     }
 
+    if (okResponse) {
+      await this.applyRefreshResponse(okResponse, attemptsMade);
+      return;
+    }
+
     // All retries exhausted. This is the one place a token refresh is truly
     // dead — log it as an error and report to Bugsnag (per-attempt failures
     // above are warnings since they may still recover on retry).
@@ -739,6 +770,63 @@ export class WhoopClient {
       refreshError
     );
     throw refreshError;
+  }
+
+  /**
+   * Handle a 2xx from the token endpoint. The refresh token we sent is now
+   * consumed, so nothing here may trigger a retry with it: parse failures are
+   * terminal, and a failed Redis write keeps the new tokens in memory
+   * (flagged via `unpersistedTokens`) rather than losing them.
+   */
+  private async applyRefreshResponse(response: Response, attempt: number): Promise<void> {
+    let data: { access_token?: string; refresh_token?: string; expires_in?: number };
+    try {
+      data = (await response.json()) as typeof data;
+    } catch (error) {
+      const refreshError = WhoopApiError.tokenRefreshError(
+        attempt,
+        new Error(`Unreadable token response from Whoop; the refresh token was consumed: ${error instanceof Error ? error.message : String(error)}`)
+      );
+      logError('Whoop', 'Token refresh succeeded but the response could not be parsed — re-run whoop:auth', refreshError);
+      throw refreshError;
+    }
+    if (!data.access_token || !data.refresh_token || typeof data.expires_in !== 'number') {
+      const refreshError = WhoopApiError.tokenRefreshError(
+        attempt,
+        new Error('Whoop token response is missing access_token, refresh_token, or expires_in')
+      );
+      logError('Whoop', 'Token refresh returned an incomplete response — re-run whoop:auth', refreshError);
+      throw refreshError;
+    }
+
+    logDebug('Whoop', `Token refresh successful on attempt ${attempt}, new refresh token: ${this.maskToken(data.refresh_token)}, expires in ${data.expires_in}s`);
+
+    // Atomically replace this.tokens so concurrent readers never see a partial update.
+    this.tokens = {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      tokenExpiresAt: Date.now() + data.expires_in * 1000,
+      loadedAt: Date.now(),
+    };
+    this.hasRotated = true;
+
+    // Store tokens in Redis for other processes (and restarts) to use.
+    const storeResult = await storeWhoopTokens({
+      accessToken: this.tokens.accessToken,
+      refreshToken: this.tokens.refreshToken,
+      expiresAt: this.tokens.tokenExpiresAt,
+    });
+    if (storeResult.success) {
+      this.unpersistedTokens = false;
+      logDebug('Whoop', `Tokens stored in Redis, version: ${storeResult.version}`);
+    } else {
+      this.unpersistedTokens = true;
+      logError(
+        'Whoop',
+        'Refreshed tokens could not be saved to Redis; using them from memory and retrying the save. ' +
+        'If the server restarts before the save succeeds, re-run whoop:auth.'
+      );
+    }
   }
 
   /**
@@ -941,10 +1029,9 @@ export class WhoopClient {
       // Get naps for this cycle
       const cycleNaps = napsByCycleId.get(cycle.id) ?? [];
 
-      const normalized = await this.normalizeRecoveryTrendEntry(recovery, sleep, cycleNaps);
       // Filter by local date in user's timezone
       if (isTimestampInLocalDateRange(recovery.created_at, startDate, endDate, timezone)) {
-        results.push(normalized);
+        results.push(await this.normalizeRecoveryTrendEntry(recovery, sleep, cycleNaps, timezone));
       }
     }
 
@@ -1113,7 +1200,12 @@ export class WhoopClient {
    */
   async getBodyMeasurements(): Promise<WhoopBodyMeasurements | null> {
     try {
-      return await this.fetchBodyMeasurementsCached();
+      const response = await this.fetchBodyMeasurementsCached();
+      return {
+        height: formatHeight(response.height_meter),
+        weight: formatWeight(response.weight_kilogram),
+        max_heart_rate: formatHR(response.max_heart_rate),
+      };
     } catch (error) {
       logError('Whoop', 'Error fetching body measurements', error);
       return null;
@@ -1265,7 +1357,8 @@ export class WhoopClient {
   private async normalizeRecoveryTrendEntry(
     recovery: WhoopRecovery,
     sleep: WhoopSleep,
-    naps: WhoopSleep[] = []
+    naps: WhoopSleep[],
+    timezone: string
   ): Promise<WhoopRecoveryTrendEntry> {
     const normalizedSleep = await this.normalizeSleep(sleep);
 
@@ -1275,7 +1368,10 @@ export class WhoopClient {
     }
 
     return {
-      date: recovery.created_at.split('T')[0],
+      // Local calendar date, matching the range filter above. `created_at` is
+      // UTC, so splitting it would label e.g. a Sydney 07:00 recovery with the
+      // previous day.
+      date: formatYMDInTimezone(new Date(recovery.created_at), timezone),
       sleep: normalizedSleep,
       recovery: this.normalizeRecoveryOnly(recovery),
     };

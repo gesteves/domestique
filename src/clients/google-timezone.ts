@@ -1,11 +1,12 @@
 import { ApiError, type ErrorCategory, type ErrorContext } from '../errors/index.js';
 import {
   buildGoogleErrorFromHttpStatus,
+  buildGoogleErrorFromLegacyStatus,
   buildGoogleNetworkError,
   googleErrorBuilders,
 } from './google-api-error-helpers.js';
 import { httpRequestJson } from './http.js';
-import { logApiCall } from '../utils/logger.js';
+import { logApiCall, logApiError } from '../utils/logger.js';
 
 const GOOGLE_TIMEZONE_API_BASE = 'https://maps.googleapis.com/maps/api/timezone';
 
@@ -119,6 +120,17 @@ export class GoogleTimezoneClient {
       ...googleTimezoneHttpErrorBuilders,
     });
 
+    const statusError = buildGoogleErrorFromLegacyStatus(
+      GoogleTimezoneApiError,
+      'Time Zone',
+      response.status,
+      context,
+      response.errorMessage
+    );
+    if (statusError) {
+      logApiError(statusError, { method: 'GET', url: url.toString(), responseBody: statusError.responseBody });
+      throw statusError;
+    }
     if (!response.timeZoneId) {
       throw GoogleTimezoneApiError.missingTimeZoneId(context);
     }

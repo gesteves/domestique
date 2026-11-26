@@ -180,6 +180,13 @@ describe('parseDateStringInTimezone', () => {
     expect(parseDateStringInTimezone('January 1, 2025', 'UTC')).toBe('2025-01-01');
   });
 
+  it('does not shift named dates by a day for UTC+13 athletes', () => {
+    // 10:30Z on Dec 15 is 23:30 Dec 15 in Auckland (NZDT, UTC+13).
+    vi.setSystemTime(new Date('2024-12-15T10:30:00Z'));
+    expect(parseDateStringInTimezone('December 25', 'Pacific/Auckland')).toBe('2024-12-25');
+    expect(parseDateStringInTimezone('January 1, 2025', 'Pacific/Auckland')).toBe('2025-01-01');
+  });
+
   it('throws DateParseError for unrecognized input', () => {
     expect(() => parseDateStringInTimezone('not a date', 'UTC')).toThrow(DateParseError);
   });

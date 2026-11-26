@@ -42,6 +42,13 @@ const MODIFIES_EXTERNAL: ToolAnnotations = {
   openWorldHint: true,
 };
 
+// IDs from the model are interpolated into Intervals.icu URL paths. Restrict
+// them to plain identifier characters so a crafted value (e.g.
+// "../athlete/i123") can't redirect a write to a different endpoint.
+const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const ACTIVITY_ID = z.string().regex(ID_PATTERN, 'Activity ID must contain only letters, digits, "-" or "_"');
+const EVENT_ID = z.string().regex(ID_PATTERN, 'Event ID must contain only letters, digits, "-" or "_"');
+
 // Boilerplate inlined into tool descriptions. Centralized so wording stays
 // consistent across the four tools that surface this caveat.
 const STRAVA_LIMITATION_NOTE =
@@ -359,7 +366,7 @@ export class ToolRegistry {
       register({
         name: 'get_weather_forecast',
         title: 'Weather Forecast',
-        description: `Weather forecast for a single date (today through 10 days out) at one or more locations. Returns a daily summary, hourly forecast, sun/moon events, and (where available) pollen and air quality; when the date is today, also includes current conditions and active alerts. Pass no arguments for today at the user's configured weather locations; pass \`date\` and/or \`location\` for race-week or destination planning. The today's-snapshot tool already embeds today's forecast for configured locations — only call this directly when the user asks specifically about weather, a future date, or a custom location.`,
+        description: `Weather forecast for a single date (today through 9 days out) at one or more locations. Returns a daily summary, hourly forecast, sun/moon events, and (where available) pollen and air quality; when the date is today, also includes current conditions and active alerts. Pass no arguments for today at the user's configured weather locations; pass \`date\` and/or \`location\` for race-week or destination planning. The today's-snapshot tool already embeds today's forecast for configured locations — only call this directly when the user asks specifically about weather, a future date, or a custom location.`,
         inputSchema: schemas.forecastInputSchema,
         outputSchema: schemas.forecastOutputSchema,
         annotations: READ_ONLY,
@@ -370,7 +377,7 @@ export class ToolRegistry {
     register({
       name: 'get_todays_activities',
       title: "Today's Activities",
-      description: `Today's activity-and-event data: completed workouts (with full per-activity detail — intervals, notes, weather, zones, heat zones — and matched Whoop strain), planned workouts, today's race (if any, detected on the TrainerRoad calendar), and active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Pass \`type\` to narrow to a single event category ('workouts' or 'races'). Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
+      description: `Today's activity-and-event data: completed workouts (with full per-activity detail — intervals, notes, weather, zones, heat zones — and matched Whoop strain), planned workouts, today's race (if any: single-discipline races from Intervals.icu, triathlons from the TrainerRoad calendar), and active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Pass \`type\` to narrow to a single event category ('workouts' or 'races'). Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         type: z.enum(['workouts', 'races']).optional().describe("Filter to a single event type. Omit to return all event types."),
       },
@@ -447,7 +454,7 @@ export class ToolRegistry {
       title: 'Workout Details',
       description: `Full per-workout drill-down for a single activity by ID — interval-by-interval power/HR/cadence, interval groups, athlete and coach notes, weather, power/pace/HR/heat zones, and matched Whoop strain — all in one call. Activity IDs are surfaced anywhere completed workouts are listed (past-range history queries, today's-snapshot tools, etc.). Returns substantially more data than a history list entry, so call only when the user wants depth on a specific workout. ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
+        activity_id: ACTIVITY_ID.describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
       outputSchema: schemas.workoutDetailsOutputSchema,
       annotations: READ_ONLY,
@@ -505,7 +512,7 @@ export class ToolRegistry {
     register({
       name: 'get_upcoming_activities',
       title: 'Upcoming Activities',
-      description: `Planned workouts and races in a future date range. Workouts are merged from TrainerRoad and Intervals.icu (TrainerRoad wins on duplicates because it carries more detail); races are detected on the TrainerRoad calendar (an all-day event paired with workout legs of the same name) — race \`description\` often carries the race priority (A/B/C) and course notes, so read it before recommending training adjustments. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so the schedule can be interpreted in light of upcoming vacations or ongoing injuries. Use for weekly/monthly schedule views, expected-load summaries, race-schedule context, periodization or taper conversations, or to surface untriaged TrainerRoad runs that should sync to Intervals.icu. Defaults to today through 7 days out; \`oldest\` and \`newest\` accept ISO YYYY-MM-DD or natural language; optional \`sport\` filter narrows workouts by discipline; optional \`type\` filter narrows to a single event category ('workouts' or 'races'). ${SCHEDULED_ORDERING_NOTE}`,
+      description: `Planned workouts and races in a future date range. Workouts are merged from TrainerRoad and Intervals.icu (TrainerRoad wins on duplicates because it carries more detail); races come from Intervals.icu (single-discipline races, with native A/B/C priority) and the TrainerRoad calendar (triathlons: an all-day event paired with workout legs of the same name) — race \`description\` often carries the race priority (A/B/C) and course notes, so read it before recommending training adjustments. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so the schedule can be interpreted in light of upcoming vacations or ongoing injuries. Use for weekly/monthly schedule views, expected-load summaries, race-schedule context, periodization or taper conversations, or to surface untriaged TrainerRoad runs that should sync to Intervals.icu. Defaults to today through 7 days out; \`oldest\` and \`newest\` accept ISO YYYY-MM-DD or natural language; optional \`sport\` filter narrows workouts by discipline; optional \`type\` filter narrows to a single event category ('workouts' or 'races'). ${SCHEDULED_ORDERING_NOTE}`,
       inputSchema: {
         oldest: z.string().optional().describe('Start date (defaults to today; e.g., "2024-01-01", "tomorrow")'),
         newest: z.string().optional().describe('End date (defaults to 7 days from start)'),
@@ -546,7 +553,7 @@ export class ToolRegistry {
       title: 'Delete Workout',
       description: `Permanently removes a Domestique-created planned workout from the user's Intervals.icu calendar. Only works on events tagged \`domestique\` (i.e., events Domestique itself created — directly or via the TrainerRoad sync flow); attempts to delete other events fail. Event IDs are surfaced anywhere planned workouts are listed (today's snapshot, upcoming-workouts queries). Use to fix incorrect workouts (delete then recreate) or to clear orphans when a TrainerRoad plan changes.`,
       inputSchema: {
-        event_id: z.string().describe('Intervals.icu event ID to delete'),
+        event_id: EVENT_ID.describe('Intervals.icu event ID to delete'),
       },
       outputSchema: schemas.deleteWorkoutOutputSchema,
       annotations: DESTRUCTIVE,
@@ -557,9 +564,9 @@ export class ToolRegistry {
     register({
       name: 'update_workout',
       title: 'Update Workout',
-      description: `Updates a Domestique-created planned workout (name, description, scheduled date, sport \`type\`, or \`structure\`). Only works on events tagged \`domestique\`; the tag is preserved on update. Pass only the fields you want to change — omitted fields are left intact. Same two text fields as \`create_workout\`: \`description\` is athlete-facing prose (goals / focus / rationale), \`structure\` is the step-by-step prescription. When \`structure\` is provided for cycling or running, Domestique converts it server-side into Intervals.icu workout-doc syntax via Claude; swimming structures are stored verbatim. The converted/stored syntax is returned as \`workout_doc\`. Changing \`type\` (e.g., Run to Ride) without also updating \`structure\` can leave the doc in a syntax invalid for the new sport. Event IDs are surfaced anywhere planned workouts are listed (today's snapshot, upcoming-workouts queries).`,
+      description: `Updates a Domestique-created planned workout (name, description, scheduled date, sport \`type\`, or \`structure\`). Only works on events tagged \`domestique\`; the tag is preserved on update. Pass only the fields you want to change — omitted fields are left intact. Same two text fields as \`create_workout\`: \`description\` is athlete-facing prose (goals / focus / rationale), \`structure\` is the step-by-step prescription. When \`structure\` is provided for cycling or running, Domestique converts it server-side into Intervals.icu workout-doc syntax via Claude; swimming structures are stored verbatim, so for swim workouts pass \`description\` and \`structure\` together when changing either. The converted/stored syntax is returned as \`workout_doc\`. Changing \`type\` (e.g., Run to Ride) without also updating \`structure\` can leave the doc in a syntax invalid for the new sport. Event IDs are surfaced anywhere planned workouts are listed (today's snapshot, upcoming-workouts queries).`,
       inputSchema: {
-        event_id: z.string().describe('Intervals.icu event ID to update'),
+        event_id: EVENT_ID.describe('Intervals.icu event ID to update'),
         name: z.string().optional().describe('New workout name'),
         description: z.string().optional().describe('New athlete-facing prose: goals, focus, rationale. NOT the structure — that goes in `structure`.'),
         structure: z.string().optional().describe('New plain-language description of the workout steps. NOT goals or rationale (those go in `description`). Cycling/running structures are converted server-side into Intervals.icu workout-doc syntax via Claude; swimming structures are stored verbatim.'),
@@ -594,7 +601,7 @@ export class ToolRegistry {
       title: 'Update Calendar Annotation',
       description: `Updates a Domestique-created calendar annotation (\`category\`, \`start_date\`, \`end_date\`, \`name\`, \`description\`). Only works on annotations tagged \`domestique\`; the tag is preserved on update. Pass only the fields you want to change — omitted fields are left intact. To clear an existing \`end_date\` (turning a multi-day annotation into a single-day one), pass an empty string for \`end_date\`. Annotation IDs are surfaced wherever annotations are listed (today's snapshot, upcoming-activities queries, history queries).`,
       inputSchema: {
-        event_id: z.string().describe('Intervals.icu event ID to update'),
+        event_id: EVENT_ID.describe('Intervals.icu event ID to update'),
         category: z.enum(['sick', 'injured', 'holiday', 'note', 'season_start']).optional().describe('New category'),
         start_date: z.string().optional().describe('New start date (YYYY-MM-DD or relative)'),
         end_date: z.string().optional().describe('New end date (YYYY-MM-DD or relative). Pass an empty string to clear'),
@@ -612,7 +619,7 @@ export class ToolRegistry {
       title: 'Delete Calendar Annotation',
       description: `Permanently removes a Domestique-created calendar annotation from the user's Intervals.icu calendar. Only works on annotations tagged \`domestique\`; attempts to delete other events fail. Annotation IDs are surfaced wherever annotations are listed (today's snapshot, upcoming-activities queries, history queries).`,
       inputSchema: {
-        event_id: z.string().describe('Intervals.icu event ID to delete'),
+        event_id: EVENT_ID.describe('Intervals.icu event ID to delete'),
       },
       outputSchema: schemas.deleteAnnotationOutputSchema,
       annotations: DESTRUCTIVE,
@@ -642,7 +649,7 @@ export class ToolRegistry {
       title: 'Set Workout Intervals',
       description: `Stamps interval boundaries onto a completed activity so Intervals.icu can recompute per-interval power, HR, cadence, TSS, etc. Each interval needs \`start_time\` and \`end_time\` in seconds from activity start (convert HH:MM:SS first — e.g., "0:05:00" → 300) and a \`type\` of WORK or RECOVERY. Infer type from the workout's own embedded \`power_zones\` (not current athlete sport settings, since FTP may have shifted): Zone 1 is typically RECOVERY, higher zones WORK, but use judgement (e.g., a Zone 2 effort right after a Zone 5 surge can read as recovery). \`replace_existing_intervals\` defaults to true (wipe and replace); pass false to merge with existing intervals.`,
       inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID'),
+        activity_id: ACTIVITY_ID.describe('Intervals.icu activity ID'),
         intervals: z
           .array(
             z.object({
@@ -677,7 +684,7 @@ export class ToolRegistry {
       title: 'Update Activity',
       description: `Updates a completed activity in Intervals.icu — fix auto-generated names, capture post-workout notes, or write FORM Goggles efficiency scores back to swim activities (e.g. transcribed from a screenshot of the FORM app). At least one field must be provided; omitted fields are left intact. Affects completed/recorded activities only — planned (future) workouts have a separate edit path. Activity IDs are surfaced anywhere completed workouts are listed. The FORM scores are unitless 0-100 values (higher is better); they're stored as custom fields on Intervals.icu and surface back through \`get_workout_details\` for swims.`,
       inputSchema: {
-        activity_id: z.string().describe('Intervals.icu activity ID'),
+        activity_id: ACTIVITY_ID.describe('Intervals.icu activity ID'),
         name: z.string().optional().describe('New name for the activity'),
         description: z.string().optional().describe('New description/notes for the activity'),
         form_score: z.number().int().min(0).max(100).optional().describe('FORM Goggles overall efficiency score (0-100, higher is better)'),
@@ -731,7 +738,7 @@ export class ToolRegistry {
     register({
       name: 'get_power_curve',
       title: 'Power Curve',
-      description: `Cycling power curve over a date range — best sustained power for each canonical duration (5s, 30s, 1min, 5min, 20min, 60min, 2hr by default; pass \`durations\` in seconds to customize). Each best includes the source activity ID and date, plus W/kg and an estimated FTP from best 20-minute power. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas per duration; the \`comparison\` field is always present, null when no comparison range was supplied. All date parameters accept ISO YYYY-MM-DD or natural language.`,
+      description: `Cycling power curve over a date range — best sustained power for each canonical duration (5s, 30s, 1min, 5min, 20min, 60min, 2hr by default; pass \`durations\` in seconds to customize). Each best includes the source activity ID and date, plus W/kg and an estimated FTP from best 20-minute power. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas per duration; the \`comparison\` field is omitted when no comparison range was supplied. All date parameters accept ISO YYYY-MM-DD or natural language.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
@@ -749,7 +756,7 @@ export class ToolRegistry {
     register({
       name: 'get_pace_curve',
       title: 'Pace Curve',
-      description: `Pace curve for running or swimming over a date range — best time achieved at each canonical race distance, with the source activity ID and date. Defaults span 400 m through marathon for running and 100 m through Ironman swim for swimming; pass \`distances\` in meters to customize. Set \`gap: true\` for running to use gradient-adjusted pace (normalizes for hills); irrelevant for swimming. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas; \`comparison\` is always present, null when no comparison range was supplied.`,
+      description: `Pace curve for running or swimming over a date range — best time achieved at each canonical race distance, with the source activity ID and date. Defaults span 400 m through marathon for running and 100 m through Ironman swim for swimming; pass \`distances\` in meters to customize. Set \`gap: true\` for running to use gradient-adjusted pace (normalizes for hills); irrelevant for swimming. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas; \`comparison\` is omitted when no comparison range was supplied.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),
@@ -769,7 +776,7 @@ export class ToolRegistry {
     register({
       name: 'get_hr_curve',
       title: 'Heart Rate Curve',
-      description: `Heart rate curve over a date range — maximum sustained HR for each canonical duration (5s, 30s, 1min, 5min, 20min, 60min, 2hr by default; pass \`durations\` to customize), with the source activity ID and date. Optional \`sport\` narrows to a single discipline so HR responses can be compared against sport-specific demands. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas; \`comparison\` is always present, null when no comparison range was supplied.`,
+      description: `Heart rate curve over a date range — maximum sustained HR for each canonical duration (5s, 30s, 1min, 5min, 20min, 60min, 2hr by default; pass \`durations\` to customize), with the source activity ID and date. Optional \`sport\` narrows to a single discipline so HR responses can be compared against sport-specific demands. Pass \`compare_to_oldest\` and \`compare_to_newest\` to also fit a comparison curve and surface deltas; \`comparison\` is omitted when no comparison range was supplied.`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago")'),
         newest: z.string().optional().describe('End date (defaults to today)'),

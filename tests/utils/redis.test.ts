@@ -10,6 +10,14 @@ const mockRedisClient = {
   setEx: vi.fn(),
   del: vi.fn(),
   on: vi.fn(),
+  // Emulates the atomic compare-and-delete Lua script used by releaseRefreshLock.
+  eval: vi.fn(async (_script: string, opts: { keys: string[]; arguments: string[] }) => {
+    const current = await mockRedisClient.get(opts.keys[0]);
+    if (current === opts.arguments[0]) {
+      return mockRedisClient.del(opts.keys[0]);
+    }
+    return 0;
+  }),
 };
 
 vi.mock('redis', () => ({
@@ -319,7 +327,7 @@ describe('Redis utilities', () => {
       expect(mockRedisClient.set).toHaveBeenCalledWith(
         'whoop:refresh_lock',
         'lock-id-123',
-        { NX: true, EX: 10 }
+        { NX: true, EX: 45 }
       );
     });
 
@@ -342,6 +350,37 @@ describe('Redis utilities', () => {
       await releaseRefreshLock('lock-id-123');
 
       expect(mockRedisClient.del).toHaveBeenCalledWith('whoop:refresh_lock');
+    });
+
+    it('releases the lock atomically via a compare-and-delete script', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      mockRedisClient.get.mockResolvedValue('lock-id-123');
+      mockRedisClient.del.mockResolvedValue(1);
+
+      const { releaseRefreshLock } = await import('../../src/utils/redis.js');
+      await releaseRefreshLock('lock-id-123');
+
+      expect(mockRedisClient.eval).toHaveBeenCalledWith(
+        expect.stringContaining('redis.call("del", KEYS[1])'),
+        { keys: ['whoop:refresh_lock'], arguments: ['lock-id-123'] }
+      );
+    });
+
+    it('storeWhoopTokens returns success:false instead of throwing when Redis is unreachable', async () => {
+      process.env.REDIS_URL = 'redis://localhost:6379';
+      vi.resetModules();
+      const { createClient } = await import('redis');
+      vi.mocked(createClient).mockImplementationOnce(() => ({
+        ...mockRedisClient,
+        isOpen: false,
+        connect: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
+      }) as never);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { storeWhoopTokens } = await import('../../src/utils/redis.js');
+      await expect(
+        storeWhoopTokens({ accessToken: 'a', refreshToken: 'r', expiresAt: Date.now() + 3600_000 })
+      ).resolves.toEqual({ success: false, version: 0 });
     });
 
     it('should not release lock when not owner', async () => {

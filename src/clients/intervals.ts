@@ -266,6 +266,8 @@ interface IntervalsActivity {
 
   // Threshold pace for this activity
   threshold_pace?: number; // Speed in m/s (needs conversion based on pace_units)
+  // Not actually returned for activities (see normalizeActivity, which reads
+  // pace_units from the matching sport settings instead). Kept optional.
   pace_units?: string; // "MINS_KM", "SECS_100M", etc.
 
   // Time in zones
@@ -521,7 +523,6 @@ interface IntervalsEvent {
   icu_training_load?: number;
   icu_intensity?: number;
   moving_time?: number;
-  duration?: number;
   tags?: string[];
   external_id?: string;
   training_availability?: string;
@@ -718,23 +719,31 @@ interface RawHRCurvesResponse {
   curves: RawActivityHRCurve[];
 }
 
+/**
+ * How long athlete profile/settings lookups (timezone, sport settings, unit
+ * preferences, wellness sources, weather locations) are cached.
+ */
+const ATHLETE_SETTINGS_TTL_MS = 15 * 60 * 1000;
+
 export class IntervalsClient {
   private config: IntervalsConfig;
   private authHeader: string;
 
-  // Session-lifetime memoized fetchers. Each gives single-flight + cache-on-success
-  // for endpoints that return effectively-constant profile/settings data.
-  // Reassignable so invalidateAthleteCaches() can drop a stale value after a
-  // location/timezone write (memoize has no clear method by design).
+  // Memoized fetchers for athlete profile/settings data. Each gives
+  // single-flight + cache-on-success. This client lives for the whole process
+  // (shared by every request), so values expire after ATHLETE_SETTINGS_TTL_MS
+  // so edits in Intervals.icu (new FTP, zones, timezone, units, weather
+  // locations) are picked up without a restart.
   private fetchTimezone = this.buildTimezoneCache();
   private buildTimezoneCache() {
     return memoize(async () => {
       const profile = await this.fetch<IntervalsAthleteProfile>('/profile');
       return profile.athlete.timezone ?? 'UTC';
-    });
+    }, ATHLETE_SETTINGS_TTL_MS);
   }
   private fetchSportSettingsCached = memoize(() =>
-    this.fetch<IntervalsSportSettings[]>('/sport-settings')
+    this.fetch<IntervalsSportSettings[]>('/sport-settings'),
+    ATHLETE_SETTINGS_TTL_MS
   );
   private fetchUnitPreferencesCached = memoize(async () => {
     const athlete = await this.fetch<IntervalsAthleteData>('');
@@ -746,7 +755,7 @@ export class IntervalsClient {
       athlete.rain,
       athlete.height_units
     );
-  });
+  }, ATHLETE_SETTINGS_TTL_MS);
   // Build a map from output wellness field name (e.g., "hrv", "sleep_duration")
   // to its configured provider ("garmin" | "whoop" | "oura"). Inferred from
   // the athlete's `*_wellness_keys` arrays on the root endpoint. Resolution
@@ -767,15 +776,13 @@ export class IntervalsClient {
     assign(athlete.icu_garmin_wellness_keys, 'garmin');
     assign(athlete.whoop_wellness_keys, 'whoop');
     return sources;
-  });
-  // Reassignable so invalidateAthleteCaches() can drop stale forecast locations
-  // after a weather-config write.
+  }, ATHLETE_SETTINGS_TTL_MS);
   private fetchWeatherConfigCached = this.buildWeatherConfigCache();
   private buildWeatherConfigCache() {
     return memoize(async () => {
       const response = await this.fetch<IntervalsWeatherConfig>('/weather-config');
       return response.forecasts ?? [];
-    });
+    }, ATHLETE_SETTINGS_TTL_MS);
   }
 
   constructor(config: IntervalsConfig) {
@@ -1197,14 +1204,17 @@ export class IntervalsClient {
    */
   private formatPaceValue(pace: number, units: string): string {
     if (units === 'MINS_KM') {
-      // pace is in minutes per km (e.g., 4 = 4:00/km)
-      const minutes = Math.floor(pace);
-      const seconds = Math.round((pace - minutes) * 60);
+      // pace is in minutes per km (e.g., 4 = 4:00/km). Round total seconds
+      // first so e.g. 4.9925 renders "5:00/km", not "4:60/km".
+      const totalSeconds = Math.round(pace * 60);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
       return `${minutes}:${seconds.toString().padStart(2, '0')}/km`;
     } else if (units === 'SECS_100M') {
       // pace is in seconds per 100m (e.g., 120 = 2:00/100m)
-      const minutes = Math.floor(pace / 60);
-      const seconds = Math.round(pace % 60);
+      const totalSeconds = Math.round(pace);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
       if (minutes > 0) {
         return `${minutes}:${seconds.toString().padStart(2, '0')}/100m`;
       }
@@ -1360,7 +1370,7 @@ export class IntervalsClient {
   ): Promise<T> {
     logApiCall('Intervals', `/activity/${activityId}${endpoint}`);
 
-    const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
+    const url = new URL(`${INTERVALS_API_BASE}/activity/${encodeURIComponent(activityId)}${endpoint}`);
 
     return httpRequestJson<T>({
       url: url.toString(),
@@ -1423,8 +1433,10 @@ export class IntervalsClient {
    *
    * Pass `activityType` so cadence values use the correct unit (rpm for cycling,
    * spm for running/swimming) and `poolLengthM` so swim interval distances pick
-   * the right unit (yards for SCY/LCY pools, meters otherwise). When either is
-   * omitted, the activity is fetched once to look them up.
+   * the right unit (yards for SCY/LCY pools, meters otherwise). When
+   * `activityType` is omitted, the activity is fetched once to look up its type
+   * (and its pool length, if that was omitted too); a passed `activityType`
+   * with no `poolLengthM` is trusted as-is.
    */
   async getActivityIntervals(
     activityId: string,
@@ -1878,7 +1890,8 @@ export class IntervalsClient {
   }
 
   /**
-   * Get non-workout calendar annotations (SICK, INJURED, HOLIDAY, NOTE) whose
+   * Get non-workout calendar annotations (SICK, INJURED, HOLIDAY, NOTE,
+   * SEASON_START) whose
    * date span overlaps the given range. The Intervals.icu /events endpoint
    * filters strictly by start_date_local, so a multi-day annotation that began
    * before `rangeStart` would be missed by a naive query. Workaround: extend
@@ -1957,7 +1970,9 @@ export class IntervalsClient {
       ? TRAINING_AVAILABILITY_MAP[event.training_availability]
       : undefined;
     return {
-      id: event.uid ?? String(event.id),
+      // The numeric event id, not `uid`: the update/delete tools pass this to
+      // /events/{eventId}, which only accepts the numeric id.
+      id: String(event.id),
       category: ANNOTATION_CATEGORY_MAP[apiCategory],
       name: event.name,
       description: event.description,
@@ -1981,8 +1996,10 @@ export class IntervalsClient {
    * Format sleep seconds to human-readable string like "8h 10m".
    */
   private formatSleepDuration(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.round((seconds % 3600) / 60);
+    // Round to whole minutes first so 7h 59m 30s renders "8h", not "7h 60m".
+    const totalMinutes = Math.round(seconds / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     if (hours === 0) {
       return `${minutes}m`;
     }
@@ -2424,7 +2441,7 @@ export class IntervalsClient {
       max_heart_rate: activity.max_heartrate != null ? formatHR(activity.max_heartrate) : undefined,
       // icu_intensity comes back as a percentage (e.g. 73.45 means 73.45% =
       // IF 0.73), so divide by 100 to normalize to the decimal form everyone
-      // else uses. Matches the per-interval normalization at line ~1793.
+      // else uses. Matches the per-interval normalization in normalizeInterval.
       intensity_factor: activity.icu_intensity != null ? activity.icu_intensity / 100 : undefined,
       elevation_gain: activity.total_elevation_gain != null
         ? formatLength(activity.total_elevation_gain)
@@ -2622,15 +2639,19 @@ export class IntervalsClient {
 
   private normalizePlannedEvent(event: IntervalsEvent, timezone: string): PlannedWorkout {
     // Calculate duration in seconds
-    const durationSeconds = event.moving_time ?? (event.duration ? event.duration * 60 : undefined);
+    const durationSeconds = event.moving_time;
 
     return {
-      id: event.uid ?? String(event.id),
+      // The numeric event id, not `uid`: the update/delete tools pass this to
+      // /events/{eventId}, which only accepts the numeric id.
+      id: String(event.id),
       scheduled_for: localStringToISO8601WithTimezone(event.start_date_local, timezone),
       name: event.name,
       description: event.description,
       expected_tss: event.icu_training_load,
-      expected_if: event.icu_intensity,
+      // icu_intensity is a percentage (e.g. 85 = IF 0.85), as on activities;
+      // normalize to the ratio TrainerRoad workouts use.
+      expected_if: event.icu_intensity != null ? event.icu_intensity / 100 : undefined,
       expected_duration: durationSeconds !== undefined
         ? formatDuration(durationSeconds)
         : undefined,
@@ -2883,7 +2904,7 @@ export class IntervalsClient {
       activity_id: curve.id,
       date: curve.start_date_local,
       weight_kg: curve.weight,
-      // Filter to only include distances where we have time data
+      // One entry per requested distance, aligned by index with `distances`.
       curve: curve.secs.map((timeSeconds, index) => ({
         distance_meters: responseDistances[index],
         distance_label: this.formatDistanceLabel(responseDistances[index]),
@@ -3033,7 +3054,7 @@ export class IntervalsClient {
     context?: { operation: string; resource?: string }
   ): Promise<T> {
     logApiCall('Intervals', `/activity/${activityId}${endpoint}`, 'PUT');
-    const url = new URL(`${INTERVALS_API_BASE}/activity/${activityId}${endpoint}`);
+    const url = new URL(`${INTERVALS_API_BASE}/activity/${encodeURIComponent(activityId)}${endpoint}`);
 
     if (queryParams) {
       Object.entries(queryParams).forEach(([key, value]) => {
@@ -3082,7 +3103,7 @@ export class IntervalsClient {
     input: UpdateEventInput
   ): Promise<UpdateEventResponse> {
     const response = await this.putJson<UpdateEventResponse>(
-      `/events/${eventId}`,
+      `/events/${encodeURIComponent(String(eventId))}`,
       input,
       { operation: 'update event', resource: `event ${eventId}` }
     );
@@ -3095,7 +3116,7 @@ export class IntervalsClient {
    */
   async deleteEvent(eventId: string | number): Promise<void> {
     await this.deleteHttp(
-      `/events/${eventId}`,
+      `/events/${encodeURIComponent(String(eventId))}`,
       { operation: 'delete event', resource: `event ${eventId}` }
     );
   }
@@ -3106,7 +3127,7 @@ export class IntervalsClient {
    */
   async getEvent(eventId: string | number): Promise<IntervalsEvent> {
     return await this.fetch<IntervalsEvent>(
-      `/events/${eventId}`,
+      `/events/${encodeURIComponent(String(eventId))}`,
       undefined,
       { operation: 'get event', resource: `event ${eventId}` }
     );

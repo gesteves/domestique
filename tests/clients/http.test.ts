@@ -148,3 +148,37 @@ describe('httpRequestVoid', () => {
     ).rejects.toBeInstanceOf(IntervalsApiError);
   });
 });
+
+describe('secret-bearing URLs in error logs', () => {
+  it('logs logUrl instead of url when the URL itself is secret', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, text: () => Promise.resolve('') });
+
+    await expect(
+      httpRequestText({
+        url: 'https://calendar.example.test/ics/PRIVATE-TOKEN',
+        logUrl: 'calendar feed (URL redacted)',
+        context: ctx,
+        ...builders,
+      })
+    ).rejects.toBeInstanceOf(IntervalsApiError);
+
+    const logged = errorSpy.mock.calls.flat().join('\n');
+    expect(logged).not.toContain('PRIVATE-TOKEN');
+    expect(logged).toContain('calendar feed (URL redacted)');
+    errorSpy.mockRestore();
+  });
+
+  it('redacts an API key query parameter on network failure', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+    await expect(
+      httpRequestJson({ url: 'https://example.test/api?key=AIzaSECRET', context: ctx, ...builders })
+    ).rejects.toBeInstanceOf(IntervalsApiError);
+
+    const logged = errorSpy.mock.calls.flat().join('\n');
+    expect(logged).not.toContain('AIzaSECRET');
+    errorSpy.mockRestore();
+  });
+});

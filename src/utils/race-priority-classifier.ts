@@ -46,10 +46,16 @@ function getClient(): Anthropic | null {
   return client;
 }
 
+// The verdict depends on the model and the system prompt as well as the
+// input, so both are part of the key: switching ANTHROPIC_CLASSIFIER_MODEL or
+// editing the prompt file re-classifies instead of serving stale verdicts.
+const PROMPT_HASH = createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 16);
+
 function cacheKey(name: string, description: string): string {
-  // Description is part of the key so user edits invalidate the cache. Don't
-  // change this without thinking about the stale-verdict case described above.
-  const hash = createHash('sha256').update(`${name}\n${description}`).digest('hex');
+  // Description is part of the key so user edits invalidate the cache.
+  const hash = createHash('sha256')
+    .update(`${getClassifierModel()}\n${PROMPT_HASH}\n${name}\n${description}`)
+    .digest('hex');
   return `${CACHE_KEY_PREFIX}${hash}`;
 }
 

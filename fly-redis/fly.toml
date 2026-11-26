@@ -5,7 +5,10 @@ primary_region = 'iad'
   image = 'redis:7-alpine'
 
 [processes]
-  app = "redis-server --dir /data --save 60 1 --appendonly no --maxmemory 64mb --maxmemory-policy allkeys-lru"
+  # volatile-lru: under memory pressure, evict only keys with a TTL (caches).
+  # The Whoop refresh token has no TTL and must never be evicted — losing it
+  # forces an interactive re-auth (`npm run whoop:auth`).
+  app = "redis-server --dir /data --save 60 1 --appendonly no --maxmemory 64mb --maxmemory-policy volatile-lru"
 
 [mounts]
   source = "redis_data"

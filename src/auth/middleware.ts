@@ -23,8 +23,9 @@ export function createOriginValidator(
 /**
  * Validate MCP authentication token from Authorization header or query parameter.
  * Supports:
- * - Authorization: Bearer <token> (preferred for Streamable HTTP)
- * - ?token=<token> (legacy SSE support)
+ * - Authorization: Bearer <token> (preferred)
+ * - ?token=<token> (for connectors that only accept a URL, e.g. the Claude and
+ *   ChatGPT connector setup documented in the README)
  */
 export function validateToken(
   req: Request,

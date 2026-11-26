@@ -11,7 +11,8 @@ vi.mock('../../src/utils/race-priority-classifier.js', () => ({
   classifyRacePriority: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('../../src/utils/training-phase-cache.js', () => ({
+vi.mock('../../src/utils/training-phase-cache.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/utils/training-phase-cache.js')>()),
   TRAINING_PHASE_NAMES: ['Base', 'Build', 'Specialty', 'Recovery Week'],
   loadMarkers: vi.fn().mockResolvedValue([]),
   rememberMarkers: vi.fn().mockResolvedValue(undefined),
@@ -1962,6 +1963,38 @@ END:VCALENDAR`;
         week: 3,
         weeks_remaining: 1, // 11 days remain → floor(11/7) = 1
       });
+    });
+
+    it('ignores a cached marker inside the live feed window that the feed no longer has (moved in TR)', async () => {
+      const { loadMarkers } = await import('../../src/utils/training-phase-cache.js');
+      // Cached: Build was on 2025-01-06, but the athlete re-planned and moved it to 2025-01-20.
+      vi.mocked(loadMarkers).mockResolvedValueOnce([
+        { date: '2024-12-01', name: 'Base' },
+        { date: '2025-01-06', name: 'Build' },
+      ]);
+
+      const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:some-workout@trainerroad.com
+DTSTART;VALUE=DATE:20250101
+DTEND;VALUE=DATE:20250102
+SUMMARY:Note
+END:VEVENT
+BEGIN:VEVENT
+UID:phase-build@trainerroad.com
+DTSTART;VALUE=DATE:20250120
+DTEND;VALUE=DATE:20250121
+SUMMARY:Build
+END:VEVENT
+END:VCALENDAR`;
+      mockFetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(ics) });
+
+      const result = await client.getCurrentTrainingPhase('2025-01-08');
+
+      expect(result?.name).toBe('Base');
+      expect(result?.started_on).toBe('2024-12-01');
+      expect(result?.ends_on).toBe('2025-01-20');
     });
   });
 });

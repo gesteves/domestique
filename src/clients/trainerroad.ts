@@ -3,6 +3,7 @@ import { format, subDays } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race, Annotation, TrainingPhase, TrainingPhaseName } from '../types/index.js';
 import { formatDuration } from '../utils/format-units.js';
+import { addDaysToYMD } from '../utils/tz.js';
 import { normalizeActivityType } from '../utils/activity-matcher.js';
 import { TrainerRoadApiError } from '../errors/index.js';
 import { httpRequestText } from './http.js';
@@ -11,6 +12,8 @@ import { categorizeAnnotation } from '../utils/annotation-categorizer.js';
 import { classifyRacePriority } from '../utils/race-priority-classifier.js';
 import {
   CachedPhaseMarker,
+  FeedWindow,
+  isWithinFeedWindow,
   loadMarkers,
   rememberMarkers,
 } from '../utils/training-phase-cache.js';
@@ -45,6 +48,8 @@ export class TrainerRoadClient {
 
     const icsData = await httpRequestText({
       url: this.config.calendarUrl,
+      // The feed URL embeds a private access token; never log it.
+      logUrl: 'TrainerRoad calendar feed (URL redacted)',
       context: errorContext,
       toHttpError: (status, ctx, body) => TrainerRoadApiError.fromHttpStatus(status, ctx, body),
       toNetworkError: (ctx, err) => TrainerRoadApiError.networkError(ctx, err),
@@ -118,12 +123,23 @@ export class TrainerRoadClient {
           name: this.normalizePhaseName(event.summary),
         });
       }
-      if (seen.length > 0) {
-        await rememberMarkers(seen);
-      }
+      await rememberMarkers(seen, this.feedWindow(events));
     } catch (error) {
       logError('TrainerRoad', 'Failed to cache phase markers', error);
     }
+  }
+
+  /** Inclusive date span covered by the fetched feed, or null if it's empty. */
+  private feedWindow(events: CalendarEvent[]): FeedWindow | null {
+    if (events.length === 0) return null;
+    let start = '9999-12-31';
+    let end = '0000-01-01';
+    for (const event of events) {
+      const date = format(event.start, 'yyyy-MM-dd');
+      if (date < start) start = date;
+      if (date > end) end = date;
+    }
+    return { start, end };
   }
 
   /**
@@ -132,7 +148,7 @@ export class TrainerRoadClient {
    *   AND must not be a race leg (name matches a race event on the same day)
    * - DATE-TIME events: must have a duration less than 1440 minutes (one day)
    * @param event - The calendar event to check
-   * @param raceEventNames - Optional set of race event names on the same day (for DATE events)
+   * @param raceEventNames - Optional set of race keys (day + name, see raceLegKey) for DATE events
    */
   private isWorkout(event: CalendarEvent, raceEventNames?: Set<string>): boolean {
     if (event.dateType === 'date') {
@@ -144,7 +160,7 @@ export class TrainerRoadClient {
       // If there are race events, check if this is a race leg
       if (raceEventNames) {
         const strippedName = this.stripDurationFromName(event.summary);
-        if (raceEventNames.has(strippedName)) {
+        if (raceEventNames.has(this.raceLegKey(event, strippedName))) {
           // This is a race leg (e.g., "0:45 - Escape from Alcatraz" when "Escape from Alcatraz" exists)
           return false;
         }
@@ -167,13 +183,21 @@ export class TrainerRoadClient {
    * @returns Set of race event names (for matching against potential race legs)
    */
   private findRaceEventNames(events: CalendarEvent[]): Set<string> {
-    const raceNames = new Set<string>();
+    const raceKeys = new Set<string>();
     for (const event of events) {
       if (event.dateType === 'date' && this.parseDurationFromName(event.summary) === undefined) {
-        raceNames.add(event.summary);
+        raceKeys.add(this.raceLegKey(event, event.summary));
       }
     }
-    return raceNames;
+    return raceKeys;
+  }
+
+  /**
+   * Key for matching a race leg to its race: same local day AND same name. A
+   * same-named all-day note on a different day must not hide a workout.
+   */
+  private raceLegKey(event: CalendarEvent, name: string): string {
+    return `${format(event.start, 'yyyy-MM-dd')}|${name}`;
   }
 
   /**
@@ -517,8 +541,13 @@ export class TrainerRoadClient {
       }));
 
     const cached = await loadMarkers();
+    const window = this.feedWindow(events);
     const byDate = new Map<string, CachedPhaseMarker>();
-    for (const m of cached) byDate.set(m.date, m);
+    // Inside the live feed's window the feed is authoritative: a cached marker
+    // there that the feed no longer has was moved or deleted in TR.
+    for (const m of cached) {
+      if (!isWithinFeedWindow(m.date, window)) byDate.set(m.date, m);
+    }
     // Live feed wins on conflict (e.g. a marker was edited in TR after caching)
     for (const m of liveMarkers) byDate.set(m.date, m);
     const merged = [...byDate.values()].sort((a, b) =>
@@ -635,6 +664,15 @@ export class TrainerRoadClient {
       endDate = timezone
         ? formatInTimeZone(event.end, timezone, 'yyyy-MM-dd')
         : format(event.end, 'yyyy-MM-dd');
+      // DTEND is exclusive for DATE-TIME events too: one ending exactly at
+      // local midnight doesn't occupy that day, so the inclusive last day is
+      // the day before.
+      const endClock = timezone
+        ? formatInTimeZone(event.end, timezone, 'HH:mm:ss')
+        : format(event.end, 'HH:mm:ss');
+      if (endClock === '00:00:00' && endDate > startDate) {
+        endDate = addDaysToYMD(endDate, -1);
+      }
     }
 
     return {
@@ -812,16 +850,19 @@ export class TrainerRoadClient {
     const result: ReturnType<typeof this.parseDescription> = {};
 
     // Try to extract TSS (e.g., "TSS: 75" or "TSS 75")
-    const tssMatch = description.match(/TSS[:\s]+(\d+(?:\.\d+)?)/i);
+    const tssMatch = description.match(/\bTSS\b[:\s]+(\d+(?:\.\d+)?)/i);
     if (tssMatch) {
       result.tss = parseFloat(tssMatch[1]);
     }
 
-    // Try to extract IF (e.g., "IF: 0.85" or "Intensity Factor: 85%")
-    const ifMatch = description.match(/(?:IF|Intensity Factor)[:\s]+(\d+(?:\.\d+)?)/i);
+    // Try to extract IF (e.g., "IF 0.85", "IF: 1.05" or "Intensity Factor: 85%").
+    // Case-sensitive "IF" with word boundaries so prose like "stop if 3
+    // intervals…" isn't parsed as IF 0.03. Percent form is converted to a
+    // ratio; a bare ratio above 1 (e.g. a VO2 session at IF 1.05) is kept.
+    const ifMatch = description.match(/\b(?:IF|[Ii]ntensity [Ff]actor)\b[:\s]+(\d+(?:\.\d+)?)\s*(%)?/);
     if (ifMatch) {
       let ifValue = parseFloat(ifMatch[1]);
-      if (ifValue > 1) {
+      if (ifMatch[2] === '%' || ifValue > 3) {
         ifValue = ifValue / 100;
       }
       result.if = ifValue;

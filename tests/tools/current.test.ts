@@ -1948,6 +1948,24 @@ describe('CurrentTools', () => {
         await expect(tools.getWeatherForecast({ date: '2026-04-27' })).rejects.toThrow(/outside the supported window/);
       });
 
+      it('accepts today+9 but rejects today+10 (daily forecast covers 10 days including today)', async () => {
+        const tools = new CurrentTools(
+          mockIntervalsClient,
+          mockWhoopClient,
+          mockTrainerRoadClient,
+          mockGoogleWeatherClient
+        );
+        vi.mocked(mockIntervalsClient.getEnabledWeatherLocations).mockResolvedValue([
+          { id: 1, label: 'Moose', latitude: 43.65, longitude: -110.71, location: 'Moose,Wyoming,US' },
+        ]);
+        vi.mocked(mockGoogleWeatherClient.getDailyForecast).mockResolvedValue(sampleDailyAt('2026-05-07'));
+        vi.mocked(mockGoogleWeatherClient.getHourlyForecast).mockResolvedValue({ forecastHours: [] });
+
+        const ok = await tools.getWeatherForecast({ date: '2026-05-07' });
+        expect(ok.forecasts).toHaveLength(1);
+        await expect(tools.getWeatherForecast({ date: '2026-05-08' })).rejects.toThrow(/outside the supported window/);
+      });
+
       it('returns empty forecasts when Google Weather is not configured (no args)', async () => {
         const tools = new CurrentTools(mockIntervalsClient, mockWhoopClient, mockTrainerRoadClient, null);
         const result = await tools.getWeatherForecast({ date: '2026-05-02' });

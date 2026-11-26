@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatDuration,
+  formatLargeDuration,
   formatDistance,
   formatSpeed,
   formatPace,
@@ -46,6 +47,24 @@ const IMPERIAL_PREFS: UnitPreferences = {
 };
 
 describe('format-units', () => {
+  describe('seconds rounding never produces ":60"', () => {
+    it('formatDuration carries a rounded-up minute', () => {
+      expect(formatDuration(1799.6)).toBe('0:30:00');
+      expect(formatDuration(3599.5)).toBe('1:00:00');
+      expect(formatDuration(59.7)).toBe('0:01:00');
+    });
+
+    it('formatLargeDuration carries a rounded-up minute', () => {
+      expect(formatLargeDuration(1799.6)).toBe('0:30:00');
+      expect(formatLargeDuration(36_000 - 0.4)).toBe('10:00:00');
+    });
+
+    it('formatPace carries a rounded-up minute', () => {
+      expect(formatPace(299.7, false)).toBe('5:00/km');
+      expect(formatPace(1199.6, true)).toBe('2:00/100m');
+    });
+  });
+
   describe('formatDuration', () => {
     it('should always use h:mm:ss format for unambiguous durations', () => {
       // Seconds under a minute

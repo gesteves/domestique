@@ -149,6 +149,19 @@ describe('categorizeAnnotation', () => {
     expect(firstKey).toBe(secondKey);
   });
 
+  it('uses a different cache key when the classifier model changes', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-test';
+    mockParse.mockResolvedValue({ parsed_output: { category: 'Note' } });
+    const { categorizeAnnotation } = await loadModule();
+
+    await categorizeAnnotation({ name: 'Race day', description: 'A race' });
+    process.env.ANTHROPIC_CLASSIFIER_MODEL = 'claude-sonnet-4-6';
+    await categorizeAnnotation({ name: 'Race day', description: 'A race' });
+    delete process.env.ANTHROPIC_CLASSIFIER_MODEL;
+
+    expect(mockRedisGetJson.mock.calls[0][0]).not.toBe(mockRedisGetJson.mock.calls[1][0]);
+  });
+
   it('uses ANTHROPIC_CLASSIFIER_MODEL when set, falling back to the default otherwise', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
     process.env.ANTHROPIC_CLASSIFIER_MODEL = 'claude-sonnet-4-6';

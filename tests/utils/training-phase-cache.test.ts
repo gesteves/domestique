@@ -156,4 +156,37 @@ describe('training-phase-cache', () => {
       expect(vi.mocked(redis.redisSetJson)).not.toHaveBeenCalled();
     });
   });
+
+  describe('rememberMarkers with a feed window', () => {
+    it('drops cached markers inside the window that the live feed no longer contains', async () => {
+      const { rememberMarkers, loadMarkers, _CACHE_KEY_FOR_TESTING } = await import(
+        '../../src/utils/training-phase-cache.js'
+      );
+      store.set(
+        _CACHE_KEY_FOR_TESTING,
+        JSON.stringify([
+          { date: '2024-12-01', name: 'Base' },
+          { date: '2025-01-06', name: 'Build' },
+        ] satisfies CachedPhaseMarker[])
+      );
+
+      await rememberMarkers([{ date: '2025-01-20', name: 'Build' }], { start: '2025-01-01', end: '2025-02-15' });
+
+      expect(await loadMarkers()).toEqual([
+        { date: '2024-12-01', name: 'Base' },
+        { date: '2025-01-20', name: 'Build' },
+      ]);
+    });
+
+    it('prunes even when the feed has no markers in the window', async () => {
+      const { rememberMarkers, loadMarkers, _CACHE_KEY_FOR_TESTING } = await import(
+        '../../src/utils/training-phase-cache.js'
+      );
+      store.set(_CACHE_KEY_FOR_TESTING, JSON.stringify([{ date: '2025-01-06', name: 'Build' }]));
+
+      await rememberMarkers([], { start: '2025-01-01', end: '2025-02-15' });
+
+      expect(await loadMarkers()).toEqual([]);
+    });
+  });
 });

@@ -43,21 +43,43 @@ export async function loadMarkers(): Promise<CachedPhaseMarker[]> {
   return [...cached].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** Inclusive YYYY-MM-DD span of dates the live iCal feed currently covers. */
+export interface FeedWindow {
+  start: string;
+  end: string;
+}
+
+/**
+ * True when `date` falls inside the live feed's window. A cached marker in
+ * that span that the feed no longer contains was moved or deleted in
+ * TrainerRoad and must be dropped.
+ */
+export function isWithinFeedWindow(date: string, window: FeedWindow | null): boolean {
+  return window !== null && date >= window.start && date <= window.end;
+}
+
 /**
  * Merge `seen` markers into the cache, deduping by date (later writes win
  * on conflict so a marker edited in TR can overwrite the cached entry), and
- * refresh the TTL. No-op when Redis is not configured or unreachable.
+ * refresh the TTL. When `window` is given, cached markers inside it are
+ * replaced wholesale by `seen` — the live feed is authoritative there, so a
+ * marker moved or deleted in TR stops being reported. No-op when Redis is not
+ * configured or unreachable.
  */
 export async function rememberMarkers(
-  seen: CachedPhaseMarker[]
+  seen: CachedPhaseMarker[],
+  window: FeedWindow | null = null
 ): Promise<void> {
-  if (seen.length === 0) return;
+  if (seen.length === 0 && window === null) return;
   if (!(await isRedisAvailable())) return;
 
   const existing = (await redisGetJson<CachedPhaseMarker[]>(KEY)) ?? [];
   const byDate = new Map<string, CachedPhaseMarker>();
-  for (const m of existing) byDate.set(m.date, m);
+  for (const m of existing) {
+    if (!isWithinFeedWindow(m.date, window)) byDate.set(m.date, m);
+  }
   for (const m of seen) byDate.set(m.date, m);
+  if (byDate.size === 0 && existing.length === 0) return;
 
   const merged = [...byDate.values()].sort((a, b) =>
     a.date.localeCompare(b.date)

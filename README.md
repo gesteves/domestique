@@ -10,7 +10,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Sync TrainerRoad running workouts to Intervals.icu (for Zwift/Garmin)
 - Fitness trends (CTL/ATL/TSB) and detailed workout analysis with intervals, notes, and weather
 - Heat strain and heat adaptation score from a [CORE Body Temperature](https://corebodytemp.com/) sensor
-- Weather, AQI, and pollen forecasts up to 10 days out for Intervals.icu weather locations or any geocoded place
+- Weather, AQI, and pollen forecasts up to 9 days out for Intervals.icu weather locations or any geocoded place
 
 **Note:** Workouts imported from Strava can't be analyzed due to API restrictions. Sync them from Zwift, Garmin Connect, Dropbox, etc. instead.
 
@@ -36,11 +36,12 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Workout Management
 - `create_workout` - Create a structured cycling/running/swimming workout from a plain-language description.
-- `update_workout` - Update a Domestique-created workout..
+- `update_workout` - Update a Domestique-created workout.
 - `delete_workout` - Delete a Domestique-created workout.
 - `sync_trainerroad_runs` - Sync running workouts from TrainerRoad to Intervals.icu, detecting changes and orphans.
 - `set_workout_intervals` - Set intervals on a completed activity.
 - `update_activity` - Update name and/or description of a completed activity.
+- `update_heat_adaptation_score` - Record a CORE heat adaptation score on the Intervals.icu wellness record for a date.
 
 ### Calendar Annotations
 - `create_annotation` - Add a sick/injured/holiday/note annotation to the Intervals.icu calendar.
@@ -77,27 +78,30 @@ Copy `.env.example` to `.env` and fill in your credentials:
 cp .env.example .env
 ```
 
-Required variables:
+Required variables (the server refuses to start without them):
 - `MCP_AUTH_TOKEN` - Secret token for MCP authentication. You can quickly generate one with:
 
 ```bash
 openssl rand -hex 32
 ```
 
+- `INTERVALS_API_KEY` and `INTERVALS_ATHLETE_ID` - see "For Intervals.icu integration" below.
+
 Optional:
+- `LOG_LEVEL` - `debug`, `info` (default), `warn`, or `error`. `debug` adds verbose internals such as Whoop token rotation.
 - `MCP_ALLOWED_ORIGINS` - Comma-separated hostnames allowed in the `Origin` header on `/mcp`, beyond localhost. Requests without an `Origin` (e.g. Claude and ChatGPT connectors) are always allowed; requests from any other origin get a 403.
 
-For Intervals.icu integration:
+For Intervals.icu integration (required):
 - `INTERVALS_API_KEY` - Your Intervals.icu API key
 - `INTERVALS_ATHLETE_ID` - Your Intervals.icu athlete ID
 
 For Whoop integration:
 - `WHOOP_CLIENT_ID`
 - `WHOOP_CLIENT_SECRET`
-- `REDIS_URL` - Required for token storage (e.g., `redis://localhost:6379`)
-- `WHOOP_REDIRECT_URI` - Optional. Auto-detected based on environment:
-  - On Fly.io: `https://{FLY_APP_NAME}.fly.dev/callback`
-  - Otherwise: `http://localhost:3000/callback`
+- `REDIS_URL` - Required for token storage (e.g., `redis://localhost:6379`). Also caches classifier results and TrainerRoad training-phase markers.
+- `WHOOP_REDIRECT_URI` - Optional, used by `whoop:auth`. Resolved as:
+  - On Fly.io (`FLY_APP_NAME` set): always `https://{FLY_APP_NAME}.fly.dev/callback` — `WHOOP_REDIRECT_URI` is ignored
+  - Otherwise: `WHOOP_REDIRECT_URI` if set, else `http://localhost:3000/callback`
 
 For TrainerRoad integration:
 - `TRAINERROAD_CALENDAR_URL` - Private iCal feed URL
@@ -112,7 +116,7 @@ For Anthropic API integration:
 - `ANTHROPIC_TOKEN_COUNTER_MODEL` - Optional override for the model used by dev-only debug token counting. Defaults to `claude-haiku-4-5`.
 
 For error reporting (optional):
-- `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.
+- `BUGSNAG_API_KEY` - Reports errors, including upstream API failures (Intervals.icu, Whoop, TrainerRoad, Google), to Bugsnag. API keys and other credentials in request URLs are redacted.
 
 ### Whoop OAuth Setup
 

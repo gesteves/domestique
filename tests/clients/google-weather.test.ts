@@ -133,6 +133,16 @@ describe('GoogleWeatherClient', () => {
       expect(url).toContain('unitsSystem=METRIC');
     });
 
+    it('requests all 10 days in one page (API default pageSize is 5)', async () => {
+      mockFetch.mockResolvedValueOnce(createMockResponse({ forecastDays: [] }));
+
+      await client.getDailyForecast(42.87, -112.58);
+
+      const url = new URL(mockFetch.mock.calls[0][0] as string);
+      expect(url.searchParams.get('days')).toBe('10');
+      expect(url.searchParams.get('pageSize')).toBe('10');
+    });
+
     it('returns the parsed body on success', async () => {
       const body = {
         forecastDays: [

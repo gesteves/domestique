@@ -45,6 +45,8 @@ vi.mock('../../src/utils/redis.js', () => ({
   releaseRefreshLock: vi.fn().mockResolvedValue(undefined),
   invalidateWhoopAccessToken: vi.fn().mockResolvedValue(true),
   getRefreshTokenVersion: vi.fn().mockResolvedValue(0),
+  // Small so lock-wait loops in tests finish quickly.
+  LOCK_TTL_SECONDS: 3,
 }));
 
 import {
@@ -224,6 +226,23 @@ describe('WhoopClient', () => {
       // In UTC timezone, these should be formatted as ISO 8601 with Z suffix: YYYY-MM-DDTHH:mm:ssZ
       expect(result[0].sleep.sleep_start).toBe('2024-12-14T22:00:00Z');
       expect(result[0].sleep.sleep_end).toBe('2024-12-15T06:00:00Z');
+    });
+
+    it('labels the entry with the local date, not the UTC date of created_at', async () => {
+      // 2024-12-14T20:00Z is 07:00 on Dec 15 in Sydney (AEDT, UTC+11).
+      const sydneyRecoveries = {
+        records: [{ ...mockRecoveries.records[0], created_at: '2024-12-14T20:00:00Z' }],
+      };
+      client.setTimezoneGetter(async () => 'Australia/Sydney');
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockCycles) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSleeps) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(sydneyRecoveries) });
+
+      const result = await client.getRecoveries('2024-12-15', '2024-12-15');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].date).toBe('2024-12-15');
     });
 
     it('should include authorization header', async () => {
@@ -1107,6 +1126,99 @@ describe('WhoopClient', () => {
       expect(auth).toBe('Bearer appeared-while-waiting');
       // Should not have called the OAuth endpoint
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('single-use refresh token safety', () => {
+    const oauthCalls = () =>
+      mockFetch.mock.calls.filter(([url]) => typeof url === 'string' && url.includes('oauth'));
+
+    it('never re-sends the refresh token after Whoop accepted it, even if the response body is unreadable', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      });
+
+      await expect(freshClient.getWorkouts('2024-12-15', '2024-12-15')).rejects.toThrow();
+      expect(oauthCalls()).toHaveLength(1);
+    });
+
+    it('keeps new tokens in memory and uses them for the next refresh when the Redis save fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+      vi.mocked(getWhoopRefreshToken).mockResolvedValue({ token: 'R1', version: 1, updatedAt: 1 });
+      vi.mocked(storeWhoopTokens).mockResolvedValue({ success: false, version: 0 });
+
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: 'A2', refresh_token: 'R2', expires_in: 3600 }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ records: [] }) });
+
+      await freshClient.getWorkouts('2024-12-15', '2024-12-15');
+      expect((freshClient as any).unpersistedTokens).toBe(true);
+      expect((freshClient as any).tokens.refreshToken).toBe('R2');
+
+      // Access token expires; Redis still has the consumed R1. The next
+      // refresh must send R2, not R1.
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: 'A3', refresh_token: 'R3', expires_in: 3600 }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ records: [] }) });
+
+      await freshClient.getWorkouts('2024-12-15', '2024-12-15');
+      const secondRefreshBody = oauthCalls()[1][1].body as URLSearchParams;
+      expect(secondRefreshBody.get('refresh_token')).toBe('R2');
+    });
+
+    it('refreshes once when several requests in the same process need a token concurrently', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('oauth')) {
+          return {
+            ok: true,
+            json: () => Promise.resolve({ access_token: 'A2', refresh_token: 'R2', expires_in: 3600 }),
+          };
+        }
+        return { ok: true, json: () => Promise.resolve({ records: [] }) };
+      });
+
+      await Promise.all([
+        freshClient.getWorkouts('2024-12-15', '2024-12-15'),
+        freshClient.getWorkouts('2024-12-15', '2024-12-15'),
+        freshClient.getWorkouts('2024-12-15', '2024-12-15'),
+      ]);
+
+      expect(oauthCalls()).toHaveLength(1);
+      expect(acquireRefreshLock).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends the token refresh with a timeout signal', async () => {
+      const freshClient = new WhoopClient(defaultConfig);
+      (freshClient as any).tokens.tokenExpiresAt = 0;
+      mockFetch.mockReset();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ access_token: 'A2', refresh_token: 'R2', expires_in: 3600 }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ records: [] }) });
+
+      await freshClient.getWorkouts('2024-12-15', '2024-12-15');
+      expect(oauthCalls()[0][1].signal).toBeInstanceOf(AbortSignal);
     });
   });
 

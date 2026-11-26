@@ -33,8 +33,13 @@ import type {
 } from '../types/index.js';
 import type { GetStrainHistoryInput, GetTodaysActivitiesInput } from './types.js';
 
-/** Maximum forecast horizon supported by Google Weather (days). */
+/**
+ * Number of calendar days the Google Weather daily forecast covers, counting
+ * today (today through today+9). Valid day offsets are 0..MAX_FORECAST_DAYS-1.
+ */
 const MAX_FORECAST_DAYS = 10;
+/** Last valid day offset from today. */
+const MAX_FORECAST_OFFSET = MAX_FORECAST_DAYS - 1;
 /** Maximum days the Pollen API forecast covers. */
 const MAX_POLLEN_FORECAST_DAYS = 5;
 /** Maximum hours the Air Quality hourly forecast covers. */
@@ -300,7 +305,9 @@ export class CurrentTools {
    *
    * Date input accepts ISO YYYY-MM-DD or natural-language strings (e.g.,
    * "tomorrow", "in 3 days"). The resolved date must be within today through
-   * today+10 in each location's tz.
+   * today+9 in each location's tz. A location whose own calendar puts the
+   * date outside that window is skipped (the rest are still returned); the
+   * call fails only if every location is out of range.
    */
   async getWeatherForecast(args: { date?: string; location?: string } = {}): Promise<ForecastResponse> {
     const athleteTimezone = await this.intervals.getAthleteTimezone();
@@ -317,10 +324,10 @@ export class CurrentTools {
       const todayInAthleteTz = getTodayInTimezone(athleteTimezone);
       const targetInAthleteTz = parseDateStringInTimezone(args.date, athleteTimezone, 'date');
       const offset = daysBetweenYMD(todayInAthleteTz, targetInAthleteTz);
-      if (offset < 0 || offset > MAX_FORECAST_DAYS) {
-        const maxDate = addDaysToYMD(todayInAthleteTz, MAX_FORECAST_DAYS);
+      if (offset < 0 || offset > MAX_FORECAST_OFFSET) {
+        const maxDate = addDaysToYMD(todayInAthleteTz, MAX_FORECAST_OFFSET);
         throw new Error(
-          `Forecast date ${targetInAthleteTz} is outside the supported window (${todayInAthleteTz} through ${maxDate}). The forecast covers up to ${MAX_FORECAST_DAYS} days from today.`
+          `Forecast date ${targetInAthleteTz} is outside the supported window (${todayInAthleteTz} through ${maxDate}). The forecast covers today through ${MAX_FORECAST_OFFSET} days from today.`
         );
       }
     }
@@ -362,8 +369,11 @@ export class CurrentTools {
     const now = new Date();
 
     // Per-location: parse `args.date` (or default "today") in the location's
-    // own tz, validate against the location's [today, today+10] window, and
-    // dispatch to the today or future builder.
+    // own tz, validate against the location's [today, today+9] window, and
+    // dispatch to the today or future builder. A location whose own calendar
+    // puts the date out of range is skipped rather than failing every
+    // location's forecast; we only throw if all of them are out of range.
+    const outOfRange: Error[] = [];
     const results = await Promise.all(
       locations.map(async (loc) => {
         const todayInLoc = getTodayInTimezone(loc.timezone);
@@ -371,11 +381,14 @@ export class CurrentTools {
           ? parseDateStringInTimezone(args.date, loc.timezone, 'date')
           : todayInLoc;
         const dayOffset = daysBetweenYMD(todayInLoc, targetDate);
-        if (dayOffset < 0 || dayOffset > MAX_FORECAST_DAYS) {
-          const maxDate = addDaysToYMD(todayInLoc, MAX_FORECAST_DAYS);
-          throw new Error(
-            `Forecast date ${targetDate} is outside the supported window (${todayInLoc} through ${maxDate}) for "${loc.label}". The forecast covers up to ${MAX_FORECAST_DAYS} days from today.`
+        if (dayOffset < 0 || dayOffset > MAX_FORECAST_OFFSET) {
+          const maxDate = addDaysToYMD(todayInLoc, MAX_FORECAST_OFFSET);
+          const error = new Error(
+            `Forecast date ${targetDate} is outside the supported window (${todayInLoc} through ${maxDate}) for "${loc.label}". The forecast covers today through ${MAX_FORECAST_OFFSET} days from today.`
           );
+          logWarn('CurrentTools', `Skipping forecast for "${loc.label}"`, error);
+          outOfRange.push(error);
+          return null;
         }
         return dayOffset === 0
           ? this.buildOneTodayForecast(loc, now)
@@ -384,6 +397,9 @@ export class CurrentTools {
     );
 
     const forecasts = results.filter((r): r is LocationForecast => r !== null);
+    if (forecasts.length === 0 && outOfRange.length === locations.length) {
+      throw outOfRange[0];
+    }
     return { current_time: currentDateTime, forecasts };
   }
 

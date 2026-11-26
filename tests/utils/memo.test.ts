@@ -82,4 +82,25 @@ describe('memoize', () => {
     expect(await memoized()).toBe('retry');
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+
+  describe('with ttlMs', () => {
+    it('serves the cached value until the TTL elapses, then refetches', async () => {
+      vi.useFakeTimers();
+      try {
+        const fetcher = vi.fn().mockResolvedValueOnce('old').mockResolvedValueOnce('new');
+        const memoized = memoize(fetcher, 1000);
+
+        expect(await memoized()).toBe('old');
+        vi.advanceTimersByTime(999);
+        expect(await memoized()).toBe('old');
+        expect(fetcher).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(2);
+        expect(await memoized()).toBe('new');
+        expect(fetcher).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

@@ -318,5 +318,80 @@ describe('PlanningTools annotation lifecycle', () => {
       );
       expect(mockIntervalsClient.deleteEvent).not.toHaveBeenCalled();
     });
+
+    it('refuses to delete a Domestique-created workout via the annotation tool', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue({
+        id: 402,
+        uid: 'uid-402',
+        name: 'Threshold intervals',
+        start_date_local: '2024-12-16T09:00:00',
+        type: 'Ride',
+        category: 'WORKOUT',
+        tags: ['domestique'],
+      });
+
+      await expect(tools.deleteAnnotation('402')).rejects.toThrow('not a calendar annotation');
+      expect(mockIntervalsClient.deleteEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('category and range guards', () => {
+    const domestiqueWorkout = {
+      id: 500,
+      uid: 'uid-500',
+      name: 'Threshold intervals',
+      start_date_local: '2024-12-16T09:00:00',
+      type: 'Ride',
+      category: 'WORKOUT',
+      tags: ['domestique'],
+    };
+    const domestiqueSick = {
+      id: 501,
+      uid: 'uid-501',
+      name: 'Flu',
+      start_date_local: '2024-12-16T00:00:00',
+      end_date_local: '2024-12-18T00:00:00',
+      type: 'Note',
+      category: 'SICK',
+      tags: ['domestique'],
+    };
+
+    it('refuses to turn a workout into an annotation via update_annotation', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(domestiqueWorkout);
+      await expect(tools.updateAnnotation({ event_id: '500', category: 'sick' })).rejects.toThrow(
+        'not a calendar annotation'
+      );
+      expect(mockIntervalsClient.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete an annotation via delete_workout', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(domestiqueSick);
+      await expect(tools.deleteWorkout('501')).rejects.toThrow('not a planned workout');
+      expect(mockIntervalsClient.deleteEvent).not.toHaveBeenCalled();
+    });
+
+    it('rejects moving only end_date before the existing start_date', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(domestiqueSick);
+      await expect(tools.updateAnnotation({ event_id: '501', end_date: '2024-12-10' })).rejects.toThrow(
+        'must be on or after start_date'
+      );
+      expect(mockIntervalsClient.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('rejects moving only start_date past the existing end_date', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(domestiqueSick);
+      await expect(tools.updateAnnotation({ event_id: '501', start_date: '2024-12-20' })).rejects.toThrow(
+        'must be on or after start_date'
+      );
+      expect(mockIntervalsClient.updateEvent).not.toHaveBeenCalled();
+    });
+
+    it('allows moving start_date past the old end_date when end_date is cleared in the same call', async () => {
+      vi.mocked(mockIntervalsClient.getEvent).mockResolvedValue(domestiqueSick);
+      vi.mocked(mockIntervalsClient.updateEvent).mockResolvedValue({ ...domestiqueSick, id: 501, name: 'Flu' });
+      await expect(
+        tools.updateAnnotation({ event_id: '501', start_date: '2024-12-20', end_date: '' })
+      ).resolves.toBeDefined();
+    });
   });
 });

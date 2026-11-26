@@ -31,6 +31,16 @@ describe('GoogleTimezoneClient', () => {
   });
 
   describe('getTimezone', () => {
+    it('throws authentication when the key is rejected (REQUEST_DENIED)', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch.mockResolvedValueOnce(
+        createMockResponse({ status: 'REQUEST_DENIED', errorMessage: 'This API is not activated on your API project.' })
+      );
+
+      const err = await client.getTimezone(37.7749, -122.4194).catch((e) => e);
+      expect(err.category).toBe('authentication');
+    });
+
     it('GETs /timezone/json with the expected query params and returns timeZoneId', async () => {
       mockFetch.mockResolvedValueOnce(
         createMockResponse({

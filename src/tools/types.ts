@@ -25,7 +25,7 @@ export const ActivityTypeFilterSchema = z
 
 export const GetActivityHistoryParams = z.object({
   oldest: DateParamSchema.describe('Start date for the query'),
-  newest: DateParamSchema.optional().describe('End date (defaults to today)'),
+  newest: DateParamSchema.optional().describe('End date (defaults to yesterday). Cannot be today.'),
   sport: SportFilterSchema,
   type: ActivityTypeFilterSchema,
 });
