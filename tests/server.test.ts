@@ -1,69 +1,115 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createServer } from 'http';
+import { z } from 'zod';
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  PROTOCOL_VERSION_META_KEY,
+} from '@modelcontextprotocol/server';
 import { createServer as createExpressServer } from '../src/server.js';
 
-// Mock the auth middleware
-vi.mock('../src/auth/middleware.js', () => ({
-  validateToken: vi.fn((req: any, res: any, next: any) => next()),
-  getConfig: vi.fn(() => ({
-    port: 3000,
-    mcpAuthToken: 'test-token',
-    intervals: {
-      apiKey: 'test-key',
-      athleteId: 'test-athlete',
-    },
-    whoop: null,
-    trainerRoad: null,
-    // No longer read by the server; set so the removed-endpoints test would
-    // catch a regression that re-registers the /api routes.
-    apiSecret: 'test-secret',
-  })),
-}));
+// Mock the auth middleware (keep the real Origin validator)
+vi.mock('../src/auth/middleware.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/auth/middleware.js')>();
+  return {
+    ...actual,
+    validateToken: vi.fn((req: any, res: any, next: any) => next()),
+    getConfig: vi.fn(() => ({
+      port: 3000,
+      mcpAuthToken: 'test-token',
+      mcpAllowedOrigins: ['claude.example'],
+      intervals: {
+        apiKey: 'test-key',
+        athleteId: 'test-athlete',
+      },
+      whoop: null,
+      trainerRoad: null,
+      // No longer read by the server; set so the removed-endpoints test would
+      // catch a regression that re-registers the /api routes.
+      apiSecret: 'test-secret',
+    })),
+  };
+});
 
-// Mock the tool registry
+// Mock the tool registry: register one trivial tool on the real McpServer so
+// the real SDK handler can be exercised end to end.
 vi.mock('../src/tools/index.js', () => ({
-  ToolRegistry: vi.fn().mockImplementation(function() {
+  ToolRegistry: vi.fn().mockImplementation(function () {
     return {
-      registerTools: vi.fn(),
-      getToolDefinitions: vi.fn().mockReturnValue([]),
-      handleToolCall: vi.fn().mockResolvedValue({
-        content: [{ type: 'text', text: '{}' }],
+      registerTools: vi.fn((server: any) => {
+        server.registerTool(
+          'echo',
+          {
+            title: 'Echo',
+            description: 'Echoes its input',
+            inputSchema: z.object({ text: z.string() }),
+            outputSchema: z.object({ echoed: z.string() }),
+          },
+          async ({ text }: { text: string }) => {
+            const structuredContent = { echoed: text };
+            return {
+              content: [{ type: 'text', text: JSON.stringify(structuredContent) }],
+              structuredContent,
+            };
+          }
+        );
       }),
     };
   }),
 }));
 
-// Mock MCP SDK
-vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
-  McpServer: vi.fn().mockImplementation(function() {
-    return {
-      setRequestHandler: vi.fn(),
-      connect: vi.fn(),
-      close: vi.fn(),
-      resource: vi.fn(),
-    };
-  }),
-}));
+const MODERN_VERSION = '2026-07-28';
+const LEGACY_VERSION = '2025-11-25';
 
-vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: vi.fn().mockImplementation(function(options?: any) {
-    // Call session initialized callback if provided
-    if (options?.onsessioninitialized) {
-      setTimeout(() => options.onsessioninitialized('test-session-id'), 0);
-    }
-    return {
-      start: vi.fn(),
-      handleRequest: vi.fn().mockImplementation(async (req: any, res: any) => {
-        // Mock a successful response
-        if (!res.headersSent) {
-          res.status(200).json({ success: true });
-        }
-      }),
-      close: vi.fn().mockResolvedValue(undefined),
-      sessionId: 'test-session-id',
-    };
-  }),
-}));
+/** Headers + body for a 2026-07-28 (stateless, per-request `_meta`) request. */
+function modernRequest(
+  method: string,
+  params: Record<string, unknown> = {},
+  extraHeaders: Record<string, string> = {}
+): RequestInit {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    Authorization: 'Bearer test-token',
+    'MCP-Protocol-Version': MODERN_VERSION,
+    'Mcp-Method': method,
+    ...extraHeaders,
+  };
+  if (typeof params.name === 'string' && !('Mcp-Name' in extraHeaders)) {
+    headers['Mcp-Name'] = params.name;
+  }
+  return {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method,
+      params: {
+        ...params,
+        _meta: {
+          [PROTOCOL_VERSION_META_KEY]: MODERN_VERSION,
+          [CLIENT_CAPABILITIES_META_KEY]: {},
+          [CLIENT_INFO_META_KEY]: { name: 'test-client', version: '1.0.0' },
+        },
+      },
+    }),
+  };
+}
+
+/** Parse a JSON or single-message SSE response body into the JSON-RPC message. */
+async function readJsonRpc(response: Response): Promise<any> {
+  const text = await response.text();
+  if ((response.headers.get('content-type') ?? '').includes('text/event-stream')) {
+    const data = text
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .pop();
+    return JSON.parse(data ?? 'null');
+  }
+  return JSON.parse(text);
+}
 
 describe('Server', () => {
   let server: ReturnType<typeof createServer>;
@@ -105,85 +151,128 @@ describe('Server', () => {
     });
   });
 
-  describe('MCP endpoint', () => {
-    it('should be accessible with valid token', async () => {
-      // MCP endpoint exists and responds (auth is mocked to pass)
-      const response = await fetch(`${baseUrl}/mcp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify({}),
-      });
+  describe('MCP endpoint (2026-07-28)', () => {
+    it('answers server/discover with supported versions', async () => {
+      const response = await fetch(`${baseUrl}/mcp`, modernRequest('server/discover'));
+      const body = await readJsonRpc(response);
 
-      // The endpoint exists - we get a response (not 404)
-      expect(response.status).not.toBe(404);
+      expect(response.status).toBe(200);
+      expect(body.result.resultType).toBe('complete');
+      expect(body.result.supportedVersions).toContain(MODERN_VERSION);
     });
 
-    it('should return 404 for unknown session ID', async () => {
+    it('lists tools with cache hints and no session header', async () => {
+      const response = await fetch(`${baseUrl}/mcp`, modernRequest('tools/list'));
+      const body = await readJsonRpc(response);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('mcp-session-id')).toBeNull();
+      expect(body.result.resultType).toBe('complete');
+      expect(body.result.tools.map((t: any) => t.name)).toEqual(['echo']);
+      expect(body.result.tools[0].outputSchema).toBeDefined();
+      expect(typeof body.result.ttlMs).toBe('number');
+      expect(['public', 'private']).toContain(body.result.cacheScope);
+    });
+
+    it('calls a tool and returns structuredContent', async () => {
+      const response = await fetch(
+        `${baseUrl}/mcp`,
+        modernRequest('tools/call', { name: 'echo', arguments: { text: 'hi' } })
+      );
+      const body = await readJsonRpc(response);
+
+      expect(response.status).toBe(200);
+      expect(body.result.resultType).toBe('complete');
+      expect(body.result.structuredContent).toEqual({ echoed: 'hi' });
+    });
+
+    it('rejects a header/body mismatch with HeaderMismatch (-32020)', async () => {
+      const response = await fetch(
+        `${baseUrl}/mcp`,
+        modernRequest('tools/list', {}, { 'Mcp-Method': 'prompts/list' })
+      );
+      const body = await readJsonRpc(response);
+
+      expect(response.status).toBe(400);
+      expect(body.error.code).toBe(-32020);
+    });
+  });
+
+  describe('MCP endpoint (legacy 2025-11-25 clients)', () => {
+    const legacyHeaders = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      Authorization: 'Bearer test-token',
+    };
+
+    it('serves initialize statelessly, without minting a session', async () => {
+      const response = await fetch(`${baseUrl}/mcp`, {
+        method: 'POST',
+        headers: legacyHeaders,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: LEGACY_VERSION,
+            capabilities: {},
+            clientInfo: { name: 'legacy-client', version: '1.0.0' },
+          },
+        }),
+      });
+      const body = await readJsonRpc(response);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('mcp-session-id')).toBeNull();
+      expect(body.result.protocolVersion).toBe(LEGACY_VERSION);
+      expect(body.result.serverInfo.name).toBe('domestique');
+    });
+
+    it('ignores a stale session ID instead of returning 404', async () => {
       const response = await fetch(`${baseUrl}/mcp`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
+          ...legacyHeaders,
+          'mcp-protocol-version': LEGACY_VERSION,
           'mcp-session-id': 'stale-session-id-from-before-deployment',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
       });
+      const body = await readJsonRpc(response);
 
-      expect(response.status).toBe(404);
-      const body = await response.json();
-      expect(body).toEqual({
-        jsonrpc: '2.0',
-        error: { code: -32001, message: 'Session not found' },
-        id: null,
-      });
+      expect(response.status).toBe(200);
+      expect(body.result.tools.map((t: any) => t.name)).toEqual(['echo']);
     });
 
-    it('should reuse transport for known session ID', async () => {
-      // First, create a session by making a request without a session ID
-      await fetch(`${baseUrl}/mcp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify({}),
-      });
-
-      // Wait for the async onsessioninitialized callback to fire
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      // Now make a request with the known session ID
+    it('returns 405 for GET (no standalone SSE stream)', async () => {
       const response = await fetch(`${baseUrl}/mcp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-          'mcp-session-id': 'test-session-id',
-        },
-        body: JSON.stringify({}),
+        method: 'GET',
+        headers: { Accept: 'text/event-stream', Authorization: 'Bearer test-token' },
       });
 
-      // Should reuse the existing session, not return 404
+      expect(response.status).toBe(405);
+    });
+  });
+
+  describe('MCP endpoint Origin validation', () => {
+    it.each([
+      ['http://localhost:6274'],
+      ['https://claude.example'],
+    ])('allows Origin %s', async (origin) => {
+      const response = await fetch(
+        `${baseUrl}/mcp`,
+        modernRequest('server/discover', {}, { Origin: origin })
+      );
       expect(response.status).toBe(200);
     });
 
-    it('should create new session when no session ID is provided', async () => {
-      const response = await fetch(`${baseUrl}/mcp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify({}),
-      });
-
-      // Should create a new session successfully
-      expect(response.status).toBe(200);
+    it('rejects an unlisted Origin with 403', async () => {
+      const response = await fetch(
+        `${baseUrl}/mcp`,
+        modernRequest('server/discover', {}, { Origin: 'https://evil.example' })
+      );
+      expect(response.status).toBe(403);
     });
-
   });
 
   describe('Root redirect', () => {
@@ -202,6 +291,7 @@ describe('Server', () => {
       ['POST', '/webhooks/whoop'],
       ['PUT', '/api/location'],
       ['POST', '/api/activities/descriptions'],
+      ['POST', '/admin/notify-tools-changed'],
     ])('%s %s returns 404', async (method, path) => {
       const response = await fetch(`${baseUrl}${path}`, {
         method,
@@ -259,6 +349,3 @@ describe('Server', () => {
     });
   });
 });
-
-// Import afterEach for cleanup
-import { afterEach } from 'vitest';

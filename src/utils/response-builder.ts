@@ -1,7 +1,7 @@
 /**
  * Response builder for MCP tools.
  *
- * Per the 2025-11-25 MCP spec, tools that declare an `outputSchema` MUST return
+ * Per the 2026-07-28 MCP spec, tools that declare an `outputSchema` MUST return
  * `structuredContent` that conforms to that schema. We do that by making the
  * handler's return value BE structuredContent — no envelope, no wrapper.
  *
@@ -9,9 +9,9 @@
  *   Tools that produce contextual hints declare an optional `hints: string[]`
  *   field in their schema; we inject the hints there so they reach modern
  *   clients that only forward structuredContent to the model.
- * - `content` carries a serialized JSON copy of structuredContent for
- *   backwards-compat with clients that don't read structuredContent. Pure JSON
- *   — no narration mixed in.
+ * - `content` carries a serialized JSON copy of structuredContent. The spec
+ *   says tools SHOULD do this; it keeps clients that don't read
+ *   structuredContent working. Pure JSON — no narration mixed in.
  * - `_meta` carries out-of-band metadata not meant for the model: dev-mode
  *   token counts, ChatGPT widget data, etc. Clients are not required to forward
  *   `_meta` to the model.
@@ -68,7 +68,7 @@ export interface ToolResponse {
 }
 
 /**
- * Builds a tool response with structured content per the 2025-11-25 MCP spec.
+ * Builds a tool response with structured content per the 2026-07-28 MCP spec.
  *
  * The handler's data becomes structuredContent directly. Hints reach the model
  * via the content text block (narration); debug info and widget data live in

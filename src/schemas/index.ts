@@ -2,7 +2,7 @@
  * Zod response schemas for MCP tool outputs.
  *
  * Each tool exports a `<tool>OutputSchema` raw shape used as the tool's
- * `outputSchema` per the 2025-11-25 MCP spec. Field-level `.describe()` calls
+ * `outputSchema` per the 2026-07-28 MCP spec. Field-level `.describe()` calls
  * carry through to the JSON Schema that clients receive via `tools/list`,
  * so the model learns what each field means without us injecting a
  * `field_descriptions` glossary into every response payload.

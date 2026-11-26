@@ -190,7 +190,7 @@ describe('Tool Response Wrapper', () => {
       };
 
       expect(result.structuredContent).toBeDefined();
-      // Per the 2025-11-25 MCP spec, when an outputSchema is declared the
+      // Per the 2026-07-28 MCP spec, when an outputSchema is declared the
       // structuredContent must be the typed payload itself, not a wrapper.
       expect(result.structuredContent).not.toHaveProperty('response');
       expect(result.structuredContent).not.toHaveProperty('field_descriptions');

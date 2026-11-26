@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import type { McpServer, ToolAnnotations } from '@modelcontextprotocol/server';
 import {
   IntervalsClient,
   WhoopClient,
@@ -80,7 +79,7 @@ interface ResponseOptions<TResult = unknown> {
  * Self-contained definition of an MCP tool: metadata, schemas, handler, and
  * response shaping options. The handler must return an object that conforms to
  * outputSchema — that object becomes structuredContent in the tool response per
- * the 2025-11-25 MCP spec.
+ * the 2026-07-28 MCP spec.
  */
 interface ToolDef<TArgs, TResult> extends ResponseOptions<TResult> {
   name: string;
@@ -323,8 +322,10 @@ export class ToolRegistry {
       {
         title: def.title,
         description: def.description,
-        inputSchema: def.inputSchema,
-        outputSchema: def.outputSchema,
+        // SDK v2 only accepts raw Zod shapes through deprecated overloads;
+        // wrap them here so every ToolDef can keep declaring plain shapes.
+        inputSchema: z.object(def.inputSchema),
+        outputSchema: z.object(def.outputSchema),
         annotations: def.annotations,
       },
       // The SDK expects args typed as the Zod shape's inferred output, but our

@@ -84,6 +84,9 @@ Required variables:
 openssl rand -hex 32
 ```
 
+Optional:
+- `MCP_ALLOWED_ORIGINS` - Comma-separated hostnames allowed in the `Origin` header on `/mcp`, beyond localhost. Requests without an `Origin` (e.g. Claude and ChatGPT connectors) are always allowed; requests from any other origin get a 403.
+
 For Intervals.icu integration:
 - `INTERVALS_API_KEY` - Your Intervals.icu API key
 - `INTERVALS_ATHLETE_ID` - Your Intervals.icu athlete ID
@@ -189,5 +192,6 @@ Add as a connector with: `https://{FLY_APP_NAME}.fly.dev/mcp?token=YOUR_SECRET_T
 
 Tested with Claude and ChatGPT. Notes:
 
-- **Tool responses**: Every tool declares an `outputSchema` per the [2025-11-25 MCP spec](https://modelcontextprotocol.io/specification/2025-11-25/server/tools). The payload is returned as `structuredContent` and also serialized into `content` for older clients. Field descriptions are delivered via `tools/list`, not embedded per response.
+- **Protocol version**: Implements the [2026-07-28 MCP spec](https://modelcontextprotocol.io/specification/2026-07-28) with the stateless Streamable HTTP transport (no sessions). Clients still on 2025-11-25 are served statelessly by the same endpoint.
+- **Tool responses**: Every tool declares an `outputSchema` per the [2026-07-28 MCP spec](https://modelcontextprotocol.io/specification/2026-07-28/server/tools). The payload is returned as `structuredContent` and also serialized into `content` for older clients. Field descriptions are delivered via `tools/list`, not embedded per response.
 - **`_meta` fields**: ChatGPT [provides](https://developers.openai.com/apps-sdk/reference#_meta-fields-the-client-provides) `_meta` (location, locale, etc.) on tool inputs; Claude doesn't.

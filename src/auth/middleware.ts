@@ -1,5 +1,24 @@
 import type { Request, Response, NextFunction } from 'express';
+import { localhostAllowedOrigins } from '@modelcontextprotocol/server';
+import { originValidation } from '@modelcontextprotocol/node';
 import { logError } from '../utils/logger.js';
+
+/**
+ * Build Express middleware that validates the `Origin` header, as the
+ * 2026-07-28 Streamable HTTP transport requires (DNS rebinding protection).
+ *
+ * Requests without an `Origin` (server-to-server connectors like Claude and
+ * ChatGPT) pass. Requests with one must come from localhost (e.g. MCP
+ * Inspector) or a hostname in `extraHostnames`; anything else gets a 403.
+ */
+export function createOriginValidator(
+  extraHostnames: string[] = []
+): (req: Request, res: Response, next: NextFunction) => void {
+  const validate = originValidation([...localhostAllowedOrigins(), ...extraHostnames]);
+  return (req, res, next) => {
+    if (validate(req, res)) next();
+  };
+}
 
 /**
  * Validate MCP authentication token from Authorization header or query parameter.
@@ -96,6 +115,11 @@ export function getConfig() {
   return {
     port: parseInt(process.env.PORT ?? '3000', 10),
     mcpAuthToken: process.env.MCP_AUTH_TOKEN!,
+    // Extra Origin hostnames allowed on /mcp, beyond localhost.
+    mcpAllowedOrigins: (process.env.MCP_ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((h) => h.trim())
+      .filter((h) => h.length > 0),
     intervals: {
       apiKey: process.env.INTERVALS_API_KEY!,
       athleteId: process.env.INTERVALS_ATHLETE_ID!,

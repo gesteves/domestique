@@ -1,8 +1,7 @@
 import express, { Request, Response } from 'express';
-import { randomUUID } from 'crypto';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { validateToken, getConfig } from './auth/middleware.js';
+import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
+import { toNodeHandler } from '@modelcontextprotocol/node';
+import { validateToken, createOriginValidator, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
 import { logMcpRequest, isMcpRequestLoggingEnabled } from './utils/request-logger.js';
 import { logInfo, logError } from './utils/logger.js';
@@ -31,14 +30,29 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
   logInfo('Server', 'Tool registry created');
 
+  // Stateless MCP handler (2026-07-28 spec: no sessions, no initialize
+  // handshake). The factory runs once per request and returns a fresh
+  // McpServer; the tool registry and its clients/caches are shared. 2025-era
+  // clients that still send `initialize` are served statelessly by the same
+  // factory (the SDK's default `legacy: 'stateless'`).
+  const mcpHandler = createMcpHandler(
+    () => {
+      const server = new McpServer({ name: 'domestique', version: '1.0.0' });
+      toolRegistry.registerTools(server);
+      return server;
+    },
+    { onerror: (error) => logError('Server', 'MCP handler error', error) }
+  );
+  const handleMcpRequest = toNodeHandler(mcpHandler, {
+    onerror: (error) => logError('Server', 'Error handling MCP request', error),
+  });
+  const validateOrigin = createOriginValidator(config.mcpAllowedOrigins);
+
   app.use(express.json());
 
   if (isMcpRequestLoggingEnabled()) {
     logInfo('MCP Request', 'Logging enabled (LOG_MCP_REQUESTS=true)');
   }
-
-  // Store active transports and servers by sessionId
-  const sessions: Record<string, { transport: StreamableHTTPServerTransport; server: McpServer }> = {};
 
   // Health check endpoint (no auth required)
   app.get('/health', (_req: Request, res: Response) => {
@@ -150,94 +164,16 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     res.type('html').send(html);
   });
 
-  // Notify all connected clients that tools have changed
-  // Useful after deployments that add/modify/remove tools
-  app.post('/admin/notify-tools-changed', validateToken, async (_req: Request, res: Response) => {
-    const sessionIds = Object.keys(sessions);
-    let notified = 0;
-
-    for (const sessionId of sessionIds) {
-      const { server } = sessions[sessionId];
-      try {
-        await server.sendToolListChanged();
-        notified++;
-      } catch (error) {
-        logError('Server', `Failed to notify session ${sessionId}`, error);
-      }
-    }
-
-    logInfo('Server', `Notified ${notified}/${sessionIds.length} sessions of tool list change`);
-    res.json({
-      success: true,
-      sessions_notified: notified,
-      total_sessions: sessionIds.length,
-    });
-  });
-
-  // MCP endpoint - handles all Streamable HTTP requests
-  app.all('/mcp', validateToken, async (req: Request, res: Response) => {
-    // Optional: log incoming JSON-RPC request (tool calls, initialize, etc.)
+  // MCP endpoint - handles all Streamable HTTP requests (modern and legacy)
+  app.all('/mcp', validateToken, validateOrigin, async (req: Request, res: Response) => {
+    // Optional: log incoming JSON-RPC request (tool calls, discover, etc.)
     // including any client-supplied `_meta` field. Controlled by LOG_MCP_REQUESTS.
     logMcpRequest(req.body);
 
-    // Check for existing session
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-    // If we have an existing session, use it
-    if (sessionId && sessions[sessionId]) {
-      const { transport } = sessions[sessionId];
-      try {
-        await transport.handleRequest(req, res, req.body);
-      } catch (error) {
-        logError('Server', 'Error handling MCP request', error);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Internal server error' });
-        }
-      }
-      return;
-    }
-
-    // If the client sent a session ID but we don't recognize it (e.g. after a
-    // server restart/deployment), return 404 so the client knows to re-initialize.
-    // Per the MCP spec, 404 signals "session not found" and the client should
-    // start a new session by sending a fresh initialization request.
-    if (sessionId) {
-      logInfo('Server', `Unknown session ID: ${sessionId}, returning 404 to trigger re-initialization`);
-      res.status(404).json({
-        jsonrpc: '2.0',
-        error: { code: -32001, message: 'Session not found' },
-        id: null,
-      });
-      return;
-    }
-
-    // For new sessions (initialization), create a new server and transport
-    const mcpServer = new McpServer(
-      { name: 'domestique', version: '1.0.0' },
-      { capabilities: { tools: { listChanged: true } } }
-    );
-
-    // Register tools for this connection
-    toolRegistry.registerTools(mcpServer);
-
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      onsessioninitialized: (newSessionId) => {
-        logInfo('Server', `Session initialized: ${newSessionId}`);
-        sessions[newSessionId] = { transport, server: mcpServer };
-      },
-      onsessionclosed: (closedSessionId) => {
-        logInfo('Server', `Session closed: ${closedSessionId}`);
-        delete sessions[closedSessionId];
-      },
-    });
-
-    // Connect the server to the transport
-    await mcpServer.connect(transport);
-
-    // Handle the request
     try {
-      await transport.handleRequest(req, res, req.body);
+      // express.json() has already drained the body stream, so hand the
+      // parsed body to the adapter.
+      await handleMcpRequest(req, res, req.body);
     } catch (error) {
       logError('Server', 'Error handling MCP request', error);
       if (!res.headersSent) {

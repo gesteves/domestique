@@ -28,7 +28,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.14.0",
     "@bugsnag/js": "^9.1.0",
-    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "chrono-node": "^2.10.3",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
