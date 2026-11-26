@@ -384,10 +384,20 @@ export function formatCalories(kcal: number): string {
  * @returns Formatted string like "88 rpm" or "180 spm"
  */
 export function formatCadence(value: number, sport: string): string {
-  const lower = sport.toLowerCase();
-  const isStepLike = lower.includes('run') || lower.includes('walk') || lower.includes('swim');
-  const unit = isStepLike ? 'spm' : 'rpm';
+  const unit = isStepLikeActivity(sport) ? 'spm' : 'rpm';
   return `${Math.round(value)} ${unit}`;
+}
+
+/**
+ * Whether an activity's cadence is counted in steps/strokes rather than
+ * pedal revolutions (running, walking, hiking, swimming). Stride and stroke
+ * length are only meaningful for these; for cycling, Intervals.icu's
+ * `average_stride` is distance per pedal revolution and is suppressed.
+ * @param sport Activity type (e.g., "Running", "VirtualRide", "Swim")
+ */
+export function isStepLikeActivity(sport: string): boolean {
+  const lower = sport.toLowerCase();
+  return lower.includes('run') || lower.includes('walk') || lower.includes('hike') || lower.includes('swim');
 }
 
 /**
@@ -425,6 +435,24 @@ export function formatVO2max(value: number): string {
  */
 export function formatBP(systolic: number, diastolic: number): string {
   return `${Math.round(systolic)}/${Math.round(diastolic)} mmHg`;
+}
+
+/**
+ * Round a unitless score to a fixed number of decimal places, passing
+ * null/undefined through. Use at normalization time for bare numerics
+ * (CTL/ATL/TSB, IF, strain, TRIMP, …) so responses don't carry float noise
+ * like `2.494519000000004`.
+ * @param value Number to round
+ * @param decimals Decimal places to keep (default 0)
+ */
+export function roundTo(value: number, decimals?: number): number;
+export function roundTo(value: number | null | undefined, decimals?: number): number | undefined;
+export function roundTo(value: number | null | undefined, decimals = 0): number | undefined {
+  if (value == null) return undefined;
+  if (!Number.isFinite(value)) return value;
+  const factor = 10 ** decimals;
+  // Normalize -0 to 0 so a rounded tiny negative doesn't render as "-0".
+  return Math.round(value * factor) / factor || 0;
 }
 
 /**
@@ -520,6 +548,27 @@ const INJURY_LABELS: Record<number, string> = {
   4: 'Injured',
 };
 
+const SLEEP_QUALITY_LABELS: Record<number, string> = {
+  1: 'Great',
+  2: 'Good',
+  3: 'Avg',
+  4: 'Poor',
+};
+
+const STRESS_LABELS: Record<number, string> = {
+  1: 'Low',
+  2: 'Avg',
+  3: 'High',
+  4: 'Extreme',
+};
+
+const HYDRATION_LABELS: Record<number, string> = {
+  1: 'Good',
+  2: 'OK',
+  3: 'Poor',
+  4: 'Bad',
+};
+
 function formatScale(value: number, labels: Record<number, string>): string | undefined {
   const n = Math.round(value);
   const label = labels[n];
@@ -549,4 +598,19 @@ export function formatMotivation(value: number): string | undefined {
 /** Format an injury status value (1–4) as "[number] - label". */
 export function formatInjury(value: number): string | undefined {
   return formatScale(value, INJURY_LABELS);
+}
+
+/** Format a subjective sleep quality value (1–4) as "[number] - label". */
+export function formatSleepQuality(value: number): string | undefined {
+  return formatScale(value, SLEEP_QUALITY_LABELS);
+}
+
+/** Format a stress value (1–4) as "[number] - label". */
+export function formatStress(value: number): string | undefined {
+  return formatScale(value, STRESS_LABELS);
+}
+
+/** Format a hydration value (1–4) as "[number] - label". */
+export function formatHydration(value: number): string | undefined {
+  return formatScale(value, HYDRATION_LABELS);
 }

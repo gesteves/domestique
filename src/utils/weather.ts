@@ -39,6 +39,9 @@ import type {
   SunEvents,
   WeatherAlert,
   LocationForecast,
+  CompactLocationForecast,
+  CompactHourlyForecast,
+  CompactCurrentWeather,
 } from '../types/index.js';
 
 /**
@@ -842,5 +845,81 @@ export function assembleFutureLocationForecast(
     }),
     alerts: selectAlerts(alerts, targetDate, locationTimezone),
     pollen: pollenForDate,
+  };
+}
+
+/** True for a missing or zero-percent probability (e.g. "0%"). */
+function isZeroChance(value: string | undefined): boolean {
+  return value === undefined || parseFloat(value) === 0;
+}
+
+/**
+ * Feels-like temperature, only when it differs from the air temperature —
+ * Google repeats the air temperature when no wind chill or heat index applies.
+ */
+function apparentIfDifferent(temperature?: string, apparent?: string): string | undefined {
+  return apparent !== undefined && apparent !== temperature ? apparent : undefined;
+}
+
+/**
+ * Local clock time from a pre-formatted "Weekday, Month D, YYYY at H:MM AM TZ"
+ * string. The parent forecast already carries the date, so each hour only
+ * needs its time. Falls back to the full string if the format is unexpected.
+ */
+function timeOfDay(formatted: string | undefined): string | undefined {
+  if (!formatted) return undefined;
+  const idx = formatted.lastIndexOf(' at ');
+  return idx >= 0 ? formatted.slice(idx + 4) : formatted;
+}
+
+function compactCurrent(current: CurrentWeather | null | undefined): CompactCurrentWeather | null | undefined {
+  if (!current) return current;
+  return {
+    condition: current.condition,
+    temperature: current.temperature,
+    temperature_apparent: apparentIfDifferent(current.temperature, current.temperature_apparent),
+    humidity: current.humidity,
+    precipitation_chance: current.precipitation_chance,
+    precipitation_type: isZeroChance(current.precipitation_chance) ? undefined : current.precipitation_type,
+    thunderstorm_probability: isZeroChance(current.thunderstorm_probability) ? undefined : current.thunderstorm_probability,
+    uv_index: current.uv_index,
+    wind_direction: current.wind_direction,
+    wind_speed: current.wind_speed,
+    wind_gust: current.wind_gust,
+    air_quality: current.air_quality,
+  };
+}
+
+function compactHour(hour: HourlyForecast): CompactHourlyForecast {
+  return {
+    hour: timeOfDay(hour.forecast_start),
+    condition: hour.condition,
+    temperature: hour.temperature,
+    temperature_apparent: apparentIfDifferent(hour.temperature, hour.temperature_apparent),
+    precipitation_chance: hour.precipitation_chance,
+    precipitation_type: isZeroChance(hour.precipitation_chance) ? undefined : hour.precipitation_type,
+    thunderstorm_probability: isZeroChance(hour.thunderstorm_probability) ? undefined : hour.thunderstorm_probability,
+    wind_speed: hour.wind_speed,
+    wind_gust: hour.wind_gust,
+    air_quality: hour.air_quality ? { aqi: hour.air_quality.aqi } : undefined,
+  };
+}
+
+/**
+ * Trim a full location forecast for embedding in the daily summary. Keeps the
+ * daily summary, alerts, and pollen as-is; reduces current conditions and each
+ * hour to the fields that drive training decisions (temperature, feels-like,
+ * precipitation, wind, AQI); drops coordinates and the per-hour date. Use
+ * get_weather_forecast for the full shape.
+ */
+export function compactLocationForecast(forecast: LocationForecast): CompactLocationForecast {
+  return {
+    location: forecast.location,
+    elevation: forecast.elevation,
+    current_conditions: compactCurrent(forecast.current_conditions),
+    daily_summary: forecast.daily_summary,
+    hourly_forecast: forecast.hourly_forecast.map(compactHour),
+    alerts: forecast.alerts,
+    pollen: forecast.pollen,
   };
 }

@@ -9,19 +9,17 @@ import { GoogleElevationClient } from '../clients/google-elevation.js';
 import { GoogleGeocodingClient } from '../clients/google-geocoding.js';
 import { GoogleTimezoneClient } from '../clients/google-timezone.js';
 import { fromZonedTime } from 'date-fns-tz';
-import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD } from '../utils/tz.js';
+import { parseDateRangeInTimezone, getTodayInTimezone, parseDateStringInTimezone, addDaysToYMD, buildPeriod, type Period } from '../utils/tz.js';
 import { getCurrentTimeInTimezone } from '../utils/date-formatting.js';
-import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts } from '../utils/workout-utils.js';
+import { DOMESTIQUE_TAG, enrichWorkoutsWithWhoop, fetchAndMergePlannedWorkouts, withZoneTimesOnly } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
 import { mergeRaces } from '../utils/race-utils.js';
-import { assembleLocationForecast, assembleFutureLocationForecast } from '../utils/weather.js';
+import { assembleLocationForecast, assembleFutureLocationForecast, compactLocationForecast } from '../utils/weather.js';
 import type {
   StrainData,
   AthleteProfile,
   DailySummary,
   SportSettingsResponse,
-  TodaysRecoveryResponse,
-  TodaysStrainResponse,
   TodaysCompletedWorkoutsResponse,
   TodaysPlannedWorkoutsResponse,
   TodaysActivitiesResponse,
@@ -30,6 +28,10 @@ import type {
   Race,
   Annotation,
   TrainingPhase,
+  CompactLocationForecast,
+  DataStatus,
+  TodaysOverview,
+  TodaysWorkouts,
 } from '../types/index.js';
 import type { GetStrainHistoryInput, GetTodaysActivitiesInput } from './types.js';
 
@@ -404,63 +406,6 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's recovery data from Whoop with current date/time in user's timezone.
-   * Returns separate sleep and recovery objects under a whoop parent.
-   */
-  async getTodaysRecovery(): Promise<TodaysRecoveryResponse> {
-    // Use athlete's timezone to get current date/time
-    const timezone = await this.intervals.getAthleteTimezone();
-    const currentDateTime = getCurrentTimeInTimezone(timezone);
-
-    if (!this.whoop) {
-      return {
-        current_time: currentDateTime,
-        whoop: {
-          sleep: null,
-          recovery: null,
-        },
-      };
-    }
-
-    const { sleep, recovery } = await this.whoop.getTodayRecovery();
-    return {
-      current_time: currentDateTime,
-      whoop: {
-        sleep,
-        recovery,
-      },
-    };
-  }
-
-  /**
-   * Get today's strain data from Whoop with current date/time in user's timezone.
-   * Uses Whoop's physiological day model - returns the most recent scored cycle.
-   * Returns strain data under a whoop parent.
-   */
-  async getTodaysStrain(): Promise<TodaysStrainResponse> {
-    // Use athlete's timezone to get current date/time
-    const timezone = await this.intervals.getAthleteTimezone();
-    const currentDateTime = getCurrentTimeInTimezone(timezone);
-
-    if (!this.whoop) {
-      return {
-        current_time: currentDateTime,
-        whoop: {
-          strain: null,
-        },
-      };
-    }
-
-    const strain = await this.whoop.getTodayStrain();
-    return {
-      current_time: currentDateTime,
-      whoop: {
-        strain,
-      },
-    };
-  }
-
-  /**
    * Get today's completed workouts from Intervals.icu with matched Whoop data
    * and current date/time in user's timezone.
    *
@@ -494,16 +439,19 @@ export class CurrentTools {
   /**
    * Get strain history from Whoop for a date range
    */
-  async getStrainHistory(params: GetStrainHistoryInput): Promise<StrainData[]> {
-    if (!this.whoop) {
-      return [];
-    }
-
+  async getStrainHistory(params: GetStrainHistoryInput): Promise<{ period: Period; strain: StrainData[] }> {
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
+    const period = buildPeriod(startDate, endDate);
 
-    return await this.whoop.getStrainData(startDate, endDate);
+    if (!this.whoop) {
+      return { period, strain: [] };
+    }
+
+    const strain = await this.whoop.getStrainData(startDate, endDate);
+    // Oldest → newest; dates are still YYYY-MM-DD at this point.
+    return { period, strain: [...strain].sort((a, b) => a.date.localeCompare(b.date)) };
   }
 
   /**
@@ -566,45 +514,47 @@ export class CurrentTools {
   }
 
   /**
-   * Get today's activities — completed workouts (with full per-activity details),
-   * planned workouts, today's race (if any), and active calendar annotations.
-   * A leaner alternative to getTodaysSummary that only returns activity-and-event data.
-   * Pass `type` to filter to a single event type ('workouts' or 'races').
+   * Shared core of both today tools: the overview (phase, races, annotations,
+   * workout totals) and the planned/completed workout lists. `fullDetail`
+   * controls whether completed workouts carry intervals/notes/weather (the
+   * activities tool) or the lighter list shape (the summary). Fetch failures
+   * are recorded in `status` instead of being silently dropped.
    */
-  async getTodaysActivities(params: GetTodaysActivitiesInput = {}): Promise<TodaysActivitiesResponse> {
-    const { type } = params;
-    const timezone = await this.intervals.getAthleteTimezone();
-    const today = getTodayInTimezone(timezone);
-    const currentDateTime = getCurrentTimeInTimezone(timezone);
+  private async buildTodaysActivities(
+    timezone: string,
+    today: string,
+    opts: { fullDetail: boolean; type?: 'workouts' | 'races'; status: DataStatus }
+  ): Promise<{ overview: TodaysOverview; workouts: TodaysWorkouts }> {
+    const { fullDetail, type, status } = opts;
+    const failed = (key: string, what: string) => (e: unknown) => {
+      logWarn('CurrentTools', `Error fetching ${what} for today`, e);
+      status[key] = 'fetch_failed';
+      return null;
+    };
 
     const [completedResponse, plannedResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, todaysRace] = await Promise.all([
-      this.getTodaysCompletedWorkouts().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching completed workouts for todays activities', e);
-        return { current_time: currentDateTime, workouts: [] } as TodaysCompletedWorkoutsResponse;
-      }),
-      this.getTodaysPlannedWorkouts().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching planned workouts for todays activities', e);
-        return { current_time: currentDateTime, workouts: [] } as TodaysPlannedWorkoutsResponse;
-      }),
+      this.getTodaysCompletedWorkouts(fullDetail ? undefined : { skipExpensiveCalls: true })
+        .catch(failed('completed_workouts', 'completed workouts')),
+      this.getTodaysPlannedWorkouts().catch(failed('planned_workouts', 'planned workouts')),
       this.intervals.getAnnotations(today, today).catch((e) => {
-        logWarn('CurrentTools', 'Error fetching Intervals.icu annotations for todays activities', e);
+        logWarn('CurrentTools', 'Error fetching Intervals.icu annotations for today', e);
         return [] as Annotation[];
       }),
       this.trainerroad
         ? this.trainerroad.getAnnotations(today, today, timezone).catch((e) => {
-            logWarn('CurrentTools', 'Error fetching TrainerRoad annotations for todays activities', e);
+            logWarn('CurrentTools', 'Error fetching TrainerRoad annotations for today', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getTrainingPhaseStarts(today, today).catch((e) => {
-            logWarn('CurrentTools', 'Error fetching TrainerRoad phase starts for todays activities', e);
+            logWarn('CurrentTools', 'Error fetching TrainerRoad phase starts for today', e);
             return [] as Annotation[];
           })
         : Promise.resolve([] as Annotation[]),
       this.trainerroad
         ? this.trainerroad.getCurrentTrainingPhase(today).catch((e) => {
-            logWarn('CurrentTools', 'Error fetching current training phase for todays activities', e);
+            logWarn('CurrentTools', 'Error fetching current training phase for today', e);
             return null as TrainingPhase | null;
           })
         : Promise.resolve(null as TrainingPhase | null),
@@ -616,33 +566,74 @@ export class CurrentTools {
       ...trainerroadPhaseStarts,
     ]);
 
-    const completed = type === 'races' ? [] : completedResponse.workouts;
-    const planned = type === 'races' ? [] : plannedResponse.workouts;
+    const completedAll = completedResponse?.workouts ?? [];
+    const completed = type === 'races'
+      ? []
+      : fullDetail ? completedAll : completedAll.map(withZoneTimesOnly);
+    const planned = type === 'races' ? [] : plannedResponse?.workouts ?? [];
     const races: Race[] = type === 'workouts' ? [] : (todaysRace ? [todaysRace] : []);
 
     const tssCompleted = completed.reduce((sum, w) => sum + (w.tss || 0), 0);
     const tssPlanned = planned.reduce((sum, w) => sum + (w.expected_tss || 0), 0);
+    const plannedWithoutTss = planned.filter((w) => w.expected_tss == null).length;
 
     return {
-      current_time: currentDateTime,
-      completed_workouts: completed,
-      planned_workouts: planned,
-      races,
-      annotations,
-      training_phase: trainingPhase,
-      workouts_completed: completed.length,
-      workouts_planned: planned.length,
-      tss_completed: Math.round(tssCompleted),
-      tss_planned: Math.round(tssPlanned),
+      overview: {
+        training_phase: trainingPhase,
+        races,
+        annotations,
+        workouts: {
+          planned: planned.length,
+          completed: completed.length,
+          tss_planned: Math.round(tssPlanned),
+          tss_completed: Math.round(tssCompleted),
+          planned_without_tss: plannedWithoutTss > 0 ? plannedWithoutTss : undefined,
+        },
+      },
+      workouts: { planned, completed },
     };
   }
 
   /**
-   * Get athlete profile including unit preferences, age, and location.
-   * Note: Sport-specific settings are now retrieved via getSportSettings().
+   * Get today's activities — overview (phase, races, annotations, totals) and
+   * planned/completed workouts, with full per-activity detail on completed
+   * workouts. Pass `type` to filter to a single event type ('workouts' or 'races').
+   */
+  async getTodaysActivities(params: GetTodaysActivitiesInput = {}): Promise<TodaysActivitiesResponse> {
+    const timezone = await this.intervals.getAthleteTimezone();
+    const today = getTodayInTimezone(timezone);
+    const status: DataStatus = {};
+
+    const { overview, workouts } = await this.buildTodaysActivities(timezone, today, {
+      fullDetail: true,
+      type: params.type,
+      status,
+    });
+
+    return {
+      current_time: getCurrentTimeInTimezone(timezone),
+      overview,
+      workouts,
+      data_status: Object.keys(status).length > 0 ? status : undefined,
+    };
+  }
+
+  /**
+   * Get athlete profile including unit preferences, age, location, and (when
+   * Whoop is connected) Whoop's body measurements. Sport-specific settings
+   * are retrieved via getSportSettings().
    */
   async getAthleteProfile(): Promise<AthleteProfile> {
-    return await this.intervals.getAthleteProfile();
+    const [profile, whoopBody] = await Promise.all([
+      this.intervals.getAthleteProfile(),
+      this.whoop
+        ? this.whoop.getBodyMeasurements().catch((e) => {
+            logWarn('CurrentTools', 'Error fetching Whoop body measurements for athlete profile', e);
+            return null;
+          })
+        : Promise.resolve(null),
+    ]);
+    return whoopBody ? { ...profile, whoop_body_measurements: whoopBody } : profile;
   }
 
   /**
@@ -667,122 +658,97 @@ export class CurrentTools {
   }
 
   /**
-   * Get a complete summary of today's data including recovery, strain, and workouts.
-   * This is the single tool for all "today's" data - recovery, sleep, strain,
-   * completed workouts, and planned workouts.
-   *
-   * Note: Whoop insight fields (recovery_level, strain_level, sleep_performance_level, etc.)
-   * are included directly in the recovery and strain objects.
+   * Get a complete summary of today, grouped by question: overview (what's on
+   * today), readiness (recovery, sleep, wellness), load (CTL/ATL/TSB and Whoop
+   * strain), the workouts, and a compact weather forecast. Completed workouts
+   * use the list shape; get_todays_activities / get_workout_details carry the
+   * full per-activity detail.
    */
   async getTodaysSummary(): Promise<DailySummary> {
-    // Use athlete's timezone to determine "today"
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
+    const status: DataStatus = {};
 
-    // Fetch all data in parallel for efficiency
-    const [recoveryResponse, strainResponse, bodyMeasurements, fitness, wellness, completedWorkoutsResponse, plannedWorkoutsResponse, intervalsAnnotations, trainerroadAnnotations, trainerroadPhaseStarts, trainingPhase, todaysRace, forecast] = await Promise.all([
-      this.getTodaysRecovery().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching recovery for daily summary', e);
-        return { current_time: getCurrentTimeInTimezone(timezone), whoop: { sleep: null, recovery: null } };
-      }),
-      this.getTodaysStrain().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching strain for daily summary', e);
-        return { current_time: getCurrentTimeInTimezone(timezone), whoop: { strain: null } };
-      }),
-      this.whoop?.getBodyMeasurements().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching body measurements for daily summary', e);
+    /**
+     * Resolve a nullable section, recording why it's missing: not configured,
+     * fetch failed, or the source had nothing for today.
+     */
+    const track = async <T>(key: string, configured: boolean, fetch: () => Promise<T | null>): Promise<T | null> => {
+      if (!configured) {
+        status[key] = 'not_configured';
         return null;
-      }) ?? Promise.resolve(null),
-      this.intervals.getTodayFitness().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching fitness for daily summary', e);
+      }
+      try {
+        const value = await fetch();
+        if (value == null) status[key] = 'no_data';
+        return value;
+      } catch (e) {
+        logWarn('CurrentTools', `Error fetching ${key} for daily summary`, e);
+        status[key] = 'fetch_failed';
         return null;
-      }),
-      this.intervals.getTodayWellness().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching wellness for daily summary', e);
+      }
+    };
+
+    // One Whoop call yields both recovery and last night's sleep; report each
+    // half's status separately.
+    const whoopToday = (async () => {
+      if (!this.whoop) {
+        status.whoop_recovery = status.whoop_sleep = 'not_configured';
         return null;
-      }),
-      this.getTodaysCompletedWorkouts().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching completed workouts for daily summary', e);
-        return { current_time: getCurrentTimeInTimezone(timezone), workouts: [] };
-      }),
-      this.getTodaysPlannedWorkouts().catch((e) => {
-        logWarn('CurrentTools', 'Error fetching planned workouts for daily summary', e);
-        return { current_time: getCurrentTimeInTimezone(timezone), workouts: [] };
-      }),
-      this.intervals.getAnnotations(today, today).catch((e) => {
-        logWarn('CurrentTools', 'Error fetching Intervals.icu annotations for daily summary', e);
-        return [] as Annotation[];
-      }),
-      this.trainerroad
-        ? this.trainerroad.getAnnotations(today, today, timezone).catch((e) => {
-            logWarn('CurrentTools', 'Error fetching TrainerRoad annotations for daily summary', e);
-            return [] as Annotation[];
-          })
-        : Promise.resolve([] as Annotation[]),
-      this.trainerroad
-        ? this.trainerroad.getTrainingPhaseStarts(today, today).catch((e) => {
-            logWarn('CurrentTools', 'Error fetching TrainerRoad phase starts for daily summary', e);
-            return [] as Annotation[];
-          })
-        : Promise.resolve([] as Annotation[]),
-      this.trainerroad
-        ? this.trainerroad.getCurrentTrainingPhase(today).catch((e) => {
-            logWarn('CurrentTools', 'Error fetching current training phase for daily summary', e);
-            return null as TrainingPhase | null;
-          })
-        : Promise.resolve(null as TrainingPhase | null),
-      // Today's race: ICU (single-discipline, native A/B/C priority) merged
-      // with TR (triathlons via umbrella+legs); self-guarding helper.
-      this.getTodaysRace(timezone, today),
-      this.buildForecasts(timezone, new Date()).catch((e) => {
-        logWarn('CurrentTools', 'Error building forecast for daily summary', e);
-        return [] as LocationForecast[];
-      }),
+      }
+      try {
+        const { recovery, sleep } = await this.whoop.getTodayRecovery();
+        if (recovery == null) status.whoop_recovery = 'no_data';
+        if (sleep == null) status.whoop_sleep = 'no_data';
+        return recovery == null && sleep == null ? null : { recovery, sleep };
+      } catch (e) {
+        logWarn('CurrentTools', 'Error fetching Whoop recovery for daily summary', e);
+        status.whoop_recovery = status.whoop_sleep = 'fetch_failed';
+        return null;
+      }
+    })();
+
+    const whoop = this.whoop;
+    const [activities, whoopReadiness, strain, fitness, wellness, forecasts] = await Promise.all([
+      this.buildTodaysActivities(timezone, today, { fullDetail: false, status }),
+      whoopToday,
+      track('whoop_strain', whoop !== null, () => whoop!.getTodayStrain()),
+      track('fitness', true, () => this.intervals.getTodayFitness()),
+      track('wellness', true, () => this.intervals.getTodayWellness()),
+      this.buildTodaysWeather(timezone, status),
     ]);
-
-    // Extract data from response objects
-    const { sleep, recovery } = recoveryResponse.whoop;
-    const { strain } = strainResponse.whoop;
-    const completedWorkouts = completedWorkoutsResponse.workouts;
-    const plannedWorkouts = plannedWorkoutsResponse.workouts;
-    const annotations = mergeAnnotations(intervalsAnnotations, [
-      ...trainerroadAnnotations,
-      ...trainerroadPhaseStarts,
-    ]);
-
-    // Calculate TSS totals
-    const tssCompleted = completedWorkouts.reduce(
-      (sum, w) => sum + (w.tss || 0),
-      0
-    );
-    const tssPlanned = plannedWorkouts.reduce(
-      (sum, w) => sum + (w.expected_tss || 0),
-      0
-    );
-
-    // Get current datetime in user's timezone for context
-    const currentDateTime = getCurrentTimeInTimezone(timezone);
 
     return {
-      current_time: currentDateTime,
-      whoop: {
-        body_measurements: bodyMeasurements,
-        strain,
-        sleep,
-        recovery,
+      current_time: getCurrentTimeInTimezone(timezone),
+      overview: activities.overview,
+      readiness: {
+        whoop: whoopReadiness,
+        wellness,
       },
-      fitness,
-      wellness,
-      planned_workouts: plannedWorkouts,
-      completed_workouts: completedWorkouts,
-      annotations,
-      training_phase: trainingPhase,
-      scheduled_race: todaysRace,
-      forecast,
-      workouts_planned: plannedWorkouts.length,
-      workouts_completed: completedWorkouts.length,
-      tss_planned: Math.round(tssPlanned),
-      tss_completed: Math.round(tssCompleted),
+      load: {
+        fitness,
+        whoop_strain: strain,
+      },
+      workouts: activities.workouts,
+      weather: forecasts,
+      data_status: Object.keys(status).length > 0 ? status : undefined,
     };
+  }
+
+  /** Today's compact forecasts for the configured locations, recording why weather is missing. */
+  private async buildTodaysWeather(timezone: string, status: DataStatus): Promise<CompactLocationForecast[]> {
+    if (!this.googleWeather) {
+      status.weather = 'not_configured';
+      return [];
+    }
+    try {
+      const forecasts = await this.buildForecasts(timezone, new Date());
+      if (forecasts.length === 0) status.weather = 'no_data';
+      return forecasts.map(compactLocationForecast);
+    } catch (e) {
+      logWarn('CurrentTools', 'Error building forecast for daily summary', e);
+      status.weather = 'fetch_failed';
+      return [];
+    }
   }
 }

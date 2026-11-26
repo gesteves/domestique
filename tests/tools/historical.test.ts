@@ -82,6 +82,38 @@ describe('HistoricalTools', () => {
       },
     ];
 
+    it('returns workouts oldest to newest with a period object', async () => {
+      // Intervals.icu lists newest first; mixed offsets must still sort by instant.
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([
+        { ...mockWorkouts[1], id: 'late', start_time: '2024-12-12T08:00:00-07:00' },
+        { ...mockWorkouts[0], id: 'early', start_time: '2024-12-12T14:30:00+00:00' },
+      ]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+
+      const result = await tools.getActivityHistory({ oldest: '2024-12-01', newest: '2024-12-14' });
+
+      expect(result.workouts.map((w) => w.id)).toEqual(['early', 'late']);
+      expect(result.period).toEqual({ start_date: '2024-12-01', end_date: '2024-12-14', days: 14 });
+    });
+
+    it('keeps only zone names and times in list view', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([
+        {
+          ...mockWorkouts[0],
+          power_zones: [
+            { name: 'Endurance', low_pct: '55%', high_pct: '75%', low_power: '154 W', high_power: '210 W', time_in_zone: '0:53:57' },
+          ],
+          hr_zones: [{ name: 'Recovery', low_hr: '0 bpm', high_hr: '138 bpm', time_in_zone: '1:00:14' }],
+        },
+      ]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+
+      const result = await tools.getActivityHistory({ oldest: '2024-12-01', newest: '2024-12-14' });
+
+      expect(result.workouts[0].power_zones).toEqual([{ name: 'Endurance', time_in_zone: '0:53:57' }]);
+      expect(result.workouts[0].hr_zones).toEqual([{ name: 'Recovery', time_in_zone: '1:00:14' }]);
+    });
+
     it('should fetch workouts for ISO date range with Whoop matching', async () => {
       vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue(mockWorkouts);
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue(mockWhoopActivities);
@@ -397,12 +429,22 @@ describe('HistoricalTools', () => {
         newest: '2024-12-15',
       });
 
+      expect(result.period).toEqual({ start_date: '2024-12-13', end_date: '2024-12-15', days: 3 });
       expect(result.data).toEqual(mockRecoveries);
       expect(result.summary.avg_recovery).toBe('80%'); // (80 + 70 + 90) / 3
       expect(result.summary.avg_hrv).toBe('62 ms'); // (60 + 55 + 70) / 3
-      expect(result.summary.avg_sleep).toBe('7:48:00'); // (8 + 7 + 8.5) / 3 hrs, rounded to 7.8
+      expect(result.summary.avg_time_in_bed).toBe('7:50:00'); // (8 + 7 + 8.5) / 3 hrs
+      expect(result.summary.avg_sleep_duration).toBe('7:20:00'); // light + SWS + REM: (7.5 + 6.5 + 8) / 3 hrs
       expect(result.summary.min_recovery).toBe('70%');
       expect(result.summary.max_recovery).toBe('90%');
+    });
+
+    it('returns entries oldest to newest regardless of source order', async () => {
+      vi.mocked(mockWhoopClient.getRecoveries).mockResolvedValue([...mockRecoveries].reverse());
+
+      const result = await tools.getRecoveryTrends({ oldest: '2024-12-13', newest: '2024-12-15' });
+
+      expect(result.data.map((d) => d.date)).toEqual(['2024-12-13', '2024-12-14', '2024-12-15']);
     });
 
     it('should return empty summary when no Whoop client', async () => {
@@ -432,9 +474,7 @@ describe('HistoricalTools', () => {
 
   describe('getWellnessTrends', () => {
     const mockWellnessTrendsFull: WellnessTrends = {
-      period_days: 7,
-      start_date: '2024-12-08',
-      end_date: '2024-12-15',
+      period: { start_date: '2024-12-08', end_date: '2024-12-15', days: 8 },
       data: [
         {
           date: '2024-12-08',
@@ -513,9 +553,7 @@ describe('HistoricalTools', () => {
 
     it('handles empty wellness data', async () => {
       const emptyTrends: WellnessTrends = {
-        period_days: 7,
-        start_date: '2024-12-08',
-        end_date: '2024-12-15',
+        period: { start_date: '2024-12-08', end_date: '2024-12-15', days: 8 },
         data: [],
       };
       vi.mocked(mockIntervalsClient.getWellnessTrends).mockResolvedValue(emptyTrends);
@@ -525,13 +563,13 @@ describe('HistoricalTools', () => {
       });
 
       expect(result.data).toEqual([]);
-      expect(result.period_days).toBe(7);
+      expect(result.period.days).toBe(8);
     });
   });
 
   describe('getTrainingLoadTrends', () => {
     const mockTrainingLoadTrends: TrainingLoadTrends = {
-      period_days: 42,
+      period: { start_date: '2024-11-03', end_date: '2024-12-14', days: 42 },
       sport: 'all',
       data: [
         { date: '2024-12-01', ctl: 50, atl: 45, tsb: 5, ramp_rate: 3, ctl_load: 40, atl_load: 60 },
@@ -606,7 +644,7 @@ describe('HistoricalTools', () => {
       hr_load: 80,
       // Z2 metrics
       power_hr_z2: 1.35,
-      power_hr_z2_mins: 30,
+      power_hr_z2_time: '0:30:00',
       cadence_z2: 90,
       // Compliance
       compliance: 95,
@@ -708,8 +746,7 @@ describe('HistoricalTools', () => {
         newest: '2024-12-15',
       });
 
-      expect(result.period_start).toBe('2024-12-01');
-      expect(result.period_end).toBe('2024-12-15');
+      expect(result.period).toEqual({ start_date: '2024-12-01', end_date: '2024-12-15', days: 15 });
       expect(result.sport).toBe('cycling');
       expect(result.activity_count).toBe(1);
       expect(result.summary.best_5s).toBeDefined();
@@ -783,8 +820,7 @@ describe('HistoricalTools', () => {
       });
 
       expect(result.comparison).toBeDefined();
-      expect(result.comparison?.previous_period_start).toBe('2024-11-01');
-      expect(result.comparison?.previous_period_end).toBe('2024-11-15');
+      expect(result.comparison?.previous_period).toEqual({ start_date: '2024-11-01', end_date: '2024-11-15', days: 15 });
       expect(result.comparison?.changes.length).toBeGreaterThan(0);
       expect(result.comparison?.changes[0].improved).toBe(true);
     });
@@ -832,7 +868,7 @@ describe('HistoricalTools', () => {
         sport: 'running',
       });
 
-      expect(result.period_start).toBe('2024-12-01');
+      expect(result.period.start_date).toBe('2024-12-01');
       expect(result.sport).toBe('running');
       expect(result.gap_adjusted).toBe(false);
       expect(result.summary.best_400m).toBeDefined();
@@ -987,7 +1023,7 @@ describe('HistoricalTools', () => {
         oldest: '2024-12-01',
       });
 
-      expect(result.period_start).toBe('2024-12-01');
+      expect(result.period.start_date).toBe('2024-12-01');
       expect(result.sport).toBeNull(); // No sport filter
       expect(result.summary.max_5s?.hr).toBe('190 bpm');
       expect(result.summary.max_20min?.hr).toBe('165 bpm');
@@ -1164,7 +1200,6 @@ describe('HistoricalTools', () => {
       expect(result.period.end_date).toBe('2024-12-15');
       expect(result.period.days).toBe(15);
       expect(result.period.active_days).toBe(3); // 3 unique dates
-      expect(result.period.weeks).toBe(3);
 
       // Check totals
       expect(result.totals.activities).toBe(3);
@@ -1193,6 +1228,41 @@ describe('HistoricalTools', () => {
         undefined,
         { skipExpensiveCalls: true }
       );
+    });
+
+    it('orders zones by their position in the zone list, not by name', async () => {
+      // Names that a name-matching sort would scramble: HR "Aerobic" sorts
+      // after "Anaerobic"; pace "Zone 5a" matches nothing.
+      const hrNames = ['Recovery', 'Aerobic', 'Tempo', 'SubThreshold', 'SuperThreshold', 'Aerobic Capacity', 'Anaerobic'];
+      const paceNames = ['Zone 1', 'Zone 2', 'Zone 3', 'Zone 4', 'Zone 5a', 'Zone 5b', 'Zone 5c'];
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([
+        {
+          id: 'r1',
+          start_time: '2024-12-10T10:00:00+00:00',
+          activity_type: 'Running',
+          duration: '0:07:00',
+          source: 'intervals.icu',
+          hr_zones: hrNames.map((name) => ({ name, low_hr: '0 bpm', time_in_zone: '0:01:00' })),
+          pace_zones: paceNames.map((name) => ({ name, low_pct: '0%', time_in_zone: '0:01:00' })),
+        },
+      ]);
+
+      const result = await tools.getActivityTotals({ oldest: '2024-12-01', newest: '2024-12-15' });
+
+      expect(result.by_sport.running.zones.heart_rate?.map((z) => z.name)).toEqual(hrNames);
+      expect(result.by_sport.running.zones.pace?.map((z) => z.name)).toEqual(paceNames);
+    });
+
+    it('totals Sweet Spot time separately from power zones', async () => {
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([
+        { ...mockActivities[0], sweet_spot_time: '0:40:00' },
+        { ...mockActivities[2], sweet_spot_time: '0:20:00' },
+      ]);
+
+      const result = await tools.getActivityTotals({ oldest: '2024-12-01', newest: '2024-12-15' });
+
+      expect(result.by_sport.cycling.sweet_spot_time).toBe('1:00:00');
+      expect(result.by_sport.cycling.zones.power?.map((z) => z.name)).toEqual(['Recovery', 'Endurance', 'Tempo']);
     });
 
     it('should filter by sports', async () => {

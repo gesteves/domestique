@@ -17,11 +17,11 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 ## Available Tools
 
 ### Today's Data
-- `get_todays_summary` - Full snapshot of today: recovery, sleep, HRV, strain, fitness (CTL/ATL/TSB), wellness, completed and planned workouts, race, calendar annotations (sick/injured/holiday/notes), and weather.
-- `get_todays_activities` - Today's completed and planned workouts, race, and calendar annotations (sick/injured/holiday/notes). Leaner alternative to `get_todays_summary`.
+- `get_todays_summary` - Full snapshot of today, grouped into overview (training phase, race, calendar annotations, workout totals), readiness (recovery, sleep, HRV, wellness), load (CTL/ATL/TSB, strain), workouts, and a compact weather forecast, noting any data that's missing and why.
+- `get_todays_activities` - Today's completed and planned workouts with full per-workout detail, plus race and calendar annotations (sick/injured/holiday/notes).
 
 ### Profile & Settings
-- `get_athlete_profile` - Athlete profile, unit preferences, age, and location.
+- `get_athlete_profile` - Athlete profile, unit preferences, age, location, and Whoop body measurements.
 - `get_sports_settings` - FTP, zones, and thresholds per sport.
 
 ### Historical/Trends

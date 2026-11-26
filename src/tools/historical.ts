@@ -2,8 +2,8 @@ import { logWarn } from '../utils/logger.js';
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { parseDateStringInTimezone, parseDateRangeInTimezone, getTodayInTimezone, addDaysToYMD } from '../utils/tz.js';
-import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
+import { parseDateStringInTimezone, parseDateRangeInTimezone, getTodayInTimezone, addDaysToYMD, buildPeriod, type Period } from '../utils/tz.js';
+import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport, withZoneTimesOnly } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
 import {
   parseDurationToHours,
@@ -62,6 +62,51 @@ interface RawPaceBest {
 }
 type RawPaceCurveSummary = { [K in keyof PaceCurveSummary]: RawPaceBest | null };
 
+/** Aggregate recovery statistics over a period. */
+interface RecoverySummary {
+  avg_recovery?: string;
+  min_recovery?: string;
+  max_recovery?: string;
+  avg_hrv?: string;
+  avg_sleep_duration?: string;
+  avg_time_in_bed?: string;
+}
+
+/** Sort workouts oldest → newest by start time (parsed, so mixed UTC offsets compare correctly). */
+function sortChronologically<T extends { start_time?: string }>(workouts: T[]): T[] {
+  const ts = (w: T) => (w.start_time ? new Date(w.start_time).getTime() : 0);
+  return [...workouts].sort((a, b) => ts(a) - ts(b));
+}
+
+/** Accumulated time in a named zone, plus its position in the zone list. */
+interface ZoneAccumulator {
+  seconds: number;
+  /** Lowest index this zone name appeared at; used to sort zones by intensity. */
+  order: number;
+}
+
+/**
+ * Add one activity's per-zone times into a running total keyed by zone name.
+ * The zone's array index is kept so totals come out in intensity order
+ * regardless of how the zones are named.
+ */
+function addZoneTimes(
+  acc: Map<string, ZoneAccumulator>,
+  zones: Array<{ name?: string; time_in_zone?: string }>
+): void {
+  zones.forEach((zone, index) => {
+    if (!zone.name || !zone.time_in_zone) return;
+    const seconds = parseDurationToSeconds(zone.time_in_zone);
+    const existing = acc.get(zone.name);
+    if (existing) {
+      existing.seconds += seconds;
+      existing.order = Math.min(existing.order, index);
+    } else {
+      acc.set(zone.name, { seconds, order: index });
+    }
+  });
+}
+
 export class HistoricalTools {
   constructor(
     private intervals: IntervalsClient,
@@ -80,7 +125,7 @@ export class HistoricalTools {
    */
   async getActivityHistory(
     params: GetActivityHistoryInput
-  ): Promise<{ workouts: WorkoutWithWhoop[]; annotations: Annotation[] }> {
+  ): Promise<{ period: Period; workouts: WorkoutWithWhoop[]; annotations: Annotation[] }> {
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
     const today = getTodayInTimezone(timezone);
@@ -131,8 +176,9 @@ export class HistoricalTools {
     ]);
     const workouts = params.type === 'races'
       ? []
-      : await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate);
-    return { workouts, annotations };
+      : sortChronologically(await enrichWorkoutsWithWhoop(rawWorkouts, this.whoop, startDate, endDate))
+          .map(withZoneTimesOnly);
+    return { period: buildPeriod(startDate, endDate), workouts, annotations };
   }
 
   /**
@@ -142,38 +188,28 @@ export class HistoricalTools {
   async getRecoveryTrends(
     params: GetRecoveryTrendsInput
   ): Promise<{
+    period: Period;
+    summary: RecoverySummary;
     data: WhoopRecoveryTrendEntry[];
-    summary: {
-      avg_recovery?: string;
-      avg_hrv?: string;
-      avg_sleep?: string;
-      min_recovery?: string;
-      max_recovery?: string;
-    };
   }> {
-    if (!this.whoop) {
-      return { data: [], summary: {} };
-    }
-
     // Use athlete's timezone for date parsing
     const timezone = await this.intervals.getAthleteTimezone();
     const { startDate, endDate } = parseDateRangeInTimezone(params.oldest, params.newest, timezone);
+    const period = buildPeriod(startDate, endDate);
 
-    const data = await this.whoop.getRecoveries(startDate, endDate);
+    if (!this.whoop) {
+      return { period, summary: {}, data: [] };
+    }
 
-    // Calculate summary statistics
-    const summary = this.calculateRecoverySummary(data);
+    const entries = await this.whoop.getRecoveries(startDate, endDate);
+    // Oldest → newest, like every other time series. Dates are YYYY-MM-DD
+    // here (formatting happens later), so a string compare is a date compare.
+    const data = [...entries].sort((a, b) => a.date.localeCompare(b.date));
 
-    return { data, summary };
+    return { period, summary: this.calculateRecoverySummary(data), data };
   }
 
-  private calculateRecoverySummary(data: WhoopRecoveryTrendEntry[]): {
-    avg_recovery?: string;
-    avg_hrv?: string;
-    avg_sleep?: string;
-    min_recovery?: string;
-    max_recovery?: string;
-  } {
+  private calculateRecoverySummary(data: WhoopRecoveryTrendEntry[]): RecoverySummary {
     if (data.length === 0) {
       return {};
     }
@@ -181,15 +217,31 @@ export class HistoricalTools {
     // Parse the formatted strings back to numbers for aggregation, then re-format.
     const recoveryScores = data.map((d) => parseFloat(d.recovery.recovery_score));
     const hrvValues = data.map((d) => parseFloat(d.recovery.hrv_rmssd));
-    const sleepHours = data.map((d) => parseDurationToHours(d.sleep.sleep_summary.total_in_bed_time));
+    const inBedHours = data.map((d) => parseDurationToHours(d.sleep.sleep_summary.total_in_bed_time));
+    // Actual sleep = light + slow wave + REM (excludes awake and no-data time).
+    const asleepHours = data.map((d) => {
+      const ss = d.sleep.sleep_summary;
+      return (
+        parseDurationToHours(ss.total_light_sleep_time) +
+        parseDurationToHours(ss.total_slow_wave_sleep_time) +
+        parseDurationToHours(ss.total_rem_sleep_time)
+      );
+    });
 
     return {
       avg_recovery: formatPercent(this.average(recoveryScores)),
-      avg_hrv: formatHRV(this.average(hrvValues)),
-      avg_sleep: formatDuration(this.average(sleepHours) * 3600),
       min_recovery: formatPercent(Math.min(...recoveryScores)),
       max_recovery: formatPercent(Math.max(...recoveryScores)),
+      avg_hrv: formatHRV(this.average(hrvValues)),
+      avg_sleep_duration: formatDuration(this.averageExact(asleepHours) * 3600),
+      avg_time_in_bed: formatDuration(this.averageExact(inBedHours) * 3600),
     };
+  }
+
+  /** Unrounded mean, for durations where rounding to 0.1 h would lose minutes. */
+  private averageExact(values: number[]): number {
+    if (values.length === 0) return 0;
+    return values.reduce((a, b) => a + b, 0) / values.length;
   }
 
   private average(values: number[]): number {
@@ -304,8 +356,7 @@ export class HistoricalTools {
     const summary = this.calculatePowerSummary(activities, apiDurations);
 
     const response: PowerCurvesResponse = {
-      period_start: startDate,
-      period_end: endDate,
+      period: buildPeriod(startDate, endDate),
       sport: 'cycling',
       activity_count: activities.length,
       durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
@@ -329,8 +380,7 @@ export class HistoricalTools {
       const compareSummary = this.calculatePowerSummary(compareActivities, compareDurations);
 
       response.comparison = {
-        previous_period_start: compareStart,
-        previous_period_end: compareEnd,
+        previous_period: buildPeriod(compareStart, compareEnd),
         previous_activity_count: compareActivities.length,
         changes: this.calculatePowerComparison(summary, compareSummary, apiDurations),
       };
@@ -495,8 +545,7 @@ export class HistoricalTools {
     const summary = this.calculatePaceSummary(activities, apiDistances, isSwimming);
 
     const response: PaceCurvesResponse = {
-      period_start: startDate,
-      period_end: endDate,
+      period: buildPeriod(startDate, endDate),
       sport: params.sport,
       gap_adjusted,
       activity_count: activities.length,
@@ -526,8 +575,7 @@ export class HistoricalTools {
       );
 
       response.comparison = {
-        previous_period_start: compareStart,
-        previous_period_end: compareEnd,
+        previous_period: buildPeriod(compareStart, compareEnd),
         previous_activity_count: compareActivities.length,
         changes: this.calculatePaceComparison(summary, compareSummary, isSwimming),
       };
@@ -683,8 +731,7 @@ export class HistoricalTools {
     const summary = this.calculateHRSummary(activities, apiDurations);
 
     const response: HRCurvesResponse = {
-      period_start: startDate,
-      period_end: endDate,
+      period: buildPeriod(startDate, endDate),
       sport: params.sport || null,
       activity_count: activities.length,
       durations_analyzed: apiDurations.map((d) => formatDurationLabel(d)),
@@ -703,8 +750,7 @@ export class HistoricalTools {
       const compareSummary = this.calculateHRSummary(compareActivities, compareDurations);
 
       response.comparison = {
-        previous_period_start: compareStart,
-        previous_period_end: compareEnd,
+        previous_period: buildPeriod(compareStart, compareEnd),
         previous_activity_count: compareActivities.length,
         changes: this.calculateHRComparison(summary, compareSummary),
       };
@@ -844,12 +890,10 @@ export class HistoricalTools {
       : activities;
 
     // Calculate period stats
-    const periodDays = this.daysBetween(startDate, endDate) + 1;
     const uniqueDates = new Set(
       filteredActivities.map((a) => a.start_time.split('T')[0])
     );
     const activeDays = uniqueDates.size;
-    const weeks = Math.ceil(periodDays / 7);
 
     // Aggregate totals
     const totals = this.aggregateTotals(filteredActivities);
@@ -859,25 +903,12 @@ export class HistoricalTools {
 
     return {
       period: {
-        start_date: startDate,
-        end_date: endDate,
-        weeks,
-        days: periodDays,
+        ...buildPeriod(startDate, endDate),
         active_days: activeDays,
       },
       totals,
       by_sport: bySport,
     };
-  }
-
-  /**
-   * Calculate days between two dates
-   */
-  private daysBetween(start: string, end: string): number {
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
   }
 
   /**
@@ -892,9 +923,10 @@ export class HistoricalTools {
     kcal: number;
     workKj: number;
     coastingSeconds: number;
-    hrZoneSeconds: Map<string, number>;
-    powerZoneSeconds: Map<string, number>;
-    paceZoneSeconds: Map<string, number>;
+    hrZoneSeconds: Map<string, ZoneAccumulator>;
+    powerZoneSeconds: Map<string, ZoneAccumulator>;
+    paceZoneSeconds: Map<string, ZoneAccumulator>;
+    sweetSpotSeconds: number;
   } {
     let durationSeconds = 0;
     let distanceKm = 0;
@@ -903,9 +935,10 @@ export class HistoricalTools {
     let kcal = 0;
     let workKj = 0;
     let coastingSeconds = 0;
-    const hrZoneSeconds: Map<string, number> = new Map();
-    const powerZoneSeconds: Map<string, number> = new Map();
-    const paceZoneSeconds: Map<string, number> = new Map();
+    const hrZoneSeconds: Map<string, ZoneAccumulator> = new Map();
+    const powerZoneSeconds: Map<string, ZoneAccumulator> = new Map();
+    const paceZoneSeconds: Map<string, ZoneAccumulator> = new Map();
+    let sweetSpotSeconds = 0;
 
     for (const activity of activities) {
       if (activity.duration) {
@@ -939,8 +972,6 @@ export class HistoricalTools {
 
       if (activity.tss) {
         load += activity.tss;
-      } else if (activity.load) {
-        load += activity.load;
       }
 
       if (activity.calories) {
@@ -959,34 +990,23 @@ export class HistoricalTools {
       }
 
       if (activity.hr_zones) {
-        for (const zone of activity.hr_zones) {
-          if (zone.time_in_zone) {
-            const seconds = parseDurationToSeconds(zone.time_in_zone);
-            hrZoneSeconds.set(zone.name, (hrZoneSeconds.get(zone.name) || 0) + seconds);
-          }
-        }
+        addZoneTimes(hrZoneSeconds, activity.hr_zones);
       }
 
       if (activity.power_zones) {
-        for (const zone of activity.power_zones) {
-          if (zone.time_in_zone) {
-            const seconds = parseDurationToSeconds(zone.time_in_zone);
-            powerZoneSeconds.set(zone.name, (powerZoneSeconds.get(zone.name) || 0) + seconds);
-          }
-        }
+        addZoneTimes(powerZoneSeconds, activity.power_zones);
       }
 
       if (activity.pace_zones) {
-        for (const zone of activity.pace_zones) {
-          if (zone.time_in_zone) {
-            const seconds = parseDurationToSeconds(zone.time_in_zone);
-            paceZoneSeconds.set(zone.name, (paceZoneSeconds.get(zone.name) || 0) + seconds);
-          }
-        }
+        addZoneTimes(paceZoneSeconds, activity.pace_zones);
+      }
+
+      if (activity.sweet_spot_time) {
+        sweetSpotSeconds += parseDurationToSeconds(activity.sweet_spot_time);
       }
     }
 
-    return { durationSeconds, distanceKm, climbingM, load, kcal, workKj, coastingSeconds, hrZoneSeconds, powerZoneSeconds, paceZoneSeconds };
+    return { durationSeconds, distanceKm, climbingM, load, kcal, workKj, coastingSeconds, hrZoneSeconds, powerZoneSeconds, paceZoneSeconds, sweetSpotSeconds };
   }
 
   /**
@@ -1068,6 +1088,9 @@ export class HistoricalTools {
       if (sport === 'cycling' && stats.coastingSeconds > 0) {
         sportTotals.coasting = formatLargeDuration(stats.coastingSeconds);
       }
+      if (stats.sweetSpotSeconds > 0) {
+        sportTotals.sweet_spot_time = formatLargeDuration(stats.sweetSpotSeconds);
+      }
 
       // Add zone data for any sport that has it
       if (hrZones.length > 0) {
@@ -1087,23 +1110,20 @@ export class HistoricalTools {
   }
 
   /**
-   * Calculate zone percentages from zone seconds map
+   * Calculate zone percentages from accumulated zone times, ordered by each
+   * zone's position in the athlete's zone list (lowest intensity first).
    */
-  private calculateZonePercentages(zoneSeconds: Map<string, number>): ZoneTotalEntry[] {
-    const totalSeconds = Array.from(zoneSeconds.values()).reduce((a, b) => a + b, 0);
+  private calculateZonePercentages(zoneSeconds: Map<string, ZoneAccumulator>): ZoneTotalEntry[] {
+    const entries = Array.from(zoneSeconds.entries());
+    const totalSeconds = entries.reduce((sum, [, z]) => sum + z.seconds, 0);
 
-    return Array.from(zoneSeconds.entries())
-      .map(([name, seconds]) => ({
+    return entries
+      .sort(([, a], [, b]) => a.order - b.order)
+      .map(([name, z]) => ({
         name,
-        time: formatLargeDuration(seconds),
-        percentage: formatPercent(totalSeconds > 0 ? (seconds / totalSeconds) * 100 : 0, 1),
-      }))
-      .sort((a, b) => {
-        // Sort by zone order
-        const order = ['Recovery', 'Endurance', 'Tempo', 'Sweet Spot', 'Threshold', 'VO2max', 'Anaerobic', 'Neuromuscular'];
-        const aIdx = order.findIndex((z) => a.name.toLowerCase().includes(z.toLowerCase()));
-        const bIdx = order.findIndex((z) => b.name.toLowerCase().includes(z.toLowerCase()));
-        return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
-      });
+        time: formatLargeDuration(z.seconds),
+        percentage: formatPercent(totalSeconds > 0 ? (z.seconds / totalSeconds) * 100 : 0, 1),
+      }));
   }
+
 }

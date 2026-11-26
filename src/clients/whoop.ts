@@ -25,6 +25,7 @@ import {
   formatLength,
   withUnit,
   formatCalories,
+  roundTo,
 } from '../utils/format-units.js';
 import { formatToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
@@ -1384,7 +1385,7 @@ export class WhoopClient {
     const strainLevel = getStrainLevel(cycle.score.strain);
     return {
       date: localDate,
-      strain_score: cycle.score.strain,
+      strain_score: roundTo(cycle.score.strain, 1),
       strain_level: strainLevel,
       strain_level_description: getStrainLevelDescription(strainLevel),
       average_heart_rate:
@@ -1446,7 +1447,7 @@ export class WhoopClient {
       start_time: formatToISO8601WithTimezone(workout.start, timezone),
       end_time: formatToISO8601WithTimezone(workout.end, timezone),
       duration: formatDuration(durationSeconds),
-      strain_score: score.strain,
+      strain_score: roundTo(score.strain, 1),
       average_heart_rate:
         score.average_heart_rate !== undefined ? formatHR(score.average_heart_rate) : undefined,
       max_heart_rate:

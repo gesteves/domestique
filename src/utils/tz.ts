@@ -27,6 +27,31 @@ export function addDaysToYMD(ymd: string, days: number): string {
 }
 
 /**
+ * A queried date range, as reported back in range-tool responses.
+ * Every range tool uses this one shape so clients can read period metadata
+ * the same way everywhere.
+ */
+export interface Period {
+  /** First date in the range (YYYY-MM-DD before response date formatting) */
+  start_date: string;
+  /** Last date in the range, inclusive */
+  end_date: string;
+  /** Number of calendar days in the range, inclusive of both ends */
+  days: number;
+}
+
+/**
+ * Build the standard `period` object for an inclusive YYYY-MM-DD range.
+ * Uses UTC calendar arithmetic, so the result doesn't depend on the runtime tz.
+ */
+export function buildPeriod(startDate: string, endDate: string): Period {
+  const [ys, ms, ds] = startDate.split('-').map(Number);
+  const [ye, me, de] = endDate.split('-').map(Number);
+  const days = Math.round((Date.UTC(ye, me - 1, de) - Date.UTC(ys, ms - 1, ds)) / 86_400_000) + 1;
+  return { start_date: startDate, end_date: endDate, days };
+}
+
+/**
  * Add (or subtract) a number of calendar months to a YYYY-MM-DD string.
  * Day overflow is handled by Date.setUTCMonth (e.g. Jan 31 + 1 month -> Mar 3).
  */

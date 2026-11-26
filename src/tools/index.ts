@@ -65,7 +65,6 @@ import { runWithUnitPreferences, METRIC_DEFAULTS } from '../utils/unit-context.j
 import type { UnitPreferences, UpdateActivityInput, UpdateHeatAdaptationScoreInput } from '../types/index.js';
 import {
   trainerroadSyncHint,
-  dailySummarySyncHint,
   activityHistoryHints,
   dailySummaryHints,
   todaysActivitiesHints,
@@ -354,19 +353,19 @@ export class ToolRegistry {
     register({
       name: 'get_todays_summary',
       title: "Today's Summary",
-      description: `One-shot snapshot of the user's status today: Whoop recovery / sleep / strain, Intervals.icu fitness metrics (CTL, ATL, TSB) and wellness, completed and planned workouts (with matched Whoop strain), active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today, today's scheduled race, and the weather forecast for the user's configured locations. Always prefer this for any "today's" data question — recovery, sleep, strain, workouts, or readiness — over assembling the same picture from individual tools. State changes throughout the day, so re-call rather than relying on a previous response. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
+      description: `One-shot snapshot of the user's status today, grouped by question: \`overview\` (training phase, races, calendar annotations, planned vs. completed workout counts and TSS), \`readiness\` (Whoop recovery and sleep alongside Intervals.icu wellness), \`load\` (CTL/ATL/TSB and Whoop day strain), \`workouts\` (planned and completed, with matched Whoop strain), and a compact \`weather\` forecast for the user's configured locations. \`data_status\` explains any missing section (not configured, fetch failed, or no data yet). Always prefer this for any "today's" data question — recovery, sleep, strain, workouts, or readiness — over assembling the same picture from individual tools. Completed workouts come in the list shape; call \`get_workout_details\` (or the today's-activities tool) for intervals, notes, and weather. State changes throughout the day, so re-call rather than relying on a previous response. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {},
       outputSchema: schemas.todaysSummaryOutputSchema,
       annotations: READ_ONLY,
       handler: async () => this.currentTools.getTodaysSummary(),
-      hints: [dailySummarySyncHint, ...dailySummaryHints],
+      hints: dailySummaryHints,
     });
 
     if (this.hasGoogleWeather) {
       register({
         name: 'get_weather_forecast',
         title: 'Weather Forecast',
-        description: `Weather forecast for a single date (today through 9 days out) at one or more locations. Returns a daily summary, hourly forecast, sun/moon events, and (where available) pollen and air quality; when the date is today, also includes current conditions and active alerts. Pass no arguments for today at the user's configured weather locations; pass \`date\` and/or \`location\` for race-week or destination planning. The today's-snapshot tool already embeds today's forecast for configured locations — only call this directly when the user asks specifically about weather, a future date, or a custom location.`,
+        description: `Weather forecast for a single date (today through 9 days out) at one or more locations. Returns a daily summary, hourly forecast, sun/moon events, and (where available) pollen and air quality; when the date is today, also includes current conditions and active alerts. Pass no arguments for today at the user's configured weather locations; pass \`date\` and/or \`location\` for race-week or destination planning. The today's-snapshot tool already embeds a compact version of today's forecast for configured locations — call this directly when the user asks specifically about weather, needs fields the compact version omits (dew point, wet bulb, pressure, visibility), or wants a future date or a custom location.`,
         inputSchema: schemas.forecastInputSchema,
         outputSchema: schemas.forecastOutputSchema,
         annotations: READ_ONLY,
@@ -377,7 +376,7 @@ export class ToolRegistry {
     register({
       name: 'get_todays_activities',
       title: "Today's Activities",
-      description: `Today's activity-and-event data: completed workouts (with full per-activity detail — intervals, notes, weather, zones, heat zones — and matched Whoop strain), planned workouts, today's race (if any: single-discipline races from Intervals.icu, triathlons from the TrainerRoad calendar), and active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Pass \`type\` to narrow to a single event category ('workouts' or 'races'). Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
+      description: `Today's activity-and-event data only: the same \`overview\` and \`workouts\` blocks as the today's-snapshot tool, but with full per-activity detail on completed workouts (intervals, notes, weather, zones, heat zones) and matched Whoop strain. Races are single-discipline races from Intervals.icu and triathlons from the TrainerRoad calendar; annotations are sickness, injury, holiday, and freeform notes from Intervals.icu and TrainerRoad overlapping today. Use this when the user asks specifically about today's training and you need that per-workout depth but not recovery, sleep, wellness, fitness, or weather. Pass \`type\` to narrow to a single event category ('workouts' or 'races'). Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         type: z.enum(['workouts', 'races']).optional().describe("Filter to a single event type. Omit to return all event types."),
       },
@@ -391,7 +390,7 @@ export class ToolRegistry {
     register({
       name: 'get_athlete_profile',
       title: 'Athlete Profile',
-      description: `Returns the athlete's static profile from Intervals.icu — name, location, timezone, gender, date of birth, age, and unit preferences. Useful for personalizing references to the user (e.g., distinguishing their workout notes from a coach's), framing age-relative fitness or HR zones, and confirming the unit system in use. Domestique already formats every unit-bearing field server-side per the athlete's preferences, so do not re-convert returned values unless asked.`,
+      description: `Returns the athlete's static profile from Intervals.icu — name, location, timezone, gender, date of birth, age, and unit preferences — plus Whoop's height, weight, and max HR when Whoop is connected. Useful for personalizing references to the user (e.g., distinguishing their workout notes from a coach's), framing age-relative fitness or HR zones, and confirming the unit system in use. Domestique already formats every unit-bearing field server-side per the athlete's preferences, so do not re-convert returned values unless asked.`,
       inputSchema: {},
       outputSchema: schemas.athleteProfileOutputSchema,
       annotations: READ_ONLY,
@@ -426,9 +425,8 @@ export class ToolRegistry {
         },
         outputSchema: schemas.strainHistoryOutputSchema,
         annotations: READ_ONLY,
-        handler: async (args: { oldest: string; newest?: string }) => ({
-          strain: await this.currentTools.getStrainHistory(args),
-        }),
+        handler: async (args: { oldest: string; newest?: string }) =>
+          this.currentTools.getStrainHistory(args),
       });
     }
 

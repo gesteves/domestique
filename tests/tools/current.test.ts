@@ -51,165 +51,6 @@ describe('CurrentTools', () => {
     tools = new CurrentTools(mockIntervalsClient, mockWhoopClient, mockTrainerRoadClient);
   });
 
-  describe('getTodaysRecovery', () => {
-    beforeEach(() => {
-      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
-    });
-
-    const mockSleep: WhoopSleepData = {
-      sleep_summary: {
-        total_in_bed_time: '8:00:00',
-        total_awake_time: '0:30:00',
-        total_no_data_time: '0:00:00',
-        total_light_sleep_time: '3:30:00',
-        total_slow_wave_sleep_time: '2:00:00',
-        total_rem_sleep_time: '2:00:00',
-        total_restorative_sleep: '4:00:00',
-        sleep_cycle_count: 4,
-        disturbance_count: 3,
-      },
-      sleep_needed: {
-        total_sleep_needed: '7:30:00',
-        baseline: '7:00:00',
-        need_from_sleep_debt: '0:15:00',
-        need_from_recent_strain: '0:15:00',
-        need_from_recent_nap: '0:00:00',
-      },
-      sleep_performance_percentage: 90,
-      sleep_performance_level: 'Optimal',
-      sleep_performance_level_description: 'Your sleep performance is optimal',
-    };
-
-    const mockRecovery: WhoopRecoveryData = {
-      recovery_score: 85,
-      hrv_rmssd: 65,
-      resting_heart_rate: 52,
-      recovery_level: 'Sufficient',
-      recovery_level_description: 'Your recovery is sufficient',
-    };
-
-    it('should return sleep and recovery data from Whoop with current_time', async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
-
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
-        sleep: mockSleep,
-        recovery: mockRecovery,
-      });
-
-      const result = await tools.getTodaysRecovery();
-
-      expect(result.whoop.sleep).toEqual(mockSleep);
-      expect(result.whoop.recovery).toEqual(mockRecovery);
-      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
-      expect(mockWhoopClient.getTodayRecovery).toHaveBeenCalled();
-
-      vi.useRealTimers();
-    });
-
-    it('should include current_time in user timezone', async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
-
-      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/New_York');
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
-        sleep: null,
-        recovery: null,
-      });
-
-      const result = await tools.getTodaysRecovery();
-
-      // 10:30:45 UTC = 05:30:45 America/New_York (UTC-5)
-      expect(result.current_time).toBe('2024-12-15T05:30:45-05:00');
-      expect(result.whoop.sleep).toBeNull();
-      expect(result.whoop.recovery).toBeNull();
-
-      vi.useRealTimers();
-    });
-
-    it('should return null sleep and recovery when Whoop client is not configured', async () => {
-      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
-
-      const result = await toolsWithoutWhoop.getTodaysRecovery();
-
-      expect(result.whoop.sleep).toBeNull();
-      expect(result.whoop.recovery).toBeNull();
-      expect(result.current_time).toBeTruthy();
-    });
-
-    it('should propagate errors from Whoop client', async () => {
-      vi.mocked(mockWhoopClient.getTodayRecovery).mockRejectedValue(new Error('API Error'));
-
-      await expect(tools.getTodaysRecovery()).rejects.toThrow('API Error');
-    });
-  });
-
-  describe('getTodaysStrain', () => {
-    beforeEach(() => {
-      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
-    });
-
-    const mockStrain: StrainData = {
-      date: '2024-12-15',
-      strain_score: 15.5,
-      strain_level: 'High',
-      strain_level_description: 'High strain',
-      average_heart_rate: 75,
-      max_heart_rate: 185,
-      calories: 2500,
-      activities: [],
-    };
-
-    it('should return strain data from Whoop with current_time', async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
-
-      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(mockStrain);
-
-      const result = await tools.getTodaysStrain();
-
-      expect(result.whoop.strain).toEqual(mockStrain);
-      expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
-      expect(mockWhoopClient.getTodayStrain).toHaveBeenCalled();
-
-      vi.useRealTimers();
-    });
-
-    it('should include current_time in user timezone', async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date('2024-12-15T10:30:45Z'));
-
-      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('America/Denver');
-      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
-
-      const result = await tools.getTodaysStrain();
-
-      // 10:30:45 UTC = 03:30:45 America/Denver (UTC-7)
-      expect(result.current_time).toBe('2024-12-15T03:30:45-07:00');
-      expect(result.whoop.strain).toBeNull();
-
-      vi.useRealTimers();
-    });
-
-    it('should return null strain when no strain data for today', async () => {
-      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
-
-      const result = await tools.getTodaysStrain();
-
-      expect(result.whoop.strain).toBeNull();
-      expect(result.current_time).toBeTruthy();
-    });
-
-    it('should return null strain when Whoop client is not configured', async () => {
-      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
-
-      const result = await toolsWithoutWhoop.getTodaysStrain();
-
-      expect(result.whoop.strain).toBeNull();
-      expect(result.current_time).toBeTruthy();
-    });
-  });
-
   describe('getTodaysCompletedWorkouts', () => {
     beforeEach(() => {
       vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
@@ -328,8 +169,24 @@ describe('CurrentTools', () => {
         newest: '2024-12-15',
       });
 
-      expect(result).toEqual(mockStrain);
+      expect(result).toEqual({
+        period: { start_date: '2024-12-01', end_date: '2024-12-15', days: 15 },
+        strain: mockStrain,
+      });
       expect(mockWhoopClient.getStrainData).toHaveBeenCalledWith('2024-12-01', '2024-12-15');
+    });
+
+    it('returns days oldest to newest regardless of source order', async () => {
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
+      vi.mocked(mockWhoopClient.getStrainData).mockResolvedValue([
+        { ...mockStrain[0], date: '2024-12-15' },
+        { ...mockStrain[0], date: '2024-12-13' },
+        { ...mockStrain[0], date: '2024-12-14' },
+      ]);
+
+      const result = await tools.getStrainHistory({ oldest: '2024-12-13', newest: '2024-12-15' });
+
+      expect(result.strain.map((d) => d.date)).toEqual(['2024-12-13', '2024-12-14', '2024-12-15']);
     });
 
     it('should default newest to today using athlete timezone', async () => {
@@ -365,12 +222,13 @@ describe('CurrentTools', () => {
     it('should return empty array when Whoop client is not configured', async () => {
       const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
 
+      vi.mocked(mockIntervalsClient.getAthleteTimezone).mockResolvedValue('UTC');
       const result = await toolsWithoutWhoop.getStrainHistory({
         oldest: '2024-12-01',
         newest: '2024-12-15',
       });
 
-      expect(result).toEqual([]);
+      expect(result.strain).toEqual([]);
     });
   });
 
@@ -535,13 +393,13 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.completed_workouts).toHaveLength(1);
-      expect(result.completed_workouts[0].whoop?.strain_score).toBe(12.5);
-      expect(result.planned_workouts).toHaveLength(2);
-      expect(result.workouts_completed).toBe(1);
-      expect(result.workouts_planned).toBe(2);
-      expect(result.tss_completed).toBe(85);
-      expect(result.tss_planned).toBe(123); // 88 + 35
+      expect(result.workouts.completed).toHaveLength(1);
+      expect(result.workouts.completed[0].whoop?.strain_score).toBe(12.5);
+      expect(result.workouts.planned).toHaveLength(2);
+      expect(result.overview.workouts.completed).toBe(1);
+      expect(result.overview.workouts.planned).toBe(2);
+      expect(result.overview.workouts.tss_completed).toBe(85);
+      expect(result.overview.workouts.tss_planned).toBe(123); // 88 + 35
       expect(result.current_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
 
       vi.useRealTimers();
@@ -570,12 +428,12 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.completed_workouts).toEqual([]);
-      expect(result.planned_workouts).toEqual([]);
-      expect(result.workouts_completed).toBe(0);
-      expect(result.workouts_planned).toBe(0);
-      expect(result.tss_completed).toBe(0);
-      expect(result.tss_planned).toBe(0);
+      expect(result.workouts.completed).toEqual([]);
+      expect(result.workouts.planned).toEqual([]);
+      expect(result.overview.workouts.completed).toBe(0);
+      expect(result.overview.workouts.planned).toBe(0);
+      expect(result.overview.workouts.tss_completed).toBe(0);
+      expect(result.overview.workouts.tss_planned).toBe(0);
       expect(result.current_time).toBeTruthy();
     });
 
@@ -587,9 +445,9 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithoutWhoop.getTodaysActivities();
 
-      expect(result.completed_workouts).toHaveLength(1);
-      expect(result.completed_workouts[0].whoop).toBeNull();
-      expect(result.planned_workouts).toHaveLength(1);
+      expect(result.workouts.completed).toHaveLength(1);
+      expect(result.workouts.completed[0].whoop).toBeNull();
+      expect(result.workouts.planned).toHaveLength(1);
     });
 
     it('should work without TrainerRoad client (planned only from Intervals)', async () => {
@@ -600,10 +458,10 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithoutTr.getTodaysActivities();
 
-      expect(result.planned_workouts).toHaveLength(1);
-      expect(result.planned_workouts[0].source).toBe('intervals.icu');
-      expect(result.workouts_planned).toBe(1);
-      expect(result.tss_planned).toBe(35);
+      expect(result.workouts.planned).toHaveLength(1);
+      expect(result.workouts.planned[0].source).toBe('intervals.icu');
+      expect(result.overview.workouts.planned).toBe(1);
+      expect(result.overview.workouts.tss_planned).toBe(35);
     });
 
     it('should handle errors in completed workouts gracefully', async () => {
@@ -613,8 +471,9 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.completed_workouts).toEqual([]);
-      expect(result.planned_workouts).toHaveLength(1);
+      expect(result.workouts.completed).toEqual([]);
+      expect(result.workouts.planned).toHaveLength(1);
+      expect(result.data_status).toEqual({ completed_workouts: 'fetch_failed' });
     });
 
     it('should handle errors in planned workouts gracefully', async () => {
@@ -625,8 +484,8 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.completed_workouts).toHaveLength(1);
-      expect(result.planned_workouts).toEqual([]);
+      expect(result.workouts.completed).toHaveLength(1);
+      expect(result.workouts.planned).toEqual([]);
     });
 
     it('should round TSS totals', async () => {
@@ -645,8 +504,8 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.tss_completed).toBe(116); // round(85.4 + 30.7) = round(116.1) = 116
-      expect(result.tss_planned).toBe(51); // round(50.6) = 51
+      expect(result.overview.workouts.tss_completed).toBe(116); // round(85.4 + 30.7) = round(116.1) = 116
+      expect(result.overview.workouts.tss_planned).toBe(51); // round(50.6) = 51
     });
 
     it('should surface today\'s race in the races array when scheduled for today', async () => {
@@ -672,7 +531,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.races).toEqual([todaysRace]);
+      expect(result.overview.races).toEqual([todaysRace]);
       vi.useRealTimers();
     });
 
@@ -685,7 +544,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.races).toEqual([]);
+      expect(result.overview.races).toEqual([]);
     });
 
     it('should include a single-discipline Intervals.icu race (merged, not TR-only)', async () => {
@@ -707,7 +566,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.races).toEqual([icuRace]);
+      expect(result.overview.races).toEqual([icuRace]);
       vi.useRealTimers();
     });
 
@@ -730,7 +589,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.races).toEqual([trRace]);
+      expect(result.overview.races).toEqual([trRace]);
       vi.useRealTimers();
     });
 
@@ -753,7 +612,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.races).toEqual([icuRace]);
+      expect(result.overview.races).toEqual([icuRace]);
       vi.useRealTimers();
     });
 
@@ -774,7 +633,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities();
 
-      expect(result.races).toEqual([]);
+      expect(result.overview.races).toEqual([]);
       vi.useRealTimers();
     });
 
@@ -796,9 +655,9 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities({ type: 'workouts' });
 
-      expect(result.races).toEqual([]);
-      expect(result.completed_workouts).toHaveLength(1);
-      expect(result.planned_workouts).toHaveLength(2);
+      expect(result.overview.races).toEqual([]);
+      expect(result.workouts.completed).toHaveLength(1);
+      expect(result.workouts.planned).toHaveLength(2);
       vi.useRealTimers();
     });
 
@@ -820,13 +679,13 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysActivities({ type: 'races' });
 
-      expect(result.completed_workouts).toEqual([]);
-      expect(result.planned_workouts).toEqual([]);
-      expect(result.workouts_completed).toBe(0);
-      expect(result.workouts_planned).toBe(0);
-      expect(result.tss_completed).toBe(0);
-      expect(result.tss_planned).toBe(0);
-      expect(result.races).toEqual([todaysRace]);
+      expect(result.workouts.completed).toEqual([]);
+      expect(result.workouts.planned).toEqual([]);
+      expect(result.overview.workouts.completed).toBe(0);
+      expect(result.overview.workouts.planned).toBe(0);
+      expect(result.overview.workouts.tss_completed).toBe(0);
+      expect(result.overview.workouts.tss_planned).toBe(0);
+      expect(result.overview.races).toEqual([todaysRace]);
       vi.useRealTimers();
     });
   });
@@ -968,23 +827,22 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.whoop.sleep).toEqual(mockSleep);
-      expect(result.whoop.recovery).toEqual(mockRecovery);
-      expect(result.whoop.strain).toEqual(mockStrain);
-      expect(result.whoop.body_measurements).toEqual(mockBodyMeasurements);
-      expect(result.fitness).toEqual(mockFitness);
+      expect(result.readiness.whoop?.sleep).toEqual(mockSleep);
+      expect(result.readiness.whoop?.recovery).toEqual(mockRecovery);
+      expect(result.load.whoop_strain).toEqual(mockStrain);
+      expect(result.load.fitness).toEqual(mockFitness);
       // All wellness fields surface, including Whoop overlaps, so the LLM can
       // compare them against whoop.* using the per-field sources map.
-      expect(result.wellness).toEqual(mockWellnessFull);
-      expect(result.completed_workouts).toHaveLength(1);
-      expect(result.planned_workouts).toHaveLength(1);
-      expect(result.workouts_completed).toBe(1);
-      expect(result.workouts_planned).toBe(1);
-      expect(result.tss_completed).toBe(85);
-      expect(result.tss_planned).toBe(88);
+      expect(result.readiness.wellness).toEqual(mockWellnessFull);
+      expect(result.workouts.completed).toHaveLength(1);
+      expect(result.workouts.planned).toHaveLength(1);
+      expect(result.overview.workouts.completed).toBe(1);
+      expect(result.overview.workouts.planned).toBe(1);
+      expect(result.overview.workouts.tss_completed).toBe(85);
+      expect(result.overview.workouts.tss_planned).toBe(88);
     });
 
-    it('should fetch completed workouts with full data (skipExpensiveCalls not set)', async () => {
+    it('fetches completed workouts in the list shape (skipExpensiveCalls set)', async () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: null, recovery: null });
       vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(null);
       vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(null);
@@ -997,11 +855,11 @@ describe('CurrentTools', () => {
 
       await tools.getTodaysSummary();
 
-      // Per-activity expensive calls (intervals, notes, weather) should
-      // be included for today's completed workouts.
+      // The summary skips per-activity calls (intervals, notes, weather);
+      // get_todays_activities / get_workout_details carry that detail.
       const callArgs = vi.mocked(mockIntervalsClient.getActivities).mock.calls[0];
       const options = callArgs[3];
-      expect(options?.skipExpensiveCalls).not.toBe(true);
+      expect(options?.skipExpensiveCalls).toBe(true);
     });
 
     it('should include current_time with full datetime in user timezone', async () => {
@@ -1046,12 +904,12 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.fitness).not.toBeNull();
-      expect(result.fitness?.ctl).toBe(65);
-      expect(result.fitness?.atl).toBe(72);
-      expect(result.fitness?.tsb).toBe(-7);
-      expect(result.fitness?.ctl_load).toBe(1.8);
-      expect(result.fitness?.atl_load).toBe(10.2);
+      expect(result.load.fitness).not.toBeNull();
+      expect(result.load.fitness?.ctl).toBe(65);
+      expect(result.load.fitness?.atl).toBe(72);
+      expect(result.load.fitness?.tsb).toBe(-7);
+      expect(result.load.fitness?.ctl_load).toBe(1.8);
+      expect(result.load.fitness?.atl_load).toBe(10.2);
     });
 
     it('should handle null fitness when fetch fails', async () => {
@@ -1070,7 +928,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.fitness).toBeNull();
+      expect(result.load.fitness).toBeNull();
     });
 
     it('passes wellness through unchanged whether or not Whoop is connected', async () => {
@@ -1083,7 +941,7 @@ describe('CurrentTools', () => {
       vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
 
       const noWhoopResult = await toolsWithoutWhoop.getTodaysSummary();
-      expect(noWhoopResult.wellness).toEqual(mockWellnessFull);
+      expect(noWhoopResult.readiness.wellness).toEqual(mockWellnessFull);
 
       // With Whoop — overlapping fields (HRV, RHR, sleep, etc.) and the
       // sources map are preserved so the LLM can compare against whoop.*.
@@ -1097,12 +955,12 @@ describe('CurrentTools', () => {
       vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
 
       const withWhoopResult = await tools.getTodaysSummary();
-      expect(withWhoopResult.wellness).toEqual(mockWellnessFull);
-      expect(withWhoopResult.wellness?.hrv).toBe('35.47 ms');
-      expect(withWhoopResult.wellness?.resting_hr).toBe('51 bpm');
-      expect(withWhoopResult.wellness?.sleep_duration).toBe('8h 10m');
-      expect(withWhoopResult.wellness?.sources?.hrv).toBe('garmin');
-      expect(withWhoopResult.wellness?.sources?.sleep_duration).toBe('whoop');
+      expect(withWhoopResult.readiness.wellness).toEqual(mockWellnessFull);
+      expect(withWhoopResult.readiness.wellness?.hrv).toBe('35.47 ms');
+      expect(withWhoopResult.readiness.wellness?.resting_hr).toBe('51 bpm');
+      expect(withWhoopResult.readiness.wellness?.sleep_duration).toBe('8h 10m');
+      expect(withWhoopResult.readiness.wellness?.sources?.hrv).toBe('garmin');
+      expect(withWhoopResult.readiness.wellness?.sources?.sleep_duration).toBe('whoop');
     });
 
     it('should handle null wellness when no data', async () => {
@@ -1121,7 +979,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.wellness).toBeNull();
+      expect(result.readiness.wellness).toBeNull();
     });
 
     it('should handle wellness fetch failure gracefully', async () => {
@@ -1140,10 +998,10 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.wellness).toBeNull();
+      expect(result.readiness.wellness).toBeNull();
     });
 
-    it('should return scheduled_race when a race is scheduled for today', async () => {
+    it("should list today's race in overview.races when a race is scheduled for today", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
 
@@ -1175,12 +1033,12 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.scheduled_race).toEqual(todaysRace);
+      expect(result.overview.races).toEqual([todaysRace]);
 
       vi.useRealTimers();
     });
 
-    it('should return null scheduled_race when no races are scheduled', async () => {
+    it('should return no races when no races are scheduled', async () => {
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
         sleep: null,
         recovery: null,
@@ -1197,10 +1055,10 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.scheduled_race).toBeNull();
+      expect(result.overview.races).toEqual([]);
     });
 
-    it('surfaces an Intervals.icu race scheduled for today as scheduled_race', async () => {
+    it('surfaces an Intervals.icu race scheduled for today in overview.races', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
 
@@ -1228,13 +1086,13 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.scheduled_race).toEqual(todaysIcuRace);
-      expect(result.scheduled_race?.priority).toBe('A');
+      expect(result.overview.races).toEqual([todaysIcuRace]);
+      expect(result.overview.races[0]?.priority).toBe('A');
 
       vi.useRealTimers();
     });
 
-    it('should return null scheduled_race when races exist but none for today', async () => {
+    it('should return no races when races exist but none for today', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
 
@@ -1260,7 +1118,7 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.scheduled_race).toBeNull();
+      expect(result.overview.races).toEqual([]);
 
       vi.useRealTimers();
     });
@@ -1282,10 +1140,10 @@ describe('CurrentTools', () => {
 
       const result = await tools.getTodaysSummary();
 
-      expect(result.scheduled_race).toBeNull();
+      expect(result.overview.races).toEqual([]);
     });
 
-    it('should return null scheduled_race when TrainerRoad client is not configured', async () => {
+    it('should return no races when TrainerRoad client is not configured', async () => {
       const toolsWithoutTr = new CurrentTools(mockIntervalsClient, mockWhoopClient, null);
 
       vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({
@@ -1302,7 +1160,93 @@ describe('CurrentTools', () => {
 
       const result = await toolsWithoutTr.getTodaysSummary();
 
-      expect(result.scheduled_race).toBeNull();
+      expect(result.overview.races).toEqual([]);
+    });
+
+    /** Mocks every source the summary reads; individual tests override pieces. */
+    function mockQuietDay() {
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: mockSleep, recovery: mockRecovery });
+      vi.mocked(mockWhoopClient.getTodayStrain).mockResolvedValue(mockStrain);
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockResolvedValue(mockFitness);
+      vi.mocked(mockIntervalsClient.getTodayWellness).mockResolvedValue(mockWellnessFull);
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([]);
+      vi.mocked(mockWhoopClient.getWorkouts).mockResolvedValue([]);
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([]);
+      vi.mocked(mockIntervalsClient.getPlannedEvents).mockResolvedValue([]);
+    }
+
+    it('groups the summary by question with the overview first', async () => {
+      mockQuietDay();
+      const result = await tools.getTodaysSummary();
+      expect(Object.keys(result).slice(0, 6)).toEqual([
+        'current_time', 'overview', 'readiness', 'load', 'workouts', 'weather',
+      ]);
+      expect(result.load.whoop_strain).toEqual(mockStrain);
+    });
+
+    it('reports why sections are missing in data_status', async () => {
+      mockQuietDay();
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockResolvedValue({ sleep: mockSleep, recovery: null });
+      vi.mocked(mockIntervalsClient.getTodayFitness).mockRejectedValue(new Error('ICU down'));
+
+      const result = await tools.getTodaysSummary();
+
+      expect(result.data_status).toEqual({
+        whoop_recovery: 'no_data', // Whoop responded but hasn't scored recovery yet
+        fitness: 'fetch_failed',
+        weather: 'not_configured', // suite instance has no Google Weather
+      });
+      expect(result.readiness.whoop?.sleep).toEqual(mockSleep);
+    });
+
+    it('marks Whoop sections not_configured without a Whoop client', async () => {
+      mockQuietDay();
+      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
+
+      const result = await toolsWithoutWhoop.getTodaysSummary();
+
+      expect(result.readiness.whoop).toBeNull();
+      expect(result.data_status).toMatchObject({
+        whoop_recovery: 'not_configured',
+        whoop_sleep: 'not_configured',
+        whoop_strain: 'not_configured',
+      });
+    });
+
+    it('marks both Whoop readiness halves fetch_failed when Whoop errors', async () => {
+      mockQuietDay();
+      vi.mocked(mockWhoopClient.getTodayRecovery).mockRejectedValue(new Error('Whoop down'));
+
+      const result = await tools.getTodaysSummary();
+
+      expect(result.readiness.whoop).toBeNull();
+      expect(result.data_status).toMatchObject({ whoop_recovery: 'fetch_failed', whoop_sleep: 'fetch_failed' });
+    });
+
+    it('flags planned workouts with no expected TSS', async () => {
+      mockQuietDay();
+      vi.mocked(mockTrainerRoadClient.getPlannedWorkouts).mockResolvedValue([
+        { ...mockPlannedWorkouts[0], id: 'a', expected_tss: 88 },
+        { ...mockPlannedWorkouts[0], id: 'b', name: 'Base Run', expected_tss: undefined },
+      ]);
+
+      const result = await tools.getTodaysSummary();
+
+      expect(result.overview.workouts).toMatchObject({ planned: 2, tss_planned: 88, planned_without_tss: 1 });
+    });
+
+    it('returns completed workouts with zone names and times only', async () => {
+      mockQuietDay();
+      vi.mocked(mockIntervalsClient.getActivities).mockResolvedValue([
+        {
+          ...mockWorkouts[0],
+          hr_zones: [{ name: 'Recovery', low_hr: '0 bpm', high_hr: '138 bpm', time_in_zone: '1:00:00' }],
+        },
+      ]);
+
+      const result = await tools.getTodaysSummary();
+
+      expect(result.workouts.completed[0].hr_zones).toEqual([{ name: 'Recovery', time_in_zone: '1:00:00' }]);
     });
   });
 
@@ -1496,8 +1440,25 @@ describe('CurrentTools', () => {
       vi.mocked(mockTrainerRoadClient.getUpcomingRaces).mockResolvedValue([]);
 
       const result = await toolsWithWeather.getTodaysSummary();
-      expect(result.forecast).toHaveLength(1);
-      expect(result.forecast[0].location).toBe('Boise');
+      expect(result.weather).toHaveLength(1);
+      const [boise] = result.weather;
+      expect(boise.location).toBe('Boise');
+      expect(result.data_status?.weather).toBeUndefined();
+
+      // Compact shape: no coordinates, and hourly entries carry only a time
+      // of day plus the training-relevant fields.
+      expect(boise).not.toHaveProperty('latitude');
+      expect(boise).not.toHaveProperty('longitude');
+      for (const hour of boise.hourly_forecast) {
+        expect(hour).not.toHaveProperty('forecast_start');
+        expect(hour).not.toHaveProperty('temperature_dew_point');
+        expect(hour).not.toHaveProperty('pressure');
+        if (hour.hour) expect(hour.hour).not.toContain(',');
+      }
+      if (boise.current_conditions) {
+        expect(boise.current_conditions).not.toHaveProperty('pressure');
+        expect(boise.current_conditions).not.toHaveProperty('as_of');
+      }
     });
 
     it("getTodaysSummary forecast is [] when Google Weather isn't configured", async () => {
@@ -1514,7 +1475,8 @@ describe('CurrentTools', () => {
 
       // tools (the suite-level instance) is constructed without Google Weather
       const result = await tools.getTodaysSummary();
-      expect(result.forecast).toEqual([]);
+      expect(result.weather).toEqual([]);
+      expect(result.data_status?.weather).toBe('not_configured');
     });
 
     it('attaches AQI from the Google Air Quality client when configured', async () => {
@@ -2262,6 +2224,33 @@ describe('CurrentTools', () => {
         // Falls back to athlete tz (America/Boise = MDT) for the response formatting.
         expect(result.forecasts[0].current_conditions?.as_of).toMatch(/MDT$/);
       });
+    });
+  });
+  describe('getAthleteProfile', () => {
+    const profile = {
+      id: 'i1',
+      name: 'Test Athlete',
+      unit_preferences: { system: 'metric', weight: 'kg', temperature: 'celsius', wind: 'kmh', precipitation: 'mm', height: 'cm' },
+    } as unknown as Awaited<ReturnType<IntervalsClient['getAthleteProfile']>>;
+    const body: WhoopBodyMeasurements = { height: '183 cm', weight: '75.5 kg', max_heart_rate: '190 bpm' } as unknown as WhoopBodyMeasurements;
+
+    it('adds Whoop body measurements when Whoop is connected', async () => {
+      vi.mocked(mockIntervalsClient.getAthleteProfile).mockResolvedValue(profile);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockResolvedValue(body);
+
+      const result = await tools.getAthleteProfile();
+
+      expect(result.whoop_body_measurements).toEqual(body);
+      expect(result.name).toBe('Test Athlete');
+    });
+
+    it('still returns the profile when the Whoop call fails or Whoop is absent', async () => {
+      vi.mocked(mockIntervalsClient.getAthleteProfile).mockResolvedValue(profile);
+      vi.mocked(mockWhoopClient.getBodyMeasurements).mockRejectedValue(new Error('Whoop down'));
+      expect((await tools.getAthleteProfile()).whoop_body_measurements).toBeUndefined();
+
+      const toolsWithoutWhoop = new CurrentTools(mockIntervalsClient, null, mockTrainerRoadClient);
+      expect(await toolsWithoutWhoop.getAthleteProfile()).toEqual(profile);
     });
   });
 });

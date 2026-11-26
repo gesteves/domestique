@@ -8,6 +8,7 @@ import type {
   PlannedWorkout,
   TodaysPlannedWorkoutsResponse,
   TodaysActivitiesResponse,
+  TodaysWorkouts,
   DailySummary,
   WorkoutWithWhoop,
 } from '../../types/index.js';
@@ -44,35 +45,57 @@ function findUnsyncedTRRuns(workouts: PlannedWorkout[]): PlannedWorkout[] {
 }
 
 /**
+ * Shared message for TrainerRoad runs that have no Intervals.icu copy yet.
+ * Returns undefined when every TR run is already synced.
+ */
+function unsyncedRunsHint(workouts: PlannedWorkout[]): string | undefined {
+  const unsyncedRuns = findUnsyncedTRRuns(workouts);
+  if (unsyncedRuns.length === 0) return undefined;
+
+  return (
+    `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
+    `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
+    `or create_workout (sport: "running") tools. First fetch the user's running pace zones via get_sports_settings.`
+  );
+}
+
+/**
  * Hint for syncing TR runs to ICU.
  * Guides LLM to offer syncing unsynced TrainerRoad runs.
  */
 export const trainerroadSyncHint: HintGenerator<TodaysPlannedWorkoutsResponse | UpcomingActivitiesResponse> = (
   data
 ) => {
-  const unsyncedRuns = findUnsyncedTRRuns(data.workouts);
-  if (unsyncedRuns.length === 0) return undefined;
+  return unsyncedRunsHint(data.workouts);
+};
 
-  return (
-    `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
-    `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
-    `or create_workout (sport: "running") tools. First fetch the user's running pace zones via get_sports_settings.`
-  );
+/** The workout lists both today tools share. */
+interface TodaysWorkoutsResponse {
+  workouts: TodaysWorkouts;
+}
+
+/**
+ * Hint for syncing TR runs to ICU from either today tool (both carry
+ * `workouts.planned`).
+ */
+export const todaysSyncHint: HintGenerator<TodaysWorkoutsResponse> = (data) => {
+  return unsyncedRunsHint(data.workouts.planned);
 };
 
 /**
- * Hint for the daily summary's planned workouts.
+ * The daily summary returns completed workouts in the list shape; point at
+ * the detail tool only when there's something completed to drill into.
  */
-export const dailySummarySyncHint: HintGenerator<DailySummary> = (data) => {
-  const unsyncedRuns = findUnsyncedTRRuns(data.planned_workouts);
-  if (unsyncedRuns.length === 0) return undefined;
-
-  return (
-    `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
-    `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
-    `or create_workout (sport: "running") tools. First fetch the user's running pace zones via get_sports_settings.`
-  );
+export const dailySummaryWorkoutDetailHint: HintGenerator<DailySummary> = (data) => {
+  if (data.workouts.completed.length === 0) return undefined;
+  return `For intervals, notes, and weather on today's completed workouts, call get_workout_details with its id.`;
 };
+
+/** Hint generators for the daily summary. */
+export const dailySummaryHints: HintGenerator<DailySummary>[] = [
+  todaysSyncHint,
+  dailySummaryWorkoutDetailHint,
+];
 
 /** Response type for activity history */
 interface ActivityHistoryResponse {
@@ -87,9 +110,7 @@ export const activityHistoryHint: HintGenerator<ActivityHistoryResponse | Workou
   const workouts = Array.isArray(data) ? data : data.workouts;
   if (workouts.length === 0) return undefined;
 
-  const workoutIds = workouts.map((w) => w.id).join(', ');
-
-  return `For full workout analysis (intervals, notes, weather, zones), call get_workout_details with activity_id. Available IDs: ${workoutIds}`;
+  return `For intervals, notes, and weather on any of these workouts, call get_workout_details with its id.`;
 };
 
 /**
@@ -100,23 +121,8 @@ export const activityHistoryHints: HintGenerator<ActivityHistoryResponse | Worko
 ];
 
 /**
- * Hint for syncing TR runs to ICU from today's activities response.
- */
-export const todaysActivitiesSyncHint: HintGenerator<TodaysActivitiesResponse> = (data) => {
-  const unsyncedRuns = findUnsyncedTRRuns(data.planned_workouts);
-  if (unsyncedRuns.length === 0) return undefined;
-
-  return (
-    `Found ${unsyncedRuns.length} TrainerRoad running workout(s) that could be synced to Intervals.icu ` +
-    `for structured execution on Zwift/Garmin. You can offer to sync these using the sync_trainerroad_runs ` +
-    `or create_workout (sport: "running") tools. First fetch the user's running pace zones via get_sports_settings.`
-  );
-};
-
-
-/**
  * Combined hint generators for today's activities.
  */
 export const todaysActivitiesHints: HintGenerator<TodaysActivitiesResponse>[] = [
-  todaysActivitiesSyncHint,
+  todaysSyncHint,
 ];

@@ -1,3 +1,7 @@
+import type { Period } from '../utils/tz.js';
+
+export type { Period };
+
 // Normalized activity types across platforms
 export type ActivityType =
   | 'Cycling'
@@ -57,8 +61,7 @@ export interface NormalizedWorkout {
   coasting_time?: string; // e.g., "0:05:30"
   coasting_percentage?: string; // e.g., "23%"
 
-  // Training load & subjective feel
-  load?: number;
+  // Subjective feel
   rpe?: string; // e.g., "7 - Hard"
   feel?: string; // e.g., "2 - Good"
 
@@ -71,7 +74,7 @@ export interface NormalizedWorkout {
 
   // Power efficiency metrics
   variability_index?: number; // NP/Avg Power
-  power_hr_ratio?: number; // Power to HR decoupling
+  hr_decoupling?: string; // Aerobic (Pw:HR) decoupling, formatted percent
   efficiency_factor?: number; // NP/Avg HR
 
   // Per-activity fitness snapshot
@@ -112,6 +115,7 @@ export interface NormalizedWorkout {
   // Zone thresholds used for this activity (normalized with names and time in zone)
   hr_zones?: HRZone[];
   power_zones?: PowerZone[];
+  sweet_spot_time?: string; // Time in the Sweet Spot band (overlaps Tempo/Threshold)
   pace_zones?: PaceZone[];
   heat_zones?: HeatZone[];
 
@@ -172,7 +176,7 @@ export interface NormalizedWorkout {
 
   // Z2 aerobic metrics
   power_hr_z2?: number; // Power/HR ratio in Z2 (aerobic efficiency)
-  power_hr_z2_mins?: string; // e.g., "12.4 min"
+  power_hr_z2_time?: string; // e.g., "0:12:24"
   cadence_z2?: string; // e.g., "88 rpm"
 
   // Workout compliance
@@ -955,6 +959,8 @@ export interface AthleteProfile {
    * when restating values in narrative text.
    */
   unit_preferences: UnitPreferences;
+  /** Height, weight, and max HR as recorded by Whoop. Only present when Whoop is connected */
+  whoop_body_measurements?: WhoopBodyMeasurements;
 }
 
 // Sport settings response for get_sports_settings tool
@@ -998,10 +1004,10 @@ export interface TrainingLoadSummary {
 }
 
 export interface TrainingLoadTrends {
-  period_days: number;
+  period: Period;
   sport: string;
-  data: DailyTrainingLoad[];
   summary: TrainingLoadSummary;
+  data: DailyTrainingLoad[];
 }
 
 // ============================================
@@ -1030,19 +1036,19 @@ interface WellnessFields {
   fat_total?: string; // e.g., "60 g"
 
   // Sleep
-  sleep_duration?: string; // e.g., "8h 10m"
+  sleep_duration?: string; // e.g., "8:10:00"
   sleep_score?: number;
-  sleep_quality?: number; // 1=GREAT, 2=GOOD, 3=AVG, 4=POOR
+  sleep_quality?: string; // e.g., "2 - Good"
   avg_sleeping_hr?: string;
 
   // Subjective metrics (1-4 scale)
   soreness?: string; // e.g., "1 - Low"
   fatigue?: string; // e.g., "2 - Avg"
-  stress?: number; // 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME
+  stress?: string; // e.g., "1 - Low"
   mood?: string; // e.g., "1 - Great"
   motivation?: string; // e.g., "2 - High"
   injury?: string; // e.g., "1 - None"
-  hydration?: number; // 1=GOOD, 2=OK, 3=POOR, 4=BAD
+  hydration?: string; // e.g., "1 - Good"
 
   // Vitals
   spo2?: string; // e.g., "98%"
@@ -1090,9 +1096,7 @@ export interface WellnessData extends WellnessFields {}
  * Wellness trends over a date range.
  */
 export interface WellnessTrends {
-  period_days: number;
-  start_date: string;
-  end_date: string;
+  period: Period;
   data: DailyWellness[];
 }
 
@@ -1191,56 +1195,82 @@ export interface WorkoutNotesResponse {
 // ============================================
 
 /**
- * Whoop data for the daily summary.
- * All Whoop data is nested under this object for clarity.
+ * Why a section of a today's response is missing. Reported in `data_status`
+ * so the model can tell an unconfigured source from a failed fetch from a
+ * source that simply has nothing yet (e.g. Whoop hasn't scored recovery).
  */
-export interface DailySummaryWhoop {
-  /** Body measurements from Whoop, null if unavailable */
-  body_measurements: WhoopBodyMeasurements | null;
-  /** Today's Whoop strain data with insight fields, null if unavailable */
-  strain: StrainData | null;
-  /** Today's Whoop sleep data, null if unavailable */
-  sleep: WhoopSleepData | null;
-  /** Today's Whoop recovery data, null if unavailable */
-  recovery: WhoopRecoveryData | null;
+export type DataStatusReason = 'not_configured' | 'fetch_failed' | 'no_data';
+
+/** Map of missing section → reason. Only sections that are missing appear. */
+export type DataStatus = Partial<Record<string, DataStatusReason>>;
+
+/** Workout counts and load for today, planned vs. completed. */
+export interface TodaysWorkoutTotals {
+  planned: number;
+  completed: number;
+  /** Sum of expected TSS across planned workouts that declare one */
+  tss_planned: number;
+  /** Sum of TSS across completed workouts */
+  tss_completed: number;
+  /** Planned workouts with no expected TSS, so tss_planned undercounts. Omitted when 0 */
+  planned_without_tss?: number;
+}
+
+/** The "what's today?" block shared by both today tools. */
+export interface TodaysOverview {
+  /** Active TrainerRoad training phase as of today. Null when no phase marker is known */
+  training_phase: TrainingPhase | null;
+  /** Today's races, if any */
+  races: Race[];
+  /** Active calendar annotations overlapping today */
+  annotations: Annotation[];
+  workouts: TodaysWorkoutTotals;
+}
+
+/** Today's workout lists, shared by both today tools. */
+export interface TodaysWorkouts {
+  planned: PlannedWorkout[];
+  completed: WorkoutWithWhoop[];
 }
 
 /**
- * Complete daily summary combining recovery, strain, and workout data.
- * Returned by get_daily_summary tool.
- *
- * Note: Whoop insight fields (recovery_level, strain_level, sleep_performance_level, etc.)
- * are included in the recovery and strain objects within the whoop property.
+ * Today's activities: overview plus the planned/completed workout lists, with
+ * full per-activity detail on completed workouts.
+ */
+export interface TodaysActivitiesResponse {
+  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
+  current_time: string;
+  overview: TodaysOverview;
+  workouts: TodaysWorkouts;
+  data_status?: DataStatus;
+}
+
+/**
+ * Complete daily summary, grouped by the question each block answers:
+ * what's on today, how recovered the athlete is, current training load,
+ * the workouts themselves, and conditions.
  */
 export interface DailySummary {
   /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
   current_time: string;
-  /** Today's Whoop recovery and strain data */
-  whoop: DailySummaryWhoop;
-  /** Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu, null if unavailable */
-  fitness: FitnessMetrics | null;
-  /** Today's wellness data (weight, etc.) from Intervals.icu, null if unavailable */
-  wellness: WellnessData | null;
-  /** Planned workouts from TrainerRoad and Intervals.icu */
-  planned_workouts: PlannedWorkout[];
-  /** Completed workouts from Intervals.icu with matched Whoop data */
-  completed_workouts: WorkoutWithWhoop[];
-  /** Active calendar annotations (sickness, injury, holiday, note, training-phase boundary) overlapping today */
-  annotations: Annotation[];
-  /** Active TrainerRoad training phase as of today, with computed week / weeks_remaining. Null when no phase marker is known */
-  training_phase: TrainingPhase | null;
-  /** Race scheduled for today (if any) */
-  scheduled_race: Race | null;
-  /** Per-location weather forecasts for today (empty if Google Weather is not configured) */
-  forecast: LocationForecast[];
-  /** Number of workouts planned for today */
-  workouts_planned: number;
-  /** Number of workouts completed today */
-  workouts_completed: number;
-  /** Total TSS from planned workouts */
-  tss_planned: number;
-  /** Total TSS from completed workouts */
-  tss_completed: number;
+  overview: TodaysOverview;
+  readiness: {
+    /** Whoop recovery and last night's sleep. Absent when Whoop is not configured */
+    whoop: { recovery: WhoopRecoveryData | null; sleep: WhoopSleepData | null } | null;
+    /** Intervals.icu wellness for today, with its per-field `sources` map */
+    wellness: WellnessData | null;
+  };
+  load: {
+    /** CTL/ATL/TSB from Intervals.icu */
+    fitness: FitnessMetrics | null;
+    /** Today's Whoop day strain */
+    whoop_strain: StrainData | null;
+  };
+  /** Workout lists; completed workouts use the summary shape */
+  workouts: TodaysWorkouts;
+  /** Compact per-location forecast for today */
+  weather: CompactLocationForecast[];
+  data_status?: DataStatus;
 }
 
 // ============================================
@@ -1470,6 +1500,63 @@ export interface LocationForecast {
 }
 
 /**
+ * Current conditions trimmed to what matters for deciding when and how to
+ * train today. Field names match {@link CurrentWeather}.
+ */
+export type CompactCurrentWeather = Pick<
+  CurrentWeather,
+  | 'condition'
+  | 'temperature'
+  | 'temperature_apparent'
+  | 'humidity'
+  | 'precipitation_chance'
+  | 'precipitation_type'
+  | 'thunderstorm_probability'
+  | 'uv_index'
+  | 'wind_direction'
+  | 'wind_speed'
+  | 'wind_gust'
+  | 'air_quality'
+>;
+
+/**
+ * One hour of the compact forecast embedded in the daily summary. Field names
+ * match {@link HourlyForecast}; `hour` is the local start time of the hour.
+ */
+export interface CompactHourlyForecast
+  extends Pick<
+    HourlyForecast,
+    | 'condition'
+    | 'temperature'
+    | 'temperature_apparent'
+    | 'precipitation_chance'
+    | 'precipitation_type'
+    | 'thunderstorm_probability'
+    | 'wind_speed'
+    | 'wind_gust'
+  > {
+  /** Local start time of the hour at the location (e.g., "8:00 AM MST") */
+  hour?: string;
+  /** AQI value only; the scale name and category are on current_conditions */
+  air_quality?: { aqi: number };
+}
+
+/**
+ * Per-location forecast as embedded in the daily summary: the full daily
+ * summary, alerts, and pollen, with trimmed current conditions and hourly
+ * entries. The weather tool returns the full {@link LocationForecast}.
+ */
+export interface CompactLocationForecast {
+  location: string;
+  elevation?: string;
+  current_conditions?: CompactCurrentWeather | null;
+  daily_summary?: DailyForecastSummary;
+  hourly_forecast: CompactHourlyForecast[];
+  alerts?: WeatherAlert[];
+  pollen?: Pollen;
+}
+
+/**
  * Forecast response, one entry per resolved location for the requested date.
  */
 export interface ForecastResponse {
@@ -1492,33 +1579,11 @@ export interface TodaysRecoveryWhoop {
 }
 
 /**
- * Today's recovery data with current time in user's timezone.
- * Returned by get_todays_recovery tool.
- */
-export interface TodaysRecoveryResponse {
-  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
-  current_time: string;
-  /** Today's Whoop sleep and recovery data */
-  whoop: TodaysRecoveryWhoop;
-}
-
-/**
  * Whoop data for today's strain response.
  */
 export interface TodaysStrainWhoop {
   /** Today's Whoop strain data, null if unavailable */
   strain: StrainData | null;
-}
-
-/**
- * Today's strain data with current time in user's timezone.
- * Returned by get_todays_strain tool.
- */
-export interface TodaysStrainResponse {
-  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
-  current_time: string;
-  /** Today's Whoop strain data */
-  whoop: TodaysStrainWhoop;
 }
 
 /**
@@ -1543,33 +1608,6 @@ export interface TodaysPlannedWorkoutsResponse {
   workouts: PlannedWorkout[];
 }
 
-/**
- * Today's combined completed/planned workouts and (when scheduled) today's race.
- * Returned by get_todays_activities tool — a leaner alternative to get_todays_summary
- * that only returns activity-and-event data.
- */
-export interface TodaysActivitiesResponse {
-  /** Current time in ISO 8601 format (YYYY-MM-DDTHH:mm:ss±HH:mm) in the user's local timezone */
-  current_time: string;
-  /** Completed workouts from Intervals.icu with full details and matched Whoop data */
-  completed_workouts: WorkoutWithWhoop[];
-  /** Planned workouts from TrainerRoad and Intervals.icu */
-  planned_workouts: PlannedWorkout[];
-  /** Today's races, if any: single-discipline races from Intervals.icu, triathlons from the TrainerRoad calendar */
-  races: Race[];
-  /** Active calendar annotations (sickness, injury, holiday, note, training-phase boundary) overlapping today */
-  annotations: Annotation[];
-  /** Active TrainerRoad training phase as of today, with computed week / weeks_remaining. Null when no phase marker is known */
-  training_phase: TrainingPhase | null;
-  /** Number of workouts completed today */
-  workouts_completed: number;
-  /** Number of workouts planned for today */
-  workouts_planned: number;
-  /** Total TSS from completed workouts */
-  tss_completed: number;
-  /** Total expected TSS from planned workouts */
-  tss_planned: number;
-}
 
 // ============================================
 // Performance Curves
@@ -1623,16 +1661,14 @@ export interface PowerCurveComparison {
 
 // Full power curves response
 export interface PowerCurvesResponse {
-  period_start: string;
-  period_end: string;
+  period: Period;
   sport: string;
   activity_count: number;
   durations_analyzed: string[]; // Human-readable labels
   summary: PowerCurveSummary;
   // null when compare_to_* params were not supplied (omitted from the response, since nulls are stripped).
   comparison: {
-    previous_period_start: string;
-    previous_period_end: string;
+    previous_period: Period;
     previous_activity_count: number;
     changes: PowerCurveComparison[];
   } | null;
@@ -1693,8 +1729,7 @@ export interface PaceCurveComparison {
 
 // Full pace curves response
 export interface PaceCurvesResponse {
-  period_start: string;
-  period_end: string;
+  period: Period;
   sport: string;
   gap_adjusted: boolean;
   activity_count: number;
@@ -1702,8 +1737,7 @@ export interface PaceCurvesResponse {
   summary: PaceCurveSummary;
   // null when compare_to_* params were not supplied (omitted from the response, since nulls are stripped).
   comparison: {
-    previous_period_start: string;
-    previous_period_end: string;
+    previous_period: Period;
     previous_activity_count: number;
     changes: PaceCurveComparison[];
   } | null;
@@ -1752,16 +1786,14 @@ export interface HRCurveComparison {
 
 // Full HR curves response
 export interface HRCurvesResponse {
-  period_start: string;
-  period_end: string;
+  period: Period;
   sport: string | null;
   activity_count: number;
   durations_analyzed: string[];
   summary: HRCurveSummary;
   // null when compare_to_* params were not supplied (omitted from the response, since nulls are stripped).
   comparison: {
-    previous_period_start: string;
-    previous_period_end: string;
+    previous_period: Period;
     previous_activity_count: number;
     changes: HRCurveComparison[];
   } | null;
@@ -1801,6 +1833,8 @@ export interface SportTotals {
   calories: string;
   /** Total work done for this sport (e.g., "308364 kJ"). Only present if > 0. */
   work?: string;
+  /** Total time in the Sweet Spot band; overlaps Tempo/Threshold power zones. Only present if > 0. */
+  sweet_spot_time?: string;
   /** Total coasting/recovery time (cycling only) */
   coasting?: string;
   /** Zone distributions for this sport */
@@ -1819,15 +1853,7 @@ export interface SportTotals {
  */
 export interface ActivityTotalsResponse {
   /** Time period analyzed */
-  period: {
-    /** Start date of the period (YYYY-MM-DD) */
-    start_date: string;
-    /** End date of the period (YYYY-MM-DD) */
-    end_date: string;
-    /** Number of weeks in the period */
-    weeks: number;
-    /** Total days in the period */
-    days: number;
+  period: Period & {
     /** Days with at least one activity */
     active_days: number;
   };

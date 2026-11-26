@@ -30,6 +30,17 @@ const hintsField = z
   .optional()
   .describe('Actionable next-step suggestions based on the data. Read these and consider following them when relevant.');
 
+/**
+ * Standard period object shared by every date-range tool.
+ */
+const PeriodZ = z.object({
+  start_date: z.string().describe('First date in the range'),
+  end_date: z.string().describe('Last date in the range (inclusive)'),
+  days: z.number().describe('Number of calendar days in the range, inclusive'),
+}).passthrough();
+
+const periodField = PeriodZ.describe('Date range the response covers');
+
 // ============================================
 // Zones (heart rate, power, pace, heat)
 // ============================================
@@ -74,7 +85,7 @@ const WorkoutNoteZ = z.object({
   id: z.string().optional().describe('Unique identifier of the note'),
   athlete_id: z.string().optional().describe('Intervals.icu athlete ID who wrote the note'),
   name: z.string().optional().describe('Name of the athlete who wrote the note'),
-  created: z.string().optional().describe('Timestamp when the note was created (ISO 8601)'),
+  created: z.string().optional().describe('Timestamp when the note was created'),
   type: z.string().optional().describe('Note type (typically TEXT)'),
   content: z.string().optional().describe('The actual note content written by the athlete'),
   attachment_url: z.string().optional().describe('URL to an attached file (if any)'),
@@ -158,12 +169,12 @@ const WhoopMatchedDataZ = z.object({
 // Workout (summary vs detail)
 // ============================================
 //
-// WorkoutSummaryZ is the always-present field set returned by bulk list
-// endpoints that intentionally skip per-activity API calls to avoid rate
-// limiting (get_activity_history). WorkoutDetailZ extends it with the heavier
-// fields that get fetched when full per-activity detail is wanted
-// (get_workout_details, get_todays_activities.completed_workouts,
-// get_todays_summary.completed_workouts).
+// WorkoutSummaryZ is the field set returned by bulk list endpoints that
+// intentionally skip per-activity API calls to avoid rate limiting
+// (get_activity_history). In list views, zone arrays carry only name and
+// time_in_zone; the zone bounds come with full detail. WorkoutDetailZ extends
+// it with the fields that need extra per-activity calls (intervals, weather)
+// and is returned by get_workout_details and get_todays_activities.
 
 const WorkoutSummaryZ = z.object({
   id: z.string().optional().describe('Unique ID of the completed activity in Intervals.icu'),
@@ -183,8 +194,7 @@ const WorkoutSummaryZ = z.object({
   unavailable: z.boolean().optional().describe("True if this workout's full data is unavailable (e.g., Strava-only)"),
   unavailable_reason: z.string().optional().describe('Human-readable reason why the workout is unavailable'),
 
-  tss: z.number().optional().describe('Training Stress Score (TSS)'),
-  load: z.number().optional().describe('Training load (equivalent to TSS for power-based activities)'),
+  tss: z.number().optional().describe('Training load for the activity (Intervals.icu training load: TSS for power-based activities, HR- or pace-based load otherwise)'),
   intensity_factor: z.number().optional().describe('Intensity Factor (IF), how hard it was compared to your FTP'),
   trimp: z.number().optional().describe('Training Impulse, training load derived from average HR relative to resting/max HR and moving time'),
   session_rpe: z.number().optional().describe('Session RPE = RPE × duration in minutes'),
@@ -211,7 +221,7 @@ const WorkoutSummaryZ = z.object({
   max_cadence: z.string().optional().describe('Peak cadence reached during the activity'),
 
   variability_index: z.number().optional().describe('Variability Index (VI)'),
-  power_hr_ratio: z.number().optional().describe('Power:HR ratio (output power per input heart rate)'),
+  hr_decoupling: z.string().optional().describe('Aerobic decoupling (Pw:HR or Pa:HR) across the activity; positive indicates cardiac drift. Under ~5% suggests good aerobic endurance'),
   efficiency_factor: z.number().optional().describe('Efficiency Factor (EF) = NP / Avg HR'),
 
   coasting_time: z.string().optional().describe('Total time spent coasting'),
@@ -256,6 +266,7 @@ const WorkoutSummaryZ = z.object({
 
   hr_zones: z.array(HRZoneZ).optional().describe('Heart rate zone objects for the time of activity (may differ from current athlete profile zones)'),
   power_zones: z.array(PowerZoneZ).optional().describe('Power zone objects for the time of activity (may differ from current athlete profile zones)'),
+  sweet_spot_time: z.string().optional().describe('Time spent in the Sweet Spot band. Overlaps the Tempo and Threshold power zones, so it is not part of power_zones and must not be added to their times'),
   pace_zones: z.array(PaceZoneZ).optional().describe('Pace zone objects for the time of activity (may differ from current athlete profile zones)'),
 
   heat_zones: z.array(HeatZoneZ).optional().describe('Heat zone objects based on the Heat Strain Index (HSI). Only present when heat strain data from a CORE body temperature sensor is available.'),
@@ -268,6 +279,18 @@ const WorkoutSummaryZ = z.object({
   start_ambient_temperature: z.string().optional().describe('Ambient temperature at the start of the activity'),
   end_ambient_temperature: z.string().optional().describe('Ambient temperature at the end of the activity'),
 
+  rolling_ftp: z.string().optional().describe('Rolling FTP estimate from recent activities'),
+  rolling_ftp_delta: z.string().optional().describe('Change in rolling FTP from previous value (positive = increasing)'),
+  interval_summary: z.array(z.string()).optional().describe('Human-readable summary of intervals (e.g., ["2x 5m 133w", "3x 10m 202w"])'),
+  power_load: z.number().optional().describe('Training load calculated from power data (TSS)'),
+  hr_load: z.number().optional().describe('Training load calculated from heart rate data'),
+  pace_load: z.number().optional().describe('Training load calculated from pace data (running/swimming)'),
+  power_hr_z2: z.number().optional().describe('Power-to-HR ratio in Zone 2 (aerobic efficiency)'),
+  power_hr_z2_time: z.string().optional().describe('Amount of Zone 2 time used to calculate power_hr_z2'),
+  cadence_z2: z.string().optional().describe('Average cadence during Zone 2 effort'),
+  compliance: z.string().optional().describe('Workout compliance against the planned target. "0%" means no planned workout was matched'),
+  threshold_pace: z.string().optional().describe('Threshold pace at time of activity (running/swimming)'),
+
   notes: z.array(WorkoutNoteZ).optional().describe('Notes/messages left by the athlete or others (e.g., a coach) for this activity'),
 
   // Whoop match data — present in summary too because matching is cheap and high-signal
@@ -278,16 +301,6 @@ const WorkoutSummaryZ = z.object({
 const WorkoutDetailZ = WorkoutSummaryZ.extend({
   intervals: z.array(WorkoutIntervalZ).optional().describe('Individual workout intervals with detailed metrics (power, HR, cadence, duration, timing)'),
   interval_groups: z.array(IntervalGroupZ).optional().describe('Grouped intervals showing repeated efforts (e.g., "4x 5m @ 200w")'),
-  rolling_ftp: z.string().optional().describe('Rolling FTP estimate from recent activities'),
-  rolling_ftp_delta: z.string().optional().describe('Change in rolling FTP from previous value (positive = increasing)'),
-  interval_summary: z.array(z.string()).optional().describe('Human-readable summary of intervals (e.g., ["2x 5m 133w", "3x 10m 202w"])'),
-  power_load: z.number().optional().describe('Training load calculated from power data (TSS)'),
-  hr_load: z.number().optional().describe('Training load calculated from heart rate data'),
-  pace_load: z.number().optional().describe('Training load calculated from pace data (running/swimming)'),
-  power_hr_z2: z.number().optional().describe('Power-to-HR ratio in Zone 2 (aerobic efficiency)'),
-  power_hr_z2_mins: z.string().optional().describe('Amount of Z2 data used to calculate the ratio'),
-  cadence_z2: z.string().optional().describe('Average cadence during Zone 2 effort'),
-  compliance: z.string().optional().describe('Workout compliance against the planned target. "0%" means no planned workout was matched'),
   weather_description: z.string().optional().describe('Weather summary for outdoor activities. Not included for indoor activities'),
 }).passthrough();
 
@@ -337,7 +350,7 @@ const WhoopSleepZ = z.object({
 }).passthrough();
 
 const WhoopRecoveryZ = z.object({
-  date: z.string().optional().describe('Date of recovery data (ISO 8601)'),
+  date: z.string().optional().describe('Date of recovery data'),
   recovery_score: z.string().optional().describe("Reflects the body's readiness for strain. Sufficient: ≥67%, Adequate: 34-66%, Low: <34%"),
   recovery_level: z.string().optional().describe("Whoop's label: Sufficient, Adequate, or Low"),
   recovery_level_description: z.string().optional().describe("Whoop's official description for this recovery level"),
@@ -390,7 +403,7 @@ const StrainDataZ = z.object({
 // ============================================
 
 const DailyTrainingLoadZ = z.object({
-  date: z.string().optional().describe('Date of fitness metrics (ISO 8601)'),
+  date: z.string().optional().describe('Date of fitness metrics'),
   ctl: z.number().optional().describe('Chronic Training Load (fitness) — 42-day exponentially weighted average of daily TSS'),
   atl: z.number().optional().describe('Acute Training Load (fatigue) — 7-day exponentially weighted average of daily TSS'),
   tsb: z.number().optional().describe('Training Stress Balance (form) = CTL - ATL. -10 to +25 typical for optimal performance'),
@@ -436,17 +449,17 @@ const WellnessFieldsShape = {
   carbs: z.string().optional().describe('Carbohydrates consumed'),
   protein: z.string().optional().describe('Protein consumed'),
   fat_total: z.string().optional().describe('Total fat consumed'),
-  sleep_duration: z.string().optional().describe('Sleep duration (e.g., "8h 10m")'),
+  sleep_duration: z.string().optional().describe('Sleep duration'),
   sleep_score: z.number().optional().describe('Sleep score (0-100)'),
-  sleep_quality: z.number().optional().describe('Subjective sleep quality: 1=GREAT, 2=GOOD, 3=AVG, 4=POOR'),
+  sleep_quality: z.string().optional().describe('Subjective sleep quality, formatted as "<n> - <Label>" with labels Great/Good/Avg/Poor'),
   avg_sleeping_hr: z.string().optional().describe('Average heart rate during sleep'),
   soreness: z.string().optional().describe('Pre-training soreness, formatted as "<n> - <Label>" with labels Low/Avg/High/Extreme'),
   fatigue: z.string().optional().describe('Pre-training fatigue, formatted as "<n> - <Label>" with labels Low/Avg/High/Extreme'),
-  stress: z.number().optional().describe('Stress: 1=LOW, 2=AVG, 3=HIGH, 4=EXTREME'),
+  stress: z.string().optional().describe('Stress, formatted as "<n> - <Label>" with labels Low/Avg/High/Extreme'),
   mood: z.string().optional().describe('Mood, formatted as "<n> - <Label>" with labels Great/Good/OK/Grumpy'),
   motivation: z.string().optional().describe('Motivation, formatted as "<n> - <Label>" with labels Extreme/High/Avg/Low'),
   injury: z.string().optional().describe('Injury status, formatted as "<n> - <Label>" with labels None/Niggle/Poor/Injured'),
-  hydration: z.number().optional().describe('Hydration: 1=GOOD, 2=OK, 3=POOR, 4=BAD'),
+  hydration: z.string().optional().describe('Hydration, formatted as "<n> - <Label>" with labels Good/OK/Poor/Bad'),
   spo2: z.string().optional().describe('Blood oxygen saturation'),
   blood_pressure: z.string().optional().describe('Blood pressure as systolic/diastolic'),
   hydration_volume: z.string().optional().describe('Volume of fluids consumed'),
@@ -465,7 +478,7 @@ const WellnessFieldsShape = {
 } as const;
 
 const DailyWellnessZ = z.object({
-  date: z.string().optional().describe('Date of wellness entry (ISO 8601)'),
+  date: z.string().optional().describe('Date of wellness entry'),
   ...WellnessFieldsShape,
 }).passthrough();
 
@@ -477,7 +490,7 @@ const WellnessDataZ = z.object(WellnessFieldsShape).passthrough();
 
 const PlannedWorkoutZ = z.object({
   id: z.string().optional().describe('Unique workout identifier. For Intervals.icu workouts this is the event ID that update_workout / delete_workout accept'),
-  scheduled_for: z.string().optional().describe("Scheduled date/time for the workout. Midnight means the user hasn't specified a time"),
+  scheduled_for: z.string().optional().describe("Scheduled date and time for the workout in the user's local timezone. A date with no time means the user hasn't specified a time"),
   name: z.string().optional().describe('Workout name'),
   description: z.string().optional().describe('Workout description, possibly including structure'),
   expected_tss: z.number().optional().describe('Expected Training Stress Score'),
@@ -512,7 +525,7 @@ const TrainingPhaseZ = z.object({
 const trainingPhaseField = TrainingPhaseZ.nullable().optional().describe('Active TrainerRoad training phase as of the queried date, with computed week / weeks_remaining. Use to interpret the intent of the current block when judging workouts and recovery');
 
 const RaceZ = z.object({
-  scheduled_for: z.string().optional().describe('Scheduled date/time in ISO 8601 format. Midnight means the start has not been set'),
+  scheduled_for: z.string().optional().describe("Scheduled date and start time in the user's local timezone. A date with no time means the start time has not been set"),
   name: z.string().optional().describe('Name of the race'),
   description: z.string().optional().describe('Description of the race, if available'),
   sport: z.string().optional().describe('Sport of the race'),
@@ -656,6 +669,7 @@ const SportTotalsZ = z.object({
   calories: z.string().optional().describe('Calories burned for this sport'),
   work: z.string().optional().describe('Work done for this sport (only present if > 0)'),
   coasting: z.string().optional().describe('Total coasting time for this sport (cycling only)'),
+  sweet_spot_time: z.string().optional().describe('Total time in the Sweet Spot band. Overlaps the Tempo and Threshold power zones, so it is not part of zones.power'),
   zones: z.object({
     power: z.array(ZoneTotalEntryZ).optional().describe('Power zone distribution (if available for this sport)'),
     pace: z.array(ZoneTotalEntryZ).optional().describe('Pace zone distribution (if available for this sport)'),
@@ -807,9 +821,10 @@ export const athleteProfileOutputSchema = {
   country: z.string().optional().describe('Country of residence'),
   timezone: z.string().optional().describe("Athlete's timezone"),
   sex: z.string().optional().describe("Athlete's gender"),
-  date_of_birth: z.string().optional().describe('Date of birth in ISO 8601 format. Only present if set in Intervals.icu'),
+  date_of_birth: z.string().optional().describe('Date of birth. Only present if set in Intervals.icu'),
   age: z.number().optional().describe('Current age in years. Only present if date_of_birth is set'),
   unit_preferences: UnitPreferencesZ.optional().describe("Athlete's preferred units, sourced from Intervals.icu. Tool responses are already formatted in these units; use them for narrative consistency when restating values"),
+  whoop_body_measurements: WhoopBodyMeasurementsZ.optional().describe('Height, weight, and max heart rate as recorded by Whoop. Only present when Whoop is connected'),
 } as const;
 
 const PerSportSettingsZ = z.object({
@@ -824,41 +839,39 @@ export const sportSettingsOutputSchema = {
 } as const;
 
 export const strainHistoryOutputSchema = {
-  strain: z.array(StrainDataZ).describe('Whoop strain data for the requested date range, including activities logged in the Whoop app'),
+  period: periodField,
+  strain: z.array(StrainDataZ).describe('Daily Whoop strain for the requested date range, including activities logged in the Whoop app. Sorted oldest to newest'),
 } as const;
 
 export const activityHistoryOutputSchema = {
-  workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Full per-activity detail (intervals, notes, weather) is available separately by activity ID.'),
+  period: periodField,
+  workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, sorted oldest to newest, with comprehensive metrics and matched Whoop strain data when available. Full per-activity detail (intervals, notes, weather) is available separately by activity ID.'),
   annotations: annotationsField,
   hints: hintsField,
 } as const;
 
 export const recoveryTrendsOutputSchema = {
-  data: z.array(WhoopRecoveryTrendEntryZ).describe('Daily recovery and sleep entries for the requested range'),
+  period: periodField,
   summary: z.object({
     avg_recovery: z.string().optional().describe('Average recovery score over the period'),
-    avg_hrv: z.string().optional().describe('Average HRV over the period'),
-    avg_sleep: z.string().optional().describe('Average time in bed per day'),
     min_recovery: z.string().optional().describe('Lowest recovery score in the period'),
     max_recovery: z.string().optional().describe('Highest recovery score in the period'),
+    avg_hrv: z.string().optional().describe('Average HRV over the period'),
+    avg_sleep_duration: z.string().optional().describe('Average time actually asleep per night (light + slow wave + REM)'),
+    avg_time_in_bed: z.string().optional().describe('Average time in bed per night, including time awake'),
   }).passthrough().describe('Aggregate recovery statistics over the period'),
+  data: z.array(WhoopRecoveryTrendEntryZ).describe('Daily recovery and sleep entries for the requested range, sorted oldest to newest'),
 } as const;
 
 export const wellnessTrendsOutputSchema = {
-  period_days: z.number().optional().describe('Number of days in the wellness data period'),
-  start_date: z.string().optional().describe('Start date of wellness data period (ISO 8601)'),
-  end_date: z.string().optional().describe('End date of wellness data period (ISO 8601)'),
+  period: periodField,
   data: z.array(DailyWellnessZ).describe('Daily wellness entries, sorted oldest to newest'),
 } as const;
 
 export const activityTotalsOutputSchema = {
-  period: z.object({
-    start_date: z.string().optional().describe('Start date of the period'),
-    end_date: z.string().optional().describe('End date of the period'),
-    weeks: z.number().optional().describe('Number of weeks in the period'),
-    days: z.number().optional().describe('Total days in the period'),
+  period: PeriodZ.extend({
     active_days: z.number().optional().describe('Days with at least one activity'),
-  }).passthrough().describe('Time period analyzed'),
+  }).describe('Date range analyzed'),
   totals: z.object({
     activities: z.number().optional().describe('Total number of activities'),
     duration: z.string().optional().describe('Total moving time across all activities'),
@@ -873,6 +886,7 @@ export const activityTotalsOutputSchema = {
 } as const;
 
 export const upcomingActivitiesOutputSchema = {
+  period: periodField,
   workouts: z.array(PlannedWorkoutZ).describe('Planned workouts and fitness activities for the requested future range, from both TrainerRoad and Intervals.icu'),
   races: z.array(RaceZ).describe('Upcoming races within the requested range: single-discipline races from Intervals.icu and triathlons from the TrainerRoad calendar'),
   annotations: annotationsField,
@@ -885,22 +899,20 @@ export const workoutDetailsOutputSchema = {
 } as const;
 
 export const trainingLoadTrendsOutputSchema = {
-  period_days: z.number().optional().describe('Number of days analyzed'),
+  period: periodField,
   sport: z.string().optional().describe('Sport scope of the analysis'),
-  data: z.array(DailyTrainingLoadZ).describe('Daily training load metrics, sorted oldest to newest'),
   summary: TrainingLoadSummaryZ.describe('Summary of training load over the period including current values, trends, peak, and ACWR'),
+  data: z.array(DailyTrainingLoadZ).describe('Daily training load metrics, sorted oldest to newest'),
 } as const;
 
 export const powerCurveOutputSchema = {
-  period_start: z.string().optional().describe('Start date of analysis period (ISO 8601)'),
-  period_end: z.string().optional().describe('End date of analysis period (ISO 8601)'),
+  period: periodField,
   sport: z.string().optional().describe('Sport type analyzed (cycling)'),
   activity_count: z.number().optional().describe('Number of activities analyzed'),
   durations_analyzed: z.array(z.string()).optional().describe('Human-readable list of durations analyzed (e.g., ["5s", "1min", "5min", "20min"])'),
   summary: PowerCurveSummaryZ.optional().describe('Best power output at key durations'),
   comparison: z.object({
-    previous_period_start: z.string().optional().describe('Start date of comparison period'),
-    previous_period_end: z.string().optional().describe('End date of comparison period'),
+    previous_period: PeriodZ.optional().describe('Date range of the comparison period'),
     previous_activity_count: z.number().optional().describe('Number of activities in comparison period'),
     changes: z.array(PowerCurveComparisonZ).optional().describe('Changes at each duration between periods'),
   }).passthrough().nullable().optional().describe('Comparison data vs a previous period. Omitted when compare_to_* params were not supplied'),
@@ -908,16 +920,14 @@ export const powerCurveOutputSchema = {
 } as const;
 
 export const paceCurveOutputSchema = {
-  period_start: z.string().optional().describe('Start date of analysis period (ISO 8601)'),
-  period_end: z.string().optional().describe('End date of analysis period (ISO 8601)'),
+  period: periodField,
   sport: z.string().optional().describe('Sport type analyzed (running or swimming)'),
   gap_adjusted: z.boolean().optional().describe('Whether pace is gradient-adjusted (running only)'),
   activity_count: z.number().optional().describe('Number of activities analyzed'),
   distances_analyzed: z.array(z.string()).optional().describe('Human-readable list of distances analyzed (e.g., ["400m", "1km", "5km"])'),
   summary: PaceCurveSummaryZ.optional().describe('Best times at key distances'),
   comparison: z.object({
-    previous_period_start: z.string().optional(),
-    previous_period_end: z.string().optional(),
+    previous_period: PeriodZ.optional().describe('Date range of the comparison period'),
     previous_activity_count: z.number().optional(),
     changes: z.array(PaceCurveComparisonZ).optional(),
   }).passthrough().nullable().optional().describe('Comparison data vs a previous period. Omitted when compare_to_* params were not supplied'),
@@ -925,15 +935,13 @@ export const paceCurveOutputSchema = {
 } as const;
 
 export const hrCurveOutputSchema = {
-  period_start: z.string().optional().describe('Start date of analysis period (ISO 8601)'),
-  period_end: z.string().optional().describe('End date of analysis period (ISO 8601)'),
+  period: periodField,
   sport: z.string().nullable().optional().describe('Sport type analyzed (or null for all sports)'),
   activity_count: z.number().optional().describe('Number of activities analyzed'),
   durations_analyzed: z.array(z.string()).optional().describe('Human-readable list of durations analyzed'),
   summary: HRCurveSummaryZ.optional().describe('Maximum sustained HR at key durations'),
   comparison: z.object({
-    previous_period_start: z.string().optional(),
-    previous_period_end: z.string().optional(),
+    previous_period: PeriodZ.optional().describe('Date range of the comparison period'),
     previous_activity_count: z.number().optional(),
     changes: z.array(HRCurveComparisonZ).optional(),
   }).passthrough().nullable().optional().describe('Comparison data vs a previous period. Omitted when compare_to_* params were not supplied'),
@@ -943,26 +951,84 @@ export const hrCurveOutputSchema = {
 // Today's data + daily summary
 // ============================================
 
+const TodaysOverviewZ = z.object({
+  training_phase: trainingPhaseField,
+  races: z.array(RaceZ).describe("Today's races, if any: single-discipline races from Intervals.icu and triathlons from the TrainerRoad calendar"),
+  annotations: annotationsField,
+  workouts: z.object({
+    planned: z.number().describe('Number of workouts planned for today'),
+    completed: z.number().describe('Number of workouts completed so far today'),
+    tss_planned: z.number().describe('Total expected TSS across planned workouts that declare one'),
+    tss_completed: z.number().describe('Total TSS across completed workouts'),
+    planned_without_tss: z.number().optional().describe('Planned workouts with no expected TSS, so tss_planned undercounts the day. Omitted when every planned workout has one'),
+  }).passthrough().describe("Counts and load for today's workouts"),
+}).passthrough().describe("What's on today: training phase, races, calendar annotations, and workout totals");
+
+const dataStatusField = z
+  .record(z.string(), z.enum(['not_configured', 'fetch_failed', 'no_data']))
+  .optional()
+  .describe("Why a section is missing, keyed by section (e.g. whoop_recovery, whoop_sleep, whoop_strain, fitness, wellness, completed_workouts, planned_workouts, weather). not_configured: the source isn't connected. fetch_failed: the source errored; retrying may help. no_data: the source responded but has nothing for today yet (e.g. Whoop hasn't scored recovery). Omitted when nothing is missing");
+
+const CompactCurrentWeatherZ = CurrentWeatherZ.pick({
+  condition: true,
+  temperature: true,
+  temperature_apparent: true,
+  humidity: true,
+  precipitation_chance: true,
+  precipitation_type: true,
+  thunderstorm_probability: true,
+  uv_index: true,
+  wind_direction: true,
+  wind_speed: true,
+  wind_gust: true,
+  air_quality: true,
+}).passthrough();
+
+const CompactHourlyForecastZ = HourlyForecastZ.pick({
+  condition: true,
+  temperature: true,
+  temperature_apparent: true,
+  precipitation_chance: true,
+  precipitation_type: true,
+  thunderstorm_probability: true,
+  wind_speed: true,
+  wind_gust: true,
+}).extend({
+  hour: z.string().optional().describe("Local start time of the hour at the location"),
+  air_quality: z.object({ aqi: z.number().describe('AQI value on the scale named in current_conditions.air_quality') }).passthrough().optional().describe('Local air quality index for this hour'),
+}).passthrough();
+
+const CompactLocationForecastZ = z.object({
+  location: z.string().optional().describe("Label of the user's configured weather location"),
+  elevation: z.string().optional().describe('Elevation at the location'),
+  current_conditions: CompactCurrentWeatherZ.nullable().optional().describe('Current conditions. temperature_apparent appears only when it differs from temperature; precipitation_type and thunderstorm_probability only when their chance is above zero'),
+  daily_summary: DailySummaryZ.optional().describe("Today's forecast summary (high/low, conditions, precipitation, wind, sunrise/sunset)"),
+  hourly_forecast: z.array(CompactHourlyForecastZ).optional().describe("Remaining hours of today in the location's timezone, with the same field rules as current_conditions"),
+  alerts: z.array(WeatherAlertZ).optional().describe('Active weather alerts for today, most severe first'),
+  pollen: PollenZ.optional().describe("Today's pollen forecast"),
+}).passthrough();
+
+
 export const todaysSummaryOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone. Use this to understand time of day when interpreting metrics"),
-  whoop: z.object({
-    body_measurements: WhoopBodyMeasurementsZ.nullable().optional().describe('Body measurements from Whoop. Null if unavailable'),
-    strain: StrainDataZ.nullable().optional().describe("Today's Whoop strain data. Null if unavailable"),
-    sleep: WhoopSleepZ.nullable().optional().describe("Today's Whoop sleep data. Null if unavailable"),
-    recovery: WhoopRecoveryZ.nullable().optional().describe("Today's Whoop recovery data. Null if unavailable"),
-  }).passthrough().optional().describe("Today's Whoop data"),
-  fitness: FitnessMetricsZ.nullable().optional().describe("Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu. Null if unavailable"),
-  wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data from Intervals.icu — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, and more. Includes a `sources` map naming each field's configured provider (garmin/whoop/oura). Some fields overlap with whoop.* and are shown in parallel intentionally so the same metric can be reconciled across sources. Null if no wellness data was recorded."),
-  planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
-  completed_workouts: z.array(WorkoutDetailZ).optional().describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones) and matched Whoop strain data'),
-  annotations: annotationsField,
-  training_phase: trainingPhaseField,
-  scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
-  forecast: z.array(LocationForecastZ).optional().describe("Today's weather forecast for each of the user's configured weather locations. Empty when no weather provider is configured or no locations are configured"),
-  workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
-  workouts_completed: z.number().optional().describe('Number of workouts completed today'),
-  tss_planned: z.number().optional().describe('Total expected TSS from planned workouts'),
-  tss_completed: z.number().optional().describe('Total TSS from completed workouts'),
+  overview: TodaysOverviewZ,
+  readiness: z.object({
+    whoop: z.object({
+      recovery: WhoopRecoveryZ.nullable().optional().describe("Today's Whoop recovery"),
+      sleep: WhoopSleepZ.nullable().optional().describe("Last night's Whoop sleep"),
+    }).passthrough().nullable().optional().describe('Whoop recovery and sleep. Absent when Whoop is not configured or has no data yet; see data_status'),
+    wellness: WellnessDataZ.nullable().optional().describe("Today's Intervals.icu wellness: HRV, resting HR, sleep, SpO2, body composition, subjective scores, nutrition, and more, with a `sources` map naming each field's provider (garmin/oura/...). Some fields overlap with readiness.whoop and are shown side by side intentionally so the same metric can be reconciled across devices"),
+  }).passthrough().describe('How recovered and ready to train the athlete is today, with each source side by side'),
+  load: z.object({
+    fitness: FitnessMetricsZ.nullable().optional().describe("Today's CTL/ATL/TSB from Intervals.icu"),
+    whoop_strain: StrainDataZ.nullable().optional().describe("Today's Whoop day strain so far"),
+  }).passthrough().describe('Current training load: long-term fitness/fatigue/form and today\'s accumulated strain'),
+  workouts: z.object({
+    planned: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
+    completed: z.array(WorkoutSummaryZ).describe('Workouts completed so far today, in the list shape (zones as name + time only) with matched Whoop strain. Call get_workout_details with an id for intervals, notes, and weather'),
+  }).passthrough().describe("Today's workouts"),
+  weather: z.array(CompactLocationForecastZ).describe("Compact forecast for each of the user's configured weather locations. Empty when weather isn't configured; see data_status. Use get_weather_forecast for every field"),
+  data_status: dataStatusField,
   hints: hintsField,
 } as const;
 
@@ -978,15 +1044,12 @@ export const forecastOutputSchema = {
 
 export const todaysActivitiesOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
-  completed_workouts: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones) and matched Whoop strain data'),
-  planned_workouts: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
-  races: z.array(RaceZ).describe("Today's races, if any: single-discipline races from Intervals.icu and triathlons from the TrainerRoad calendar"),
-  annotations: annotationsField,
-  training_phase: trainingPhaseField,
-  workouts_completed: z.number().optional().describe('Number of workouts completed today'),
-  workouts_planned: z.number().optional().describe('Number of workouts planned for today'),
-  tss_completed: z.number().optional().describe('Total TSS from completed workouts'),
-  tss_planned: z.number().optional().describe('Total expected TSS from planned workouts'),
+  overview: TodaysOverviewZ,
+  workouts: z.object({
+    planned: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
+    completed: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones) and matched Whoop strain data'),
+  }).passthrough().describe("Today's workouts"),
+  data_status: dataStatusField,
   hints: hintsField,
 } as const;
 

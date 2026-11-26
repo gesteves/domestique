@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatSleepQuality,
+  formatStress,
+  formatHydration,
+  roundTo,
+  isStepLikeActivity,
   formatDuration,
   formatLargeDuration,
   formatSignedDuration,
@@ -675,5 +680,39 @@ describe('format-units', () => {
       expect(formatInjury(0)).toBeUndefined();
       expect(formatInjury(5)).toBeUndefined();
     });
+  });
+});
+
+describe('roundTo', () => {
+  it('rounds to the requested decimals and strips float noise', () => {
+    expect(roundTo(2.494519000000004, 1)).toBe(2.5);
+    expect(roundTo(0.8142856999999999, 2)).toBe(0.81);
+    expect(roundTo(194.29315)).toBe(194);
+  });
+
+  it('passes null/undefined through and never returns -0', () => {
+    expect(roundTo(undefined, 1)).toBeUndefined();
+    expect(roundTo(null, 1)).toBeUndefined();
+    expect(Object.is(roundTo(-0.015548706, 1), 0)).toBe(true);
+  });
+});
+
+describe('isStepLikeActivity', () => {
+  it('is true for run/walk/hike/swim and false for rides', () => {
+    expect(isStepLikeActivity('VirtualRun')).toBe(true);
+    expect(isStepLikeActivity('Walk')).toBe(true);
+    expect(isStepLikeActivity('Hike')).toBe(true);
+    expect(isStepLikeActivity('Swim')).toBe(true);
+    expect(isStepLikeActivity('VirtualRide')).toBe(false);
+    expect(isStepLikeActivity('Ride')).toBe(false);
+  });
+});
+
+describe('wellness scale formatters', () => {
+  it('label sleep quality, stress, and hydration like the other 1-4 scales', () => {
+    expect(formatSleepQuality(2)).toBe('2 - Good');
+    expect(formatStress(4)).toBe('4 - Extreme');
+    expect(formatHydration(1)).toBe('1 - Good');
+    expect(formatHydration(9)).toBeUndefined();
   });
 });

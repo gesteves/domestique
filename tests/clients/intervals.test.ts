@@ -215,8 +215,8 @@ describe('IntervalsClient', () => {
 
       // VirtualRide with trainer: true should be indoor
       expect(result[0].is_indoor).toBe(true);
-      expect(result[0].is_commute).toBe(false);
-      expect(result[0].is_race).toBe(false);
+      expect(result[0].is_commute).toBeUndefined(); // false flags are omitted
+      expect(result[0].is_race).toBeUndefined();
       
       // Run with trainer: false should not be indoor
       expect(result[1].is_indoor).toBe(false);
@@ -537,7 +537,7 @@ describe('IntervalsClient', () => {
       const result = await client.getActivities('2024-12-14', '2024-12-15');
 
       expect(result[0].session_rpe).toBe(361);
-      expect(result[0].icu_strain_score).toBeCloseTo(118.565, 2);
+      expect(result[0].icu_strain_score).toBe(119);
     });
 
     it('should include athlete metrics at time of activity', async () => {
@@ -576,13 +576,13 @@ describe('IntervalsClient', () => {
       expect(result[0].average_power).toBe('181 W');
 
       // Efficiency metrics
-      expect(result[0].variability_index).toBeCloseTo(1.011, 2);
-      expect(result[0].efficiency_factor).toBeCloseTo(1.356, 2);
+      expect(result[0].variability_index).toBe(1.01);
+      expect(result[0].efficiency_factor).toBe(1.36);
 
       // Fitness snapshot
-      expect(result[0].ctl_at_activity).toBeCloseTo(63.48, 1);
-      expect(result[0].atl_at_activity).toBeCloseTo(49.26, 1);
-      expect(result[0].tsb_at_activity).toBeCloseTo(14.21, 1);
+      expect(result[0].ctl_at_activity).toBe(63.5);
+      expect(result[0].atl_at_activity).toBe(49.3);
+      expect(result[0].tsb_at_activity).toBe(14.2);
 
       // Energy
       expect(result[0].work).toBe('1307 kJ');
@@ -1448,8 +1448,8 @@ describe('IntervalsClient', () => {
       expect(result?.weight).toBeUndefined();
       expect(result?.resting_hr).toBe('52 bpm');
       expect(result?.hrv).toBe('39 ms');
-      expect(result?.sleep_duration).toBe('8h');
-      expect(result?.sleep_quality).toBe(1);
+      expect(result?.sleep_duration).toBe('8:00:00');
+      expect(result?.sleep_quality).toBe('1 - Great');
       expect(result?.soreness).toBe('2 - Avg');
       expect(result?.fatigue).toBe('2 - Avg');
     });
@@ -1500,17 +1500,17 @@ describe('IntervalsClient', () => {
       expect(result?.resting_hr).toBe('51 bpm');
       expect(result?.hrv).toBe('35 ms');
       expect(result?.hrv_sdnn).toBe('45 ms');
-      expect(result?.sleep_duration).toBe('8h 10m');
+      expect(result?.sleep_duration).toBe('8:10:00');
       expect(result?.sleep_score).toBe(87);
-      expect(result?.sleep_quality).toBe(1);
+      expect(result?.sleep_quality).toBe('1 - Great');
       expect(result?.avg_sleeping_hr).toBe('48 bpm');
       expect(result?.soreness).toBe('1 - Low');
       expect(result?.fatigue).toBe('2 - Avg');
-      expect(result?.stress).toBe(1);
+      expect(result?.stress).toBe('1 - Low');
       expect(result?.mood).toBe('2 - Good');
       expect(result?.motivation).toBe('2 - High');
       expect(result?.injury).toBe('1 - None');
-      expect(result?.hydration).toBe(2);
+      expect(result?.hydration).toBe('2 - OK');
       expect(result?.spo2).toBe('98.0%');
       expect(result?.blood_pressure).toBe('120/80 mmHg');
       expect(result?.hydration_volume).toBe('2500 ml');
@@ -1777,9 +1777,7 @@ describe('IntervalsClient', () => {
 
       const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
 
-      expect(result.period_days).toBe(3);
-      expect(result.start_date).toBe('2024-12-13');
-      expect(result.end_date).toBe('2024-12-15');
+      expect(result.period).toEqual({ start_date: '2024-12-13', end_date: '2024-12-15', days: 3 });
       expect(result.data).toHaveLength(3);
       expect(result.data[0].date).toBe('2024-12-13');
       expect(result.data[0].weight).toBe('74.5 kg');
@@ -1825,9 +1823,9 @@ describe('IntervalsClient', () => {
       expect(result.data[0].weight).toBe('74.5 kg');
       expect(result.data[0].resting_hr).toBe('52 bpm');
       expect(result.data[0].hrv).toBe('39 ms');
-      expect(result.data[0].sleep_duration).toBe('7h 30m');
+      expect(result.data[0].sleep_duration).toBe('7:30:00');
       expect(result.data[0].sleep_score).toBe(85);
-      expect(result.data[0].sleep_quality).toBe(1);
+      expect(result.data[0].sleep_quality).toBe('1 - Great');
       expect(result.data[0].soreness).toBe('2 - Avg');
       expect(result.data[0].fatigue).toBe('2 - Avg');
       expect(result.data[0].readiness).toBe(70);
@@ -1842,7 +1840,7 @@ describe('IntervalsClient', () => {
       const result = await client.getWellnessTrends('2024-12-13', '2024-12-15');
 
       expect(result.data).toHaveLength(0);
-      expect(result.period_days).toBe(3);
+      expect(result.period.days).toBe(3);
     });
 
     it('should filter out entries with no wellness data', async () => {
@@ -3679,6 +3677,79 @@ describe('IntervalsClient', () => {
 
       const result = await client.getEnabledWeatherLocations();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('activity normalization (derived fields)', () => {
+    /** Route mocked responses by URL so call order doesn't matter. */
+    function routeFetch(activity: Record<string, unknown>) {
+      mockFetch.mockImplementation((url: string) => {
+        let body: unknown = {};
+        if (url.includes('/activities')) body = [activity];
+        else if (url.includes('/sport-settings')) body = mockSportSettings;
+        else body = { id: 'i12345', timezone: 'UTC' };
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      });
+    }
+
+    const baseRide = {
+      id: 'i1',
+      start_date_local: '2026-11-24T16:10:00',
+      type: 'VirtualRide',
+      name: 'Ride',
+      moving_time: 7231,
+      icu_ftp: 280,
+      icu_power_zones: [55, 75, 90, 105, 120, 150, 999],
+      icu_zone_times: [
+        { id: 'Z1', secs: 2492 },
+        { id: 'Z2', secs: 190 },
+        { id: 'Z3', secs: 1644 },
+        { id: 'Z4', secs: 2903 },
+        { id: 'Z5', secs: 2 },
+        { id: 'Z6', secs: 0 },
+        { id: 'Z7', secs: 0 },
+        { id: 'SS', secs: 4495 },
+      ],
+      decoupling: -2.1818216,
+      average_stride: 3.09,
+      average_cadence: 93,
+    };
+
+    it('reports Sweet Spot separately instead of as an overlapping power zone', async () => {
+      routeFetch(baseRide);
+      const [w] = await client.getActivities('2026-11-24', '2026-11-24', undefined, { skipExpensiveCalls: true });
+      expect(w.power_zones?.map((z) => z.name)).not.toContain('Sweet Spot');
+      expect(w.power_zones).toHaveLength(7);
+      expect(w.sweet_spot_time).toBe('1:14:55');
+    });
+
+    it('formats decoupling as a percent under hr_decoupling', async () => {
+      routeFetch(baseRide);
+      const [w] = await client.getActivities('2026-11-24', '2026-11-24', undefined, { skipExpensiveCalls: true });
+      expect(w.hr_decoupling).toBe('-2.2%');
+      expect((w as Record<string, unknown>).power_hr_ratio).toBeUndefined();
+    });
+
+    it('omits stride length for cycling', async () => {
+      routeFetch(baseRide);
+      const [w] = await client.getActivities('2026-11-24', '2026-11-24', undefined, { skipExpensiveCalls: true });
+      expect(w.average_stride).toBeUndefined();
+    });
+
+    it('inverts GAP (m/s) into a pace and keeps stride for running', async () => {
+      routeFetch({
+        id: 'i2',
+        start_date_local: '2026-11-25T18:28:00',
+        type: 'VirtualRun',
+        name: 'Run',
+        moving_time: 1816,
+        // 1000 / 349 s ≈ 2.865 m/s → 5:49/km
+        gap: 1000 / 349,
+        average_stride: 1.01,
+      });
+      const [w] = await client.getActivities('2026-11-25', '2026-11-25', undefined, { skipExpensiveCalls: true });
+      expect(w.gap).toBe('5:49/km');
+      expect(w.average_stride).toBe('1.01 m');
     });
   });
 });

@@ -1,7 +1,7 @@
 import { logWarn } from '../utils/logger.js';
 import { IntervalsClient } from '../clients/intervals.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
-import { addDaysToYMD, parseDateStringInTimezone } from '../utils/tz.js';
+import { addDaysToYMD, parseDateStringInTimezone, buildPeriod, type Period } from '../utils/tz.js';
 import { formatPercent } from '../utils/format-units.js';
 import { DOMESTIQUE_TAG, fetchAndMergePlannedWorkouts, sportToActivityType } from '../utils/workout-utils.js';
 import { mergeAnnotations } from '../utils/annotation-utils.js';
@@ -36,6 +36,7 @@ import type { GetUpcomingActivitiesInput } from './types.js';
  * Response type for upcoming activities — planned workouts, races, and annotations.
  */
 export interface UpcomingActivitiesResponse {
+  period: Period;
   workouts: PlannedWorkout[];
   races: Race[];
   annotations: Annotation[];
@@ -225,6 +226,7 @@ export class PlanningTools {
     });
 
     return {
+      period: buildPeriod(startDateStr, endDateStr),
       workouts: type === 'races' ? [] : sortedWorkouts,
       races: type === 'workouts' ? [] : racesInRange,
       annotations,

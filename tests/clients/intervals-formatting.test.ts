@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { IntervalsClient, formatPaceFromSpeed, secondsToSampleIndex } from '../../src/clients/intervals.js';
-
-// Private helper, exercised directly for the rounding edge cases.
-const client = new IntervalsClient({ apiKey: 'k', athleteId: 'i1' }) as unknown as {
-  formatSleepDuration(seconds: number): string;
-};
+import { formatPaceFromSpeed, secondsToSampleIndex } from '../../src/clients/intervals.js';
 
 describe('formatPaceFromSpeed (Intervals.icu stores threshold pace as m/s)', () => {
   it('formats every supported pace unit', () => {
@@ -44,13 +39,5 @@ describe('secondsToSampleIndex', () => {
     expect(secondsToSampleIndex(time, 5)).toBe(3); // inside a pause → next sample
     expect(secondsToSampleIndex(time, 12)).toBe(4);
     expect(secondsToSampleIndex(time, 99)).toBe(4);
-  });
-});
-
-describe('IntervalsClient formatting rounding', () => {
-  it('formatSleepDuration never renders 60 minutes', () => {
-    expect(client.formatSleepDuration(28_770)).toBe('8h');
-    expect(client.formatSleepDuration(27_000)).toBe('7h 30m');
-    expect(client.formatSleepDuration(3_570)).toBe('1h');
   });
 });

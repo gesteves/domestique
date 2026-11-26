@@ -104,15 +104,56 @@ export async function enrichWorkoutsWithWhoop(
   endDate: string
 ): Promise<WorkoutWithWhoop[]> {
   if (!whoop) {
-    return workouts.map((w) => ({ ...w, whoop: null }));
+    return workouts.map((w) => attachWhoop(w, { whoop: null }));
   }
   try {
     const whoopActivities = await whoop.getWorkouts(startDate, endDate);
-    return workouts.map((w) => ({ ...w, whoop: matchWhoopActivity(w, whoopActivities) }));
+    return workouts.map((w) => attachWhoop(w, { whoop: matchWhoopActivity(w, whoopActivities) }));
   } catch (error) {
     logWarn('WorkoutUtils', 'Error fetching Whoop activities for matching', error);
-    return workouts.map((w) => ({ ...w, whoop: null, whoop_unavailable: true }));
+    return workouts.map((w) => attachWhoop(w, { whoop: null, whoop_unavailable: true }));
   }
+}
+
+/** Provenance/link fields that should stay at the end of a workout object. */
+const TRAILING_WORKOUT_KEYS = ['source', 'intervals_icu_url', 'garmin_connect_url', 'zwift_url', 'strava_url'] as const;
+
+/**
+ * Add the Whoop match to a workout while keeping provenance and links as the
+ * last keys, so the model reads the matched strain alongside the metrics
+ * rather than after a block of URLs.
+ */
+function attachWhoop(
+  workout: NormalizedWorkout,
+  whoopFields: Pick<WorkoutWithWhoop, 'whoop' | 'whoop_unavailable'>
+): WorkoutWithWhoop {
+  const body: Record<string, unknown> = { ...workout };
+  const trailing: Record<string, unknown> = {};
+  for (const key of TRAILING_WORKOUT_KEYS) {
+    if (key in body) {
+      trailing[key] = body[key];
+      delete body[key];
+    }
+  }
+  return { ...body, ...whoopFields, ...trailing } as WorkoutWithWhoop;
+}
+
+/**
+ * List views keep only each zone's name and time; the zone bounds are the
+ * same on every activity and come back with get_workout_details.
+ */
+export function withZoneTimesOnly<T extends Pick<NormalizedWorkout, 'hr_zones' | 'power_zones' | 'pace_zones' | 'heat_zones'>>(
+  workout: T
+): T {
+  const strip = <Z extends { name: string; time_in_zone?: string }>(zones?: Z[]) =>
+    zones?.map((z) => ({ name: z.name, time_in_zone: z.time_in_zone })) as Z[] | undefined;
+  return {
+    ...workout,
+    hr_zones: strip(workout.hr_zones),
+    power_zones: strip(workout.power_zones),
+    pace_zones: strip(workout.pace_zones),
+    heat_zones: strip(workout.heat_zones),
+  };
 }
 
 // ============================================

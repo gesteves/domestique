@@ -64,6 +64,8 @@ import {
   formatEnergy,
   formatEnergyKJ,
   formatCadence,
+  isStepLikeActivity,
+  roundTo,
   formatMass,
   formatHRV,
   formatVO2max,
@@ -79,8 +81,11 @@ import {
   formatMood,
   formatMotivation,
   formatInjury,
+  formatSleepQuality,
+  formatStress,
+  formatHydration,
 } from '../utils/format-units.js';
-import { getTodayInTimezone } from '../utils/tz.js';
+import { getTodayInTimezone, buildPeriod } from '../utils/tz.js';
 import { localStringToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
   calculateHeatMetrics,
@@ -282,7 +287,7 @@ interface IntervalsActivity {
   polarization_index?: number;
 
   // Gradient adjusted pace & stride
-  gap?: number; // gradient adjusted pace (sec/m)
+  gap?: number; // gradient adjusted speed (m/s)
   average_stride?: number; // meters per stride
 
   // Altitude
@@ -1268,9 +1273,7 @@ export class IntervalsClient {
     zoneBoundaries: number[] | undefined,
     zoneNames: string[] | undefined,
     ftp: number | undefined,
-    zoneTimes: ZoneTime[] | undefined,
-    sweetSpotMin: number | null | undefined,
-    sweetSpotMax: number | null | undefined
+    zoneTimes: ZoneTime[] | undefined
   ): PowerZone[] | undefined {
     if (!zoneBoundaries || !zoneNames || !ftp) {
       return undefined;
@@ -1291,19 +1294,6 @@ export class IntervalsClient {
           zone.time_in_zone = formatDuration(seconds);
         }
       });
-
-      // Add sweet spot zone if there's time in it
-      const sweetSpotSeconds = timeMap.get('SS');
-      if (sweetSpotSeconds && sweetSpotSeconds > 0 && sweetSpotMin != null && sweetSpotMax != null) {
-        zones.push({
-          name: 'Sweet Spot',
-          low_pct: formatPercent(sweetSpotMin),
-          high_pct: formatPercent(sweetSpotMax),
-          low_power: formatPower((sweetSpotMin / 100) * ftp),
-          high_power: formatPower((sweetSpotMax / 100) * ftp),
-          time_in_zone: formatDuration(sweetSpotSeconds),
-        });
-      }
     }
 
     return zones;
@@ -1791,7 +1781,7 @@ export class IntervalsClient {
       power_to_weight:
         raw.average_watts_kg != null ? withUnit(raw.average_watts_kg, 'W/kg', 1) : undefined,
       power_zone: raw.zone,
-      intensity_factor: raw.intensity ? raw.intensity / 100 : undefined,
+      intensity_factor: raw.intensity ? roundTo(raw.intensity / 100, 2) : undefined,
       interval_tss: raw.training_load ? Math.round(raw.training_load * 10) / 10 : undefined,
 
       // Heart rate
@@ -1803,7 +1793,7 @@ export class IntervalsClient {
       average_cadence:
         raw.average_cadence != null ? formatCadence(raw.average_cadence, activityType) : undefined,
       stride_length:
-        raw.average_stride != null
+        raw.average_stride != null && isStepLikeActivity(activityType)
           ? (isSwim ? formatStrokeLength(raw.average_stride, poolLengthM) : formatStride(raw.average_stride))
           : undefined,
 
@@ -1869,12 +1859,12 @@ export class IntervalsClient {
 
     return wellness.map((w) => ({
       date: w.id, // id is the date in YYYY-MM-DD format
-      ctl: w.ctl,
-      atl: w.atl,
-      tsb: w.ctl - w.atl, // Training Stress Balance = CTL - ATL
-      ramp_rate: w.rampRate,
-      ctl_load: w.ctlLoad,
-      atl_load: w.atlLoad,
+      ctl: roundTo(w.ctl, 1),
+      atl: roundTo(w.atl, 1),
+      tsb: roundTo(w.ctl - w.atl, 1), // Training Stress Balance = CTL - ATL
+      ramp_rate: roundTo(w.rampRate, 1),
+      ctl_load: roundTo(w.ctlLoad),
+      atl_load: roundTo(w.atlLoad),
     }));
   }
 
@@ -2001,23 +1991,6 @@ export class IntervalsClient {
   }
 
   /**
-   * Format sleep seconds to human-readable string like "8h 10m".
-   */
-  private formatSleepDuration(seconds: number): string {
-    // Round to whole minutes first so 7h 59m 30s renders "8h", not "7h 60m".
-    const totalMinutes = Math.round(seconds / 60);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours === 0) {
-      return `${minutes}m`;
-    }
-    if (minutes === 0) {
-      return `${hours}h`;
-    }
-    return `${hours}h ${minutes}m`;
-  }
-
-  /**
    * Convert raw wellness data from API to WellnessData type.
    * Only includes fields that have non-null values.
    */
@@ -2064,13 +2037,14 @@ export class IntervalsClient {
 
     // Sleep
     if (data.sleepSecs != null) {
-      result.sleep_duration = this.formatSleepDuration(data.sleepSecs);
+      result.sleep_duration = formatDuration(data.sleepSecs);
     }
     if (data.sleepScore != null) {
       result.sleep_score = data.sleepScore;
     }
     if (data.sleepQuality != null) {
-      result.sleep_quality = data.sleepQuality;
+      const formatted = formatSleepQuality(data.sleepQuality);
+      if (formatted) result.sleep_quality = formatted;
     }
     if (data.avgSleepingHR != null) {
       result.avg_sleeping_hr = formatHR(data.avgSleepingHR);
@@ -2086,7 +2060,8 @@ export class IntervalsClient {
       if (formatted) result.fatigue = formatted;
     }
     if (data.stress != null) {
-      result.stress = data.stress;
+      const formatted = formatStress(data.stress);
+      if (formatted) result.stress = formatted;
     }
     if (data.mood != null) {
       const formatted = formatMood(data.mood);
@@ -2101,7 +2076,8 @@ export class IntervalsClient {
       if (formatted) result.injury = formatted;
     }
     if (data.hydration != null) {
-      result.hydration = data.hydration;
+      const formatted = formatHydration(data.hydration);
+      if (formatted) result.hydration = formatted;
     }
 
     // Vitals
@@ -2257,15 +2233,8 @@ export class IntervalsClient {
     // per day, so build the per-day map individually.
     const data = await Promise.all(mapped.map((entry) => this.attachWellnessSources(entry)));
 
-    // Calculate period days
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const periodDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
     return {
-      period_days: periodDays,
-      start_date: startDate,
-      end_date: endDate,
+      period: buildPeriod(startDate, endDate),
       data,
     };
   }
@@ -2308,8 +2277,9 @@ export class IntervalsClient {
       ? activity.max_speed * 3.6
       : undefined;
 
-    // Convert GAP from sec/m to sec/km if available
-    const gapSecPerKm = activity.gap ? activity.gap * 1000 : undefined;
+    // GAP arrives as a gradient-adjusted *speed* in m/s (like every other
+    // Intervals.icu pace field); invert it to sec/km for pace formatting.
+    const gapSecPerKm = activity.gap ? 1000 / activity.gap : undefined;
 
     // Pool length (in meters) drives the unit choice for swim distances:
     // SCY/LCY pools (≈22.86m or ≈45.72m) emit yards, SCM/LCM and unknown emit meters.
@@ -2356,10 +2326,12 @@ export class IntervalsClient {
       activity.icu_power_zones,
       matchingSport?.power_zone_names,
       activity.icu_ftp,
-      powerZoneTimes,
-      matchingSport?.sweet_spot_min,
-      matchingSport?.sweet_spot_max
+      powerZoneTimes
     );
+    // Sweet Spot overlaps the Tempo/Threshold zones, so it's reported on its
+    // own rather than as an extra power-zone entry (which would make the
+    // zone times sum to more than the activity duration).
+    const sweetSpotSeconds = activity.icu_zone_times?.find((zt) => zt.id === 'SS')?.secs;
     const paceZones = this.normalizeActivityPaceZones(
       activity.pace_zones,
       matchingSport?.pace_zone_names,
@@ -2434,31 +2406,152 @@ export class IntervalsClient {
     const atlAtActivity = activity.icu_atl ?? activity.atl;
     const joulesTotal = activity.icu_joules ?? activity.joules;
 
+    // Key order is reading order for the model: identity and headline
+    // numbers first, then load, power, heart rate, pace, zones, conditions,
+    // athlete context, and links last. `load` is not emitted separately: it is
+    // the same icu_training_load value as `tss`.
     return {
+      // Identity
       id: activity.id,
       start_time: localStringToISO8601WithTimezone(activity.start_date_local, timezone),
       activity_type: activity.type ? normalizeActivityType(activity.type) : 'Other',
       name: activity.name,
       description: activity.description,
+      // is_indoor: true if trainer flag is set, OR activity type contains "virtual", OR source is Zwift
+      is_indoor: isIndoor,
+      // Only flag commutes/races; `false` on every other activity is noise.
+      is_commute: activity.commute || undefined,
+      is_race: activity.race || undefined,
+
+      // Headline
       duration: formatDuration(durationSeconds),
       distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim, poolLengthM) : undefined,
-      tss: activity.icu_training_load,
-      // Handle both API field naming conventions (icu_ prefixed and non-prefixed)
-      normalized_power: normalizedPowerVal != null ? formatPower(normalizedPowerVal) : undefined,
-      average_power: averagePowerVal != null ? formatPower(averagePowerVal) : undefined,
-      average_heart_rate: activity.average_heartrate != null ? formatHR(activity.average_heartrate) : undefined,
-      max_heart_rate: activity.max_heartrate != null ? formatHR(activity.max_heartrate) : undefined,
-      // icu_intensity comes back as a percentage (e.g. 73.45 means 73.45% =
-      // IF 0.73), so divide by 100 to normalize to the decimal form everyone
-      // else uses. Matches the per-interval normalization in normalizeInterval.
-      intensity_factor: activity.icu_intensity != null ? activity.icu_intensity / 100 : undefined,
       elevation_gain: activity.total_elevation_gain != null
         ? formatLength(activity.total_elevation_gain)
         : undefined,
       calories: activity.calories != null ? formatCalories(activity.calories) : undefined,
-      source: 'intervals.icu',
 
-      // Activity URLs
+      // Load, intensity, and perceived effort
+      tss: activity.icu_training_load,
+      // icu_intensity comes back as a percentage (e.g. 73.45 means 73.45% =
+      // IF 0.73), so divide by 100 to normalize to the decimal form everyone
+      // else uses. Matches the per-interval normalization in normalizeInterval.
+      intensity_factor: activity.icu_intensity != null ? roundTo(activity.icu_intensity / 100, 2) : undefined,
+      power_load: activity.power_load,
+      hr_load: activity.hr_load,
+      pace_load: activity.pace_load ?? undefined,
+      trimp: roundTo(activity.trimp),
+      session_rpe: roundTo(activity.session_rpe),
+      icu_strain_score: roundTo(activity.strain_score),
+      rpe: (() => {
+        const v = this.pickHighestRpe(activity.rpe, activity.icu_rpe);
+        return v != null ? formatRpe(v) : undefined;
+      })(),
+      feel: activity.feel != null ? formatFeel(activity.feel) : undefined,
+      compliance: activity.compliance != null ? formatPercent(activity.compliance) : undefined,
+      interval_summary: activity.interval_summary,
+
+      // Power (handle both API field naming conventions)
+      normalized_power: normalizedPowerVal != null ? formatPower(normalizedPowerVal) : undefined,
+      average_power: averagePowerVal != null ? formatPower(averagePowerVal) : undefined,
+      variability_index: roundTo(variabilityIndex, 2),
+      work: joulesTotal != null ? formatEnergyKJ(joulesTotal / 1000) : undefined,
+      ftp: activity.icu_ftp != null ? formatPower(activity.icu_ftp) : undefined,
+      eftp: activity.icu_eftp != null ? formatPower(activity.icu_eftp) : undefined,
+      activity_eftp: activity.icu_pm_ftp != null ? formatPower(activity.icu_pm_ftp) : undefined,
+      rolling_ftp: activity.icu_rolling_ftp != null ? formatPower(activity.icu_rolling_ftp) : undefined,
+      rolling_ftp_delta:
+        activity.icu_rolling_ftp_delta != null ? formatPower(activity.icu_rolling_ftp_delta) : undefined,
+      coasting_time: activity.coasting_time != null
+        ? formatDuration(activity.coasting_time)
+        : undefined,
+      coasting_percentage: coastingPercentage != null ? formatPercent(coastingPercentage, 1) : undefined,
+
+      // Heart rate and aerobic efficiency
+      average_heart_rate: activity.average_heartrate != null ? formatHR(activity.average_heartrate) : undefined,
+      max_heart_rate: activity.max_heartrate != null ? formatHR(activity.max_heartrate) : undefined,
+      lthr: activity.lthr != null ? formatHR(activity.lthr) : undefined,
+      hrrc: activity.hrrc,
+      // Intervals.icu `decoupling` is aerobic (Pw:HR / Pa:HR) decoupling, as a percentage
+      hr_decoupling: activity.decoupling != null ? formatPercent(activity.decoupling, 1) : undefined,
+      efficiency_factor: roundTo(efficiencyFactor, 2),
+      power_hr_z2: roundTo(activity.icu_power_hr_z2, 2),
+      power_hr_z2_time:
+        activity.icu_power_hr_z2_mins != null ? formatDuration(activity.icu_power_hr_z2_mins * 60) : undefined,
+      cadence_z2:
+        activity.icu_cadence_z2 != null ? formatCadence(activity.icu_cadence_z2, activityType) : undefined,
+
+      // Speed, pace, cadence, stride
+      average_speed: avgSpeedKph != null ? formatSpeed(avgSpeedKph) : undefined,
+      max_speed: maxSpeedKph != null ? formatSpeed(maxSpeedKph) : undefined,
+      gap: gapSecPerKm != null ? formatPace(gapSecPerKm, isSwim) : undefined,
+      threshold_pace: thresholdPaceHuman,
+      average_cadence:
+        activity.average_cadence != null ? formatCadence(activity.average_cadence, activityType) : undefined,
+      max_cadence:
+        activity.max_cadence != null ? formatCadence(activity.max_cadence, activityType) : undefined,
+      // For swims the value is per-stroke distance; the unit follows the pool.
+      average_stride: activity.average_stride != null && isStepLikeActivity(activityType)
+        ? (isSwim ? formatStrokeLength(activity.average_stride, poolLengthM) : formatStride(activity.average_stride))
+        : undefined,
+
+      // Swimming (pool swims) and FORM Goggles scores (0-100, higher is better)
+      pool_length: poolLengthM != null ? formatPoolLength(poolLengthM) : undefined,
+      lengths: activity.lengths,
+      form_score: activity.FormScore,
+      form_head_pitch: activity.FormHeadPitch,
+      form_peak_head_roll: activity.FormPeakHeadRoll,
+      form_time_to_neutral: activity.FormTimeToNeutral,
+      form_set_pacing: activity.FormSetPacing,
+      form_interval_pacing: activity.FormIntervalPacing,
+
+      // Zones (as of the activity) and heat strain
+      hr_zones: hrZones,
+      power_zones: powerZones,
+      sweet_spot_time: powerZones && sweetSpotSeconds ? formatDuration(sweetSpotSeconds) : undefined,
+      pace_zones: paceZones,
+      heat_zones: heatMetrics?.zones,
+      max_heat_strain_index: heatMetrics?.max_heat_strain_index,
+      median_heat_strain_index: heatMetrics?.median_heat_strain_index,
+
+      // Conditions: weather (outdoor, single-activity requests), ambient temperature, altitude
+      weather_description: weatherDescription,
+      min_ambient_temperature:
+        tempMetrics?.min_ambient_temperature != null ? formatTemperature(tempMetrics.min_ambient_temperature) : undefined,
+      max_ambient_temperature:
+        tempMetrics?.max_ambient_temperature != null ? formatTemperature(tempMetrics.max_ambient_temperature) : undefined,
+      median_ambient_temperature:
+        tempMetrics?.median_ambient_temperature != null ? formatTemperature(tempMetrics.median_ambient_temperature) : undefined,
+      start_ambient_temperature:
+        tempMetrics?.start_ambient_temperature != null ? formatTemperature(tempMetrics.start_ambient_temperature) : undefined,
+      end_ambient_temperature:
+        tempMetrics?.end_ambient_temperature != null ? formatTemperature(tempMetrics.end_ambient_temperature) : undefined,
+      average_altitude: activity.average_altitude != null ? formatLength(activity.average_altitude) : undefined,
+      min_altitude: activity.min_altitude != null ? formatLength(activity.min_altitude) : undefined,
+      max_altitude: activity.max_altitude != null ? formatLength(activity.max_altitude) : undefined,
+
+      // Fueling
+      carbs_used: activity.carbs_used != null ? formatMass(activity.carbs_used) : undefined,
+      carbs_intake: activity.carbs_ingested != null ? formatMass(activity.carbs_ingested) : undefined,
+      carb_intake_rate: activity.CarbIntakeRate != null
+        ? `${Math.round(activity.CarbIntakeRate)} g/h`
+        : undefined,
+
+      // Athlete state at the time of the activity
+      ctl_at_activity: roundTo(ctlAtActivity, 1),
+      atl_at_activity: roundTo(atlAtActivity, 1),
+      tsb_at_activity:
+        ctlAtActivity !== undefined && atlAtActivity !== undefined ? roundTo(ctlAtActivity - atlAtActivity, 1) : undefined,
+      weight: activity.icu_weight != null ? formatWeight(activity.icu_weight) : undefined,
+      resting_hr: activity.icu_resting_hr != null ? formatHR(activity.icu_resting_hr) : undefined,
+
+      // Notes and detailed intervals (single-activity requests only)
+      notes,
+      intervals,
+      interval_groups: intervalGroups,
+
+      // Provenance and links
+      source: 'intervals.icu',
       intervals_icu_url: `https://intervals.icu/activities/${activity.id}`,
       garmin_connect_url:
         activity.source === 'GARMIN_CONNECT' && activity.external_id
@@ -2471,155 +2564,6 @@ export class IntervalsClient {
       strava_url: activity.strava_id
         ? `https://www.strava.com/activities/${activity.strava_id}`
         : undefined,
-
-      // Speed metrics
-      average_speed: avgSpeedKph != null ? formatSpeed(avgSpeedKph) : undefined,
-      max_speed: maxSpeedKph != null ? formatSpeed(maxSpeedKph) : undefined,
-
-      // Coasting
-      coasting_time: activity.coasting_time != null
-        ? formatDuration(activity.coasting_time)
-        : undefined,
-      coasting_percentage: coastingPercentage != null ? formatPercent(coastingPercentage, 1) : undefined,
-
-      // Training load & feel
-      load: activity.icu_training_load,
-      rpe: (() => {
-        const v = this.pickHighestRpe(activity.rpe, activity.icu_rpe);
-        return v != null ? formatRpe(v) : undefined;
-      })(),
-      feel: activity.feel != null ? formatFeel(activity.feel) : undefined,
-
-      // HR metrics
-      hrrc: activity.hrrc,
-      trimp: activity.trimp,
-
-      // Power efficiency (handle both API field naming conventions)
-      variability_index: variabilityIndex,
-      power_hr_ratio: activity.decoupling,
-      efficiency_factor: efficiencyFactor,
-
-      // Fitness snapshot (handle both API field naming conventions)
-      ctl_at_activity: ctlAtActivity,
-      atl_at_activity: atlAtActivity,
-      tsb_at_activity:
-        ctlAtActivity !== undefined && atlAtActivity !== undefined ? ctlAtActivity - atlAtActivity : undefined,
-
-      // Cadence
-      average_cadence:
-        activity.average_cadence != null ? formatCadence(activity.average_cadence, activityType) : undefined,
-      max_cadence:
-        activity.max_cadence != null ? formatCadence(activity.max_cadence, activityType) : undefined,
-
-      // Thresholds
-      ftp: activity.icu_ftp != null ? formatPower(activity.icu_ftp) : undefined,
-      eftp: activity.icu_eftp != null ? formatPower(activity.icu_eftp) : undefined,
-      activity_eftp: activity.icu_pm_ftp != null ? formatPower(activity.icu_pm_ftp) : undefined,
-      lthr: activity.lthr != null ? formatHR(activity.lthr) : undefined,
-
-      // Energy (handle both API field naming conventions)
-      work: joulesTotal != null ? formatEnergyKJ(joulesTotal / 1000) : undefined,
-      carbs_used: activity.carbs_used != null ? formatMass(activity.carbs_used) : undefined,
-      carbs_intake: activity.carbs_ingested != null ? formatMass(activity.carbs_ingested) : undefined,
-      carb_intake_rate: activity.CarbIntakeRate != null
-        ? `${Math.round(activity.CarbIntakeRate)} g/h`
-        : undefined,
-
-      // Athlete metrics at time of activity
-      weight: activity.icu_weight != null ? formatWeight(activity.icu_weight) : undefined,
-      resting_hr: activity.icu_resting_hr != null ? formatHR(activity.icu_resting_hr) : undefined,
-
-      // Activity context flags
-      // is_indoor: true if trainer flag is set, OR activity type contains "virtual", OR source is Zwift
-      is_indoor: isIndoor,
-      is_commute: activity.commute,
-      is_race: activity.race,
-
-      // Threshold pace
-      threshold_pace: thresholdPaceHuman,
-
-      // Zone thresholds (normalized with names and time in zone)
-      hr_zones: hrZones,
-      power_zones: powerZones,
-      pace_zones: paceZones,
-      heat_zones: heatMetrics?.zones,
-
-      // Heat metrics
-      max_heat_strain_index: heatMetrics?.max_heat_strain_index,
-      median_heat_strain_index: heatMetrics?.median_heat_strain_index,
-
-      // Temperature metrics
-      min_ambient_temperature:
-        tempMetrics?.min_ambient_temperature != null ? formatTemperature(tempMetrics.min_ambient_temperature) : undefined,
-      max_ambient_temperature:
-        tempMetrics?.max_ambient_temperature != null ? formatTemperature(tempMetrics.max_ambient_temperature) : undefined,
-      median_ambient_temperature:
-        tempMetrics?.median_ambient_temperature != null ? formatTemperature(tempMetrics.median_ambient_temperature) : undefined,
-      start_ambient_temperature:
-        tempMetrics?.start_ambient_temperature != null ? formatTemperature(tempMetrics.start_ambient_temperature) : undefined,
-      end_ambient_temperature:
-        tempMetrics?.end_ambient_temperature != null ? formatTemperature(tempMetrics.end_ambient_temperature) : undefined,
-
-      // Running/pace metrics
-      // For swims the value is per-stroke distance; the unit follows the pool.
-      average_stride: activity.average_stride != null
-        ? (isSwim ? formatStrokeLength(activity.average_stride, poolLengthM) : formatStride(activity.average_stride))
-        : undefined,
-      gap: gapSecPerKm != null ? formatPace(gapSecPerKm, isSwim) : undefined,
-
-      // Swimming metrics (only present for pool swims)
-      pool_length: poolLengthM != null ? formatPoolLength(poolLengthM) : undefined,
-      lengths: activity.lengths,
-
-      // FORM Goggles efficiency scores (only present when manually filled in for swims; all 0-100, higher is better)
-      form_score: activity.FormScore,
-      form_head_pitch: activity.FormHeadPitch,
-      form_peak_head_roll: activity.FormPeakHeadRoll,
-      form_time_to_neutral: activity.FormTimeToNeutral,
-      form_set_pacing: activity.FormSetPacing,
-      form_interval_pacing: activity.FormIntervalPacing,
-
-      // Altitude
-      average_altitude: activity.average_altitude != null ? formatLength(activity.average_altitude) : undefined,
-      min_altitude: activity.min_altitude != null ? formatLength(activity.min_altitude) : undefined,
-      max_altitude: activity.max_altitude != null ? formatLength(activity.max_altitude) : undefined,
-
-      // Session metrics
-      session_rpe: activity.session_rpe,
-      icu_strain_score: activity.strain_score,
-
-      // Notes
-      notes,
-
-      // Detailed interval data
-      intervals,
-      interval_groups: intervalGroups,
-
-      // Rolling fitness estimates
-      rolling_ftp: activity.icu_rolling_ftp != null ? formatPower(activity.icu_rolling_ftp) : undefined,
-      rolling_ftp_delta:
-        activity.icu_rolling_ftp_delta != null ? formatPower(activity.icu_rolling_ftp_delta) : undefined,
-
-      // Interval summary
-      interval_summary: activity.interval_summary,
-
-      // Load breakdown by metric type
-      power_load: activity.power_load,
-      hr_load: activity.hr_load,
-      pace_load: activity.pace_load ?? undefined,
-
-      // Z2 aerobic metrics
-      power_hr_z2: activity.icu_power_hr_z2,
-      power_hr_z2_mins:
-        activity.icu_power_hr_z2_mins != null ? withUnit(activity.icu_power_hr_z2_mins, 'min', 1) : undefined,
-      cadence_z2:
-        activity.icu_cadence_z2 != null ? formatCadence(activity.icu_cadence_z2, activityType) : undefined,
-
-      // Workout compliance
-      compliance: activity.compliance != null ? formatPercent(activity.compliance) : undefined,
-
-      // Weather (only fetched for outdoor activities in single-activity requests)
-      weather_description: weatherDescription,
     };
   }
 
@@ -2696,19 +2640,23 @@ export class IntervalsClient {
       atl_load: w.atlLoad,
     }));
 
-    // Calculate summary
+    // Calculate summary from unrounded values, then round the daily series
     const summary = this.calculateTrainingLoadSummary(data);
-
-    // Inclusive day count between the two dates
-    const startMs = new Date(`${startDate}T00:00:00Z`).getTime();
-    const endMs = new Date(`${endDate}T00:00:00Z`).getTime();
-    const periodDays = Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1;
+    const roundedData: DailyTrainingLoad[] = data.map((d) => ({
+      ...d,
+      ctl: roundTo(d.ctl, 1),
+      atl: roundTo(d.atl, 1),
+      tsb: roundTo(d.tsb, 1),
+      ramp_rate: roundTo(d.ramp_rate, 1),
+      ctl_load: roundTo(d.ctl_load),
+      atl_load: roundTo(d.atl_load),
+    }));
 
     return {
-      period_days: periodDays,
+      period: buildPeriod(startDate, endDate),
       sport: 'all',
-      data,
       summary,
+      data: roundedData,
     };
   }
 
