@@ -1,4 +1,4 @@
-import ical from 'node-ical';
+import ical, { type CalendarResponse, type VEvent } from 'node-ical';
 import { format, subDays } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import type { PlannedWorkout, TrainerRoadConfig, ActivityType, Race, Annotation, TrainingPhase, TrainingPhaseName } from '../types/index.js';
@@ -50,7 +50,7 @@ export class TrainerRoadClient {
       toNetworkError: (ctx, err) => TrainerRoadApiError.networkError(ctx, err),
     });
 
-    let parsed: ical.CalendarResponse;
+    let parsed: CalendarResponse;
     try {
       parsed = ical.parseICS(icsData);
     } catch (error) {
@@ -65,7 +65,7 @@ export class TrainerRoadClient {
     for (const [_, component] of Object.entries(parsed)) {
       if (component?.type !== 'VEVENT') continue;
 
-      const event = component as ical.VEvent;
+      const event = component as VEvent;
       if (!event.start || !event.summary) {
         logWarn(
           'TrainerRoad',

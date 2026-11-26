@@ -66,7 +66,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Intervals.icu account with API key
 - Whoop account with OAuth credentials
 - TrainerRoad account with calendar feed URL
