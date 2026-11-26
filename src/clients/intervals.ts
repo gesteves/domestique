@@ -69,6 +69,7 @@ import {
   formatVO2max,
   formatBP,
   withUnit,
+  formatCalories,
   formatPoolLength,
   formatStrokeLength,
   formatRpe,
@@ -492,7 +493,7 @@ const WELLNESS_API_TO_OUTPUT_KEY: Record<string, string> = {
   hrvSDNN: 'hrv_sdnn',
   menstrualPhase: 'menstrual_phase',
   menstrualPhasePredicted: 'menstrual_phase_predicted',
-  kcalConsumed: 'kcal_consumed',
+  kcalConsumed: 'calories_consumed',
   carbohydrates: 'carbs',
   fatTotal: 'fat_total',
   sleepSecs: 'sleep_duration',
@@ -717,6 +718,58 @@ interface RawActivityHRCurve {
 interface RawHRCurvesResponse {
   secs: number[];
   curves: RawActivityHRCurve[];
+}
+
+/**
+ * Distance each Intervals.icu `pace_units` value expresses a pace over.
+ * `MINS_*` units render as m:ss; `SECS_*` units render sub-minute paces as
+ * plain seconds (e.g. "45s/100m"), matching how Intervals.icu shows them.
+ */
+const PACE_UNIT_DISTANCES: Record<string, { meters: number; suffix: string; seconds: boolean }> = {
+  MINS_KM: { meters: 1000, suffix: '/km', seconds: false },
+  MINS_MILE: { meters: 1609.344, suffix: '/mi', seconds: false },
+  SECS_100M: { meters: 100, suffix: '/100m', seconds: true },
+  SECS_100Y: { meters: 91.44, suffix: '/100yd', seconds: true },
+  SECS_250M: { meters: 250, suffix: '/250m', seconds: true },
+  SECS_400M: { meters: 400, suffix: '/400m', seconds: true },
+  SECS_500M: { meters: 500, suffix: '/500m', seconds: true },
+};
+
+/**
+ * Format a speed (m/s, as Intervals.icu stores threshold pace) in the given
+ * `pace_units`. For `NONE` or an unrecognized unit, the speed is shown as a
+ * speed in the athlete's preferred units instead of a pace.
+ */
+export function formatPaceFromSpeed(speedMps: number, units: string): string {
+  const unit = PACE_UNIT_DISTANCES[units];
+  if (!unit || !(speedMps > 0)) {
+    return formatSpeed(speedMps * 3.6);
+  }
+  // Round total seconds first so e.g. 299.6 s renders "5:00", not "4:60".
+  const totalSeconds = Math.round(unit.meters / speedMps);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (unit.seconds && minutes === 0) {
+    return `${seconds}s${unit.suffix}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}${unit.suffix}`;
+}
+
+/**
+ * Map elapsed seconds to a sample index in a `time` stream (ascending elapsed
+ * seconds per sample): the first sample at or after `seconds`, clamped to the
+ * last sample. Binary search, so it's cheap on multi-hour recordings.
+ */
+export function secondsToSampleIndex(time: number[], seconds: number): number {
+  let lo = 0;
+  let hi = time.length - 1;
+  if (seconds >= time[hi]) return hi;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (time[mid] < seconds) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /**
@@ -1041,10 +1094,8 @@ export class IntervalsClient {
 
     // Threshold pace
     if (settings.threshold_pace && settings.pace_units) {
-      // For SECS_100M (swimming), threshold_pace is stored as speed in m/s
-      // Convert to actual pace (time per distance) for display
-      const paceValue = this.convertToPaceValue(settings.threshold_pace, settings.pace_units);
-      result.threshold_pace = this.formatPaceValue(paceValue, settings.pace_units);
+      // threshold_pace is stored as speed in m/s; display it as a pace.
+      result.threshold_pace = this.formatPaceValue(settings.threshold_pace, settings.pace_units);
     }
 
     // Power zones
@@ -1066,12 +1117,10 @@ export class IntervalsClient {
 
     // Pace zones
     if (settings.pace_zones && settings.pace_zone_names && settings.threshold_pace && settings.pace_units) {
-      // Convert threshold to actual pace value for zone calculations
-      const paceValue = this.convertToPaceValue(settings.threshold_pace, settings.pace_units);
       result.pace_zones = this.mergePaceZones(
         settings.pace_zones,
         settings.pace_zone_names,
-        paceValue,
+        settings.threshold_pace,
         settings.pace_units
       );
     }
@@ -1134,20 +1183,22 @@ export class IntervalsClient {
 
   /**
    * Merge pace zone percentages with names and format human-readable paces.
-   * Pace zones array contains % of threshold pace: [77.5, 87.7, 94.3, 100, 103.4, 111.5, 999]
+   * Pace zones array contains % of threshold speed: [77.5, 87.7, 94.3, 100, 103.4, 111.5, 999]
    *
-   * Important: Higher percentage = FASTER pace (less time per km)
-   * So pace = threshold_pace / (percentage / 100)
+   * Higher percentage = FASTER (zone speed = threshold speed × percentage), so
+   * the zone's lower bound is its slow pace and its upper bound its fast pace.
    *
-   * Example with 4:00/km threshold:
-   * - 77.5% → 4.0 / 0.775 = 5.16 min/km (slower)
-   * - 100%  → 4.0 / 1.0   = 4.00 min/km (threshold)
-   * - 112%  → 4.0 / 1.12  = 3.57 min/km (faster)
+   * Example with a 4:00/km threshold (4.167 m/s):
+   * - 77.5% → 3.229 m/s = 5:10/km (slower)
+   * - 100%  → 4.167 m/s = 4:00/km (threshold)
+   * - 112%  → 4.667 m/s = 3:34/km (faster)
+   *
+   * @param thresholdSpeed - Threshold pace as stored by Intervals.icu (m/s)
    */
   private mergePaceZones(
     zones: number[],
     names: string[],
-    thresholdPace: number,
+    thresholdSpeed: number,
     paceUnits: string
   ): PaceZone[] {
     const result: PaceZone[] = [];
@@ -1156,19 +1207,16 @@ export class IntervalsClient {
       const lowPercent = i === 0 ? 0 : zones[i - 1];
       const highPercent = zones[i] >= 999 ? null : zones[i];
 
-      // Calculate actual pace values
-      // pace = threshold / (percentage / 100)
-      // low_percent (lower %) = slower pace (more time per km)
-      // high_percent (higher %) = faster pace (less time per km)
-      const slowPaceValue = lowPercent > 0 ? thresholdPace / (lowPercent / 100) : null;
-      const fastPaceValue = highPercent ? thresholdPace / (highPercent / 100) : null;
+      // Zone speeds: lower % = slower (more time per distance)
+      const slowSpeed = lowPercent > 0 ? thresholdSpeed * (lowPercent / 100) : null;
+      const fastSpeed = highPercent ? thresholdSpeed * (highPercent / 100) : null;
 
       result.push({
         name: names[i],
         low_pct: formatPercent(lowPercent),
         high_pct: highPercent !== null ? formatPercent(highPercent) : null,
-        slow_pace: slowPaceValue ? this.formatPaceValue(slowPaceValue, paceUnits) : null,
-        fast_pace: fastPaceValue ? this.formatPaceValue(fastPaceValue, paceUnits) : null,
+        slow_pace: slowSpeed ? this.formatPaceValue(slowSpeed, paceUnits) : null,
+        fast_pace: fastSpeed ? this.formatPaceValue(fastSpeed, paceUnits) : null,
       });
     }
 
@@ -1176,52 +1224,12 @@ export class IntervalsClient {
   }
 
   /**
-   * Convert raw threshold_pace from API to actual pace value.
-   * Intervals.icu stores threshold_pace as SPEED in m/s for all sports.
-   * The pace_units field indicates how to DISPLAY it.
-   *
-   * - MINS_KM: convert m/s to minutes per km
-   * - SECS_100M: convert m/s to seconds per 100m
+   * Format a speed as a pace in the athlete's chosen `pace_units`.
+   * Intervals.icu stores threshold_pace (and pace-zone thresholds) as SPEED in
+   * m/s for every sport; `pace_units` only says how to display it.
    */
-  private convertToPaceValue(rawValue: number, units: string): number {
-    if (units === 'MINS_KM') {
-      // rawValue is speed in m/s, convert to minutes per km
-      // pace (min/km) = (1000m / speed) / 60
-      return (1000 / rawValue) / 60;
-    } else if (units === 'SECS_100M') {
-      // rawValue is speed in m/s, convert to seconds per 100m
-      // pace (sec/100m) = 100m / speed (m/s)
-      return 100 / rawValue;
-    }
-    // Default: assume it's already the pace value
-    return rawValue;
-  }
-
-  /**
-   * Format a pace value (already converted) into human-readable string.
-   * @param pace - Pace value (min/km for MINS_KM, sec/100m for SECS_100M)
-   * @param units - "MINS_KM", "SECS_100M", etc.
-   */
-  private formatPaceValue(pace: number, units: string): string {
-    if (units === 'MINS_KM') {
-      // pace is in minutes per km (e.g., 4 = 4:00/km). Round total seconds
-      // first so e.g. 4.9925 renders "5:00/km", not "4:60/km".
-      const totalSeconds = Math.round(pace * 60);
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return `${minutes}:${seconds.toString().padStart(2, '0')}/km`;
-    } else if (units === 'SECS_100M') {
-      // pace is in seconds per 100m (e.g., 120 = 2:00/100m)
-      const totalSeconds = Math.round(pace);
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      if (minutes > 0) {
-        return `${minutes}:${seconds.toString().padStart(2, '0')}/100m`;
-      }
-      return `${seconds}s/100m`;
-    }
-    // Default: just return the raw value
-    return `${pace.toFixed(2)} ${units}`;
+  private formatPaceValue(speedMps: number, units: string): string {
+    return formatPaceFromSpeed(speedMps, units);
   }
 
   /**
@@ -1308,15 +1316,15 @@ export class IntervalsClient {
   private normalizeActivityPaceZones(
     zoneBoundaries: number[] | undefined,
     zoneNames: string[] | undefined,
-    thresholdPace: number | undefined,
+    thresholdSpeed: number | undefined,
     paceUnits: string | undefined,
     zoneTimes: number[] | undefined
   ): PaceZone[] | undefined {
-    if (!zoneBoundaries || !zoneNames || !thresholdPace || !paceUnits) {
+    if (!zoneBoundaries || !zoneNames || !thresholdSpeed || !paceUnits) {
       return undefined;
     }
 
-    const zones = this.mergePaceZones(zoneBoundaries, zoneNames, thresholdPace, paceUnits);
+    const zones = this.mergePaceZones(zoneBoundaries, zoneNames, thresholdSpeed, paceUnits);
 
     // Merge in time data if available
     if (zoneTimes) {
@@ -1771,7 +1779,7 @@ export class IntervalsClient {
       type: raw.type,
       label: raw.label,
       group_id: raw.group_id,
-      start_seconds: raw.start_time,
+      start_offset: formatDuration(raw.start_time),
       duration: formatDuration(raw.moving_time),
       distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim, poolLengthM) : undefined,
 
@@ -2042,7 +2050,7 @@ export class IntervalsClient {
 
     // Nutrition
     if (data.kcalConsumed != null) {
-      result.kcal_consumed = data.kcalConsumed;
+      result.calories_consumed = formatCalories(data.kcalConsumed);
     }
     if (data.carbohydrates != null) {
       result.carbs = withUnit(data.carbohydrates, 'g');
@@ -2325,7 +2333,8 @@ export class IntervalsClient {
       // Use pace_units from sport settings (API doesn't return it for activities)
       paceUnits = matchingSport?.pace_units;
       if (paceUnits) {
-        thresholdPaceValue = this.convertToPaceValue(activity.threshold_pace, paceUnits);
+        // Keep the raw speed (m/s) for the zone math; format it for display.
+        thresholdPaceValue = activity.threshold_pace;
         thresholdPaceHuman = this.formatPaceValue(thresholdPaceValue, paceUnits);
       }
     }
@@ -2446,7 +2455,7 @@ export class IntervalsClient {
       elevation_gain: activity.total_elevation_gain != null
         ? formatLength(activity.total_elevation_gain)
         : undefined,
-      calories: activity.calories,
+      calories: activity.calories != null ? formatCalories(activity.calories) : undefined,
       source: 'intervals.icu',
 
       // Activity URLs
@@ -3167,8 +3176,29 @@ export class IntervalsClient {
   }
 
   /**
+   * Fetch the activity's `time` stream (elapsed seconds at each sample).
+   * Returns null when the activity has no time stream (e.g. a manual entry
+   * with no recorded data); API errors propagate.
+   */
+  private async fetchTimeStream(activityId: string): Promise<number[] | null> {
+    const streams = await this.fetchActivity<Array<{ type: string; data: number[] | null }>>(
+      activityId,
+      '/streams?types=time',
+      { operation: 'fetch activity time stream' }
+    );
+    const time = Array.isArray(streams)
+      ? streams.find((stream) => stream.type === 'time')?.data
+      : undefined;
+    return time && time.length > 0 ? time : null;
+  }
+
+  /**
    * Update intervals on a completed activity.
    * PUT /api/v1/activity/{id}/intervals?all={replaceAll}
+   *
+   * `start_time` / `end_time` are elapsed seconds from activity start; they
+   * are converted to sample indices via the activity's `time` stream (falling
+   * back to seconds-as-indices only when the activity has no time stream).
    *
    * When replaceAll is true, all existing intervals on the activity are replaced.
    * When replaceAll is false, the new intervals are merged with existing ones.
@@ -3180,12 +3210,18 @@ export class IntervalsClient {
     intervals: ActivityIntervalInput[],
     replaceAll: boolean = true
   ): Promise<void> {
-    // Map our input format to the API format
-    // The API uses start_index/end_index (data point indices) rather than start_time/end_time
-    // For 1Hz data (most common), these are equal to seconds
+    // The API positions intervals by start_index/end_index (sample indices
+    // into the recorded streams), not by elapsed seconds. They only coincide
+    // for uninterrupted 1 Hz recordings; with auto-pause gaps or smart
+    // recording (e.g. a sample every few seconds), seconds-as-indices drift.
+    // Map each boundary through the activity's `time` stream instead.
+    const timeStream = await this.fetchTimeStream(activityId);
+    const toIndex = (seconds: number): number =>
+      timeStream ? secondsToSampleIndex(timeStream, seconds) : Math.round(seconds);
+
     const apiIntervals = intervals.map((interval) => ({
-      start_index: interval.start_time,
-      end_index: interval.end_time,
+      start_index: toIndex(interval.start_time),
+      end_index: toIndex(interval.end_time),
       type: interval.type,
       label: interval.label,
     }));

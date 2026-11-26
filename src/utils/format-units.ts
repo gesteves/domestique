@@ -201,6 +201,17 @@ export function parseDurationToSeconds(duration: string): number {
 }
 
 /**
+ * Format a signed duration difference in h:mm:ss with an explicit sign, e.g.
+ * "-0:00:50" (50 s faster) or "+0:01:05". Zero renders as "0:00:00".
+ * @param seconds Signed duration in seconds
+ */
+export function formatSignedDuration(seconds: number): string {
+  const rounded = Math.round(seconds);
+  if (rounded === 0) return formatDuration(0);
+  return `${rounded < 0 ? '-' : '+'}${formatDuration(Math.abs(rounded))}`;
+}
+
+/**
  * Format a large duration in seconds to human-readable string with total hours.
  * Uses HHH:MM:SS format for durations that may span many hours.
  * @param seconds Duration in seconds
@@ -353,6 +364,16 @@ export function formatEnergy(joules: number): string {
  */
 export function formatEnergyKJ(kj: number): string {
   return `${Math.round(kj)} kJ`;
+}
+
+/**
+ * Format dietary/metabolic energy in kilocalories (the "Calories" on food
+ * labels and in Whoop/Intervals.icu).
+ * @param kcal Energy in kilocalories
+ * @returns Formatted string like "650 kcal"
+ */
+export function formatCalories(kcal: number): string {
+  return `${Math.round(kcal)} kcal`;
 }
 
 /**

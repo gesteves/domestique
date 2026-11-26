@@ -12,7 +12,7 @@ function paceResponse(sport: string, change_percent: string, improved: boolean):
     distances_analyzed: ['5km'],
     summary: {} as PaceCurvesResponse['summary'],
     comparison: {
-      changes: [{ distance_label: '5km', current_seconds: 1200, previous_seconds: 1250, change_seconds: -50, change_percent, improved }],
+      changes: [{ distance_label: '5km', current_time: '0:20:00', previous_time: '0:20:50', change_time: '-0:00:50', change_percent, improved }],
     },
   } as unknown as PaceCurvesResponse;
 }

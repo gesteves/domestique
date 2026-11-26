@@ -24,6 +24,7 @@ import {
   formatTemperature,
   formatLength,
   withUnit,
+  formatCalories,
 } from '../utils/format-units.js';
 import { formatToISO8601WithTimezone } from '../utils/date-formatting.js';
 import {
@@ -32,6 +33,7 @@ import {
   isTimestampInLocalDateRange,
 } from '../utils/tz.js';
 import { memoize } from '../utils/memo.js';
+import { describeFetchError, requestTimeoutSignal } from './http.js';
 import {
   getRecoveryLevel,
   getRecoveryLevelDescription,
@@ -742,8 +744,8 @@ export class WhoopClient {
 
         break;
       } catch (error) {
-        // Network errors are retryable
-        lastError = error instanceof Error ? error : new Error(String(error));
+        // Network errors (including timeouts) are retryable
+        lastError = describeFetchError(error, TOKEN_REFRESH_TIMEOUT_MS) ?? new Error(String(error));
         logWarn('Whoop', `Token refresh network error on attempt ${attempt}: ${lastError.message}`);
         if (attempt < MAX_RETRY_ATTEMPTS) {
           const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
@@ -843,9 +845,10 @@ export class WhoopClient {
           Authorization: `Bearer ${this.tokens.accessToken}`,
           Accept: 'application/json',
         },
+        signal: requestTimeoutSignal(),
       });
     } catch (error) {
-      const networkError = WhoopApiError.networkError(errorContext, error instanceof Error ? error : undefined);
+      const networkError = WhoopApiError.networkError(errorContext, describeFetchError(error));
       logApiError(networkError, { method: 'GET', url });
       throw networkError;
     }
@@ -1392,7 +1395,7 @@ export class WhoopClient {
         cycle.score.max_heart_rate !== undefined
           ? formatHR(cycle.score.max_heart_rate)
           : undefined,
-      calories: Math.round(cycle.score.kilojoule / 4.184),
+      calories: formatCalories(cycle.score.kilojoule / 4.184),
       activities: await Promise.all(
         workouts.filter((w) => w.score !== null).map((w) => this.normalizeWorkout(w))
       ),
@@ -1448,7 +1451,7 @@ export class WhoopClient {
         score.average_heart_rate !== undefined ? formatHR(score.average_heart_rate) : undefined,
       max_heart_rate:
         score.max_heart_rate !== undefined ? formatHR(score.max_heart_rate) : undefined,
-      calories: Math.round(score.kilojoule / 4.184),
+      calories: formatCalories(score.kilojoule / 4.184),
       distance: distanceKm !== undefined ? formatDistance(distanceKm, isSwim) : undefined,
       elevation_gain:
         score.altitude_gain_meter !== undefined ? formatLength(score.altitude_gain_meter) : undefined,

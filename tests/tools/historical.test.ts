@@ -78,7 +78,7 @@ describe('HistoricalTools', () => {
         strain_score: 12.5,
         average_heart_rate: 145,
         max_heart_rate: 175,
-        calories: 650,
+        calories: '650 kcal',
       },
     ];
 
@@ -624,7 +624,7 @@ describe('HistoricalTools', () => {
           strain_score: 12.5,
           average_heart_rate: 145,
           max_heart_rate: 175,
-          calories: 650,
+          calories: '650 kcal',
         },
       ]);
 
@@ -836,7 +836,7 @@ describe('HistoricalTools', () => {
       expect(result.sport).toBe('running');
       expect(result.gap_adjusted).toBe(false);
       expect(result.summary.best_400m).toBeDefined();
-      expect(result.summary.best_400m?.time_seconds).toBe(90);
+      expect(result.summary.best_400m?.time).toBe('0:01:30');
       expect(result.summary.best_1km?.pace).toBe('4:00/km');
     });
 
@@ -866,7 +866,7 @@ describe('HistoricalTools', () => {
 
       expect(result.sport).toBe('swimming');
       expect(result.summary.best_100m).toBeDefined();
-      expect(result.summary.best_100m?.time_seconds).toBe(90);
+      expect(result.summary.best_100m?.time).toBe('0:01:30');
       // Running-specific fields should not be in swimming response
       expect(result.summary.best_1km).toBeUndefined();
       expect(result.summary.best_5km).toBeUndefined();
@@ -894,8 +894,8 @@ describe('HistoricalTools', () => {
 
       const result = await tools.getPaceCurve({ oldest: '2024-12-01', sport: 'swimming' });
 
-      expect(result.summary.best_400m?.time_seconds).toBe(380);
-      expect(result.summary.best_800m?.time_seconds).toBe(790);
+      expect(result.summary.best_400m?.time).toBe('0:06:20');
+      expect(result.summary.best_800m?.time).toBe('0:13:10');
     });
 
     it('should use GAP when specified for running', async () => {
@@ -951,6 +951,12 @@ describe('HistoricalTools', () => {
 
       expect(result.comparison).toBeDefined();
       expect(result.comparison?.changes[0].improved).toBe(true); // Faster now
+      // Unit-in-value strings, current 90 s vs previous 100 s
+      expect(result.comparison?.changes[0]).toMatchObject({
+        current_time: '0:01:30',
+        previous_time: '0:01:40',
+        change_time: '-0:00:10',
+      });
     });
   });
 
@@ -1086,7 +1092,7 @@ describe('HistoricalTools', () => {
         distance: '60.5 km',
         elevation_gain: '800 m',
         tss: 120,
-        calories: 1200,
+        calories: '1200 kcal',
         work: '1500 kJ',
         coasting_time: '0:15:00',
         source: 'intervals.icu',
@@ -1109,7 +1115,7 @@ describe('HistoricalTools', () => {
         distance: '8.5 km',
         elevation_gain: '100 m',
         tss: 60,
-        calories: 500,
+        calories: '500 kcal',
         work: '0 kJ',
         source: 'intervals.icu',
         hr_zones: [
@@ -1129,7 +1135,7 @@ describe('HistoricalTools', () => {
         distance: '45.0 km',
         elevation_gain: '600 m',
         tss: 90,
-        calories: 900,
+        calories: '900 kcal',
         work: '1100 kJ',
         coasting_time: '0:10:00',
         source: 'intervals.icu',
@@ -1166,7 +1172,7 @@ describe('HistoricalTools', () => {
       expect(result.totals.distance).toBe('114.0 km'); // 60.5 + 8.5 + 45 = 114
       expect(result.totals.climbing).toBe('1500 m'); // 800 + 100 + 600
       expect(result.totals.load).toBe(270); // 120 + 60 + 90
-      expect(result.totals.kcal).toBe(2600); // 1200 + 500 + 900
+      expect(result.totals.calories).toBe('2600 kcal'); // 1200 + 500 + 900
       // Mock activities use the new `work: "X kJ"` field shape
       expect(result.totals.work).toBe('2600 kJ');
       expect(result.totals.coasting).toBe('0:25:00'); // 0:15 + 0:10
@@ -1302,7 +1308,7 @@ describe('HistoricalTools', () => {
           distance: '1500 m',
           elevation_gain: '0 m',
           tss: 40,
-          calories: 300,
+          calories: '300 kcal',
           source: 'intervals.icu',
         },
       ];

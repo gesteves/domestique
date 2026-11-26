@@ -85,7 +85,7 @@ const WorkoutIntervalZ = z.object({
   type: z.enum(['WORK', 'RECOVERY']).optional().describe('Interval type: WORK (hard effort) or RECOVERY (easy/rest)'),
   label: z.string().optional().describe('Custom label if assigned'),
   group_id: z.string().optional().describe('ID linking similar intervals (e.g., "56s@314w91rpm")'),
-  start_seconds: z.number().optional().describe('Start time in seconds from activity start'),
+  start_offset: z.string().optional().describe('Elapsed time from the start of the activity to the start of this interval'),
   duration: z.string().optional().describe('Duration of this interval'),
   distance: z.string().optional().describe('Distance covered during this interval'),
   average_power: z.string().optional().describe('Average power during this interval'),
@@ -148,7 +148,7 @@ const WhoopMatchedDataZ = z.object({
   strain_score: z.number().optional().describe('Whoop cardiovascular strain score for the matched workout (0-21, logarithmic). Light: 0-9, Moderate: 10-13, High: 14-17, All out: 18-21'),
   average_heart_rate: z.string().optional().describe('Average heart rate Whoop recorded during this matched workout'),
   max_heart_rate: z.string().optional().describe('Peak heart rate Whoop recorded during this matched workout'),
-  calories: z.number().optional().describe('Estimated calories Whoop calculated for this matched workout'),
+  calories: z.string().optional().describe('Estimated calories Whoop calculated for this matched workout'),
   distance: z.string().optional().describe('Distance Whoop recorded for this matched workout. Only present if Whoop captured GPS or sensor distance'),
   elevation_gain: z.string().optional().describe('Total elevation gain Whoop recorded during this matched workout (ascent only, does not net out descent)'),
   zone_durations: WhoopZoneDurationsZ.optional().describe('Time spent in each Whoop HR zone during this matched workout. Whoop uses heart rate reserve, so zone boundaries may differ from Intervals.icu HR zones'),
@@ -229,7 +229,7 @@ const WorkoutSummaryZ = z.object({
   min_altitude: z.string().optional().describe('Minimum altitude'),
   max_altitude: z.string().optional().describe('Maximum altitude'),
 
-  calories: z.number().optional().describe('Estimated calories burned'),
+  calories: z.string().optional().describe('Estimated calories burned'),
   carbs_used: z.string().optional().describe('Estimated carbohydrates used'),
   carbs_intake: z.string().optional().describe("Carbohydrates consumed during activity. Absence doesn't imply lack of consumption"),
   carb_intake_rate: z.string().optional().describe('Rate of carbohydrate intake during the activity'),
@@ -368,7 +368,7 @@ const StrainActivityZ = z.object({
   strain_score: z.number().optional().describe('Whoop strain score for this single activity (0-21, logarithmic). Distinct from the day-level strain in the parent object'),
   average_heart_rate: z.string().optional().describe('Average heart rate during this Whoop-app-logged activity'),
   max_heart_rate: z.string().optional().describe('Maximum heart rate during this Whoop-app-logged activity'),
-  calories: z.number().optional().describe('Estimated calories burned during this activity'),
+  calories: z.string().optional().describe('Estimated calories burned during this activity'),
   distance: z.string().optional().describe('Distance covered during this activity. Only present when Whoop captured GPS or sensor distance'),
   elevation_gain: z.string().optional().describe('Total elevation gain during this activity. Only present when Whoop captured altitude'),
   zone_durations: WhoopZoneDurationsZ.optional().describe('Time spent in each Whoop HR zone during this activity'),
@@ -381,7 +381,7 @@ const StrainDataZ = z.object({
   strain_level_description: z.string().optional().describe("Whoop's official description for this strain level"),
   average_heart_rate: z.string().optional().describe('Average heart rate across the entire day'),
   max_heart_rate: z.string().optional().describe('Peak heart rate reached during the day'),
-  calories: z.number().optional().describe('Total estimated calories burned across the day, per Whoop'),
+  calories: z.string().optional().describe('Total estimated calories burned across the day, per Whoop'),
   activities: z.array(StrainActivityZ).optional().describe("Activities logged in the user's Whoop app on this day. May be empty"),
 }).passthrough();
 
@@ -432,7 +432,7 @@ const WellnessFieldsShape = {
   hrv_sdnn: z.string().optional().describe('Heart rate variability (SDNN)'),
   menstrual_phase: z.string().optional().describe('Current menstrual cycle phase'),
   menstrual_phase_predicted: z.string().optional().describe('Predicted menstrual cycle phase'),
-  kcal_consumed: z.number().optional().describe('Calories consumed'),
+  calories_consumed: z.string().optional().describe('Calories consumed'),
   carbs: z.string().optional().describe('Carbohydrates consumed'),
   protein: z.string().optional().describe('Protein consumed'),
   fat_total: z.string().optional().describe('Total fat consumed'),
@@ -581,7 +581,7 @@ const PowerCurveComparisonZ = z.object({
 }).passthrough();
 
 const PaceBestZ = z.object({
-  time_seconds: z.number().optional().describe('Best time in seconds'),
+  time: z.string().optional().describe('Best time (elapsed duration) at this distance'),
   pace: z.string().optional().describe('Pace in human-readable format'),
   activity_id: z.string().optional(),
   date: z.string().optional(),
@@ -605,9 +605,9 @@ const PaceCurveSummaryZ = z.object({
 
 const PaceCurveComparisonZ = z.object({
   distance_label: z.string().optional(),
-  current_seconds: z.number().optional().describe('Time in current period'),
-  previous_seconds: z.number().optional().describe('Time in previous period'),
-  change_seconds: z.number().optional().describe('Absolute change in seconds (negative = faster)'),
+  current_time: z.string().optional().describe('Best time in current period'),
+  previous_time: z.string().optional().describe('Best time in previous period'),
+  change_time: z.string().optional().describe('Signed change in time, current - previous (negative = faster)'),
   change_percent: z.string().optional().describe('Change from previous period (negative = faster)'),
   improved: z.boolean().optional().describe('Whether performance improved (true = faster)'),
 }).passthrough();
@@ -653,7 +653,7 @@ const SportTotalsZ = z.object({
   distance: z.string().optional().describe('Total distance for this sport'),
   climbing: z.string().optional().describe('Total climbing for this sport (only present if > 0)'),
   load: z.number().optional().describe('Total training load for this sport'),
-  kcal: z.number().optional().describe('Calories burned for this sport'),
+  calories: z.string().optional().describe('Calories burned for this sport'),
   work: z.string().optional().describe('Work done for this sport (only present if > 0)'),
   coasting: z.string().optional().describe('Total coasting time for this sport (cycling only)'),
   zones: z.object({
@@ -865,7 +865,7 @@ export const activityTotalsOutputSchema = {
     distance: z.string().optional().describe('Total distance covered'),
     climbing: z.string().optional().describe('Total elevation gain (only present if > 0)'),
     load: z.number().optional().describe('Total training load (TSS)'),
-    kcal: z.number().optional().describe('Total calories burned'),
+    calories: z.string().optional().describe('Total calories burned'),
     work: z.string().optional().describe('Total work done (only present if > 0)'),
     coasting: z.string().optional().describe('Total coasting/recovery time'),
   }).passthrough().describe('Aggregated totals across all activities. Zone breakdowns are per-sport in by_sport[*].zones, since zones differ by sport'),

@@ -182,3 +182,40 @@ describe('secret-bearing URLs in error logs', () => {
     errorSpy.mockRestore();
   });
 });
+
+describe('request timeouts', () => {
+  it('passes an abort signal to fetch', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({}) });
+
+    await httpRequestJson({ url: 'https://example.test/api', context: ctx, ...builders });
+
+    expect(mockFetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('reports a timeout as a retryable network error that says it timed out', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockRejectedValueOnce(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+
+    const err = await httpRequestJson({ url: 'https://example.test/api', context: ctx, timeoutMs: 5000, ...builders }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(IntervalsApiError);
+    expect(err.isRetryable).toBe(true);
+    expect(err.message).toContain('timed out after 5s');
+    errorSpy.mockRestore();
+  });
+
+  it('actually aborts a request that never responds', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockImplementationOnce((_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+      })
+    );
+
+    const err = await httpRequestJson({ url: 'https://example.test/api', context: ctx, timeoutMs: 20, ...builders }).catch((e) => e);
+
+    expect(err).toBeInstanceOf(IntervalsApiError);
+    expect(err.message).toContain('timed out');
+    errorSpy.mockRestore();
+  });
+});

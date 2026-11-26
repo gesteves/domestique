@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   formatDuration,
   formatLargeDuration,
+  formatSignedDuration,
+  formatCalories,
   formatDistance,
   formatSpeed,
   formatPace,
@@ -47,6 +49,21 @@ const IMPERIAL_PREFS: UnitPreferences = {
 };
 
 describe('format-units', () => {
+  describe('formatSignedDuration', () => {
+    it('prefixes the sign and formats the magnitude as h:mm:ss', () => {
+      expect(formatSignedDuration(-50)).toBe('-0:00:50');
+      expect(formatSignedDuration(65)).toBe('+0:01:05');
+      expect(formatSignedDuration(0)).toBe('0:00:00');
+      expect(formatSignedDuration(-0.4)).toBe('0:00:00');
+    });
+  });
+
+  describe('formatCalories', () => {
+    it('formats kilocalories with the unit', () => {
+      expect(formatCalories(2868.07)).toBe('2868 kcal');
+    });
+  });
+
   describe('seconds rounding never produces ":60"', () => {
     it('formatDuration carries a rounded-up minute', () => {
       expect(formatDuration(1799.6)).toBe('0:30:00');

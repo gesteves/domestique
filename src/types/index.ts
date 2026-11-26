@@ -25,7 +25,7 @@ export interface NormalizedWorkout {
   max_heart_rate?: string;
   intensity_factor?: number;
   elevation_gain?: string; // e.g., "500 m"
-  calories?: number;
+  calories?: string; // e.g., "650 kcal"
   source: 'intervals.icu' | 'whoop' | 'trainerroad' | 'strava';
 
   // Activity URLs
@@ -200,7 +200,7 @@ export interface WhoopMatchedData {
   strain_score: number;
   average_heart_rate?: string; // e.g., "165 bpm"
   max_heart_rate?: string;
-  calories?: number;
+  calories?: string; // e.g., "650 kcal"
   distance?: string; // e.g., "45.2 km"
   elevation_gain?: string; // e.g., "500 m"
   zone_durations?: WhoopZoneDurations;
@@ -357,7 +357,7 @@ export interface StrainData {
   strain_level_description: string;
   average_heart_rate?: string;
   max_heart_rate?: string;
-  calories?: number;
+  calories?: string; // e.g., "650 kcal"
   activities: StrainActivity[];
 }
 
@@ -380,7 +380,7 @@ export interface StrainActivity {
   strain_score: number;
   average_heart_rate?: string;
   max_heart_rate?: string;
-  calories?: number;
+  calories?: string; // e.g., "650 kcal"
   distance?: string; // e.g., "45.2 km"
   elevation_gain?: string; // e.g., "500 m"
   zone_durations?: WhoopZoneDurations;
@@ -1024,7 +1024,7 @@ interface WellnessFields {
   menstrual_phase_predicted?: string;
 
   // Nutrition
-  kcal_consumed?: number;
+  calories_consumed?: string;
   carbs?: string; // e.g., "180 g"
   protein?: string; // e.g., "120 g"
   fat_total?: string; // e.g., "60 g"
@@ -1104,7 +1104,7 @@ export interface WorkoutInterval {
   type: 'WORK' | 'RECOVERY';
   label?: string;
   group_id?: string;
-  start_seconds: number; // Position marker - kept as number
+  start_offset: string; // Elapsed time from activity start, e.g. "0:12:30"
   duration: string; // e.g., "0:00:56"
   distance?: string; // e.g., "1.2 km"
 
@@ -1656,7 +1656,7 @@ export interface ActivityPaceCurve {
 
 // Best value at a specific distance
 export interface PaceBest {
-  time_seconds: number;
+  time: string; // Duration, e.g. "0:20:15"
   pace: string;
   activity_id: string;
   date: string;
@@ -1684,9 +1684,9 @@ export interface PaceCurveSummary {
 // Comparison between two periods for pace curves
 export interface PaceCurveComparison {
   distance_label: string;
-  current_seconds: number;
-  previous_seconds: number;
-  change_seconds: number;
+  current_time: string; // e.g. "0:20:15"
+  previous_time: string;
+  change_time: string; // Signed, e.g. "-0:00:50" (faster)
   change_percent: string; // e.g., "-3.5%"
   improved: boolean; // For pace, improved = faster = lower time
 }
@@ -1797,8 +1797,8 @@ export interface SportTotals {
   climbing?: string;
   /** Total training load (TSS) for this sport */
   load: number;
-  /** Total calories burned for this sport */
-  kcal: number;
+  /** Total calories burned for this sport (e.g., "12450 kcal") */
+  calories: string;
   /** Total work done for this sport (e.g., "308364 kJ"). Only present if > 0. */
   work?: string;
   /** Total coasting/recovery time (cycling only) */
@@ -1843,8 +1843,8 @@ export interface ActivityTotalsResponse {
     climbing?: string;
     /** Total training load (TSS) */
     load: number;
-    /** Total calories burned */
-    kcal: number;
+    /** Total calories burned (e.g., "12450 kcal") */
+    calories: string;
     /** Total work done in kilojoules (e.g., "308364 kJ"). Only present if > 0. */
     work?: string;
     /** Total coasting/recovery time (e.g., "3:45:00") */

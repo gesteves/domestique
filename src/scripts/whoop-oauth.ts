@@ -189,6 +189,7 @@ async function exchangeCodeForTokens(
       client_secret: clientSecret,
       redirect_uri: redirectUri,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {

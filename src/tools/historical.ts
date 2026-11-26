@@ -13,6 +13,9 @@ import {
   formatPercent,
   formatHRV,
   formatDuration,
+  formatSignedDuration,
+  formatCalories,
+  formatEnergyKJ,
   formatPower,
   formatHR,
   formatDistance,
@@ -50,6 +53,15 @@ import type {
   GetRecoveryTrendsInput,
   GetActivityTotalsInput,
 } from './types.js';
+/** Internal per-distance best with the raw time, before unit formatting. */
+interface RawPaceBest {
+  time_seconds: number;
+  pace: string;
+  activity_id: string;
+  date: string;
+}
+type RawPaceCurveSummary = { [K in keyof PaceCurveSummary]: RawPaceBest | null };
+
 export class HistoricalTools {
   constructor(
     private intervals: IntervalsClient,
@@ -489,7 +501,7 @@ export class HistoricalTools {
       gap_adjusted,
       activity_count: activities.length,
       distances_analyzed: apiDistances.map((d) => this.formatDistanceLabel(d)),
-      summary,
+      summary: this.formatPaceSummary(summary),
       comparison: null,
     };
 
@@ -531,14 +543,14 @@ export class HistoricalTools {
     activities: ActivityPaceCurve[],
     distances: number[],
     isSwimming: boolean
-  ): PaceCurveSummary {
+  ): RawPaceCurveSummary {
     // Define target distances based on sport
     const targetDistances: { [key: string]: number } = isSwimming
       ? { best_100m: 100, best_200m: 200, best_400m: 400, best_800m: 800, best_1500m: 1500, best_half_iron_swim: 1900, best_iron_swim: 3800 }
       : { best_400m: 400, best_1km: 1000, best_mile: 1609, best_5km: 5000, best_10km: 10000, best_half_marathon: 21097, best_marathon: 42195 };
 
     // Only initialize fields relevant to the sport
-    const bests: Partial<Record<keyof PaceCurveSummary, PaceBest | null>> = isSwimming
+    const bests: Partial<Record<keyof PaceCurveSummary, RawPaceBest | null>> = isSwimming
       ? {
           best_100m: null,
           best_200m: null,
@@ -564,7 +576,7 @@ export class HistoricalTools {
       const idx = distances.findIndex((d) => Math.abs(d - targetMeters) <= tolerance);
       if (idx === -1) continue;
 
-      let best: PaceBest | null = null;
+      let best: RawPaceBest | null = null;
       for (const activity of activities) {
         const point = activity.curve[idx];
         // For pace, lower time is better
@@ -580,15 +592,26 @@ export class HistoricalTools {
       bests[key as keyof PaceCurveSummary] = best;
     }
 
-    return bests as PaceCurveSummary;
+    return bests as RawPaceCurveSummary;
+  }
+
+  /** Convert the raw (seconds-based) summary into the unit-in-value output shape. */
+  private formatPaceSummary(raw: RawPaceCurveSummary): PaceCurveSummary {
+    const out: Partial<Record<keyof PaceCurveSummary, PaceBest | null>> = {};
+    for (const [key, best] of Object.entries(raw) as [keyof PaceCurveSummary, RawPaceBest | null][]) {
+      out[key] = best
+        ? { time: formatDuration(best.time_seconds), pace: best.pace, activity_id: best.activity_id, date: best.date }
+        : null;
+    }
+    return out as PaceCurveSummary;
   }
 
   /**
    * Calculate pace comparison between current and previous periods
    */
   private calculatePaceComparison(
-    current: PaceCurveSummary,
-    previous: PaceCurveSummary,
+    current: RawPaceCurveSummary,
+    previous: RawPaceCurveSummary,
     isSwimming: boolean
   ): PaceCurveComparison[] {
     const comparisons: PaceCurveComparison[] = [];
@@ -612,9 +635,9 @@ export class HistoricalTools {
 
       comparisons.push({
         distance_label: key.replace('best_', ''),
-        current_seconds: currentBest.time_seconds,
-        previous_seconds: previousBest.time_seconds,
-        change_seconds: changeSeconds,
+        current_time: formatDuration(currentBest.time_seconds),
+        previous_time: formatDuration(previousBest.time_seconds),
+        change_time: formatSignedDuration(changeSeconds),
         change_percent: formatPercent(changePercent, 1),
         improved: changeSeconds < 0, // Faster is better for pace
       });
@@ -921,7 +944,10 @@ export class HistoricalTools {
       }
 
       if (activity.calories) {
-        kcal += activity.calories;
+        // Formatted as e.g. "650 kcal"; parse the number back for summing,
+        // like the duration/work fields below.
+        const value = parseFloat(activity.calories);
+        if (Number.isFinite(value)) kcal += value;
       }
 
       if (activity.work) {
@@ -976,7 +1002,7 @@ export class HistoricalTools {
       duration: formatLargeDuration(stats.durationSeconds),
       distance: formatDistance(stats.distanceKm, false),
       load: Math.round(stats.load),
-      kcal: Math.round(stats.kcal),
+      calories: formatCalories(stats.kcal),
       coasting: formatLargeDuration(stats.coastingSeconds),
     };
 
@@ -984,7 +1010,7 @@ export class HistoricalTools {
       result.climbing = formatLength(stats.climbingM);
     }
     if (stats.workKj > 0) {
-      result.work = `${Math.round(stats.workKj)} kJ`;
+      result.work = formatEnergyKJ(stats.workKj);
     }
 
     return result;
@@ -1027,7 +1053,7 @@ export class HistoricalTools {
         duration: formatLargeDuration(stats.durationSeconds),
         distance: distanceFormatted,
         load: Math.round(stats.load),
-        kcal: Math.round(stats.kcal),
+        calories: formatCalories(stats.kcal),
         zones: {},
       };
 
@@ -1035,7 +1061,7 @@ export class HistoricalTools {
         sportTotals.climbing = formatLength(stats.climbingM);
       }
       if (stats.workKj > 0) {
-        sportTotals.work = `${Math.round(stats.workKj)} kJ`;
+        sportTotals.work = formatEnergyKJ(stats.workKj);
       }
 
       // Add coasting only for cycling

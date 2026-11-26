@@ -808,7 +808,7 @@ describe('WhoopClient', () => {
       expect(result).toHaveLength(1);
       expect(result[0].date).toBe('2024-12-15'); // Date from end time
       expect(result[0].strain_score).toBe(15.5);
-      expect(result[0].calories).toBeCloseTo(2868, 0); // 12000 / 4.184
+      expect(result[0].calories).toBe('2868 kcal'); // 12000 / 4.184
       expect(result[0].activities).toHaveLength(1);
       expect(result[0].activities[0].activity_type).toBe('Cycling');
     });
@@ -1204,6 +1204,15 @@ describe('WhoopClient', () => {
 
       expect(oauthCalls()).toHaveLength(1);
       expect(acquireRefreshLock).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends Whoop data requests with a timeout signal', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ records: [] }) });
+
+      await client.getWorkouts('2024-12-15', '2024-12-15');
+
+      expect(mockFetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
     });
 
     it('sends the token refresh with a timeout signal', async () => {

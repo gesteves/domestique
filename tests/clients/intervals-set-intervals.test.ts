@@ -5,6 +5,17 @@ import { IntervalsClient } from '../../src/clients/intervals.js';
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+// updateActivityIntervals first GETs the activity's `time` stream. These
+// tests cover the PUT itself, so serve an activity without a time stream
+// (seconds map 1:1 to indices).
+function mockNoTimeStream() {
+  mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+}
+
+function mockTimeStream(time: number[]) {
+  mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([{ type: 'time', data: time }]) });
+}
+
 describe('IntervalsClient updateActivityIntervals', () => {
   let client: IntervalsClient;
 
@@ -15,6 +26,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
 
   describe('updateActivityIntervals', () => {
     it('should update activity intervals successfully', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
@@ -44,6 +56,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should include all=true query parameter by default', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
@@ -60,6 +73,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should include all=false when replaceAll is false', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
@@ -78,6 +92,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should include all=true when replaceAll is explicitly true', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
@@ -96,6 +111,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should handle intervals with all fields', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
@@ -111,7 +127,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
 
       await client.updateActivityIntervals('activity456', intervals);
 
-      const callArgs = mockFetch.mock.calls[0];
+      const callArgs = mockFetch.mock.calls[1]; // [0] is the time-stream GET
       const body = JSON.parse(callArgs[1].body);
 
       expect(body).toHaveLength(5);
@@ -126,6 +142,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should handle intervals without labels', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({}),
@@ -138,7 +155,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
 
       await client.updateActivityIntervals('activity789', intervals);
 
-      const callArgs = mockFetch.mock.calls[0];
+      const callArgs = mockFetch.mock.calls[1]; // [0] is the time-stream GET
       const body = JSON.parse(callArgs[1].body);
 
       // API uses start_index/end_index
@@ -148,6 +165,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should throw error on API error (404)', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 404,
@@ -162,6 +180,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should throw error on API error (401)', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 401,
@@ -176,6 +195,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should throw error on API error (500)', async () => {
+      mockNoTimeStream();
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -190,6 +210,7 @@ describe('IntervalsClient updateActivityIntervals', () => {
     });
 
     it('should handle network error', async () => {
+      mockNoTimeStream();
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       await expect(
@@ -197,6 +218,50 @@ describe('IntervalsClient updateActivityIntervals', () => {
           { start_time: 0, end_time: 300, type: 'WORK' as const },
         ])
       ).rejects.toThrow('Network error');
+    });
+  });
+
+  describe('seconds → sample index mapping', () => {
+    const putBody = () => {
+      const put = mockFetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PUT');
+      return JSON.parse((put![1] as RequestInit).body as string) as Array<{ start_index: number; end_index: number }>;
+    };
+
+    it('maps elapsed seconds through the time stream when recording is not 1 Hz', async () => {
+      // Smart recording: one sample every 2 s, with a 60 s auto-pause after t=100.
+      const time = [...Array.from({ length: 51 }, (_, i) => i * 2), ...Array.from({ length: 100 }, (_, i) => 160 + i * 2)];
+      mockTimeStream(time);
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+
+      await client.updateActivityIntervals('i1', [
+        { start_time: 40, end_time: 100, type: 'WORK' },
+        { start_time: 200, end_time: 300, type: 'RECOVERY' },
+      ]);
+
+      expect(putBody()).toEqual([
+        expect.objectContaining({ start_index: 20, end_index: 50 }),
+        // 200 s is sample 51 + (200-160)/2 = 71; 300 s is 51 + 70 = 121
+        expect.objectContaining({ start_index: 71, end_index: 121 }),
+      ]);
+    });
+
+    it('clamps boundaries past the end of the recording to the last sample', async () => {
+      mockTimeStream([0, 1, 2, 3, 4]);
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+
+      await client.updateActivityIntervals('i1', [{ start_time: 2, end_time: 999, type: 'WORK' }]);
+
+      expect(putBody()).toEqual([expect.objectContaining({ start_index: 2, end_index: 4 })]);
+    });
+
+    it('does not PUT anything when the time stream fetch fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve('busy') });
+
+      await expect(
+        client.updateActivityIntervals('i1', [{ start_time: 0, end_time: 60, type: 'WORK' }])
+      ).rejects.toThrow();
+      expect(mockFetch.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')).toBe(false);
     });
   });
 });

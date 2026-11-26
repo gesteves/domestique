@@ -1,8 +1,36 @@
 import { ApiError, type ErrorContext } from '../errors/index.js';
 import { logApiError } from '../utils/logger.js';
 
+/**
+ * Default per-request timeout for outbound API calls. Covers the whole
+ * exchange (connect, headers, and reading the body), so a stalled upstream
+ * fails the tool call with a retryable network error instead of hanging it.
+ */
+export const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
+
+/**
+ * Build the abort signal for an outbound request. Exposed so clients that call
+ * `fetch` directly (e.g. Whoop) apply the same timeout.
+ */
+export function requestTimeoutSignal(timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS): AbortSignal {
+  return AbortSignal.timeout(timeoutMs);
+}
+
+/**
+ * Turn fetch's timeout abort into an Error whose message says what happened
+ * ("The operation was aborted due to timeout" is unhelpful in tool output).
+ */
+export function describeFetchError(error: unknown, timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS): Error | undefined {
+  if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+    return new Error(`request timed out after ${Math.round(timeoutMs / 1000)}s`);
+  }
+  return error instanceof Error ? error : undefined;
+}
+
 export interface HttpRequestOptions {
   url: string;
+  /** Per-request timeout in ms. Defaults to {@link DEFAULT_HTTP_TIMEOUT_MS}. */
+  timeoutMs?: number;
   /**
    * What to log in place of `url` on failure. Set this when the URL itself is
    * a secret (e.g. TrainerRoad's private calendar feed URL). Credential query
@@ -29,17 +57,16 @@ export interface HttpRequestOptions {
  */
 async function performFetch(opts: HttpRequestOptions): Promise<Response> {
   const method = opts.method ?? 'GET';
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS;
   try {
     return await fetch(opts.url, {
       method,
       headers: opts.headers,
       body: opts.body,
+      signal: requestTimeoutSignal(timeoutMs),
     });
   } catch (error) {
-    const networkError = opts.toNetworkError(
-      opts.context,
-      error instanceof Error ? error : undefined
-    );
+    const networkError = opts.toNetworkError(opts.context, describeFetchError(error, timeoutMs));
     logApiError(networkError, { method, url: opts.logUrl ?? opts.url });
     throw networkError;
   }

@@ -1536,7 +1536,7 @@ describe('IntervalsClient', () => {
 
       const result = await client.getTodayWellness();
 
-      expect(result?.kcal_consumed).toBe(2400);
+      expect(result?.calories_consumed).toBe('2400 kcal');
       expect(result?.carbs).toBe('280 g');
       expect(result?.protein).toBe('150 g');
       expect(result?.fat_total).toBeUndefined();
@@ -2485,6 +2485,39 @@ describe('IntervalsClient', () => {
       expect(result?.settings.sweet_spot_max).toBeUndefined();
       expect(result?.settings.lthr).toBe('165 bpm');
       expect(result?.settings.max_hr).toBe('195 bpm');
+    });
+
+    it('formats threshold pace and pace zones in MINS_MILE (not raw speed)', async () => {
+      // 7:00/mi threshold = 1609.344 m / 420 s ≈ 3.8318 m/s
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([{
+          id: 2,
+          types: ['Run'],
+          threshold_pace: 1609.344 / 420,
+          pace_units: 'MINS_MILE',
+          pace_zones: [80, 100, 999],
+          pace_zone_names: ['Easy', 'Threshold', 'Fast'],
+        }]),
+      });
+
+      const result = await client.getSportSettingsForSport('running');
+
+      expect(result?.settings.threshold_pace).toBe('7:00/mi');
+      expect(result?.settings.pace_zones).toEqual([
+        expect.objectContaining({ name: 'Easy', slow_pace: null, fast_pace: '8:45/mi' }), // 420 / 0.8
+        expect.objectContaining({ name: 'Threshold', slow_pace: '8:45/mi', fast_pace: '7:00/mi' }),
+        expect.objectContaining({ name: 'Fast', slow_pace: '7:00/mi', fast_pace: null }),
+      ]);
+    });
+
+    it('formats a yard-pool swim threshold pace per 100yd', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([{ id: 3, types: ['Swim'], threshold_pace: 91.44 / 95, pace_units: 'SECS_100Y' }]),
+      });
+      const result = await client.getSportSettingsForSport('swimming');
+      expect(result?.settings.threshold_pace).toBe('1:35/100yd');
     });
   });
 
