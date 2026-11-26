@@ -14,9 +14,12 @@ primary_region = 'iad'
 [[services]]
   protocol = 'tcp'
   internal_port = 6379
-  auto_stop_machines = 'stop'
+  # Domestique reaches Redis via domestique-redis.internal, which bypasses the
+  # Fly Proxy, so a stopped machine is never woken and DNS won't resolve.
+  # Keep it running.
+  auto_stop_machines = 'off'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
   [[services.ports]]
