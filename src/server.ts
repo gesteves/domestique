@@ -5,9 +5,6 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { validateToken, getConfig } from './auth/middleware.js';
 import { ToolRegistry } from './tools/index.js';
 import { logMcpRequest, isMcpRequestLoggingEnabled } from './utils/request-logger.js';
-import { createWhoopWebhookHandler } from './webhooks/whoop.js';
-import { createLocationApiHandler } from './api/location.js';
-import { createRegenerateDescriptionsApiHandler } from './api/regenerate-descriptions.js';
 import { logInfo, logError } from './utils/logger.js';
 
 export interface ServerOptions {
@@ -24,7 +21,6 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
     intervals: config.intervals,
     whoop: config.whoop,
     trainerroad: config.trainerRoad,
-    lastfm: config.lastfm,
     googleWeather: config.googleWeather,
     googleAirQuality: config.googleAirQuality,
     googlePollen: config.googlePollen,
@@ -35,84 +31,10 @@ export async function createServer(options: ServerOptions): Promise<express.Expr
 
   logInfo('Server', 'Tool registry created');
 
-  // Whoop webhook receiver. Authenticates incoming requests via Whoop's HMAC
-  // signature (signed with WHOOP_CLIENT_SECRET), so no separate auth token is
-  // needed. Registered BEFORE the global express.json() so the route-local
-  // express.raw() can see the unparsed body — the HMAC must be computed over
-  // exactly the bytes Whoop sent.
-  const whoopClientForWebhook = toolRegistry.getWhoopClient();
-  if (whoopClientForWebhook && config.whoop) {
-    const whoopWebhookHandler = createWhoopWebhookHandler({
-      intervals: toolRegistry.getIntervalsClient(),
-      whoop: whoopClientForWebhook,
-      trainerroad: toolRegistry.getTrainerRoadClient(),
-      clientSecret: config.whoop.clientSecret,
-    });
-    app.post(
-      '/webhooks/whoop',
-      express.raw({ type: '*/*', limit: '64kb' }),
-      whoopWebhookHandler
-    );
-    logInfo('Server', 'Whoop webhook receiver registered at POST /webhooks/whoop');
-  } else {
-    logInfo('Server', 'Whoop webhook receiver not registered (Whoop is not configured)');
-  }
-
   app.use(express.json());
 
   if (isMcpRequestLoggingEnabled()) {
     logInfo('MCP Request', 'Logging enabled (LOG_MCP_REQUESTS=true)');
-  }
-
-  // PUT /api/location — caller-initiated (typically an iOS Shortcut posting
-  // device GPS). Authenticated with a dedicated shared secret (Bearer header
-  // only, no HMAC), so it can run after express.json() and read the parsed
-  // body. Registered only when the secret and the Google geocoding/timezone
-  // clients are configured.
-  const geocodingForLocation = toolRegistry.getGoogleGeocodingClient();
-  const timezoneForLocation = toolRegistry.getGoogleTimezoneClient();
-  if (config.apiSecret && geocodingForLocation && timezoneForLocation) {
-    app.put(
-      '/api/location',
-      createLocationApiHandler({
-        intervals: toolRegistry.getIntervalsClient(),
-        geocoding: geocodingForLocation,
-        timezone: timezoneForLocation,
-        secret: config.apiSecret,
-      })
-    );
-    logInfo('Server', 'Location endpoint registered at PUT /api/location');
-  } else {
-    logInfo(
-      'Server',
-      'Location endpoint not registered (set API_SECRET and GOOGLE_API_KEY)'
-    );
-  }
-
-  // POST /api/activities/descriptions — caller-initiated batch regen.
-  // Authenticated with the same shared secret as the location endpoint
-  // (Bearer header only, no HMAC), so it can run after express.json() and
-  // read the parsed body. Whoop/TrainerRoad are optional — without them the
-  // description just omits the Whoop strain / planned lines.
-  if (config.apiSecret) {
-    app.post(
-      '/api/activities/descriptions',
-      createRegenerateDescriptionsApiHandler({
-        intervals: toolRegistry.getIntervalsClient(),
-        whoop: toolRegistry.getWhoopClient(),
-        trainerroad: toolRegistry.getTrainerRoadClient(),
-        secret: config.apiSecret,
-      })
-    );
-    logInfo(
-      'Server',
-      'Regenerate-descriptions endpoint registered at POST /api/activities/descriptions'
-    );
-  } else {
-    logInfo(
-      'Server',
-      'Regenerate-descriptions endpoint not registered (set API_SECRET)'
-    );
   }
 
   // Store active transports and servers by sessionId

@@ -16,30 +16,6 @@ export function getTodayInTimezone(timezone: string): string {
 }
 
 /**
- * Strict YYYY-MM-DD parse that also rejects impossible calendar dates
- * (e.g. 2026-02-30). Returns the trimmed date string when valid, else null.
- * Does not resolve relative dates ("today") — callers that need a default
- * should substitute one explicitly.
- */
-export function parseYMD(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
-  if (!m) return null;
-  const [, y, mo, d] = m;
-  const date = new Date(`${trimmed}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  if (
-    date.getUTCFullYear() !== Number(y) ||
-    date.getUTCMonth() + 1 !== Number(mo) ||
-    date.getUTCDate() !== Number(d)
-  ) {
-    return null;
-  }
-  return trimmed;
-}
-
-/**
  * Add a (possibly negative) number of days to a YYYY-MM-DD string.
  * Operates on UTC components only, so the result is independent of the JS runtime's timezone.
  */
@@ -59,37 +35,6 @@ export function addMonthsToYMD(ymd: string, months: number): string {
   const date = new Date(Date.UTC(y, m - 1, d));
   date.setUTCMonth(date.getUTCMonth() + months);
   return ymdFromUTC(date);
-}
-
-/**
- * Convert a UTC timestamp (or `undefined` to mean "now") into a YYYY-MM-DD
- * using a fixed offset like Whoop's `timezone_offset` ("Z", "-05:00", "+0200").
- *
- * Unlike `formatYMDInTimezone`, this takes a raw numeric offset string rather
- * than an IANA zone name — handy for sources like Whoop that record the
- * offset that applied at the moment of the event, regardless of the athlete's
- * current location.
- */
-export function formatYMDFromOffset(
-  timestamp: string | undefined,
-  offset: string,
-  now: Date = new Date()
-): string {
-  const offsetMs = parseFixedOffsetMs(offset);
-  const baseMs = timestamp ? new Date(timestamp).getTime() : now.getTime();
-  return new Date(baseMs + offsetMs).toISOString().slice(0, 10);
-}
-
-function parseFixedOffsetMs(offset: string): number {
-  if (offset === 'Z') return 0;
-  const match = /^([+-])(\d{2}):?(\d{2})$/.exec(offset);
-  if (!match) {
-    throw new Error(`Unrecognized fixed timezone offset: ${offset}`);
-  }
-  const sign = match[1] === '-' ? -1 : 1;
-  const hours = Number(match[2]);
-  const minutes = Number(match[3]);
-  return sign * (hours * 60 + minutes) * 60 * 1000;
 }
 
 /**

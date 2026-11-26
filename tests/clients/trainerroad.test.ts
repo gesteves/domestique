@@ -93,7 +93,7 @@ END:VCALENDAR`;
     it('should trim trailing whitespace from the SUMMARY name', async () => {
       // TrainerRoad iCal SUMMARY values can carry a trailing space, e.g.
       // "2:00 - Tortoise Shell ". Left intact it breaks `activity.name`
-      // `includes(planned.name)` matching for activity-description headlines.
+      // `includes(planned.name)` matching (e.g. race-leg detection).
       // Trailing space built explicitly so editors/linters can't silently strip it.
       const summaryLine = `SUMMARY:2:00 - Tortoise Shell${' '}`;
       const icsWithTrailingSpace = [

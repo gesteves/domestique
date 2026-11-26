@@ -133,7 +133,6 @@ describe('HistoricalTools', () => {
       const toolsWithTr = new HistoricalTools(
         mockIntervalsClient,
         mockWhoopClient,
-        null,
         mockTrainerRoadClient
       );
 
@@ -266,7 +265,6 @@ describe('HistoricalTools', () => {
       const toolsWithTr = new HistoricalTools(
         mockIntervalsClient,
         mockWhoopClient,
-        null,
         mockTrainerRoadClient
       );
 

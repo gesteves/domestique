@@ -84,7 +84,7 @@ export class TrainerRoadClient {
       // Trim at the source: TrainerRoad iCal SUMMARY values can carry trailing
       // whitespace (e.g. "2:00 - Tortoise Shell "), which otherwise survives
       // stripDurationFromName's greedy `(.+)$` capture and breaks downstream
-      // exact/`includes` name matching (race-leg detection, activity headlines).
+      // exact/`includes` name matching (e.g. race-leg detection).
       const rawSummary = typeof event.summary === 'string' ? event.summary : event.summary.val;
       const summary = rawSummary.trim();
       const description = event.description == null

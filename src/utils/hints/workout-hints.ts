@@ -89,7 +89,7 @@ export const activityHistoryHint: HintGenerator<ActivityHistoryResponse | Workou
 
   const workoutIds = workouts.map((w) => w.id).join(', ');
 
-  return `For full workout analysis (intervals, notes, weather, zones, music), call get_workout_details with activity_id. Available IDs: ${workoutIds}`;
+  return `For full workout analysis (intervals, notes, weather, zones), call get_workout_details with activity_id. Available IDs: ${workoutIds}`;
 };
 
 /**

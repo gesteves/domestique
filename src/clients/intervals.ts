@@ -42,7 +42,6 @@ import type {
   WellnessTrends,
   ActivityType,
   ActivityIntervalInput,
-  PlayedSong,
   WeatherLocation,
   Race,
   RacePriority,
@@ -410,10 +409,6 @@ interface IntervalsActivity {
   // carbs_ingested / (elapsed_time / 3600). Null when intake or elapsed time
   // isn't recorded.
   CarbIntakeRate?: number;
-
-  // Whoop strain (0-21) for the matched Whoop workout. Written by the
-  // Whoop webhook receiver on workout.updated events.
-  WhoopWorkoutStrain?: number;
 }
 
 interface IntervalsWellness {
@@ -477,9 +472,6 @@ interface IntervalsWellness {
 
   // Custom metrics
   CoreHeatAdaptationScore?: number;
-  WhoopStrain?: number; // Daily Whoop cycle strain (0-21), written by the Whoop webhook receiver
-  WhoopSleepPerformance?: number; // Whoop sleep performance percentage (0-100), keyed by sleep end date
-  WhoopRecovery?: number; // Whoop recovery score (0-100), keyed by associated sleep's end date
 }
 
 /**
@@ -729,9 +721,6 @@ interface RawHRCurvesResponse {
 export class IntervalsClient {
   private config: IntervalsConfig;
   private authHeader: string;
-  private playedSongsGetter:
-    | ((startMs: number, endMs: number) => Promise<PlayedSong[]>)
-    | null = null;
 
   // Session-lifetime memoized fetchers. Each gives single-flight + cache-on-success
   // for endpoints that return effectively-constant profile/settings data.
@@ -789,39 +778,11 @@ export class IntervalsClient {
     });
   }
 
-  /**
-   * Drop the session-memoized timezone and weather-config caches so subsequent
-   * reads reflect a just-written athlete profile / weather config. Call after a
-   * successful location update on a long-running server.
-   *
-   * Only timezone and weather-config are reset because those are the only fields
-   * a location update mutates. The other memoized caches — sport settings
-   * (`fetchSportSettingsCached`), unit preferences (`fetchUnitPreferencesCached`),
-   * and wellness sources (`fetchWellnessSourcesCached`) — are intentionally
-   * session-permanent: nothing in this server writes them, so they can't go
-   * stale within a session. The asymmetry is deliberate, not an oversight.
-   */
-  invalidateAthleteCaches(): void {
-    this.fetchTimezone = this.buildTimezoneCache();
-    this.fetchWeatherConfigCached = this.buildWeatherConfigCache();
-  }
-
   constructor(config: IntervalsConfig) {
     this.config = config;
     // Intervals.icu uses API key as password with "API_KEY" as username
     const credentials = Buffer.from(`API_KEY:${config.apiKey}`).toString('base64');
     this.authHeader = `Basic ${credentials}`;
-  }
-
-  /**
-   * Set a function that fetches played songs for a time range (ms since epoch).
-   * When set, normalizeActivity attaches the songs under `played_songs` for single-activity
-   * fetches (skipExpensiveCalls: false).
-   */
-  setPlayedSongsGetter(
-    getter: (startMs: number, endMs: number) => Promise<PlayedSong[]>
-  ): void {
-    this.playedSongsGetter = getter;
   }
 
   /**
@@ -970,43 +931,6 @@ export class IntervalsClient {
         longitude: l.lon,
         location: l.location,
       }));
-  }
-
-  /**
-   * Fetch the raw weather-config forecast locations, bypassing the session
-   * cache. Use for read-before-write comparisons; reads on the hot path should
-   * use the memoized getEnabledWeatherLocations().
-   */
-  async getWeatherForecastsRaw(): Promise<IntervalsWeatherForecastLocation[]> {
-    const response = await this.fetch<IntervalsWeatherConfig>('/weather-config');
-    return response.forecasts ?? [];
-  }
-
-  /**
-   * Update the athlete's profile location fields via PUT /athlete/{id}.
-   * Only the provided keys are sent.
-   */
-  async updateAthleteProfile(updates: {
-    city?: string;
-    state?: string;
-    country?: string;
-    timezone?: string;
-  }): Promise<void> {
-    await this.putJson('', updates, { operation: 'update athlete profile' });
-  }
-
-  /**
-   * Replace the athlete's weather-config forecast locations via
-   * PUT /athlete/{id}/weather-config.
-   */
-  async updateWeatherConfig(
-    forecasts: IntervalsWeatherForecastLocation[]
-  ): Promise<void> {
-    await this.putJson(
-      '/weather-config',
-      { forecasts },
-      { operation: 'update weather config' }
-    );
   }
 
   /**
@@ -2268,22 +2192,6 @@ export class IntervalsClient {
   }
 
   /**
-   * Fetch the raw CoreHeatAdaptationScore (0–100) for a given date, or null
-   * when there's no wellness record / no score on file. Used by the Whoop
-   * webhook description path to append a "X% heat adapted" suffix to the
-   * heat-strain line. Failures (404, network) resolve to null — heat
-   * adaptation is best-effort, not a critical signal.
-   */
-  async getCoreHeatAdaptationScore(date: string): Promise<number | null> {
-    try {
-      const data = await this.fetch<IntervalsWellness>(`/wellness/${date}`);
-      return typeof data.CoreHeatAdaptationScore === 'number' ? data.CoreHeatAdaptationScore : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
    * Update wellness fields for a specific date.
    * PUT /api/v1/athlete/{id}/wellness/{date}
    *
@@ -2299,37 +2207,6 @@ export class IntervalsClient {
       updates,
       { operation: 'update wellness', resource: `wellness ${date}` }
     );
-  }
-
-  /**
-   * Bulk-update wellness records for multiple dates in a single request.
-   * PUT /api/v1/athlete/{id}/wellness-bulk
-   *
-   * Each record's `id` is the day in YYYY-MM-DD format. Only fields present
-   * on each record are changed; everything else is left intact.
-   */
-  async updateWellnessBulk(
-    records: Array<Partial<IntervalsWellness> & { id: string }>
-  ): Promise<void> {
-    logApiCall('Intervals', '/wellness-bulk', 'PUT');
-    const url = new URL(
-      `${INTERVALS_API_BASE}/athlete/${this.config.athleteId}/wellness-bulk`
-    );
-    return httpRequestVoid({
-      url: url.toString(),
-      method: 'PUT',
-      headers: {
-        Authorization: this.authHeader,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(records),
-      context: {
-        operation: 'bulk update wellness',
-        resource: `${records.length} wellness records`,
-      },
-      ...intervalsHttpErrorBuilders,
-    });
   }
 
   /**
@@ -2517,20 +2394,6 @@ export class IntervalsClient {
     if (!options?.skipExpensiveCalls && !isIndoor) {
       const weatherResponse = await this.getActivityWeather(activity.id);
       weatherDescription = weatherResponse.weather_description;
-    }
-
-    // Fetch songs played during the activity from Last.fm (if configured)
-    // Skip if skipExpensiveCalls is true
-    let playedSongs: PlayedSong[] | undefined;
-    if (!options?.skipExpensiveCalls && this.playedSongsGetter) {
-      try {
-        const { startMs, endMs } = computeActivityTimeRange(activity);
-        const songs = await this.playedSongsGetter(startMs, endMs);
-        playedSongs = songs.length > 0 ? songs : undefined;
-      } catch (error) {
-        // Last.fm failures should never fail activity normalization
-        playedSongs = undefined;
-      }
     }
 
     // Get athlete timezone for formatting start_time
@@ -2731,9 +2594,6 @@ export class IntervalsClient {
 
       // Weather (only fetched for outdoor activities in single-activity requests)
       weather_description: weatherDescription,
-
-      // Songs played during the activity (only fetched when Last.fm is configured)
-      played_songs: playedSongs,
     };
   }
 
@@ -3317,18 +3177,4 @@ export class IntervalsClient {
       { operation: 'update activity intervals', resource: `activity ${activityId}` }
     );
   }
-}
-
-/**
- * Compute start/end time for an activity as milliseconds since epoch.
- * Uses start_date (UTC) and moving_time (falling back to elapsed_time).
- */
-function computeActivityTimeRange(activity: IntervalsActivity): {
-  startMs: number;
-  endMs: number;
-} {
-  const startMs = new Date(activity.start_date).getTime();
-  const durationSeconds = activity.moving_time ?? activity.elapsed_time ?? 0;
-  const endMs = startMs + durationSeconds * 1000;
-  return { startMs, endMs };
 }

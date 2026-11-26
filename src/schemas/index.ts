@@ -130,15 +130,6 @@ const IntervalGroupZ = z.object({
   elevation_gain: z.string().optional().describe('Total elevation gain across all repetitions in this group'),
 }).passthrough();
 
-const PlayedSongZ = z.object({
-  name: z.string().optional().describe('Track title'),
-  played_at: z.string().optional().describe("When the song was scrobbled, in the user's local timezone"),
-  url: z.string().optional().describe('Last.fm track URL'),
-  album: z.string().optional().describe('Album name'),
-  artist: z.string().optional().describe('Artist name'),
-  loved: z.literal(true).optional().describe('Set to true when the user has marked this track as loved on Last.fm; omitted otherwise'),
-}).passthrough();
-
 // ============================================
 // Whoop matched data (embedded in workouts)
 // ============================================
@@ -298,7 +289,6 @@ const WorkoutDetailZ = WorkoutSummaryZ.extend({
   cadence_z2: z.string().optional().describe('Average cadence during Zone 2 effort'),
   compliance: z.string().optional().describe('Workout compliance against the planned target. "0%" means no planned workout was matched'),
   weather_description: z.string().optional().describe('Weather summary for outdoor activities. Not included for indoor activities'),
-  played_songs: z.array(PlayedSongZ).optional().describe('Songs scrobbled to Last.fm during the activity, in chronological order'),
 }).passthrough();
 
 // ============================================
@@ -838,7 +828,7 @@ export const strainHistoryOutputSchema = {
 } as const;
 
 export const activityHistoryOutputSchema = {
-  workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Full per-activity detail (intervals, notes, weather, music) is available separately by activity ID.'),
+  workouts: z.array(WorkoutSummaryZ).describe('Completed workouts and fitness activities in the date range, with comprehensive metrics and matched Whoop strain data when available. Full per-activity detail (intervals, notes, weather) is available separately by activity ID.'),
   annotations: annotationsField,
   hints: hintsField,
 } as const;
@@ -891,7 +881,7 @@ export const upcomingActivitiesOutputSchema = {
 } as const;
 
 export const workoutDetailsOutputSchema = {
-  workout: WorkoutDetailZ.describe('Detailed workout including intervals, notes, weather, zones, heat zones, music, and matched Whoop strain data'),
+  workout: WorkoutDetailZ.describe('Detailed workout including intervals, notes, weather, zones, heat zones, and matched Whoop strain data'),
 } as const;
 
 export const trainingLoadTrendsOutputSchema = {
@@ -964,7 +954,7 @@ export const todaysSummaryOutputSchema = {
   fitness: FitnessMetricsZ.nullable().optional().describe("Today's fitness metrics (CTL/ATL/TSB) from Intervals.icu. Null if unavailable"),
   wellness: WellnessDataZ.nullable().optional().describe("Today's wellness data from Intervals.icu — HRV, resting HR, sleep, SpO2, blood pressure, body composition, subjective scores, nutrition, and more. Includes a `sources` map naming each field's configured provider (garmin/whoop/oura). Some fields overlap with whoop.* and are shown in parallel intentionally so the same metric can be reconciled across sources. Null if no wellness data was recorded."),
   planned_workouts: z.array(PlannedWorkoutZ).optional().describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
-  completed_workouts: z.array(WorkoutDetailZ).optional().describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
+  completed_workouts: z.array(WorkoutDetailZ).optional().describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones) and matched Whoop strain data'),
   annotations: annotationsField,
   training_phase: trainingPhaseField,
   scheduled_race: RaceZ.nullable().optional().describe("Today's race, if any"),
@@ -988,7 +978,7 @@ export const forecastOutputSchema = {
 
 export const todaysActivitiesOutputSchema = {
   current_time: z.string().optional().describe("Current date and time in the user's local timezone"),
-  completed_workouts: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones, music) and matched Whoop strain data'),
+  completed_workouts: z.array(WorkoutDetailZ).describe('Workouts completed so far today, with full per-activity details (intervals, notes, weather, zones, heat zones) and matched Whoop strain data'),
   planned_workouts: z.array(PlannedWorkoutZ).describe('Workouts planned for today from TrainerRoad and Intervals.icu'),
   races: z.array(RaceZ).describe("Today's race, if any (zero or one entry, detected from the TrainerRoad calendar)"),
   annotations: annotationsField,
@@ -1102,32 +1092,4 @@ export const updateActivityOutputSchema = {
 export const updateHeatAdaptationScoreOutputSchema = {
   date: z.string().describe('Date the score was set on'),
   heat_adaptation_score: z.string().describe('Updated heat adaptation score'),
-} as const;
-
-export const updateLocationInputSchema = {
-  latitude: z.number().optional().describe('Latitude in decimal degrees. Provide with longitude, or use location instead'),
-  longitude: z.number().optional().describe('Longitude in decimal degrees. Provide with latitude, or use location instead'),
-  location: z.string().optional().describe('Free-text place query (city, address, landmark) resolved to coordinates. Use instead of latitude/longitude'),
-} as const;
-
-export const updateLocationOutputSchema = {
-  location: z.string().describe('Resolved location string written to Intervals.icu (e.g. "Jackson Hole, Wyoming, United States")'),
-  label: z.string().describe('Human-readable display label for the location'),
-  timezone: z.string().describe('Resolved IANA timezone'),
-  city: z.string().optional().describe('Resolved city'),
-  state: z.string().optional().describe('Resolved state/region'),
-  country: z.string().optional().describe('Resolved country'),
-  profile_updated: z.boolean().describe('Whether the Intervals.icu athlete profile was changed (false if already current)'),
-  weather_config_updated: z.boolean().describe('Whether the Intervals.icu weather config was changed (false if already current)'),
-} as const;
-
-export const regenerateDescriptionsInputSchema = {
-  activity_id: z.string().optional().describe('Intervals.icu activity ID to regenerate. Takes precedence over date; when set, only this activity is regenerated'),
-  date: z.string().optional().describe('Day to regenerate, as YYYY-MM-DD. Omit for today in the athlete\'s timezone. Ignored when activity_id is set'),
-} as const;
-
-export const regenerateDescriptionsOutputSchema = {
-  date: z.string().describe('The day whose activity descriptions were regenerated (YYYY-MM-DD)'),
-  regenerated: z.array(z.string()).describe('Activity IDs a description regeneration was attempted for'),
-  skipped: z.array(z.string()).describe('Activity IDs skipped (not swim/bike/run, pool swim, or unavailable Strava import)'),
 } as const;

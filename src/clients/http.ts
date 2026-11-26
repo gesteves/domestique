@@ -65,7 +65,7 @@ async function throwIfNotOk(response: Response, opts: HttpRequestOptions): Promi
 
 /**
  * Perform an HTTP request and parse the response as JSON.
- * Used by clients whose APIs return JSON on success (Intervals.icu, Whoop bodies, Last.fm bodies).
+ * Used by clients whose APIs return JSON on success (Intervals.icu, Whoop, Google).
  */
 export async function httpRequestJson<T>(opts: HttpRequestOptions): Promise<T> {
   const response = await performFetch(opts);
@@ -75,8 +75,7 @@ export async function httpRequestJson<T>(opts: HttpRequestOptions): Promise<T> {
 
 /**
  * Perform an HTTP request and return the response body as text.
- * Used by callers that handle parsing themselves (Last.fm needs to inspect API-level
- * error bodies before treating the payload as data; TrainerRoad returns iCal text).
+ * Used by callers that handle parsing themselves (TrainerRoad returns iCal text).
  */
 export async function httpRequestText(opts: HttpRequestOptions): Promise<string> {
   const response = await performFetch(opts);

@@ -997,7 +997,7 @@ describe('CurrentTools', () => {
 
       await tools.getTodaysSummary();
 
-      // Per-activity expensive calls (intervals, notes, weather, music) should
+      // Per-activity expensive calls (intervals, notes, weather) should
       // be included for today's completed workouts.
       const callArgs = vi.mocked(mockIntervalsClient.getActivities).mock.calls[0];
       const options = callArgs[3];

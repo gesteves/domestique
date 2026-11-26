@@ -1,7 +1,6 @@
 import { logWarn } from '../utils/logger.js';
 import { IntervalsClient } from '../clients/intervals.js';
 import { WhoopClient } from '../clients/whoop.js';
-import { LastFmClient } from '../clients/lastfm.js';
 import { TrainerRoadClient } from '../clients/trainerroad.js';
 import { parseDateStringInTimezone, parseDateRangeInTimezone, getTodayInTimezone, addDaysToYMD } from '../utils/tz.js';
 import { enrichWorkoutsWithWhoop, normalizeActivityTypeToSport } from '../utils/workout-utils.js';
@@ -55,7 +54,6 @@ export class HistoricalTools {
   constructor(
     private intervals: IntervalsClient,
     private whoop: WhoopClient | null,
-    private lastfm: LastFmClient | null = null,
     private trainerroad: TrainerRoadClient | null = null
   ) {}
 

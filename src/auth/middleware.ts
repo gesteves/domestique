@@ -96,8 +96,6 @@ export function getConfig() {
   return {
     port: parseInt(process.env.PORT ?? '3000', 10),
     mcpAuthToken: process.env.MCP_AUTH_TOKEN!,
-    // Authenticates the caller-initiated /api endpoints.
-    apiSecret: process.env.API_SECRET ?? null,
     intervals: {
       apiKey: process.env.INTERVALS_API_KEY!,
       athleteId: process.env.INTERVALS_ATHLETE_ID!,
@@ -115,13 +113,6 @@ export function getConfig() {
           calendarUrl: process.env.TRAINERROAD_CALENDAR_URL,
         }
       : null,
-    lastfm:
-      process.env.LASTFM_USERNAME && process.env.LASTFM_API_KEY
-        ? {
-            username: process.env.LASTFM_USERNAME,
-            apiKey: process.env.LASTFM_API_KEY,
-          }
-        : null,
     googleWeather: process.env.GOOGLE_API_KEY
       ? {
           apiKey: process.env.GOOGLE_API_KEY,

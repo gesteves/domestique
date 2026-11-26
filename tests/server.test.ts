@@ -14,6 +14,9 @@ vi.mock('../src/auth/middleware.js', () => ({
     },
     whoop: null,
     trainerRoad: null,
+    // No longer read by the server; set so the removed-endpoints test would
+    // catch a regression that re-registers the /api routes.
+    apiSecret: 'test-secret',
   })),
 }));
 
@@ -26,11 +29,6 @@ vi.mock('../src/tools/index.js', () => ({
       handleToolCall: vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: '{}' }],
       }),
-      getIntervalsClient: vi.fn(),
-      getWhoopClient: vi.fn().mockReturnValue(null),
-      getTrainerRoadClient: vi.fn().mockReturnValue(null),
-      getGoogleGeocodingClient: vi.fn().mockReturnValue(null),
-      getGoogleTimezoneClient: vi.fn().mockReturnValue(null),
     };
   }),
 }));
@@ -196,6 +194,25 @@ describe('Server', () => {
 
       expect(response.status).toBe(302);
       expect(response.headers.get('location')).toBe('https://github.com/gesteves/domestique');
+    });
+  });
+
+  describe('Removed endpoints', () => {
+    it.each([
+      ['POST', '/webhooks/whoop'],
+      ['PUT', '/api/location'],
+      ['POST', '/api/activities/descriptions'],
+    ])('%s %s returns 404', async (method, path) => {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers: {
+          Authorization: 'Bearer test-secret',
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      });
+
+      expect(response.status).toBe(404);
     });
   });
 

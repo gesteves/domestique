@@ -16,7 +16,6 @@ async function main() {
     logInfo('Startup', `Intervals.icu: configured for athlete ${config.intervals.athleteId}`);
     logInfo('Startup', `Whoop: ${config.whoop ? 'configured' : 'not configured'}`);
     logInfo('Startup', `TrainerRoad: ${config.trainerRoad ? 'configured' : 'not configured'}`);
-    logInfo('Startup', `Last.fm: ${config.lastfm ? 'configured' : 'not configured'}`);
     logInfo('Startup', `Google Weather: ${config.googleWeather ? 'configured' : 'not configured'}`);
     logInfo('Startup', `Google Air Quality: ${config.googleAirQuality ? 'configured' : 'not configured'}`);
     logInfo('Startup', `Google Pollen: ${config.googlePollen ? 'configured' : 'not configured'}`);

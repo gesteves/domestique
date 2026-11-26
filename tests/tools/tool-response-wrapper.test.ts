@@ -17,7 +17,6 @@ vi.mock('../../src/clients/intervals.js', () => ({
       getUnitPreferences: vi.fn().mockResolvedValue({ system: 'metric', weight: 'kg', temperature: 'celsius' }),
       getWellness: vi.fn().mockResolvedValue(null),
       getWellnessTrends: vi.fn().mockResolvedValue({ period_days: 7, start_date: '', end_date: '', data: [] }),
-      setPlayedSongsGetter: vi.fn(),
     };
   }),
 }));
@@ -47,14 +46,6 @@ vi.mock('../../src/clients/trainerroad.js', () => ({
   }),
 }));
 
-vi.mock('../../src/clients/lastfm.js', () => ({
-  LastFmClient: vi.fn().mockImplementation(function () {
-    return {
-      getPlayedSongsDuring: vi.fn().mockResolvedValue([]),
-    };
-  }),
-}));
-
 describe('Tool Response Wrapper', () => {
   let registry: ToolRegistry;
   let mockServer: { registerTool: ReturnType<typeof vi.fn> };
@@ -80,7 +71,6 @@ describe('Tool Response Wrapper', () => {
         clientSecret: 'test',
       },
       trainerroad: { calendarUrl: 'https://test.com' },
-      lastfm: { username: 'test', apiKey: 'test' },
     });
 
     registry.registerTools(mockServer as unknown as Parameters<typeof registry.registerTools>[0]);
@@ -209,7 +199,7 @@ describe('Tool Response Wrapper', () => {
 
   describe('tool registration', () => {
     it('should register all expected tools', () => {
-      expect(registeredHandlers.size).toBe(26);
+      expect(registeredHandlers.size).toBe(25);
 
       // Verify key tools are registered
       expect(registeredHandlers.has('get_todays_summary')).toBe(true);
@@ -237,7 +227,8 @@ describe('Tool Response Wrapper', () => {
       expect(registeredHandlers.has('create_annotation')).toBe(true);
       expect(registeredHandlers.has('update_annotation')).toBe(true);
       expect(registeredHandlers.has('delete_annotation')).toBe(true);
-      expect(registeredHandlers.has('regenerate_descriptions')).toBe(true);
+      expect(registeredHandlers.has('regenerate_descriptions')).toBe(false);
+      expect(registeredHandlers.has('update_location')).toBe(false);
     });
 
     it('should set up timezone getter when Whoop client is configured', async () => {

@@ -104,7 +104,7 @@ export function logDebug(scope: string, message: string): void {
   if (shouldLog('debug')) console.log(format(scope, message));
 }
 
-/** Normal operational line (API calls, tool invocations, webhook lifecycle). */
+/** Normal operational line (API calls, tool invocations, startup). */
 export function logInfo(scope: string, message: string): void {
   if (shouldLog('info')) console.log(format(scope, message));
 }

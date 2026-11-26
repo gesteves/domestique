@@ -11,7 +11,6 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - Fitness trends (CTL/ATL/TSB) and detailed workout analysis with intervals, notes, and weather
 - Heat strain and heat adaptation score from a [CORE Body Temperature](https://corebodytemp.com/) sensor
 - Weather, AQI, and pollen forecasts up to 10 days out for Intervals.icu weather locations or any geocoded place
-- Generates activity descriptions for Strava (swim, bike, and run activities only)
 
 **Note:** Workouts imported from Strava can't be analyzed due to API restrictions. Sync them from Zwift, Garmin Connect, Dropbox, etc. instead.
 
@@ -42,7 +41,6 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 - `sync_trainerroad_runs` - Sync running workouts from TrainerRoad to Intervals.icu, detecting changes and orphans.
 - `set_workout_intervals` - Set intervals on a completed activity.
 - `update_activity` - Update name and/or description of a completed activity.
-- `regenerate_descriptions` - Regenerate the descriptions of a day's completed activities, or a single activity by ID.
 
 ### Calendar Annotations
 - `create_annotation` - Add a sick/injured/holiday/note annotation to the Intervals.icu calendar.
@@ -51,7 +49,7 @@ A TypeScript MCP (Model Context Protocol) server that integrates with [Intervals
 
 ### Analysis
 - `get_training_load_trends` - CTL, ATL, TSB, ramp rate, and ACWR over time.
-- `get_workout_details` - All details for one workout: intervals, notes, weather, zones, music, and matched Whoop strain.
+- `get_workout_details` - All details for one workout: intervals, notes, weather, zones, and matched Whoop strain.
 
 ### Performance Curves
 - `get_power_curve` - Best watts at various durations with W/kg, estimated FTP, and period comparison.
@@ -104,21 +102,11 @@ For TrainerRoad integration:
 For weather forecasts (optional):
 - `GOOGLE_API_KEY` - Google Cloud API key with the Weather, Air Quality, Pollen, Elevation, Geocoding, and Time Zone APIs enabled.
 
-For Last.fm integration (optional):
-- `LASTFM_USERNAME` - Last.fm username.
-- `LASTFM_API_KEY` - Last.fm API key.
-
-When both are set, `get_workout_details` and `get_todays_activities` include tracks played during the workout. ("Why not use Spotify?" you may be wondering. Ingesting Spotify data into AI is against their [developer policy](https://developer.spotify.com/policy).)
-
 For Anthropic API integration:
-- `ANTHROPIC_API_KEY` - Required for `create_workout` and `update_workout` on cycling and running (server converts the plain-language `structure` field into Intervals.icu workout-doc syntax). Also enables, when set, Claude for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note), triathlon race priority extraction (A/B/C from the umbrella description), auto-generated activity descriptions on `workout.updated` Whoop webhooks, and debug token counting.
+- `ANTHROPIC_API_KEY` - Required for `create_workout` and `update_workout` on cycling and running (server converts the plain-language `structure` field into Intervals.icu workout-doc syntax). Also enables, when set, Claude for TrainerRoad annotation categorization (Sick/Injured/Holiday/Note), triathlon race priority extraction (A/B/C from the umbrella description), and debug token counting.
 - `ANTHROPIC_CLASSIFIER_MODEL` - Optional override for the model used by the annotation and race-priority classifiers. Defaults to `claude-haiku-4-5`.
-- `ANTHROPIC_DESCRIPTION_MODEL` - Optional override for the model used by the activity-description generator. Defaults to `claude-sonnet-4-6`.
 - `ANTHROPIC_WORKOUT_MODEL` - Optional override for the model used by the `create_workout` / `update_workout` structure-to-syntax converter. Defaults to `claude-sonnet-4-6`.
 - `ANTHROPIC_TOKEN_COUNTER_MODEL` - Optional override for the model used by dev-only debug token counting. Defaults to `claude-haiku-4-5`.
-
-For the `/api` endpoints (optional):
-- `API_SECRET` - Authenticates the `/api` endpoints via `Authorization: Bearer`. Generate with `openssl rand -hex 32`.
 
 For error reporting (optional):
 - `BUGSNAG_API_KEY` - Reports upstream API failures (Intervals.icu, Whoop, TrainerRoad) to Bugsnag.
@@ -134,27 +122,6 @@ Whoop uses OAuth 2.0 with single-use refresh tokens stored in Redis. One-time se
 5. Open the displayed URL, authorize, and paste the resulting code back into the script.
 
 The server refreshes tokens automatically thereafter.
-
-### Whoop Webhooks (optional)
-
-When Whoop is configured, Domestique exposes `POST /webhooks/whoop` and uses it to:
-
-- Sync the day's Whoop strain to Intervals.icu wellness.
-- Set per-workout Whoop strain on the matching Intervals.icu activity.
-- Auto-generate a description for the completed activity (requires `ANTHROPIC_API_KEY`).
-
-**One-time setup in Intervals.icu** — create these custom fields:
-- Wellness: `WhoopStrain` (Number)
-- Activity: `WhoopWorkoutStrain` (Number)
-
-**One-time setup in Whoop** — in your Whoop developer dashboard, add the webhook URL `https://{your-host}/webhooks/whoop` and select **Model Version: v2**.
-
-### `/api` endpoints (optional)
-
-When `API_SECRET` is set, Domestique exposes two HTTP endpoints for callers like iOS Shortcuts, authenticated with `Authorization: Bearer <API_SECRET>`:
-
-- `PUT /api/location` — sets the athlete's current location from a JSON body `{ "latitude", "longitude" }` (also requires `GOOGLE_API_KEY`). Same as the `update_location` tool.
-- `POST /api/activities/descriptions` — regenerates a day's activity descriptions. Optional JSON body `{ "date": "YYYY-MM-DD" }` (defaults to today) or `{ "activity_id": "..." }` to regenerate a single activity (takes precedence over `date`). Same as the `regenerate_descriptions` tool.
 
 ## Local Development
 

@@ -7,7 +7,6 @@
 export { IntervalsClient } from './intervals.js';
 export { WhoopClient } from './whoop.js';
 export { TrainerRoadClient } from './trainerroad.js';
-export { LastFmClient } from './lastfm.js';
 export { GoogleWeatherClient } from './google-weather.js';
 export { GoogleAirQualityClient } from './google-air-quality.js';
 export { GooglePollenClient } from './google-pollen.js';

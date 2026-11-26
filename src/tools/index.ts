@@ -5,7 +5,6 @@ import {
   IntervalsClient,
   WhoopClient,
   TrainerRoadClient,
-  LastFmClient,
   GoogleWeatherClient,
   GoogleAirQualityClient,
   GooglePollenClient,
@@ -229,7 +228,6 @@ export interface ToolsConfig {
     clientSecret: string;
   } | null;
   trainerroad?: { calendarUrl: string } | null;
-  lastfm?: { username: string; apiKey: string } | null;
   googleWeather?: { apiKey: string } | null;
   googleAirQuality?: { apiKey: string } | null;
   googlePollen?: { apiKey: string } | null;
@@ -243,28 +241,20 @@ export class ToolRegistry {
   private historicalTools: HistoricalTools;
   private planningTools: PlanningTools;
   private intervalsClient: IntervalsClient;
-  private whoopClient: WhoopClient | null;
-  private trainerroadClient: TrainerRoadClient | null;
-  private googleGeocodingClient: GoogleGeocodingClient | null;
-  private googleTimezoneClient: GoogleTimezoneClient | null;
   // Track optional client presence so registerTools can skip tools whose data
   // source isn't connected — better to hide a tool than register one that
   // returns empty results without explanation.
   private readonly hasWhoop: boolean;
   private readonly hasTrainerRoad: boolean;
-  private readonly hasLastFm: boolean;
   private readonly hasGoogleWeather: boolean;
 
   constructor(config: ToolsConfig) {
     const intervalsClient = new IntervalsClient(config.intervals);
     this.intervalsClient = intervalsClient;
     const whoopClient = config.whoop ? new WhoopClient(config.whoop) : null;
-    this.whoopClient = whoopClient;
     const trainerroadClient = config.trainerroad
       ? new TrainerRoadClient(config.trainerroad)
       : null;
-    this.trainerroadClient = trainerroadClient;
-    const lastfmClient = config.lastfm ? new LastFmClient(config.lastfm) : null;
     const googleWeatherClient = config.googleWeather
       ? new GoogleWeatherClient(config.googleWeather)
       : null;
@@ -283,24 +273,13 @@ export class ToolRegistry {
     const googleTimezoneClient = config.googleTimezone
       ? new GoogleTimezoneClient(config.googleTimezone)
       : null;
-    this.googleGeocodingClient = googleGeocodingClient;
-    this.googleTimezoneClient = googleTimezoneClient;
     this.hasWhoop = whoopClient !== null;
     this.hasTrainerRoad = trainerroadClient !== null;
-    this.hasLastFm = lastfmClient !== null;
     this.hasGoogleWeather = googleWeatherClient !== null;
 
     // Connect Whoop client to Intervals.icu timezone for proper date filtering
     if (whoopClient) {
       whoopClient.setTimezoneGetter(() => intervalsClient.getAthleteTimezone());
-    }
-
-    // Connect Last.fm client to Intervals.icu so normalizeActivity can enrich workouts
-    // with played songs when skipExpensiveCalls is false.
-    if (lastfmClient) {
-      intervalsClient.setPlayedSongsGetter((startMs, endMs) =>
-        lastfmClient.getPlayedSongsDuring(startMs, endMs)
-      );
     }
 
     this.currentTools = new CurrentTools(
@@ -314,33 +293,8 @@ export class ToolRegistry {
       googleGeocodingClient,
       googleTimezoneClient
     );
-    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, lastfmClient, trainerroadClient);
+    this.historicalTools = new HistoricalTools(intervalsClient, whoopClient, trainerroadClient);
     this.planningTools = new PlanningTools(intervalsClient, trainerroadClient);
-  }
-
-  /** Access the shared Intervals.icu client (for non-MCP entry points like webhooks). */
-  getIntervalsClient(): IntervalsClient {
-    return this.intervalsClient;
-  }
-
-  /** Access the shared Whoop client, or null if Whoop isn't configured. */
-  getWhoopClient(): WhoopClient | null {
-    return this.whoopClient;
-  }
-
-  /** Access the shared TrainerRoad client, or null if TR isn't configured. */
-  getTrainerRoadClient(): TrainerRoadClient | null {
-    return this.trainerroadClient;
-  }
-
-  /** Access the shared Google Geocoding client, or null if not configured. */
-  getGoogleGeocodingClient(): GoogleGeocodingClient | null {
-    return this.googleGeocodingClient;
-  }
-
-  /** Access the shared Google Time Zone client, or null if not configured. */
-  getGoogleTimezoneClient(): GoogleTimezoneClient | null {
-    return this.googleTimezoneClient;
   }
 
   /**
@@ -415,7 +369,7 @@ export class ToolRegistry {
     register({
       name: 'get_todays_activities',
       title: "Today's Activities",
-      description: `Today's activity-and-event data: completed workouts (with full per-activity detail — intervals, notes, weather, zones, heat zones, music — and matched Whoop strain), planned workouts, today's race (if any, detected on the TrainerRoad calendar), and active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Pass \`type\` to narrow to a single event category ('workouts' or 'races'). Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
+      description: `Today's activity-and-event data: completed workouts (with full per-activity detail — intervals, notes, weather, zones, heat zones — and matched Whoop strain), planned workouts, today's race (if any, detected on the TrainerRoad calendar), and active calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping today. Use this when the user asks specifically about today's training and you don't need recovery, sleep, wellness, or fitness metrics — the broader today's-snapshot tool returns workout summaries only, so call this when full per-activity detail for today is required. Pass \`type\` to narrow to a single event category ('workouts' or 'races'). Re-call as the day progresses; cached results go stale. ${SCHEDULED_ORDERING_NOTE} ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         type: z.enum(['workouts', 'races']).optional().describe("Filter to a single event type. Omit to return all event types."),
       },
@@ -473,7 +427,7 @@ export class ToolRegistry {
     register({
       name: 'get_activity_history',
       title: 'Activity History',
-      description: `Completed workouts and fitness activities in a past date range, with comprehensive summary metrics and matched Whoop strain. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so volume changes can be interpreted. History is workouts-only — past races are not surfaced. Use for training-pattern analysis, volume/intensity review, or to find activity IDs to drive deeper per-workout inspection (intervals, notes, weather, music are fetched separately). Date parameters accept ISO YYYY-MM-DD or natural language ("30 days ago", "last Monday", "December 1"); optional \`sport\` filters by discipline. The optional \`type\` filter is accepted for symmetry with the today's/upcoming activity tools — passing \`type: 'races'\` returns annotations only with an empty workouts array. **Never** pass today's date — past dates only. ${STRAVA_LIMITATION_NOTE}`,
+      description: `Completed workouts and fitness activities in a past date range, with comprehensive summary metrics and matched Whoop strain. Also returns calendar annotations from Intervals.icu and TrainerRoad (sickness, injury, holiday, freeform note) overlapping the range so volume changes can be interpreted. History is workouts-only — past races are not surfaced. Use for training-pattern analysis, volume/intensity review, or to find activity IDs to drive deeper per-workout inspection (intervals, notes, weather are fetched separately). Date parameters accept ISO YYYY-MM-DD or natural language ("30 days ago", "last Monday", "December 1"); optional \`sport\` filters by discipline. The optional \`type\` filter is accepted for symmetry with the today's/upcoming activity tools — passing \`type: 'races'\` returns annotations only with an empty workouts array. **Never** pass today's date — past dates only. ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         oldest: z.string().describe('Start date (e.g., "2024-01-01", "30 days ago"). Cannot be today.'),
         newest: z.string().optional().describe('End date (defaults to yesterday). Cannot be today.'),
@@ -490,7 +444,7 @@ export class ToolRegistry {
     register({
       name: 'get_workout_details',
       title: 'Workout Details',
-      description: `Full per-workout drill-down for a single activity by ID — interval-by-interval power/HR/cadence, interval groups, athlete and coach notes, weather, power/pace/HR/heat zones, scrobbled music (when Last.fm is configured), and matched Whoop strain — all in one call. Activity IDs are surfaced anywhere completed workouts are listed (past-range history queries, today's-snapshot tools, etc.). Returns substantially more data than a history list entry, so call only when the user wants depth on a specific workout. ${STRAVA_LIMITATION_NOTE}`,
+      description: `Full per-workout drill-down for a single activity by ID — interval-by-interval power/HR/cadence, interval groups, athlete and coach notes, weather, power/pace/HR/heat zones, and matched Whoop strain — all in one call. Activity IDs are surfaced anywhere completed workouts are listed (past-range history queries, today's-snapshot tools, etc.). Returns substantially more data than a history list entry, so call only when the user wants depth on a specific workout. ${STRAVA_LIMITATION_NOTE}`,
       inputSchema: {
         activity_id: z.string().describe('Intervals.icu activity ID (e.g., "i111325719")'),
       },
@@ -571,7 +525,7 @@ export class ToolRegistry {
     register({
       name: 'create_workout',
       title: 'Create Workout',
-      description: `Creates a structured workout on the user's Intervals.icu calendar; cycling and running workouts then sync to Zwift and Garmin. Provide the workout as plain language in \`structure\` — Domestique converts it server-side into Intervals.icu workout-doc syntax for cycling and running (Sonnet handles the conversion); for swimming the \`structure\` text is stored verbatim. Two distinct text fields, do not confuse them: \`description\` is athlete-facing prose (goals / focus / rationale), \`structure\` is the actual step-by-step prescription (warmup, intervals, recoveries, cooldown). The generated syntax is returned as \`workout_doc\` so the caller can show the athlete what was written. When mirroring a TrainerRoad run, set \`sport\` to "running", pass the TR workout UID as \`trainerroad_uid\` so orphan tracking can detect later changes (the field is ignored for other sports), and pass the TR workout's name **verbatim** as \`name\` — case-sensitive, no decoration — so the Whoop-webhook headline matcher can later identify the completed activity by substring match against names like \`Zwift - Intervals.icu: <name>\`. Created workouts are tagged \`domestique\`, which is the gating condition for the matching update / delete tools — fix mistakes by deleting and recreating.`,
+      description: `Creates a structured workout on the user's Intervals.icu calendar; cycling and running workouts then sync to Zwift and Garmin. Provide the workout as plain language in \`structure\` — Domestique converts it server-side into Intervals.icu workout-doc syntax for cycling and running (Sonnet handles the conversion); for swimming the \`structure\` text is stored verbatim. Two distinct text fields, do not confuse them: \`description\` is athlete-facing prose (goals / focus / rationale), \`structure\` is the actual step-by-step prescription (warmup, intervals, recoveries, cooldown). The generated syntax is returned as \`workout_doc\` so the caller can show the athlete what was written. When mirroring a TrainerRoad run, set \`sport\` to "running", pass the TR workout UID as \`trainerroad_uid\` so orphan tracking can detect later changes (the field is ignored for other sports), and pass the TR workout's name **verbatim** as \`name\` — case-sensitive, no decoration — so the completed activity can later be matched to it by substring match against names like \`Zwift - Intervals.icu: <name>\`. Created workouts are tagged \`domestique\`, which is the gating condition for the matching update / delete tools — fix mistakes by deleting and recreating.`,
       inputSchema: {
         sport: z.enum(['cycling', 'running', 'swimming']).describe('Sport for the workout'),
         scheduled_for: z.string().describe('Date (YYYY-MM-DD) or datetime for the workout'),
@@ -669,7 +623,7 @@ export class ToolRegistry {
       register({
         name: 'sync_trainerroad_runs',
         title: 'Sync TrainerRoad Runs',
-        description: `Reconciles TrainerRoad running workouts against the Intervals.icu calendar over a date range (defaults today through 30 days out). Runs only — TrainerRoad cycling and swimming are not synced. The response splits into \`runs_to_sync\` (new TR runs not yet on Intervals.icu — caller is expected to follow up by creating each as a structured running workout), \`runs_to_update\` (TR runs whose source has changed), and \`deleted\` (orphans whose TR source was removed, cleaned up automatically). When following up with \`create_workout\` for each entry, pass \`tr_name\` verbatim as the workout's \`name\` (case-sensitive, no decoration) so the Whoop-webhook headline matcher can later substring-match the completed activity. Call this when the user asks to sync TrainerRoad, before showing this week's plan, or when adjusting after a TR plan change.`,
+        description: `Reconciles TrainerRoad running workouts against the Intervals.icu calendar over a date range (defaults today through 30 days out). Runs only — TrainerRoad cycling and swimming are not synced. The response splits into \`runs_to_sync\` (new TR runs not yet on Intervals.icu — caller is expected to follow up by creating each as a structured running workout), \`runs_to_update\` (TR runs whose source has changed), and \`deleted\` (orphans whose TR source was removed, cleaned up automatically). When following up with \`create_workout\` for each entry, pass \`tr_name\` verbatim as the workout's \`name\` (case-sensitive, no decoration) so the completed activity can later be substring-matched to it. Call this when the user asks to sync TrainerRoad, before showing this week's plan, or when adjusting after a TR plan change.`,
         inputSchema: {
           oldest: z.string().optional().describe('Start date (defaults to today)'),
           newest: z.string().optional().describe('End date (defaults to 30 days from start)'),
@@ -749,30 +703,6 @@ export class ToolRegistry {
       annotations: MODIFIES_EXTERNAL,
       handler: async (args: UpdateHeatAdaptationScoreInput) =>
         this.planningTools.updateHeatAdaptationScore(args),
-    });
-
-    if (this.googleGeocodingClient && this.googleTimezoneClient) {
-      register({
-        name: 'update_location',
-        title: 'Update Location',
-        description: `Sets the user's current location on Intervals.icu from coordinates or a place name: updates the athlete profile (city, state, country, timezone) and replaces the weather config with a single forecast at that location. Pass \`latitude\`+\`longitude\`, or a free-text \`location\` (city, address, landmark) which is geocoded to coordinates. Each write is skipped when Intervals.icu already matches, so it's safe to call repeatedly. This is the same operation the nightly location webhook performs; use it for one-off "I'm in <place> now" updates or to correct the configured location before checking the weather.`,
-        inputSchema: schemas.updateLocationInputSchema,
-        outputSchema: schemas.updateLocationOutputSchema,
-        annotations: MODIFIES_EXTERNAL,
-        handler: async (args: { latitude?: number; longitude?: number; location?: string }) =>
-          this.currentTools.updateLocation(args),
-      });
-    }
-
-    register({
-      name: 'regenerate_descriptions',
-      title: 'Regenerate Activity Descriptions',
-      description: `Regenerates the Strava-ready descriptions of every eligible activity on a day, exactly as the Whoop \`workout.updated\` webhook does per-activity — useful when descriptions are missing or stale (e.g. after editing an activity, or a Whoop match arriving late). Pass \`date\` as YYYY-MM-DD; omit for today in the athlete's timezone. Pass \`activity_id\` to regenerate just that one activity — it takes precedence over \`date\` (which is then ignored). Only swim, bike, and run activities are eligible; other sports, pool swims, and unavailable Strava imports are skipped. Activities without a Whoop match still get a description, just without the strain line. Returns which activity IDs were regenerated vs. skipped. Requires \`ANTHROPIC_API_KEY\` (the description generator); without it every activity fails and \`regenerated\` is empty. This is the same operation the \`POST /api/activities/descriptions\` endpoint performs.`,
-      inputSchema: schemas.regenerateDescriptionsInputSchema,
-      outputSchema: schemas.regenerateDescriptionsOutputSchema,
-      annotations: MODIFIES_EXTERNAL,
-      handler: async (args: { date?: string; activity_id?: string }) =>
-        this.currentTools.regenerateDescriptions(args),
     });
 
     // ============================================
